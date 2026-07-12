@@ -35,11 +35,7 @@ from modules.protocol_animator_extra import (
     build_tls_scene,
     build_vlan_scene,
 )
-from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER,
-    BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
+from ui import styles as _s
 from ui.widgets.protocol_canvas import ProtocolCanvas
 from ui.widgets.jargon_tooltip import get_definition
 
@@ -184,50 +180,40 @@ class _ContextPanel(QFrame):
         # Toggle bar
         self._toggle = QPushButton("  ▸  Why this protocol matters")
         self._toggle.setCheckable(True)
-        self._toggle.setStyleSheet(
-            f"QPushButton {{ background:transparent; border:none;"
-            f" border-top:1px solid {BORDER}; color:{TEXT_MUTED}; font-size:11px;"
-            f" font-weight:600; text-align:left; padding:6px 12px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:checked {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._toggle, "QPushButton {{ background:transparent; border:none;"
+            " border-top:1px solid {BORDER}; color:{TEXT_MUTED}; font-size:11px;"
+            " font-weight:600; text-align:left; padding:6px 12px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:checked {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         self._toggle.toggled.connect(self._on_toggle)
         root.addWidget(self._toggle)
 
         # Expanded body
         self._body = QFrame()
         self._body.setVisible(False)
-        self._body.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0; }}"
-        )
+        _s.themed_ss(self._body, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0; }}")
         body_lay = QVBoxLayout(self._body)
         body_lay.setContentsMargins(16, 12, 16, 12)
         body_lay.setSpacing(8)
 
         self._why_lbl = QLabel()
         self._why_lbl.setWordWrap(True)
-        self._why_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._why_lbl, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         body_lay.addWidget(self._why_lbl)
 
         self._wrong_lbl = QLabel()
         self._wrong_lbl.setWordWrap(True)
-        self._wrong_lbl.setStyleSheet(
-            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._wrong_lbl, "font-size:12px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         body_lay.addWidget(self._wrong_lbl)
 
         self._nav_btn = QPushButton()
         self._nav_btn.setFixedHeight(28)
-        self._nav_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
-            f" color:{ACCENT}; border-radius:4px; font-size:11px; font-weight:600;"
-            f" padding:0 12px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._nav_btn, "QPushButton {{ background:transparent; border:1px solid {ACCENT};"
+            " color:{ACCENT}; border-radius:4px; font-size:11px; font-weight:600;"
+            " padding:0 12px; }}"
+            "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         self._nav_btn.setVisible(False)
         body_lay.addWidget(self._nav_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -260,21 +246,19 @@ class _ContextPanel(QFrame):
 def _card_frame() -> QFrame:
     f = QFrame()
     f.setObjectName("contentArea")
-    f.setStyleSheet(
-        f"QFrame#contentArea {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-radius:8px; }}"
-    )
+    _s.themed_ss(f, "QFrame#contentArea {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-radius:8px; }}")
     return f
 
 
-def _label(text: str, size: int = 12, color: str = TEXT_PRIMARY,
+def _label(text: str, size: int = 12, color_name: str = "TEXT_PRIMARY",
            bold: bool = False) -> QLabel:
     lbl = QLabel(text)
     lbl.setWordWrap(True)
-    lbl.setStyleSheet(
-        f"font-size:{size}px; color:{color};"
-        + (" font-weight:bold;" if bold else "")
-    )
+    _s.themed_ss(lbl, lambda sz=size, cn=color_name, b=bold: (
+        f"font-size:{sz}px; color:{getattr(_s, cn)};"
+        + (" font-weight:bold;" if b else "")
+    ))
     return lbl
 
 
@@ -334,14 +318,14 @@ class ProtocolVizPage(QWidget):
 
         # Page header
         hdr = QWidget()
-        hdr.setStyleSheet(f"background:{BG_CARD}; border-bottom:1px solid {BORDER};")
+        _s.themed_ss(hdr, "background:{BG_CARD}; border-bottom:1px solid {BORDER};")
         hdr_lay = QVBoxLayout(hdr)
         hdr_lay.setContentsMargins(20, 14, 20, 14)
         hdr_lay.setSpacing(2)
-        hdr_lay.addWidget(_label("Protocol Visualizer", 16, TEXT_PRIMARY, bold=True))
+        hdr_lay.addWidget(_label("Protocol Visualizer", 16, "TEXT_PRIMARY", bold=True))
         hdr_lay.addWidget(_label(
             "Animated step-by-step diagrams of ten protocols using your network's real addresses.",
-            11, TEXT_SECONDARY,
+            11, "TEXT_SECONDARY",
         ))
         outer.addWidget(hdr)
 
@@ -361,7 +345,7 @@ class ProtocolVizPage(QWidget):
         picker_lay  = QVBoxLayout(picker_card)
         picker_lay.setContentsMargins(16, 12, 16, 12)
         picker_lay.setSpacing(6)
-        picker_lay.addWidget(_label("Choose a protocol", 11, TEXT_SECONDARY))
+        picker_lay.addWidget(_label("Choose a protocol", 11, "TEXT_SECONDARY"))
 
         proto_grid = QGridLayout()
         proto_grid.setSpacing(8)
@@ -388,14 +372,12 @@ class ProtocolVizPage(QWidget):
 
         # Canvas title bar
         title_bar = QWidget()
-        title_bar.setStyleSheet(
-            f"background:transparent; border-bottom:1px solid {BORDER};"
-        )
+        _s.themed_ss(title_bar, "background:transparent; border-bottom:1px solid {BORDER};")
         tb_lay = QHBoxLayout(title_bar)
         tb_lay.setContentsMargins(16, 10, 16, 10)
         tb_lay.setSpacing(8)
-        self._canvas_title    = _label("", 13, TEXT_PRIMARY, bold=True)
-        self._canvas_subtitle = _label("", 10, TEXT_MUTED)
+        self._canvas_title    = _label("", 13, "TEXT_PRIMARY", bold=True)
+        self._canvas_subtitle = _label("", 10, "TEXT_MUTED")
         tb_lay.addWidget(self._canvas_title)
         tb_lay.addWidget(self._canvas_subtitle)
         # Curriculum badges placeholder — populated in _select_protocol
@@ -412,30 +394,22 @@ class ProtocolVizPage(QWidget):
         _ph_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _ph_icon = QLabel("◎")
         _ph_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _ph_icon.setStyleSheet(
-            f"font-size:32px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_ph_icon, "font-size:32px; color:{TEXT_MUTED}; background:transparent; border:none;")
         self._placeholder_msg = QLabel("No capture session active")
         self._placeholder_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder_msg.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._placeholder_msg, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         _ph_sub = QLabel("Animated diagram of the protocols your network is speaking right now.")
         _ph_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _ph_sub.setWordWrap(True)
-        _ph_sub.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_ph_sub, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         _ph_cta = QPushButton("▶  Start Scan")
         _ph_cta.setFixedHeight(30)
         _ph_cta.setCursor(Qt.CursorShape.PointingHandCursor)
-        _ph_cta.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(_ph_cta, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         _ph_cta.clicked.connect(lambda: self.navigate_to.emit("Home"))
         _ph_lay.addWidget(_ph_icon)
         _ph_lay.addWidget(self._placeholder_msg)
@@ -458,9 +432,7 @@ class ProtocolVizPage(QWidget):
 
         # Playback controls
         ctrl_bar = QWidget()
-        ctrl_bar.setStyleSheet(
-            f"background:transparent; border-top:1px solid {BORDER};"
-        )
+        _s.themed_ss(ctrl_bar, "background:transparent; border-top:1px solid {BORDER};")
         ctrl_lay = QHBoxLayout(ctrl_bar)
         ctrl_lay.setContentsMargins(16, 8, 16, 8)
         ctrl_lay.setSpacing(8)
@@ -470,7 +442,7 @@ class ProtocolVizPage(QWidget):
         self._btn_fwd   = self._ctrl_btn("▶▶", "Next step")
         self._btn_reset = self._ctrl_btn("↺  Reset", "Restart from step 1")
 
-        self._step_label = _label("Step 1 of 1", 11, TEXT_MUTED)
+        self._step_label = _label("Step 1 of 1", 11, "TEXT_MUTED")
 
         ctrl_lay.addWidget(self._btn_back)
         ctrl_lay.addWidget(self._btn_play)
@@ -494,20 +466,19 @@ class ProtocolVizPage(QWidget):
         desc_lay.setSpacing(6)
 
         desc_hdr = QHBoxLayout()
-        self._step_title = _label("", 12, TEXT_PRIMARY, bold=True)
-        self._step_index = _label("", 11, TEXT_MUTED)
+        self._step_title = _label("", 12, "TEXT_PRIMARY", bold=True)
+        self._step_index = _label("", 11, "TEXT_MUTED")
         desc_hdr.addWidget(self._step_title)
         desc_hdr.addStretch()
         desc_hdr.addWidget(self._step_index)
         desc_lay.addLayout(desc_hdr)
 
-        self._step_detail = _label("", 11, TEXT_SECONDARY)
+        self._step_detail = _label("", 11, "TEXT_SECONDARY")
         desc_lay.addWidget(self._step_detail)
 
-        self._step_explanation = _label("", 12, TEXT_PRIMARY)
-        self._step_explanation.setStyleSheet(
-            f"font-size:12px; color:{TEXT_PRIMARY}; line-height:1.6;"
-        )
+        self._step_explanation = QLabel("")
+        self._step_explanation.setWordWrap(True)
+        _s.themed_ss(self._step_explanation, "font-size:12px; color:{TEXT_PRIMARY}; line-height:1.6;")
         desc_lay.addWidget(self._step_explanation)
         bl.addWidget(desc_card)
 
@@ -523,12 +494,10 @@ class ProtocolVizPage(QWidget):
         btn = QPushButton(text)
         btn.setToolTip(tooltip)
         btn.setFixedHeight(28)
-        btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; border:1px solid {BORDER};"
-            f" border-radius:4px; color:{TEXT_PRIMARY}; font-size:11px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{BORDER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(btn, "QPushButton {{ background:transparent; border:1px solid {BORDER};"
+            " border-radius:4px; color:{TEXT_PRIMARY}; font-size:11px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{BORDER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         return btn
 
     def _style_proto_btns(self) -> None:
@@ -536,11 +505,11 @@ class ProtocolVizPage(QWidget):
             active = (key == self._active_key)
             btn.setStyleSheet(
                 f"QPushButton {{ border-radius:4px; font-size:11px; font-weight:bold; padding:0 8px;"
-                f" background:{'%s' % ACCENT if active else 'transparent'};"
-                f" color:{WHITE if active else TEXT_SECONDARY};"
-                f" border:1px solid {'%s' % ACCENT if active else BORDER}; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                f" background:{'%s' % _s.ACCENT if active else 'transparent'};"
+                f" color:{_s.WHITE if active else _s.TEXT_SECONDARY};"
+                f" border:1px solid {'%s' % _s.ACCENT if active else _s.BORDER}; }}"
+                f"QPushButton:hover {{ background:{_s.ACCENT}; color:{_s.WHITE}; }}"
+                f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
             )
             btn.setChecked(active)
 

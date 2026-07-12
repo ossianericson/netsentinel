@@ -25,12 +25,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG,
-    NAV_BAR, RED, RED_BG,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-)
+from ui import styles as _s
 
 
 def _page_header(title: str, subtitle: str = "") -> QFrame:
@@ -40,25 +35,19 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
     """
     container = QFrame()
     container.setObjectName("pageHeader")
-    container.setStyleSheet(
-        f"QFrame#pageHeader {{ background: transparent; border: none;"
-        f" border-bottom: 1px solid {BORDER}; }}"
-    )
+    _s.themed_ss(container, "QFrame#pageHeader {{ background: transparent; border: none;"
+        " border-bottom: 1px solid {BORDER}; }}")
     vbox = QVBoxLayout(container)
     vbox.setContentsMargins(20, 16, 20, 12)
     vbox.setSpacing(2)
     t = QLabel(title)
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-        "padding:0; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;")
     vbox.addWidget(t)
     if subtitle:
         s = QLabel(subtitle)
-        s.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            "padding:0; background:transparent; border:none;"
-        )
+        _s.themed_ss(s, "color:{TEXT_SECONDARY}; font-size:11px;"
+            "padding:0; background:transparent; border:none;")
         vbox.addWidget(s)
     return container
 
@@ -100,10 +89,8 @@ def build_help_tab(window) -> QWidget:
     def _section(title: str, rows: list[tuple[str, str]]) -> QFrame:
         card = QFrame()
         card.setObjectName("card")
-        card.setStyleSheet(
-            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-            f"border-radius:{CARD_RADIUS};}}"
-        )
+        _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            "border-radius:{CARD_RADIUS};}}")
         cl = QVBoxLayout(card)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
@@ -112,15 +99,11 @@ def build_help_tab(window) -> QWidget:
         tb = QFrame()
         tb.setObjectName("cardHeader")
         tb.setFixedHeight(32)
-        tb.setStyleSheet(
-            f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};"
-        )
+        _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
         tbl = QHBoxLayout(tb)
         tbl.setContentsMargins(12, 0, 12, 0)
         t = QLabel(title)
-        t.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;"
-        )
+        _s.themed_ss(t, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
         tbl.addWidget(t)
         tbl.addStretch()
         cl.addWidget(tb)
@@ -133,10 +116,8 @@ def build_help_tab(window) -> QWidget:
         tbl_w.setShowGrid(False)
         tbl_w.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         tbl_w.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        tbl_w.setStyleSheet(
-            f"QTableWidget{{background:{BG_CARD};border:none;font-size:11px;}}"
-            f"QTableWidget::item{{padding:4px 8px;color:{TEXT_PRIMARY};}}"
-        )
+        _s.themed_ss(tbl_w, "QTableWidget{{background:{BG_CARD};border:none;font-size:11px;}}"
+            "QTableWidget::item{{padding:4px 8px;color:{TEXT_PRIMARY};}}")
         tbl_w.horizontalHeader().setStretchLastSection(True)
         tbl_w.setColumnWidth(0, 220)
         tbl_w.verticalHeader().setDefaultSectionSize(24)
@@ -144,10 +125,10 @@ def build_help_tab(window) -> QWidget:
         for i, (key, desc) in enumerate(rows):
             k = QTableWidgetItem(key)
             k.setFont(QFont("Consolas", 10))
-            k.setForeground(QColor(ACCENT_DARK))
-            k.setBackground(QColor(BG_ALT_ROW if i % 2 else BG_CARD))
+            k.setForeground(QColor(_s.ACCENT_DARK))
+            k.setBackground(QColor(_s.BG_ALT_ROW if i % 2 else _s.BG_CARD))
             d = QTableWidgetItem(desc)
-            d.setBackground(QColor(BG_ALT_ROW if i % 2 else BG_CARD))
+            d.setBackground(QColor(_s.BG_ALT_ROW if i % 2 else _s.BG_CARD))
             tbl_w.setItem(i, 0, k)
             tbl_w.setItem(i, 1, d)
 
@@ -158,28 +139,26 @@ def build_help_tab(window) -> QWidget:
     # ── Getting started ──────────────────────────────────────────────────
     intro_card = QFrame()
     intro_card.setObjectName("card")
-    intro_card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(intro_card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+        "border-radius:{CARD_RADIUS};}}")
     icl = QVBoxLayout(intro_card)
     icl.setContentsMargins(0, 0, 0, 0)
     icl.setSpacing(0)
 
     itb = QFrame()
     itb.setFixedHeight(32)
-    itb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(itb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     itbl = QHBoxLayout(itb)
     itbl.setContentsMargins(12, 0, 12, 0)
     itl = QLabel("Getting Started")
-    itl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(itl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     itbl.addWidget(itl)
     itbl.addStretch()
     icl.addWidget(itb)
 
     intro_text = QLabel(
         "<p style='margin:12px 16px 4px 16px; font-size:11px; "
-        f"color:{TEXT_PRIMARY}; line-height:1.6;'>"
+        f"color:{_s.TEXT_PRIMARY}; line-height:1.6;'>"
         "<b>1. Run as Administrator</b> — STP, Storm, ARP, and Bandwidth modules "
         "require raw packet capture (Npcap on Windows). Right-click the shortcut "
         "→ Run as Administrator, or the app will prompt you automatically.<br><br>"
@@ -208,34 +187,32 @@ def build_help_tab(window) -> QWidget:
     # ── First 10 Minutes walkthrough ─────────────────────────────────────
     walkthrough_card = QFrame()
     walkthrough_card.setObjectName("card")
-    walkthrough_card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(walkthrough_card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+        "border-radius:{CARD_RADIUS};}}")
     wcl = QVBoxLayout(walkthrough_card)
     wcl.setContentsMargins(0, 0, 0, 0)
     wcl.setSpacing(0)
     wtb = QFrame()
     wtb.setFixedHeight(32)
-    wtb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(wtb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     wtbl = QHBoxLayout(wtb)
     wtbl.setContentsMargins(12, 0, 12, 0)
     wtl = QLabel("First 10 Minutes — Guided Walkthrough")
-    wtl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(wtl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     wtbl.addWidget(wtl)
     wtbl.addStretch()
     wcl.addWidget(wtb)
     walkthrough_text = QLabel(
         f"<div style='margin:12px 16px 12px 16px; font-size:11px; "
-        f"color:{TEXT_PRIMARY}; line-height:1.7;'>"
-        f"<b style='color:{ACCENT};'>Step 1 — See what's on your network</b><br>"
+        f"color:{_s.TEXT_PRIMARY}; line-height:1.7;'>"
+        f"<b style='color:{_s.ACCENT};'>Step 1 — See what's on your network</b><br>"
         "Click <b>Run Scan</b> on the Home screen (or press Ctrl+R). NetSentinel sends "
         "ARP requests to every address in your subnet and builds a full device list. "
         "Most home networks finish in under 15 seconds.<br>"
         "<i>What to look for:</i> any device you don't recognise. Note its MAC address "
         "— the first 6 characters identify the manufacturer (e.g. <code>B8:27:EB</code> = Raspberry Pi).<br><br>"
 
-        f"<b style='color:{ACCENT};'>Step 2 — Check your connection quality</b><br>"
+        f"<b style='color:{_s.ACCENT};'>Step 2 — Check your connection quality</b><br>"
         "Go to <b>DNS &amp; Outages</b>. You'll see a live RTT graph to your gateway and "
         "internet targets. A flat line under 10 ms to your router is healthy. "
         "Spikes above 200 ms, or gaps in the line, indicate packet loss.<br>"
@@ -243,7 +220,7 @@ def build_help_tab(window) -> QWidget:
         "device on your network is winning the STP Root Bridge election. "
         "See <i>Learn Networking</i> below for what that means.<br><br>"
 
-        f"<b style='color:{ACCENT};'>Step 3 — Run the Health Check</b><br>"
+        f"<b style='color:{_s.ACCENT};'>Step 3 — Run the Health Check</b><br>"
         "Open <b>Health Check</b> and click <b>Run Diagnostics</b>. This tests ping "
         "to 5 targets, compares DNS speed across 4 resolvers, checks HTTP reachability, "
         "and runs a traceroute to your gateway.<br>"
@@ -251,21 +228,21 @@ def build_help_tab(window) -> QWidget:
         "is 3–5× slower than Cloudflare (1.1.1.1), switching DNS in your router settings "
         "can noticeably speed up browsing.<br><br>"
 
-        f"<b style='color:{ACCENT};'>Step 4 — Get your Network Grade</b><br>"
+        f"<b style='color:{_s.ACCENT};'>Step 4 — Get your Network Grade</b><br>"
         "Open <b>Network Grade</b>. The A–F score across 8 dimensions tells you "
         "where your network ranks. Any dimension rated C or below has a "
         "<b>How to Fix</b> guide — click the row.<br>"
         "<i>What to look for:</i> a low Safety score means unknown or high-risk "
         "devices are present. A low STP score means a rogue bridge was detected.<br><br>"
 
-        f"<b style='color:{ACCENT};'>Step 5 — Let it run in the background</b><br>"
+        f"<b style='color:{_s.ACCENT};'>Step 5 — Let it run in the background</b><br>"
         "Leave NetSentinel open for 30+ minutes while you use your network normally. "
         "The <b>Stability Log</b> and <b>Availability History</b> tabs build up "
         "timestamped evidence. After 30 minutes, <b>Network Grade → Network Health Report</b> "
         "produces a standalone HTML file you can attach to an ISP support ticket — "
         "with hop-by-hop packet loss, outage timestamps, and DNS latency data.<br><br>"
 
-        f"<b style='color:{ACCENT};'>Tip — Right-click everything</b><br>"
+        f"<b style='color:{_s.ACCENT};'>Tip — Right-click everything</b><br>"
         "Every table row in NetSentinel has a context menu. Right-click any device "
         "for <b>Copy IP</b>, <b>Copy MAC</b>, <b>Port Scan</b>, <b>How to Fix</b>, "
         "and <b>Wake-on-LAN</b>. Right-click any scan result for remediation guidance."
@@ -387,49 +364,47 @@ def build_help_tab(window) -> QWidget:
     # ── Risk Level Guide ──────────────────────────────────────────────────
     risk_card = QFrame()
     risk_card.setObjectName("card")
-    risk_card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(risk_card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+        "border-radius:{CARD_RADIUS};}}")
     rcl = QVBoxLayout(risk_card)
     rcl.setContentsMargins(0, 0, 0, 0)
     rcl.setSpacing(0)
     rtb = QFrame()
     rtb.setFixedHeight(32)
-    rtb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(rtb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     rtbl = QHBoxLayout(rtb)
     rtbl.setContentsMargins(12, 0, 12, 0)
     rtl = QLabel("Risk Level Guide")
-    rtl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(rtl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     rtbl.addWidget(rtl)
     rtbl.addStretch()
     rcl.addWidget(rtb)
 
     _risk_rows = [
-        ("CLEAN",   GREEN,    GREEN_BG,  "No threats or issues detected. All devices are expected."),
-        ("LOW",     ACCENT,   BG_CARD,   "Minor or informational — no immediate action required."),
-        ("MEDIUM",  AMBER,    AMBER_BG,  "Noteworthy — review soon. Examples: unknown device, degraded RTT."),
-        ("WARNING", AMBER,    AMBER_BG,  "Active issue that should be investigated promptly."),
-        ("HIGH",    RED,      RED_BG,    "Serious threat detected — ARP spoof, rogue bridge, rogue DHCP."),
-        ("STORM",   RED,      RED_BG,    "Broadcast storm in progress — network performance is impacted now."),
-        ("UNKNOWN", TEXT_MUTED, BG_CARD, "Device or result could not be classified. Check manually."),
+        ("CLEAN",   "GREEN",    "GREEN_BG",  "No threats or issues detected. All devices are expected."),
+        ("LOW",     "ACCENT",   "BG_CARD",   "Minor or informational — no immediate action required."),
+        ("MEDIUM",  "AMBER",    "AMBER_BG",  "Noteworthy — review soon. Examples: unknown device, degraded RTT."),
+        ("WARNING", "AMBER",    "AMBER_BG",  "Active issue that should be investigated promptly."),
+        ("HIGH",    "RED",      "RED_BG",    "Serious threat detected — ARP spoof, rogue bridge, rogue DHCP."),
+        ("STORM",   "RED",      "RED_BG",    "Broadcast storm in progress — network performance is impacted now."),
+        ("UNKNOWN", "TEXT_MUTED", "BG_CARD", "Device or result could not be classified. Check manually."),
     ]
-    for lvl, fg, bg, meaning in _risk_rows:
+    for lvl, fg_name, bg_name, meaning in _risk_rows:
         rw = QWidget()
-        rw.setStyleSheet(f"background:{bg};")
+        _s.themed_ss(rw, lambda bn=bg_name: f"background:{getattr(_s, bn)};")
         rwl = QHBoxLayout(rw)
         rwl.setContentsMargins(12, 4, 12, 4)
         rwl.setSpacing(10)
         badge = QLabel(lvl)
         badge.setFixedWidth(72)
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setStyleSheet(
-            f"color:{fg};font-size:10px;font-weight:bold;"
-            f"border:1px solid {fg};border-radius:3px;padding:1px 4px;"
+        _s.themed_ss(badge, lambda fn=fg_name: (
+            f"color:{getattr(_s, fn)};font-size:10px;font-weight:bold;"
+            f"border:1px solid {getattr(_s, fn)};border-radius:3px;padding:1px 4px;"
             f"background:transparent;"
-        )
+        ))
         ml = QLabel(meaning)
-        ml.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;")
+        _s.themed_ss(ml, "font-size:11px;color:{TEXT_PRIMARY};background:transparent;")
         rwl.addWidget(badge)
         rwl.addWidget(ml, 1)
         rcl.addWidget(rw)
@@ -491,28 +466,26 @@ def build_help_tab(window) -> QWidget:
     # ── Learn Networking ─────────────────────────────────────────────────
     learn_card = QFrame()
     learn_card.setObjectName("card")
-    learn_card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(learn_card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+        "border-radius:{CARD_RADIUS};}}")
     lcl = QVBoxLayout(learn_card)
     lcl.setContentsMargins(0, 0, 0, 0)
     lcl.setSpacing(0)
     ltb = QFrame()
     ltb.setFixedHeight(32)
-    ltb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(ltb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     ltbl = QHBoxLayout(ltb)
     ltbl.setContentsMargins(12, 0, 12, 0)
     ltl = QLabel("Learn Networking — How Your Network Actually Works")
-    ltl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(ltl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     ltbl.addWidget(ltl)
     ltbl.addStretch()
     lcl.addWidget(ltb)
     learn_text = QLabel(
         f"<div style='margin:12px 16px 14px 16px; font-size:11px; "
-        f"color:{TEXT_PRIMARY}; line-height:1.75;'>"
+        f"color:{_s.TEXT_PRIMARY}; line-height:1.75;'>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>Your home network at a glance</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>Your home network at a glance</b><br>"
         "Your <b>router</b> sits between two worlds: the <b>WAN</b> (your ISP — the internet) "
         "and the <b>LAN</b> (your home devices). Every device on the LAN gets two addresses: "
         "a <b>MAC address</b> (burned into the hardware, identifies the manufacturer, never changes) "
@@ -520,7 +493,7 @@ def build_help_tab(window) -> QWidget:
         "Your router runs <b>DHCP</b> to hand out IPs automatically and <b>DNS</b> to translate "
         "names like <i>google.com</i> into the IP addresses that packets actually travel to.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>How the scan works — ARP</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>How the scan works — ARP</b><br>"
         "<b>ARP</b> (Address Resolution Protocol) is how devices on a LAN find each other. "
         "When your computer wants to talk to 192.168.1.1, it broadcasts <i>"
         "\"Who has 192.168.1.1?\"</i> — every device on the subnet hears this. "
@@ -528,7 +501,7 @@ def build_help_tab(window) -> QWidget:
         "NetSentinel sends an ARP request to every address in your subnet simultaneously, "
         "then listens for replies — revealing every active device without any special permissions.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>Reading RTT — what the numbers mean</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>Reading RTT — what the numbers mean</b><br>"
         "<b>RTT</b> (Round-Trip Time) is how long a packet takes to travel to a host and "
         "return, measured in milliseconds. Good benchmarks: <b>&lt; 1 ms</b> to your router "
         "(same LAN); <b>&lt; 20 ms</b> to your ISP gateway; <b>&lt; 50 ms</b> to major internet "
@@ -536,7 +509,7 @@ def build_help_tab(window) -> QWidget:
         "<b>Jitter</b> (variation between readings) matters for voice and video — "
         "a stable 30 ms line is better than one that swings between 5 ms and 200 ms.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>Spanning Tree Protocol (STP) — the hidden troublemaker</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>Spanning Tree Protocol (STP) — the hidden troublemaker</b><br>"
         "STP prevents network loops by electing one device as the <b>Root Bridge</b> — "
         "all traffic flows through it. Your router should win this election. "
         "But mesh WiFi nodes, smart TVs, and game consoles connected via Ethernet also "
@@ -546,7 +519,7 @@ def build_help_tab(window) -> QWidget:
         "that ISP support always blames on WiFi interference. "
         "NetSentinel captures the BPDU packets that reveal which device is doing this.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>ARP spoofing — how MITM attacks work</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>ARP spoofing — how MITM attacks work</b><br>"
         "Because ARP has no authentication, a device can send <i>fake</i> ARP replies: "
         "<i>\"I have the IP of your router — send traffic to my MAC instead.\"</i> "
         "Every device on the LAN updates its ARP cache with the lie. Now all your traffic "
@@ -554,7 +527,7 @@ def build_help_tab(window) -> QWidget:
         "a classic <b>Man-in-the-Middle (MITM)</b> attack. "
         "NetSentinel detects this by watching for IP-to-MAC mapping conflicts in ARP traffic.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>Broadcast storms — when traffic eats itself</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>Broadcast storms — when traffic eats itself</b><br>"
         "ARP requests, mDNS queries, and DHCP discovery are all <b>broadcasts</b> — "
         "every device on the LAN must process each one. Normally this is a tiny background noise. "
         "But a network loop (two cables between the same two switches), a misconfigured device, "
@@ -563,7 +536,7 @@ def build_help_tab(window) -> QWidget:
         "real traffic. This looks exactly like an ISP outage — but the problem is entirely local. "
         "The Broadcast Storm tab shows the flood rate and which device is the source.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>DNS — the phone book, and why it affects speed</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>DNS — the phone book, and why it affects speed</b><br>"
         "Every website visit starts with a DNS lookup before a single byte of content loads. "
         "If your DNS resolver is slow, <i>every</i> page has a hidden delay. "
         "ISP-provided DNS servers are often 30–100 ms. "
@@ -572,7 +545,7 @@ def build_help_tab(window) -> QWidget:
         "and go to your ISP instead — revealing every site you visit. "
         "The Health Check tab benchmarks all resolvers side-by-side on your current connection.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>Open ports — what they reveal</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>Open ports — what they reveal</b><br>"
         "Every service on a device listens on a numbered <b>port</b>. "
         "Port 22 = SSH (remote terminal), 80 = HTTP, 443 = HTTPS, "
         "3389 = Windows Remote Desktop, 8080 = admin web interfaces. "
@@ -582,7 +555,7 @@ def build_help_tab(window) -> QWidget:
         "and measures whether something replies — fast, precise, and requires admin rights "
         "because it bypasses the normal OS socket layer.<br><br>"
 
-        f"<b style='font-size:12px; color:{ACCENT};'>The Network Grade — what each dimension measures</b><br>"
+        f"<b style='font-size:12px; color:{_s.ACCENT};'>The Network Grade — what each dimension measures</b><br>"
         "<b>Uptime</b> — % of time your internet target was reachable in the last 24h. "
         "<b>Latency</b> — average RTT to internet; A = under 20 ms, F = over 150 ms. "
         "<b>Jitter</b> — RTT variance; A = under 5 ms, F = over 50 ms. "
@@ -601,40 +574,36 @@ def build_help_tab(window) -> QWidget:
     # ── Appearance / Theme → redirect to Settings ─────────────────────────
     appear_callout = QFrame()
     appear_callout.setObjectName("card")
-    appear_callout.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(appear_callout, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+        "border-radius:{CARD_RADIUS};}}")
     acl = QVBoxLayout(appear_callout)
     acl.setContentsMargins(0, 0, 0, 0)
     acl.setSpacing(0)
     atb = QFrame()
     atb.setFixedHeight(32)
-    atb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(atb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     atbl = QHBoxLayout(atb)
     atbl.setContentsMargins(12, 0, 12, 0)
     atl = QLabel("Appearance & Customisation")
-    atl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(atl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     atbl.addWidget(atl)
     atbl.addStretch()
     acl.addWidget(atb)
     abody = QWidget()
-    abody.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(abody, "background:{BG_CARD};")
     abl = QHBoxLayout(abody)
     abl.setContentsMargins(16, 10, 16, 12)
     abl.setSpacing(12)
     ainfo = QLabel(
         "Colour themes, display preferences, and shortcuts are managed in one place."
     )
-    ainfo.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
+    _s.themed_ss(ainfo, "font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
     abl.addWidget(ainfo, 1)
     btn_go_settings = QPushButton("⚙  Open Settings")
-    btn_go_settings.setStyleSheet(
-        f"QPushButton{{background:{ACCENT};color:{NAV_BAR};"
-        f"border:1px solid {ACCENT};border-radius:4px;"
-        f"padding:5px 14px;font-size:11px;font-weight:bold;}}"
-        f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(btn_go_settings, "QPushButton{{background:{ACCENT};color:{NAV_BAR};"
+        "border:1px solid {ACCENT};border-radius:4px;"
+        "padding:5px 14px;font-size:11px;font-weight:bold;}}"
+        "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     btn_go_settings.clicked.connect(
         lambda: window._open_settings_dialog()
     )
@@ -645,27 +614,25 @@ def build_help_tab(window) -> QWidget:
     # ── Check for updates ─────────────────────────────────────────────────
     update_card = QFrame()
     update_card.setObjectName("card")
-    update_card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(update_card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+        "border-radius:{CARD_RADIUS};}}")
     ucl = QVBoxLayout(update_card)
     ucl.setContentsMargins(0, 0, 0, 0)
     ucl.setSpacing(0)
     utb = QFrame()
     utb.setFixedHeight(32)
-    utb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(utb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     utbl = QHBoxLayout(utb)
     utbl.setContentsMargins(12, 0, 12, 0)
     utl = QLabel("Updates")
-    utl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(utl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     utbl.addWidget(utl)
     utbl.addStretch()
     ucl.addWidget(utb)
     ubody = QHBoxLayout()
     ubody.setContentsMargins(12, 8, 12, 10)
     window._update_lbl = QLabel(f"Current version: v{app_ver}")
-    window._update_lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};")
+    _s.themed_ss(window._update_lbl, "font-size:11px;color:{TEXT_PRIMARY};")
     ubody.addWidget(window._update_lbl, 1)
     btn_update = QPushButton("Check for Updates")
     btn_update.setObjectName("btnNetRefresh")

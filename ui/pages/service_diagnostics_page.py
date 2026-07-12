@@ -36,35 +36,28 @@ from PyQt6.QtWidgets import (
 from modules.metric_store import MetricStore
 from modules.service_bandwidth_overlay import build_overlay_note
 from modules.service_diagnostics import SERVICE_CATALOG, ServiceDiagnosticResult
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE,
-    AMBER,
-    BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    TH_BG, TH_TEXT, WHITE,
-)
+from ui import styles as _s
 from ui.widgets.context_menu import install_copy_menu
 from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
 
 
 # ── Layer display helpers ─────────────────────────────────────────────────────
 
-_LAYER_LABELS = {
-    "none":           ("All layers OK", GREEN),
-    "device":         ("Device problem", RED),
-    "local_network":  ("Local network", RED),
-    "dns":            ("DNS failure", AMBER),
-    "isp":            ("ISP issue", AMBER),
-    "routing":        ("Routing problem", AMBER),
-    "remote_outage":  ("Remote outage", AMBER),
-    "filtered":       ("Blocked / filtered", AMBER),
+_LAYER_LABELS_NAME = {
+    "none":           ("All layers OK", "GREEN"),
+    "device":         ("Device problem", "RED"),
+    "local_network":  ("Local network", "RED"),
+    "dns":            ("DNS failure", "AMBER"),
+    "isp":            ("ISP issue", "AMBER"),
+    "routing":        ("Routing problem", "AMBER"),
+    "remote_outage":  ("Remote outage", "AMBER"),
+    "filtered":       ("Blocked / filtered", "AMBER"),
 }
 
 def _layer_badge(failure_layer: str) -> tuple[str, str]:
     """Return (label, colour) for a failure layer string."""
-    return _LAYER_LABELS.get(failure_layer, (failure_layer, TEXT_SECONDARY))
+    label, color_name = _LAYER_LABELS_NAME.get(failure_layer, (failure_layer, "TEXT_SECONDARY"))
+    return label, getattr(_s, color_name)
 
 
 def _ts_label(ts: int) -> str:
@@ -101,7 +94,7 @@ class ServiceDiagnosticsPage(QWidget):
         root.addWidget(self._build_control_card())
 
         self._status_lbl = QLabel("Select a service and click Run Diagnostics.")
-        self._status_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:12px;")
+        _s.themed_ss(self._status_lbl, "color:{TEXT_MUTED}; font-size:12px;")
 
         self._stack = QStackedWidget()
         self._stack.addWidget(self._build_empty_state())
@@ -112,16 +105,14 @@ class ServiceDiagnosticsPage(QWidget):
 
     def _build_control_card(self) -> QFrame:
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f"border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            "border-radius:{CARD_RADIUS}; }}")
         lay = QHBoxLayout(card)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(10)
 
         lbl = QLabel("Service:")
-        lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-weight:600; border:none;")
+        _s.themed_ss(lbl, "color:{TEXT_PRIMARY}; font-weight:600; border:none;")
         lay.addWidget(lbl)
 
         self._service_combo = QComboBox()
@@ -140,7 +131,7 @@ class ServiceDiagnosticsPage(QWidget):
         self._traceroute_chk.setToolTip(
             "Adds path analysis (~30 s extra). Shows each network hop to the service."
         )
-        self._traceroute_chk.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none;")
+        _s.themed_ss(self._traceroute_chk, "color:{TEXT_PRIMARY}; border:none;")
         lay.addWidget(self._traceroute_chk)
 
         lay.addStretch()
@@ -148,13 +139,11 @@ class ServiceDiagnosticsPage(QWidget):
         self._run_btn = QPushButton("Run Diagnostics")
         self._run_btn.setFixedHeight(32)
         self._run_btn.clicked.connect(self._on_run_clicked)
-        self._run_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f"border-radius:4px; padding:0 16px; font-weight:600; }}"
-            f"QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(self._run_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            "border-radius:4px; padding:0 16px; font-weight:600; }}"
+            "QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}")
         lay.addWidget(self._run_btn)
 
         return card
@@ -186,20 +175,18 @@ class ServiceDiagnosticsPage(QWidget):
 
         icon_lbl = QLabel("◎")
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:48px;")
+        _s.themed_ss(icon_lbl, "color:{TEXT_MUTED}; font-size:48px;")
 
         title_lbl = QLabel("Select a service and run diagnostics")
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:16px; font-weight:600;"
-        )
+        _s.themed_ss(title_lbl, "color:{TEXT_PRIMARY}; font-size:16px; font-weight:600;")
 
         sub_lbl = QLabel(
             "NetSentinel will probe DNS, TCP reachability, latency, and (optionally)\n"
             "the network path to identify where any failure is occurring."
         )
         sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        sub_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        _s.themed_ss(sub_lbl, "color:{TEXT_SECONDARY}; font-size:12px;")
 
         lay.addWidget(icon_lbl)
         lay.addWidget(title_lbl)
@@ -210,10 +197,10 @@ class ServiceDiagnosticsPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(scroll, "background:{BG_DARK};")
 
         container = QWidget()
-        container.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(container, "background:{BG_DARK};")
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(0, 0, 0, 0)
         vlay.setSpacing(10)
@@ -230,10 +217,8 @@ class ServiceDiagnosticsPage(QWidget):
 
     def _build_summary_card(self) -> QFrame:
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f"border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            "border-radius:{CARD_RADIUS}; }}")
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 12, 16, 12)
         lay.setSpacing(6)
@@ -241,13 +226,11 @@ class ServiceDiagnosticsPage(QWidget):
         # Header row
         hdr = QHBoxLayout()
         self._sum_service_lbl = QLabel("—")
-        self._sum_service_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:15px; font-weight:700; border:none;"
-        )
+        _s.themed_ss(self._sum_service_lbl, "color:{TEXT_PRIMARY}; font-size:15px; font-weight:700; border:none;")
         hdr.addWidget(self._sum_service_lbl)
         hdr.addStretch()
         self._sum_ts_lbl = QLabel("")
-        self._sum_ts_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px; border:none;")
+        _s.themed_ss(self._sum_ts_lbl, "color:{TEXT_MUTED}; font-size:11px; border:none;")
         hdr.addWidget(self._sum_ts_lbl)
         lay.addLayout(hdr)
 
@@ -255,27 +238,21 @@ class ServiceDiagnosticsPage(QWidget):
         badge_row = QHBoxLayout()
         self._sum_badge = QLabel("—")
         self._sum_badge.setFixedHeight(24)
-        self._sum_badge.setStyleSheet(
-            f"border-radius:4px; padding:2px 10px; font-size:12px;"
-            f"font-weight:600; color:{WHITE}; background:{TEXT_MUTED};"
-        )
+        _s.themed_ss(self._sum_badge, "border-radius:4px; padding:2px 10px; font-size:12px;"
+            "font-weight:600; color:{WHITE}; background:{TEXT_MUTED};")
         badge_row.addWidget(self._sum_badge)
 
         self._sum_conf_lbl = QLabel("")
-        self._sum_conf_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:12px; border:none;"
-        )
+        _s.themed_ss(self._sum_conf_lbl, "color:{TEXT_SECONDARY}; font-size:12px; border:none;")
         badge_row.addWidget(self._sum_conf_lbl)
         badge_row.addStretch()
 
         self._forum_btn = QPushButton("Copy for Reddit/Discord")
-        self._forum_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px; font-size:11px;"
-            f" border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._forum_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:4px 14px; font-size:11px;"
+            " border-radius:4px; }}"
+            "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._forum_btn.clicked.connect(self._copy_forum_markdown)
         badge_row.addWidget(self._forum_btn)
         lay.addLayout(badge_row)
@@ -283,18 +260,14 @@ class ServiceDiagnosticsPage(QWidget):
         # Summary text
         self._sum_text = QLabel("")
         self._sum_text.setWordWrap(True)
-        self._sum_text.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:12px; border:none;"
-        )
+        _s.themed_ss(self._sum_text, "color:{TEXT_PRIMARY}; font-size:12px; border:none;")
         lay.addWidget(self._sum_text)
 
         # Bandwidth context overlay (S6-6) — only shown when diagnostics pass
         # but other devices are actively using bandwidth right now
         self._bandwidth_overlay_lbl = QLabel("")
         self._bandwidth_overlay_lbl.setWordWrap(True)
-        self._bandwidth_overlay_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; font-style:italic; border:none;"
-        )
+        _s.themed_ss(self._bandwidth_overlay_lbl, "color:{TEXT_SECONDARY}; font-size:11px; font-style:italic; border:none;")
         self._bandwidth_overlay_lbl.setVisible(False)
         lay.addWidget(self._bandwidth_overlay_lbl)
 
@@ -302,10 +275,8 @@ class ServiceDiagnosticsPage(QWidget):
 
     def _build_layers_card(self) -> QFrame:
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f"border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            "border-radius:{CARD_RADIUS}; }}")
         vlay = QVBoxLayout(card)
         vlay.setContentsMargins(0, 0, 0, 0)
         vlay.setSpacing(0)
@@ -313,16 +284,12 @@ class ServiceDiagnosticsPage(QWidget):
         # Card header
         hdr = QFrame()
         hdr.setFixedHeight(32)
-        hdr.setStyleSheet(
-            f"background:{TH_BG}; border-radius:{CARD_RADIUS} {CARD_RADIUS} 0 0;"
-            f"border-bottom:1px solid {CARD_HDR_BORDER};"
-        )
+        _s.themed_ss(hdr, "background:{TH_BG}; border-radius:{CARD_RADIUS} {CARD_RADIUS} 0 0;"
+            "border-bottom:1px solid {CARD_HDR_BORDER};")
         hdr_lay = QHBoxLayout(hdr)
         hdr_lay.setContentsMargins(12, 0, 12, 0)
         hdr_lbl = QLabel("Diagnostic Layers")
-        hdr_lbl.setStyleSheet(
-            f"color:{TH_TEXT}; font-weight:700; font-size:12px; border:none;"
-        )
+        _s.themed_ss(hdr_lbl, "color:{TH_TEXT}; font-weight:700; font-size:12px; border:none;")
         hdr_lay.addWidget(hdr_lbl)
         vlay.addWidget(hdr)
 
@@ -341,15 +308,13 @@ class ServiceDiagnosticsPage(QWidget):
         )
         self._layers_table.setColumnWidth(0, 120)
         self._layers_table.setColumnWidth(1, 80)
-        self._layers_table.setStyleSheet(
-            f"QTableWidget {{ border:none; background:{BG_CARD}; "
-            f"alternate-background-color:{BG_ALT_ROW}; gridline-color:{TABLE_ROW_BORDER}; }}"
-            f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; "
-            f"border:none; padding:4px 8px; font-weight:700; }}"
-            f"QTableWidget::item {{ padding:0 8px; color:{TEXT_PRIMARY}; "
-            f"border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._layers_table, "QTableWidget {{ border:none; background:{BG_CARD}; "
+            "alternate-background-color:{BG_ALT_ROW}; gridline-color:{TABLE_ROW_BORDER}; }}"
+            "QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; "
+            "border:none; padding:4px 8px; font-weight:700; }}"
+            "QTableWidget::item {{ padding:0 8px; color:{TEXT_PRIMARY}; "
+            "border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}")
         install_copy_menu(self._layers_table, [
             ("separator",    None),
             ("Re-run probe", self._on_run_clicked),
@@ -360,15 +325,11 @@ class ServiceDiagnosticsPage(QWidget):
         # Traceroute section (hidden until used)
         self._trace_hdr = QFrame()
         self._trace_hdr.setFixedHeight(32)
-        self._trace_hdr.setStyleSheet(
-            f"background:{TH_BG}; border:none; border-top:1px solid {CARD_HDR_BORDER};"
-        )
+        _s.themed_ss(self._trace_hdr, "background:{TH_BG}; border:none; border-top:1px solid {CARD_HDR_BORDER};")
         th_lay = QHBoxLayout(self._trace_hdr)
         th_lay.setContentsMargins(12, 0, 12, 0)
         th_lbl = QLabel("Network Path (Traceroute)")
-        th_lbl.setStyleSheet(
-            f"color:{TH_TEXT}; font-weight:700; font-size:12px; border:none;"
-        )
+        _s.themed_ss(th_lbl, "color:{TH_TEXT}; font-weight:700; font-size:12px; border:none;")
         th_lay.addWidget(th_lbl)
         self._trace_hdr.hide()
         vlay.addWidget(self._trace_hdr)
@@ -386,15 +347,13 @@ class ServiceDiagnosticsPage(QWidget):
         )
         self._trace_table.setColumnWidth(0, 60)
         self._trace_table.setColumnWidth(2, 100)
-        self._trace_table.setStyleSheet(
-            f"QTableWidget {{ border:none; background:{BG_CARD}; "
-            f"gridline-color:{TABLE_ROW_BORDER}; }}"
-            f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; "
-            f"border:none; padding:4px 8px; font-weight:700; }}"
-            f"QTableWidget::item {{ padding:0 8px; color:{TEXT_PRIMARY}; "
-            f"border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._trace_table, "QTableWidget {{ border:none; background:{BG_CARD}; "
+            "gridline-color:{TABLE_ROW_BORDER}; }}"
+            "QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; "
+            "border:none; padding:4px 8px; font-weight:700; }}"
+            "QTableWidget::item {{ padding:0 8px; color:{TEXT_PRIMARY}; "
+            "border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}")
         install_copy_menu(self._trace_table)
         self._trace_table.hide()
         vlay.addWidget(self._trace_table)
@@ -471,7 +430,7 @@ class ServiceDiagnosticsPage(QWidget):
         self._run_btn.setFocus()
 
     def _set_status(self, msg: str, is_error: bool = False) -> None:
-        color = RED if is_error else TEXT_MUTED
+        color = _s.RED if is_error else _s.TEXT_MUTED
         self._status_lbl.setStyleSheet(f"color:{color}; font-size:12px;")
         self._status_lbl.setText(msg)
 
@@ -486,7 +445,7 @@ class ServiceDiagnosticsPage(QWidget):
         self._sum_badge.setText(badge_text)
         self._sum_badge.setStyleSheet(
             f"border-radius:4px; padding:2px 10px; font-size:12px;"
-            f"font-weight:600; color:{WHITE}; background:{badge_color};"
+            f"font-weight:600; color:{_s.WHITE}; background:{badge_color};"
         )
         self._sum_conf_lbl.setText(f"  Confidence: {result.confidence}%")
         self._sum_text.setText(result.summary or "No summary available.")
@@ -495,7 +454,7 @@ class ServiceDiagnosticsPage(QWidget):
         # Diagnostic layers table
         def _row(row_idx: int, name: str, passed: bool, detail: str) -> None:
             status_char = "●"
-            status_color = GREEN if passed else RED
+            status_color = _s.GREEN if passed else _s.RED
             name_item  = QTableWidgetItem(name)
             status_item = QTableWidgetItem(status_char)
             status_item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(status_color))

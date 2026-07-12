@@ -37,12 +37,9 @@ from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from modules.metric_store import MetricStore, ServiceCheckPoint
 from modules.service_monitor import ServiceTarget, check_tcp
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, BG_ALT_ROW, BG_CARD,
-    BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, STATUS_ICON_CRIT, STATUS_ICON_OK, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
-    TH_TEXT,
+    STATUS_ICON_CRIT, STATUS_ICON_OK,
 )
+from ui import styles as _s
 
 _QS_KEY = "service_monitor/targets"
 
@@ -166,11 +163,11 @@ class ServicePage(QWidget):
         layout.setSpacing(8)
 
         title = QLabel("Service Heartbeat Monitor")
-        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(title, "font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
         layout.addWidget(title)
 
         subtitle = QLabel("TCP port reachability checks — configured services are probed every minute.")
-        subtitle.setStyleSheet(f"font-size: 11px; color: {TEXT_SECONDARY};")
+        _s.themed_ss(subtitle, "font-size: 11px; color: {TEXT_SECONDARY};")
         layout.addWidget(subtitle)
 
         self._content_stack = QStackedWidget()
@@ -186,7 +183,7 @@ class ServicePage(QWidget):
         )
         em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        _s.themed_ss(em_desc, "color:{TEXT_SECONDARY}; font-size:12px;")
         evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
         evl.addSpacing(16)
 
@@ -194,22 +191,22 @@ class ServicePage(QWidget):
         e0_host  = QLineEdit()
         e0_host.setPlaceholderText("Host / IP  (e.g. 192.168.1.1)")
         e0_host.setFixedWidth(200)
-        e0_host.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
+        _s.themed_ss(e0_host, "font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
         e0_port  = QSpinBox()
         e0_port.setRange(1, 65535)
         e0_port.setValue(443)
         e0_port.setFixedWidth(75)
-        e0_port.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 4px;")
+        _s.themed_ss(e0_port, "font-size:11px; border:1px solid {BORDER}; padding:3px 4px;")
         e0_label = QLineEdit()
         e0_label.setPlaceholderText("Label  (optional)")
         e0_label.setFixedWidth(140)
-        e0_label.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
+        _s.themed_ss(e0_label, "font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
         e0_add   = QPushButton("Add Service")
         e0_add.setObjectName("btnScan")
         e0_add.setFixedHeight(30)
 
-        _e0_normal_style = f"font-size:11px; border:1px solid {BORDER}; padding:3px 6px;"
-        _e0_error_style = f"font-size:11px; border:1px solid {RED}; padding:3px 6px;"
+        _e0_normal_style = "font-size:11px; border:1px solid {BORDER}; padding:3px 6px;"
+        _e0_error_style = "font-size:11px; border:1px solid {RED}; padding:3px 6px;"
 
         def _add_from_empty():
             host = e0_host.text()
@@ -226,14 +223,14 @@ class ServicePage(QWidget):
                     self.scan_requested.emit()
                 else:
                     msg = f"Couldn't reach {host.strip()}:{port} — not added."
-                    e0_host.setStyleSheet(_e0_error_style)
+                    _s.themed_ss(e0_host, _e0_error_style)
                     e0_host.setToolTip(msg)
                     # setToolTip() alone only shows on hover — pop it up immediately
                     # so the rejection reason is actually seen, not just a red flash.
                     QToolTip.showText(e0_host.mapToGlobal(e0_host.rect().bottomLeft()), msg, e0_host)
                     _t = QTimer(self)
                     _t.setSingleShot(True)
-                    _t.timeout.connect(lambda: (e0_host.setStyleSheet(_e0_normal_style), e0_host.setToolTip("")))
+                    _t.timeout.connect(lambda: (_s.themed_ss(e0_host, _e0_normal_style), e0_host.setToolTip("")))
                     _t.start(2500)
 
             started = self._probe_and_add(host, port, label, _done)
@@ -264,36 +261,34 @@ class ServicePage(QWidget):
 
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_up    = self._make_kpi("SERVICES UP",    "—", GREEN)
-        self._kpi_down  = self._make_kpi("SERVICES DOWN",  "—", RED)
-        self._kpi_total = self._make_kpi("TOTAL SERVICES", "—", ACCENT)
-        self._kpi_avg   = self._make_kpi("AVG RTT (UP)",   "—", ACCENT)
+        self._kpi_up    = self._make_kpi("SERVICES UP",    "—", "GREEN")
+        self._kpi_down  = self._make_kpi("SERVICES DOWN",  "—", "RED")
+        self._kpi_total = self._make_kpi("TOTAL SERVICES", "—", "ACCENT")
+        self._kpi_avg   = self._make_kpi("AVG RTT (UP)",   "—", "ACCENT")
         for w in (self._kpi_up, self._kpi_down, self._kpi_total, self._kpi_avg):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
         cl.addLayout(kpi_row)
 
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
         # Title bar with inline add form
         title_bar = QFrame()
-        title_bar.setStyleSheet(f"background: {BG_CARD}; border-bottom: 1px solid {CARD_HDR_BORDER};")
+        _s.themed_ss(title_bar, "background: {BG_CARD}; border-bottom: 1px solid {CARD_HDR_BORDER};")
         tb_layout = QHBoxLayout(title_bar)
         tb_layout.setContentsMargins(10, 6, 10, 6)
         tb_layout.setSpacing(6)
 
         bar_lbl = QLabel("Service Status")
-        bar_lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(bar_lbl, "font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
         tb_layout.addWidget(bar_lbl)
         tb_layout.addStretch()
         self._svc_refresh_lbl = QLabel("")
-        self._svc_refresh_lbl.setStyleSheet(f"font-size: 10px; color: {TEXT_MUTED};")
+        _s.themed_ss(self._svc_refresh_lbl, "font-size: 10px; color: {TEXT_MUTED};")
         tb_layout.addWidget(self._svc_refresh_lbl)
         tb_layout.addSpacing(10)
 
@@ -301,32 +296,30 @@ class ServicePage(QWidget):
         self._txt_host.setPlaceholderText("Host / IP")
         self._txt_host.setFixedWidth(160)
         self._txt_host.setFixedHeight(24)
-        self._txt_host.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
+        _s.themed_ss(self._txt_host, "font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
         self._spin_port = QSpinBox()
         self._spin_port.setRange(1, 65535)
         self._spin_port.setValue(443)
         self._spin_port.setFixedWidth(70)
         self._spin_port.setFixedHeight(24)
-        self._spin_port.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 3px;")
+        _s.themed_ss(self._spin_port, "font-size:11px; border:1px solid {BORDER}; padding:2px 3px;")
         self._txt_label = QLineEdit()
         self._txt_label.setPlaceholderText("Label")
         self._txt_label.setFixedWidth(120)
         self._txt_label.setFixedHeight(24)
-        self._txt_label.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
+        _s.themed_ss(self._txt_label, "font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
         btn_add = QPushButton("+ Add")
         btn_add.setFixedHeight(24)
-        btn_add.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" background:transparent; padding:0 10px; }}"
-            f"QPushButton:hover   {{ color:{ACCENT_LITE}; border-color:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; border-color:{ACCENT_DARK}; }}"
-        )
+        _s.themed_ss(btn_add, "QPushButton {{ font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            " background:transparent; padding:0 10px; }}"
+            "QPushButton:hover   {{ color:{ACCENT_LITE}; border-color:{ACCENT_LITE}; }}"
+            "QPushButton:pressed {{ color:{ACCENT_DARK}; border-color:{ACCENT_DARK}; }}")
 
-        _bar_normal_style = f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;"
-        _bar_error_style = f"font-size:11px; border:1px solid {RED}; padding:2px 5px;"
+        _bar_normal_style = "font-size:11px; border:1px solid {BORDER}; padding:2px 5px;"
+        _bar_error_style = "font-size:11px; border:1px solid {RED}; padding:2px 5px;"
 
         def _flash_bar_host(tooltip: str, duration_ms: int) -> None:
-            self._txt_host.setStyleSheet(_bar_error_style)
+            _s.themed_ss(self._txt_host, _bar_error_style)
             self._txt_host.setToolTip(tooltip)
             if tooltip:
                 # setToolTip() alone only shows on hover — pop it up immediately
@@ -339,7 +332,7 @@ class ServicePage(QWidget):
             _t = QTimer(self)
             _t.setSingleShot(True)
             _t.timeout.connect(lambda: (
-                self._txt_host.setStyleSheet(_bar_normal_style), self._txt_host.setToolTip("")
+                _s.themed_ss(self._txt_host, _bar_normal_style), self._txt_host.setToolTip("")
             ))
             _t.start(duration_ms)
 
@@ -394,8 +387,7 @@ class ServicePage(QWidget):
         self._table.setSelectionBehavior(ExpandingTable.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.setSortingEnabled(True)
-        self._table.setStyleSheet(
-            f"""
+        _s.themed_ss(self._table, """
             QTableWidget {{
                 border: none; gridline-color: {TABLE_ROW_BORDER};
                 font-size: 11px; color: {TEXT_PRIMARY};
@@ -411,8 +403,7 @@ class ServicePage(QWidget):
             QTableWidget::item:selected {{
                 background: {TABLE_SEL}; color: {TEXT_PRIMARY};
             }}
-            """
-        )
+            """)
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
@@ -486,20 +477,20 @@ class ServicePage(QWidget):
 
     # ── KPI helpers ───────────────────────────────────────────────────────────
 
-    def _make_kpi(self, label: str, value: str, accent: str) -> QFrame:
+    def _make_kpi(self, label: str, value: str, accent_name: str) -> QFrame:
         frame = QFrame()
-        frame.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; "
-            f"border-left: 3px solid {accent}; }}"
-        )
+        _s.themed_ss(frame, lambda name=accent_name: (
+            f"QFrame {{ background: {_s.BG_CARD}; border: 1px solid {_s.BORDER}; "
+            f"border-left: 3px solid {getattr(_s, name)}; }}"
+        ))
         frame.setMinimumWidth(100)
         lay = QVBoxLayout(frame)
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
         lbl = QLabel(label)
-        lbl.setStyleSheet(f"font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};")
+        _s.themed_ss(lbl, "font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};")
         val = QLabel(value)
-        val.setStyleSheet(f"font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(val, "font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};")
         val.setObjectName(f"kpi_val_{label}")
         lay.addWidget(lbl)
         lay.addWidget(val)
@@ -544,7 +535,7 @@ class ServicePage(QWidget):
                 # Targets exist but no check data yet — show waiting hint
                 self._table.setRowCount(1)
                 placeholder = QTableWidgetItem("Waiting for first check cycle…")
-                placeholder.setForeground(QColor(TEXT_SECONDARY))
+                placeholder.setForeground(QColor(_s.TEXT_SECONDARY))
                 placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self._table.setItem(0, 0, placeholder)
                 self._table.setSpan(0, 0, 1, 6)
@@ -566,13 +557,13 @@ class ServicePage(QWidget):
 
             if r.up:
                 status_text  = f"{STATUS_ICON_OK}  UP"
-                status_color = GREEN
+                status_color = _s.GREEN
                 up_count += 1
                 if r.rtt_ms is not None:
                     rtts.append(r.rtt_ms)
             else:
                 status_text  = f"{STATUS_ICON_CRIT}  DOWN"
-                status_color = RED
+                status_color = _s.RED
                 down_count += 1
 
             rtt_str = f"{r.rtt_ms:.1f}" if r.rtt_ms is not None else "—"
@@ -607,12 +598,10 @@ class ServicePage(QWidget):
                 _diag_btn = QPushButton("Diagnose →")
                 _diag_btn.setFixedHeight(18)
                 _diag_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                _diag_btn.setStyleSheet(
-                    f"QPushButton {{ background: transparent; color: {ACCENT};"
-                    f" font-size: 9px; border: 1px solid {ACCENT}; border-radius: 2px; padding: 0 4px; }}"
-                    f"QPushButton:hover {{ background: {BG_HOVER}; color: {ACCENT}; }}"
-                    f"QPushButton:pressed {{ background: {BORDER}; color: {TEXT_PRIMARY}; }}"
-                )
+                _s.themed_ss(_diag_btn, "QPushButton {{ background: transparent; color: {ACCENT};"
+                    " font-size: 9px; border: 1px solid {ACCENT}; border-radius: 2px; padding: 0 4px; }}"
+                    "QPushButton:hover {{ background: {BG_HOVER}; color: {ACCENT}; }}"
+                    "QPushButton:pressed {{ background: {BORDER}; color: {TEXT_PRIMARY}; }}")
                 _host = r.host
                 _diag_btn.clicked.connect(
                     lambda _=False, _h=_host: self.diagnose_service.emit(
@@ -668,11 +657,11 @@ class ServicePage(QWidget):
         )
         if r is None:
             return QWidget()
-        status_color = GREEN if r.up else RED
+        status_color = _s.GREEN if r.up else _s.RED
 
         outer = QWidget()
         outer.setStyleSheet(
-            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f"QWidget {{ background:{_s.BG_HOVER}; border:none;"
             f" border-left:3px solid {status_color}; }}"
         )
         lay = QHBoxLayout(outer)
@@ -681,10 +670,10 @@ class ServicePage(QWidget):
 
         def _hdr(t):
             l = QLabel(t)
-            l.setStyleSheet(f"font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
+            _s.themed_ss(l, "font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
             return l
 
-        def _val(t, c=TEXT_PRIMARY):
+        def _val(t, c=_s.TEXT_PRIMARY):
             l = QLabel(str(t))
             l.setStyleSheet(f"font-size:11px; color:{c}; background:transparent; border:none;")
             return l
@@ -710,7 +699,7 @@ class ServicePage(QWidget):
         g2.addRow(_hdr("RTT"),        _val(rtt_str))
         g2.addRow(_hdr("Last Check"), _val(_ts_label(r.ts)))
         if not r.up and r.error:
-            g2.addRow(_hdr("Error"), _val(r.error, RED))
+            g2.addRow(_hdr("Error"), _val(r.error, _s.RED))
 
         # Recent history from store (last 5 checks)
         if self._store:
@@ -724,9 +713,7 @@ class ServicePage(QWidget):
                 g3.setSpacing(3)
                 g3.setHorizontalSpacing(12)
                 recent_lbl = _val(dots)
-                recent_lbl.setStyleSheet(
-                    f"font-size:14px; color:{GREEN}; background:transparent; border:none; letter-spacing:2px;"
-                )
+                _s.themed_ss(recent_lbl, "font-size:14px; color:{GREEN}; background:transparent; border:none; letter-spacing:2px;")
                 g3.addRow(_hdr("Last 5 checks"), recent_lbl)
                 lay.addWidget(col3)
 
@@ -739,10 +726,8 @@ class ServicePage(QWidget):
         _port = r.port
         btn_rm = QPushButton("Remove Service")
         btn_rm.setFixedHeight(24)
-        btn_rm.setStyleSheet(
-            f"font-size:10px; color:{RED}; border:1px solid {RED};"
-            f" background:transparent; padding:0 8px;"
-        )
+        _s.themed_ss(btn_rm, "font-size:10px; color:{RED}; border:1px solid {RED};"
+            " background:transparent; padding:0 8px;")
         btn_rm.clicked.connect(lambda: self._remove_service(_host, _port))
         lay.addWidget(btn_rm, alignment=Qt.AlignmentFlag.AlignVCenter)
 

@@ -22,18 +22,20 @@ from PyQt6.QtWidgets import (
 
 from modules.lab_scenarios import LabResult, LabScenario, SCENARIOS
 from modules.metric_store import MetricStore
+from ui import styles as _s
 from ui.styles import (
     alpha,
-    ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 _PICKER  = 0
 _RUNNER  = 1
 _RESULT  = 2
 
-_EFFORT_COLOR = {"S": GREEN, "M": AMBER, "L": RED}
+_EFFORT_COLOR_NAME = {"S": "GREEN", "M": "AMBER", "L": "RED"}
+
+
+def _effort_color(effort: str) -> str:
+    return getattr(_s, _EFFORT_COLOR_NAME.get(effort, "AMBER"))
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +247,7 @@ class LabModePage(QWidget):
         self._solution_visible:     bool = False
 
         self._setup_ui()
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
 
     # ------------------------------------------------------------------
     # UI build
@@ -295,24 +297,19 @@ class LabModePage(QWidget):
     def _scenario_card(self, scenario: LabScenario) -> QFrame:
         card = QFrame()
         card.setObjectName("labCard")
-        card.setStyleSheet(
-            f"QFrame#labCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:8px; }}"
-        )
+        _s.themed_ss(card, "QFrame#labCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:8px; }}")
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 14, 16, 14)
         lay.setSpacing(6)
 
         header = QHBoxLayout()
         t = QLabel(scenario.title)
-        t.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
-        effort_color = _EFFORT_COLOR.get(scenario.effort, AMBER)
+        _s.themed_ss(t, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
         e = QLabel(f"Effort: {scenario.effort}")
-        e.setStyleSheet(
-            f"font-size:10px; color:{effort_color}; background:transparent;"
-        )
+        _s.themed_ss(e, lambda eff=scenario.effort: (
+            f"font-size:10px; color:{_effort_color(eff)}; background:transparent;"
+        ))
         header.addWidget(t)
         header.addStretch()
         header.addWidget(e)
@@ -320,11 +317,11 @@ class LabModePage(QWidget):
 
         g = QLabel(scenario.goal)
         g.setWordWrap(True)
-        g.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        _s.themed_ss(g, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         lay.addWidget(g)
 
         steps_lbl = QLabel(f"{len(scenario.steps)} steps")
-        steps_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
+        _s.themed_ss(steps_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
         lay.addWidget(steps_lbl)
 
         # Curriculum alignment badges
@@ -344,12 +341,10 @@ class LabModePage(QWidget):
 
         btn = QPushButton("Start Exercise")
         btn.setFixedHeight(28)
-        btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         btn.clicked.connect(lambda _, s=scenario: self._start_scenario(s))
         btn.clicked.connect(lambda: self.scan_requested.emit())
         btn_row.addWidget(btn)
@@ -357,12 +352,10 @@ class LabModePage(QWidget):
         if scenario.protocol:
             viz_btn = QPushButton(f"See how {scenario.protocol} works →")
             viz_btn.setFixedHeight(28)
-            viz_btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{ACCENT};"
-                f" border:1px solid {ACCENT}; border-radius:4px; font-size:11px; }}"
-                f"QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(viz_btn, "QPushButton {{ background:transparent; color:{ACCENT};"
+                " border:1px solid {ACCENT}; border-radius:4px; font-size:11px; }}"
+                "QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
             _proto = scenario.protocol
             viz_btn.clicked.connect(lambda _, p=_proto: self.explore_protocol.emit(p))
             btn_row.addWidget(viz_btn)
@@ -382,24 +375,18 @@ class LabModePage(QWidget):
         # back link
         self._runner_back = QPushButton("← Back to exercises")
         self._runner_back.setFlat(True)
-        self._runner_back.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; text-align:left; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._runner_back, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; text-align:left; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._runner_back.clicked.connect(self._go_picker)
         outer.addWidget(self._runner_back)
 
         # scenario title + step indicator
         hdr = QHBoxLayout()
         self._runner_title = QLabel()
-        self._runner_title.setStyleSheet(
-            f"font-size:17px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(self._runner_title, "font-size:17px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
         self._runner_step_lbl = QLabel()
-        self._runner_step_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._runner_step_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         hdr.addWidget(self._runner_title)
         hdr.addStretch()
         hdr.addWidget(self._runner_step_lbl)
@@ -408,17 +395,13 @@ class LabModePage(QWidget):
 
         # instruction card
         self._instruction_card = QFrame()
-        self._instruction_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-left:4px solid {ACCENT}; border-radius:6px; }}"
-        )
+        _s.themed_ss(self._instruction_card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-left:4px solid {ACCENT}; border-radius:6px; }}")
         inst_lay = QVBoxLayout(self._instruction_card)
         inst_lay.setContentsMargins(14, 12, 14, 12)
         self._instruction_lbl = QLabel()
         self._instruction_lbl.setWordWrap(True)
-        self._instruction_lbl.setStyleSheet(
-            f"font-size:13px; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(self._instruction_lbl, "font-size:13px; color:{TEXT_PRIMARY}; background:transparent;")
         inst_lay.addWidget(self._instruction_lbl)
         outer.addWidget(self._instruction_card)
 
@@ -427,32 +410,24 @@ class LabModePage(QWidget):
         self._prog_bar.setRange(0, 0)
         self._prog_bar.setFixedHeight(6)
         self._prog_bar.setTextVisible(False)
-        self._prog_bar.setStyleSheet(
-            f"QProgressBar {{ background:{BG_CARD}; border:none; border-radius:3px; }}"
-            f"QProgressBar::chunk {{ background:{ACCENT}; border-radius:3px; }}"
-        )
+        _s.themed_ss(self._prog_bar, "QProgressBar {{ background:{BG_CARD}; border:none; border-radius:3px; }}"
+            "QProgressBar::chunk {{ background:{ACCENT}; border-radius:3px; }}")
         self._prog_bar.hide()
         outer.addWidget(self._prog_bar)
 
         self._prog_lbl = QLabel()
-        self._prog_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._prog_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._prog_lbl.hide()
         outer.addWidget(self._prog_lbl)
 
         # summary label (shown after scan finishes)
         self._summary_card = QFrame()
-        self._summary_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:6px; }}"
-        )
+        _s.themed_ss(self._summary_card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:6px; }}")
         sum_lay = QVBoxLayout(self._summary_card)
         sum_lay.setContentsMargins(14, 10, 14, 10)
         self._summary_lbl = QLabel()
         self._summary_lbl.setWordWrap(True)
-        self._summary_lbl.setStyleSheet(
-            f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(self._summary_lbl, "font-size:12px; color:{TEXT_PRIMARY}; background:transparent;")
         sum_lay.addWidget(self._summary_lbl)
         self._summary_card.hide()
         outer.addWidget(self._summary_card)
@@ -473,39 +448,33 @@ class LabModePage(QWidget):
 
         # hint panel (hidden until toggled) — above buttons so it doesn't push them off-screen
         self._hint_card = QFrame()
-        self._hint_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {alpha(AMBER, 0x40)};"
-            f" border-left:4px solid {AMBER}; border-radius:6px; }}"
-        )
+        _s.themed_ss(self._hint_card, lambda: (
+            f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {alpha(_s.AMBER, 0x40)};"
+            f" border-left:4px solid {_s.AMBER}; border-radius:6px; }}"
+        ))
         hint_lay = QVBoxLayout(self._hint_card)
         hint_lay.setContentsMargins(14, 10, 14, 10)
         self._hint_lbl = QLabel()
         self._hint_lbl.setWordWrap(True)
-        self._hint_lbl.setStyleSheet(
-            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._hint_lbl, "font-size:12px; color:{TEXT_SECONDARY}; background:transparent;")
         hint_lay.addWidget(self._hint_lbl)
         self._hint_card.hide()
         outer.addWidget(self._hint_card)
 
         # solution panel (hidden until revealed) — above buttons
         self._solution_card = QFrame()
-        self._solution_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {alpha(GREEN, 0x40)};"
-            f" border-left:4px solid {GREEN}; border-radius:6px; }}"
-        )
+        _s.themed_ss(self._solution_card, lambda: (
+            f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {alpha(_s.GREEN, 0x40)};"
+            f" border-left:4px solid {_s.GREEN}; border-radius:6px; }}"
+        ))
         sol_lay = QVBoxLayout(self._solution_card)
         sol_lay.setContentsMargins(14, 10, 14, 10)
         sol_hdr = QLabel("Solution")
-        sol_hdr.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{GREEN}; background:transparent;"
-        )
+        _s.themed_ss(sol_hdr, "font-size:11px; font-weight:bold; color:{GREEN}; background:transparent;")
         sol_lay.addWidget(sol_hdr)
         self._solution_lbl = QLabel()
         self._solution_lbl.setWordWrap(True)
-        self._solution_lbl.setStyleSheet(
-            f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(self._solution_lbl, "font-size:12px; color:{TEXT_PRIMARY}; background:transparent;")
         sol_lay.addWidget(self._solution_lbl)
         self._solution_card.hide()
         outer.addWidget(self._solution_card)
@@ -514,47 +483,39 @@ class LabModePage(QWidget):
         btn_row = QHBoxLayout()
         self._run_btn = QPushButton("Run Check")
         self._run_btn.setFixedHeight(30)
-        self._run_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
-            f"QPushButton:hover:!disabled {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._run_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
+            "QPushButton:hover:!disabled {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._run_btn.clicked.connect(self._run_check)
 
         self._hint_btn = QPushButton("Show Hint")
         self._hint_btn.setFixedHeight(30)
         self._hint_btn.setCheckable(True)
-        self._hint_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
-            f" border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._hint_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+            " border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            "QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         self._hint_btn.toggled.connect(self._toggle_hint)
 
         self._solution_btn = QPushButton("Reveal Solution")
         self._solution_btn.setFixedHeight(30)
-        self._solution_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
-            f" border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; border-color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._solution_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+            " border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; border-color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         self._solution_btn.clicked.connect(self._reveal_solution)
 
         self._next_btn = QPushButton("Next Step →")
         self._next_btn.setFixedHeight(30)
         self._next_btn.setEnabled(False)
-        self._next_btn.setStyleSheet(
-            f"QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
-            f"QPushButton:hover:!disabled {{ background:{GREEN}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{GREEN}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._next_btn, "QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
+            "QPushButton:hover:!disabled {{ background:{GREEN}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{GREEN}; color:{WHITE}; }}")
         self._next_btn.clicked.connect(self._next_step)
 
         btn_row.addWidget(self._run_btn)
@@ -575,9 +536,7 @@ class LabModePage(QWidget):
         outer.setSpacing(10)
 
         self._result_title = QLabel()
-        self._result_title.setStyleSheet(
-            f"font-size:17px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(self._result_title, "font-size:17px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
         outer.addWidget(self._result_title)
 
         self._verdict_card = QFrame()
@@ -585,13 +544,9 @@ class LabModePage(QWidget):
         v_lay = QVBoxLayout(self._verdict_card)
         v_lay.setContentsMargins(16, 14, 16, 14)
         self._verdict_lbl = QLabel()
-        self._verdict_lbl.setStyleSheet(
-            f"font-size:15px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(self._verdict_lbl, "font-size:15px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
         self._verdict_meta = QLabel()
-        self._verdict_meta.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._verdict_meta, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         v_lay.addWidget(self._verdict_lbl)
         v_lay.addWidget(self._verdict_meta)
         outer.addWidget(self._verdict_card)
@@ -601,42 +556,34 @@ class LabModePage(QWidget):
         btn_row = QHBoxLayout()
         export_btn = QPushButton("Export Report (HTML)")
         export_btn.setFixedHeight(30)
-        export_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(export_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         export_btn.clicked.connect(self._export_report)
 
         again_btn = QPushButton("Try Again")
         again_btn.setFixedHeight(30)
-        again_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(again_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         again_btn.clicked.connect(lambda: self._start_scenario(self._scenario) if self._scenario else None)
 
         badge_btn = QPushButton("Download Badge (PNG)")
         badge_btn.setFixedHeight(30)
-        badge_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(badge_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         badge_btn.clicked.connect(self._download_badge)
         self._badge_btn = badge_btn
 
         back_btn = QPushButton("← Back to Exercises")
         back_btn.setFixedHeight(30)
         back_btn.setFlat(True)
-        back_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent; border:none; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(back_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent; border:none; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         back_btn.clicked.connect(self._go_picker)
 
         btn_row.addWidget(back_btn)
@@ -730,9 +677,9 @@ class LabModePage(QWidget):
         self._prog_lbl.hide()
         self._run_btn.setText("Run Check")
 
-        color = GREEN if result.get("ok") else AMBER
+        color = _s.GREEN if result.get("ok") else _s.AMBER
         self._summary_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {color}40;"
+            f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {color}40;"
             f" border-left:4px solid {color}; border-radius:6px; }}"
         )
         self._summary_lbl.setText(result.get("summary", "Done."))
@@ -762,22 +709,20 @@ class LabModePage(QWidget):
         if is_device_list:
             # header row
             hdr = QLabel("  IP Address        MAC               Vendor                  Hostname        Risk")
-            hdr.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
-                f" background:transparent; font-family:monospace;"
-            )
+            _s.themed_ss(hdr, "font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+                " background:transparent; font-family:monospace;")
             self._findings_vbox.addWidget(hdr)
 
             for dev in findings:
                 risk  = dev.get("risk", "")
                 color = {
-                    "HIGH":    RED,
-                    "UNKNOWN": AMBER,
-                }.get(risk, GREEN)
+                    "HIGH":    _s.RED,
+                    "UNKNOWN": _s.AMBER,
+                }.get(risk, _s.GREEN)
 
                 row = QFrame()
                 row.setStyleSheet(
-                    f"QFrame {{ background:{BG_CARD}; border:1px solid {color}30;"
+                    f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {color}30;"
                     f" border-left:3px solid {color}; border-radius:4px; }}"
                 )
                 rl = QHBoxLayout(row)
@@ -787,10 +732,8 @@ class LabModePage(QWidget):
                 def _cell(text: str, width: int) -> QLabel:
                     lbl = QLabel(text)
                     lbl.setFixedWidth(width)
-                    lbl.setStyleSheet(
-                        f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
-                        f" font-family:monospace;"
-                    )
+                    _s.themed_ss(lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+                        " font-family:monospace;")
                     return lbl
 
                 rl.addWidget(_cell(dev.get("ip", "—"), 130))
@@ -811,22 +754,16 @@ class LabModePage(QWidget):
             for item in findings:
                 for key, val in item.items():
                     row = QFrame()
-                    row.setStyleSheet(
-                        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-                        f" border-radius:4px; }}"
-                    )
+                    _s.themed_ss(row, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+                        " border-radius:4px; }}")
                     rl = QHBoxLayout(row)
                     rl.setContentsMargins(8, 4, 8, 4)
                     key_lbl = QLabel(str(key).replace("_", " ").title() + ":")
                     key_lbl.setFixedWidth(160)
-                    key_lbl.setStyleSheet(
-                        f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-                    )
+                    _s.themed_ss(key_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
                     val_lbl = QLabel(str(val))
                     val_lbl.setWordWrap(True)
-                    val_lbl.setStyleSheet(
-                        f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
-                    )
+                    _s.themed_ss(val_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
                     rl.addWidget(key_lbl)
                     rl.addWidget(val_lbl)
                     rl.addStretch()
@@ -885,13 +822,13 @@ class LabModePage(QWidget):
         self._result_title.setText(result.scenario_title)
 
         color = {
-            "PASS": GREEN, "PARTIAL": AMBER, "INCOMPLETE": AMBER,
-        }.get(result.verdict, AMBER)
+            "PASS": _s.GREEN, "PARTIAL": _s.AMBER, "INCOMPLETE": _s.AMBER,
+        }.get(result.verdict, _s.AMBER)
         icon  = {"PASS": "✓", "PARTIAL": "△", "INCOMPLETE": "✗"}.get(result.verdict, "△")
 
         self._verdict_card.setStyleSheet(
-            f"QFrame#verdictCard {{ background:{BG_CARD};"
-            f" border-left:4px solid {color}; border:1px solid {BORDER};"
+            f"QFrame#verdictCard {{ background:{_s.BG_CARD};"
+            f" border-left:4px solid {color}; border:1px solid {_s.BORDER};"
             f" border-radius:6px; }}"
         )
         self._verdict_lbl.setText(f"{icon}  {result.verdict}")

@@ -24,10 +24,9 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.metric_store import MetricStore
+from ui import styles as _s
 from ui.styles import (
     alpha,
-    ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK, BORDER, BG_HOVER, GREEN, RED,
-    PROGRESS_TRACK, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.jargon_tooltip import JargonTooltip
 
@@ -42,13 +41,17 @@ _CATEGORY_TERM: dict[str, str] = {
     "Chronic Connectivity Loss":                 "Packet Loss",
 }
 
-_SEV_COLOR = {
-    "CRITICAL": RED,
-    "HIGH":     RED,
-    "MEDIUM":   AMBER,
-    "LOW":      GREEN,
-    "INFO":     ACCENT,
+_SEV_COLOR_NAME = {
+    "CRITICAL": "RED",
+    "HIGH":     "RED",
+    "MEDIUM":   "AMBER",
+    "LOW":      "GREEN",
+    "INFO":     "ACCENT",
 }
+
+
+def _sev_color(sev: str) -> str:
+    return getattr(_s, _SEV_COLOR_NAME.get(sev, "ACCENT"))
 
 # Maps CorrelatedFinding.category → (button label, navigate_to target)
 _CTA_MAP: dict[str, tuple[str, str]] = {
@@ -335,15 +338,15 @@ class DiagnosisPage(QWidget):
         self._isp_btn.setText("Quick test: Is this my ISP or my router?")
         self._isp_btn.setEnabled(True)
         _CATEGORY_COLORS = {
-            "local":    RED,
-            "isp":      AMBER,
-            "external": AMBER,
-            "all_ok":   GREEN,
-            "unknown":  TEXT_SECONDARY,
+            "local":    _s.RED,
+            "isp":      _s.AMBER,
+            "external": _s.AMBER,
+            "all_ok":   _s.GREEN,
+            "unknown":  _s.TEXT_SECONDARY,
         }
-        color = _CATEGORY_COLORS.get(result.category, TEXT_SECONDARY)
+        color = _CATEGORY_COLORS.get(result.category, _s.TEXT_SECONDARY)
         self._isp_result_card.setStyleSheet(
-            f"QFrame#ispResultCard {{ background:{BG_CARD}; border:1px solid {color};"
+            f"QFrame#ispResultCard {{ background:{_s.BG_CARD}; border:1px solid {color};"
             f" border-left:3px solid {color}; border-radius:4px; }}"
         )
         self._isp_verdict_lbl.setText(result.verdict)
@@ -363,7 +366,7 @@ class DiagnosisPage(QWidget):
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
@@ -371,12 +374,10 @@ class DiagnosisPage(QWidget):
         # Back link
         back_btn = QPushButton("← Overview")
         back_btn.setFlat(True)
-        back_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(back_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         back_btn.clicked.connect(lambda: self.navigate_to.emit("Dashboard"))
         root.addWidget(back_btn)
@@ -406,9 +407,7 @@ class DiagnosisPage(QWidget):
 
         prompt = QLabel("What's happening?")
         prompt.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        prompt.setStyleSheet(
-            f"font-size:15px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(prompt, "font-size:15px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
         lay.addWidget(prompt)
 
         _SYMPTOMS = [
@@ -425,12 +424,12 @@ class DiagnosisPage(QWidget):
         self._symptom_group.setExclusive(True)
 
         _tile_base = (
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:2px solid {BORDER}; border-radius:8px;"
-            f" font-size:12px; padding:18px 12px; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
-            f"QPushButton:checked {{ border-color:{ACCENT}; background:{ACCENT};"
-            f" color:{WHITE}; }}"
+            "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:2px solid {BORDER}; border-radius:8px;"
+            " font-size:12px; padding:18px 12px; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
+            "QPushButton:checked {{ border-color:{ACCENT}; background:{ACCENT};"
+            " color:{WHITE}; }}"
         )
 
         self._symptom_btns: dict = {}
@@ -439,7 +438,7 @@ class DiagnosisPage(QWidget):
             btn.setCheckable(True)
             btn.setFixedHeight(72)
             btn.setMinimumWidth(160)
-            btn.setStyleSheet(_tile_base)
+            _s.themed_ss(btn, _tile_base)
             btn.setProperty("symptom_key", key)
             self._symptom_group.addButton(btn)
             self._symptom_btns[key] = btn
@@ -465,9 +464,7 @@ class DiagnosisPage(QWidget):
         sp_lay.setContentsMargins(0, 0, 0, 0)
         sp_lay.setSpacing(8)
         sp_label = QLabel("Service:")
-        sp_label.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(sp_label, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._symptom_service_combo = QComboBox()
         self._symptom_service_combo.setMinimumWidth(200)
         from modules.service_diagnostics import SERVICE_CATALOG
@@ -496,17 +493,13 @@ class DiagnosisPage(QWidget):
         _od_lay.setContentsMargins(0, 0, 0, 0)
         _od_lay.setSpacing(8)
         _od_label = QLabel("Describe the issue:")
-        _od_label.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(_od_label, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._other_desc_edit = QLineEdit()
         self._other_desc_edit.setPlaceholderText("e.g. my printer can't be found, one device is much slower than others…")
         self._other_desc_edit.setFixedHeight(28)
-        self._other_desc_edit.setStyleSheet(
-            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:0 6px; font-size:11px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._other_desc_edit, "QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:0 6px; font-size:11px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         _od_lay.addWidget(_od_label)
         _od_lay.addWidget(self._other_desc_edit, 1)
         lay.addWidget(self._other_desc_row)
@@ -515,67 +508,53 @@ class DiagnosisPage(QWidget):
         _tile_hint = QLabel("Select a symptom, then click Run Diagnosis — NetSentinel runs targeted checks and shows plain-English results in 15–30 seconds.")
         _tile_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _tile_hint.setWordWrap(True)
-        _tile_hint.setStyleSheet(
-            f"font-size:11px; font-style:italic; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(_tile_hint, "font-size:11px; font-style:italic; color:{TEXT_SECONDARY}; background:transparent;")
         lay.addWidget(_tile_hint)
 
         run_btn = QPushButton("Run Diagnosis")
         run_btn.setFixedWidth(180)
         run_btn.setFixedHeight(44)
-        run_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" font-size:13px; font-weight:bold; border-radius:6px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(run_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " font-size:13px; font-weight:bold; border-radius:6px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         run_btn.clicked.connect(self._start)
         lay.addWidget(run_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         hint = QLabel("Takes about 30 seconds.")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(hint, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         lay.addWidget(hint)
 
         # ISP vs Router quick test (S3-4)
         sep_line = QFrame()
         sep_line.setFrameShape(QFrame.Shape.HLine)
-        sep_line.setStyleSheet(f"color:{BORDER}; background:{BORDER}; border:none; max-height:1px;")
+        _s.themed_ss(sep_line, "color:{BORDER}; background:{BORDER}; border:none; max-height:1px;")
         lay.addWidget(sep_line)
 
         self._isp_btn = QPushButton("Quick test: Is this my ISP or my router?")
         self._isp_btn.setFixedHeight(32)
-        self._isp_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" font-size:11px; border-radius:4px; padding:0 12px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT_DARK}; }}"
-        )
+        _s.themed_ss(self._isp_btn, "QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
+            " font-size:11px; border-radius:4px; padding:0 12px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT_DARK}; }}")
         self._isp_btn.clicked.connect(self._launch_isp_test)
         lay.addWidget(self._isp_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # ISP test result card — hidden until a test completes
         self._isp_result_card = QFrame()
         self._isp_result_card.setObjectName("ispResultCard")
-        self._isp_result_card.setStyleSheet(
-            f"QFrame#ispResultCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
-        )
+        _s.themed_ss(self._isp_result_card, "QFrame#ispResultCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}")
         _irc_lay = QVBoxLayout(self._isp_result_card)
         _irc_lay.setContentsMargins(12, 8, 12, 8)
         _irc_lay.setSpacing(4)
         self._isp_verdict_lbl = QLabel("–")
         self._isp_verdict_lbl.setWordWrap(True)
-        self._isp_verdict_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._isp_verdict_lbl, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY}; border:none; background:transparent;")
         self._isp_detail_lbl = QLabel("")
         self._isp_detail_lbl.setWordWrap(True)
-        self._isp_detail_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._isp_detail_lbl, "font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;")
         _irc_lay.addWidget(self._isp_verdict_lbl)
         _irc_lay.addWidget(self._isp_detail_lbl)
         self._isp_result_card.hide()
@@ -596,26 +575,20 @@ class DiagnosisPage(QWidget):
         self._progress_bar.setFixedWidth(420)
         self._progress_bar.setFixedHeight(10)
         self._progress_bar.setTextVisible(False)
-        self._progress_bar.setStyleSheet(
-            f"QProgressBar {{ background:{PROGRESS_TRACK}; border-radius:5px; border:none; }}"
-            f"QProgressBar::chunk {{ background:{ACCENT}; border-radius:5px; }}"
-        )
+        _s.themed_ss(self._progress_bar, "QProgressBar {{ background:{PROGRESS_TRACK}; border-radius:5px; border:none; }}"
+            "QProgressBar::chunk {{ background:{ACCENT}; border-radius:5px; }}")
 
         self._step_lbl = QLabel("Starting…")
         self._step_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._step_lbl.setStyleSheet(
-            f"font-size:13px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._step_lbl, "font-size:13px; color:{TEXT_SECONDARY}; background:transparent;")
 
         self._cancel_btn = QPushButton("Cancel")
         self._cancel_btn.setFixedWidth(100)
-        self._cancel_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; padding:4px 14px; font-size:11px;"
-            f" border-radius:4px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._cancel_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; padding:4px 14px; font-size:11px;"
+            " border-radius:4px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._cancel_btn.clicked.connect(self._cancel)
 
         lay.addWidget(self._progress_bar, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -633,33 +606,27 @@ class DiagnosisPage(QWidget):
         # Amber logger warning — shown when logger has never been started
         self._logger_warn = QFrame()
         self._logger_warn.setObjectName("loggerWarn")
-        self._logger_warn.setStyleSheet(
-            f"QFrame#loggerWarn {{ background:{alpha(AMBER, 0x18)}; border:1px solid {alpha(AMBER, 0x66)};"
+        _s.themed_ss(self._logger_warn, lambda: (
+            f"QFrame#loggerWarn {{ background:{alpha(_s.AMBER, 0x18)}; border:1px solid {alpha(_s.AMBER, 0x66)};"
             f" border-radius:3px; }}"
-        )
+        ))
         _lw_lay = QHBoxLayout(self._logger_warn)
         _lw_lay.setContentsMargins(10, 6, 10, 6)
         _lw_lay.setSpacing(8)
         _lw_icon = QLabel("⚠")
-        _lw_icon.setStyleSheet(
-            f"font-size:13px; color:{AMBER}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_lw_icon, "font-size:13px; color:{AMBER}; background:transparent; border:none;")
         _lw_text = QLabel(
             "Network Logger has no data yet — some findings may be incomplete. "
             "Start the logger and let it run for a few hours for the best results."
         )
         _lw_text.setWordWrap(True)
-        _lw_text.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_lw_text, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         _lw_dismiss = QPushButton("×")
         _lw_dismiss.setFixedSize(18, 18)
-        _lw_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _s.themed_ss(_lw_dismiss, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:14px; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
         _lw_dismiss.clicked.connect(lambda: self._logger_warn.setVisible(False))
         _lw_lay.addWidget(_lw_icon)
         _lw_lay.addWidget(_lw_text, 1)
@@ -672,44 +639,34 @@ class DiagnosisPage(QWidget):
 
         # Symptom context label — shows which symptom the user reported (S3-3)
         self._symptom_ctx_lbl = QLabel("")
-        self._symptom_ctx_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none; padding:0 2px;"
-        )
+        _s.themed_ss(self._symptom_ctx_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none; padding:0 2px;")
         self._symptom_ctx_lbl.hide()
         outer.addWidget(self._symptom_ctx_lbl)
 
         # Verdict card
         self._verdict_card = QFrame()
         self._verdict_card.setObjectName("verdictCard")
-        self._verdict_card.setStyleSheet(
-            f"QFrame#verdictCard {{ background:{BG_CARD};"
-            f" border-left:4px solid {ACCENT}; border-top:1px solid {BORDER};"
-            f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self._verdict_card, "QFrame#verdictCard {{ background:{BG_CARD};"
+            " border-left:4px solid {ACCENT}; border-top:1px solid {BORDER};"
+            " border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}")
         vc_lay = QVBoxLayout(self._verdict_card)
         vc_lay.setContentsMargins(14, 10, 14, 10)
         vc_lay.setSpacing(4)
 
         self._verdict_title = QLabel("Diagnosis Result")
-        self._verdict_title.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(self._verdict_title, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " border:none; background:transparent;")
         self._verdict_text = QLabel("–")
         self._verdict_text.setWordWrap(True)
-        self._verdict_text.setStyleSheet(
-            f"font-size:12px; color:{TEXT_PRIMARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._verdict_text, "font-size:12px; color:{TEXT_PRIMARY}; border:none; background:transparent;")
         vc_lay.addWidget(self._verdict_title)
         vc_lay.addWidget(self._verdict_text)
         outer.addWidget(self._verdict_card)
 
         # Diff badge — shown on re-runs when new findings appeared
         self._diff_lbl = QLabel("")
-        self._diff_lbl.setStyleSheet(
-            f"font-size:10px; color:{AMBER}; background:transparent;"
-            f" border:none; padding:0 2px;"
-        )
+        _s.themed_ss(self._diff_lbl, "font-size:10px; color:{AMBER}; background:transparent;"
+            " border:none; padding:0 2px;")
         self._diff_lbl.hide()
         outer.addWidget(self._diff_lbl)
 
@@ -718,34 +675,30 @@ class DiagnosisPage(QWidget):
         # the user has a result worth sharing. No modal, no confetti.
         self._share_card = QFrame()
         self._share_card.setObjectName("shareCard")
-        self._share_card.setStyleSheet(
-            f"QFrame#shareCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
-        )
+        _s.themed_ss(self._share_card, "QFrame#shareCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}")
         _sc_lay = QHBoxLayout(self._share_card)
         _sc_lay.setContentsMargins(12, 6, 12, 6)
         _sc_lay.setSpacing(8)
         _share_lbl = QLabel("Share this result")
-        _share_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(_share_lbl, "font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;")
         _sc_lay.addWidget(_share_lbl)
         _sc_lay.addStretch()
         _share_btn_qss = (
-            f"QPushButton {{ background:transparent; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:3px 10px; font-size:10px;"
-            f" border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton {{ background:transparent; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:3px 10px; font-size:10px;"
+            " border-radius:4px; }}"
+            "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         self._share_img_btn = QPushButton("Copy as image")
-        self._share_img_btn.setStyleSheet(_share_btn_qss)
+        _s.themed_ss(self._share_img_btn, _share_btn_qss)
         self._share_img_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._share_img_btn.clicked.connect(self._copy_share_image)
         _sc_lay.addWidget(self._share_img_btn)
         self._share_md_btn = QPushButton("Copy as Markdown")
-        self._share_md_btn.setStyleSheet(_share_btn_qss)
+        _s.themed_ss(self._share_md_btn, _share_btn_qss)
         self._share_md_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._share_md_btn.clicked.connect(self._copy_share_markdown)
         _sc_lay.addWidget(self._share_md_btn)
@@ -763,12 +716,10 @@ class DiagnosisPage(QWidget):
         # "Other findings" toggle + remaining cards
         self._other_toggle = QPushButton("▶  Other findings (0)")
         self._other_toggle.setFlat(True)
-        self._other_toggle.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:4px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._other_toggle, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:4px 0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._other_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self._other_toggle.clicked.connect(self._toggle_other_findings)
         self._other_expanded = False
@@ -779,10 +730,10 @@ class DiagnosisPage(QWidget):
         self._findings_scroll.setWidgetResizable(True)
         self._findings_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._findings_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._findings_scroll.setStyleSheet(f"QScrollArea {{ background:{BG_DARK}; border:none; }}")
+        _s.themed_ss(self._findings_scroll, "QScrollArea {{ background:{BG_DARK}; border:none; }}")
 
         self._findings_container = QWidget()
-        self._findings_container.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(self._findings_container, "background:{BG_DARK};")
         self._findings_layout = QVBoxLayout(self._findings_container)
         self._findings_layout.setContentsMargins(0, 0, 0, 0)
         self._findings_layout.setSpacing(6)
@@ -794,12 +745,10 @@ class DiagnosisPage(QWidget):
         # "All clear" CTA — shown only when no findings
         self._grade_cta = QPushButton("Get a Network Grade score →")
         self._grade_cta.setFlat(True)
-        self._grade_cta.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:2px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._grade_cta, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:2px 0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._grade_cta.setCursor(Qt.CursorShape.PointingHandCursor)
         self._grade_cta.clicked.connect(lambda: self.navigate_to.emit("Network Grade"))
         self._grade_cta.hide()
@@ -810,36 +759,36 @@ class DiagnosisPage(QWidget):
         self._again_btn = QPushButton("Run Again")
         self._again_btn.setFixedWidth(120)
         _btn_qss = (
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px; font-size:11px;"
-            f" border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+            "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:4px 14px; font-size:11px;"
+            " border-radius:4px; }}"
+            "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
         )
-        self._again_btn.setStyleSheet(_btn_qss)
+        _s.themed_ss(self._again_btn, _btn_qss)
         self._again_btn.clicked.connect(self._reset)
         btn_row.addWidget(self._again_btn)
 
         self._copy_btn = QPushButton("Copy report")
         self._copy_btn.setFixedWidth(120)
-        self._copy_btn.setStyleSheet(_btn_qss)
+        _s.themed_ss(self._copy_btn, _btn_qss)
         self._copy_btn.clicked.connect(self._copy_report)
         btn_row.addWidget(self._copy_btn)
 
         self._history_btn = QPushButton("History")
         self._history_btn.setFixedWidth(80)
-        self._history_btn.setStyleSheet(_btn_qss)
+        _s.themed_ss(self._history_btn, _btn_qss)
         self._history_btn.clicked.connect(self._show_history_dialog)
         btn_row.addWidget(self._history_btn)
 
         self._export_btn = QPushButton("Export…")
         self._export_btn.setFixedWidth(80)
-        self._export_btn.setStyleSheet(_btn_qss)
+        _s.themed_ss(self._export_btn, _btn_qss)
         self._export_btn.clicked.connect(self._export_report)
         btn_row.addWidget(self._export_btn)
 
         self._forum_btn = QPushButton("Copy for Reddit/Discord")
         self._forum_btn.setFixedWidth(170)
-        self._forum_btn.setStyleSheet(_btn_qss)
+        _s.themed_ss(self._forum_btn, _btn_qss)
         self._forum_btn.clicked.connect(self._copy_forum_markdown)
         btn_row.addWidget(self._forum_btn)
 
@@ -862,15 +811,15 @@ class DiagnosisPage(QWidget):
         headline = getattr(finding, "headline",    "")
         remedy   = getattr(finding, "remediation", "")
         category = getattr(finding, "category",    "")
-        color    = _SEV_COLOR.get(sev, ACCENT)
+        color    = _sev_color(sev)
 
         card = QFrame()
         card.setObjectName("findingCard")
         border_w = "4px" if hero else "3px"
         card.setStyleSheet(
-            f"QFrame#findingCard {{ background:{BG_CARD};"
-            f" border-left:{border_w} solid {color}; border-top:1px solid {BORDER};"
-            f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
+            f"QFrame#findingCard {{ background:{_s.BG_CARD};"
+            f" border-left:{border_w} solid {color}; border-top:1px solid {_s.BORDER};"
+            f" border-right:1px solid {_s.BORDER}; border-bottom:1px solid {_s.BORDER}; }}"
         )
         lay = QVBoxLayout(card)
         lay.setContentsMargins(14 if hero else 12, 12 if hero else 8, 14 if hero else 12, 12 if hero else 8)
@@ -897,7 +846,7 @@ class DiagnosisPage(QWidget):
         hl.setWordWrap(True)
         hl_size = "14px" if hero else "12px"
         hl.setStyleSheet(
-            f"font-size:{hl_size}; font-weight:bold; color:{TEXT_PRIMARY};"
+            f"font-size:{hl_size}; font-weight:bold; color:{_s.TEXT_PRIMARY};"
             f" border:none; background:transparent;"
         )
         hdr.addWidget(badge)
@@ -906,10 +855,8 @@ class DiagnosisPage(QWidget):
         _term = _CATEGORY_TERM.get(category)
         if _term:
             _jt = JargonTooltip(_term)
-            _jt.setStyleSheet(
-                f"font-size:9px; color:{ACCENT}; text-decoration:underline dotted;"
-                f" background:transparent; padding:0 2px;"
-            )
+            _s.themed_ss(_jt, "font-size:9px; color:{ACCENT}; text-decoration:underline dotted;"
+                " background:transparent; padding:0 2px;")
             hdr.addWidget(_jt)
         lay.addLayout(hdr)
 
@@ -918,7 +865,7 @@ class DiagnosisPage(QWidget):
             rem.setWordWrap(True)
             rem_size = "12px" if hero else "11px"
             rem.setStyleSheet(
-                f"font-size:{rem_size}; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+                f"font-size:{rem_size}; color:{_s.TEXT_SECONDARY}; border:none; background:transparent;"
             )
             lay.addWidget(rem)
 
@@ -929,17 +876,15 @@ class DiagnosisPage(QWidget):
             expander_btn.setFlat(True)
             expander_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             expander_btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                f"QPushButton {{ color:{_s.ACCENT}; font-size:11px; background:transparent;"
                 f" border:none; padding:2px 0; text-align:left; }}"
                 f"QPushButton:hover {{ color:{color}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
             )
             steps_widget = QFrame()
-            steps_widget.setStyleSheet(
-                f"QFrame {{ background:{BG_HOVER}; border-left:2px solid {BORDER};"
-                f" border-top:none; border-right:none; border-bottom:none;"
-                f" margin-left:4px; }}"
-            )
+            _s.themed_ss(steps_widget, "QFrame {{ background:{BG_HOVER}; border-left:2px solid {BORDER};"
+                " border-top:none; border-right:none; border-bottom:none;"
+                " margin-left:4px; }}")
             steps_widget.setVisible(False)
             sw_lay = QVBoxLayout(steps_widget)
             sw_lay.setContentsMargins(10, 6, 6, 6)
@@ -947,9 +892,7 @@ class DiagnosisPage(QWidget):
             for step in steps:
                 sl = QLabel(step)
                 sl.setWordWrap(True)
-                sl.setStyleSheet(
-                    f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-                )
+                _s.themed_ss(sl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
                 sw_lay.addWidget(sl)
 
             def _toggle_steps(checked: bool, btn=expander_btn, sw=steps_widget) -> None:
@@ -966,12 +909,10 @@ class DiagnosisPage(QWidget):
             cta_btn = QPushButton(cta_label)
             cta_btn.setFlat(True)
             cta_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            cta_btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-                f" border:none; padding:2px 0; text-align:left; }}"
-                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-            )
+            _s.themed_ss(cta_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                " border:none; padding:2px 0; text-align:left; }}"
+                "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
             cta_btn.clicked.connect(
                 lambda _=False, t=cta_target: self.navigate_to.emit(t)
             )
@@ -982,14 +923,12 @@ class DiagnosisPage(QWidget):
         if verify_step:
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.HLine)
-            sep.setStyleSheet(f"color:{BORDER}; background:{BORDER}; border:none; max-height:1px;")
+            _s.themed_ss(sep, "color:{BORDER}; background:{BORDER}; border:none; max-height:1px;")
             lay.addWidget(sep)
 
             after_lbl = QLabel(f"After fixing: {verify_step}")
             after_lbl.setWordWrap(True)
-            after_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(after_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
             lay.addWidget(after_lbl)
 
             verify_row = QHBoxLayout()
@@ -998,17 +937,13 @@ class DiagnosisPage(QWidget):
             verify_btn = QPushButton("▶  Verify this fix")
             verify_btn.setFlat(True)
             verify_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            verify_btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-                f" border:none; padding:2px 0; text-align:left; }}"
-                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-            )
+            _s.themed_ss(verify_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                " border:none; padding:2px 0; text-align:left; }}"
+                "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
 
             verify_status = QLabel("")
-            verify_status.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(verify_status, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
 
             verify_row.addWidget(verify_btn)
             verify_row.addWidget(verify_status)
@@ -1053,14 +988,10 @@ class DiagnosisPage(QWidget):
             still_present = any(getattr(f, "category", "") == _cat for f in findings)
             if still_present:
                 _lbl.setText("Still present — try next step")
-                _lbl.setStyleSheet(
-                    f"font-size:10px; color:{AMBER}; background:transparent; border:none;"
-                )
+                _s.themed_ss(_lbl, "font-size:10px; color:{AMBER}; background:transparent; border:none;")
             else:
                 _lbl.setText("✓ Fixed!")
-                _lbl.setStyleSheet(
-                    f"font-size:10px; color:{GREEN}; background:transparent; border:none;"
-                )
+                _s.themed_ss(_lbl, "font-size:10px; color:{GREEN}; background:transparent; border:none;")
 
         worker.finished.connect(_on_done)
         worker.start()
@@ -1270,16 +1201,12 @@ class DiagnosisPage(QWidget):
                 w.deleteLater()
 
         if not findings:
-            self._verdict_card.setStyleSheet(
-                f"QFrame#verdictCard {{ background:{BG_CARD};"
-                f" border-left:4px solid {GREEN}; border-top:1px solid {BORDER};"
-                f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
-            )
+            _s.themed_ss(self._verdict_card, "QFrame#verdictCard {{ background:{BG_CARD};"
+                " border-left:4px solid {GREEN}; border-top:1px solid {BORDER};"
+                " border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}")
             self._verdict_title.setText("Your network looks healthy")
-            self._verdict_title.setStyleSheet(
-                f"font-size:13px; font-weight:bold; color:{GREEN};"
-                f" border:none; background:transparent;"
-            )
+            _s.themed_ss(self._verdict_title, "font-size:13px; font-weight:bold; color:{GREEN};"
+                " border:none; background:transparent;")
             self._verdict_text.setText(
                 "Gateway responding  ·  DNS working  ·  No broadcast storms"
                 "  ·  No rogue devices  ·  No network loops"
@@ -1289,11 +1216,11 @@ class DiagnosisPage(QWidget):
             self._findings_scroll.hide()
             self._grade_cta.show()
         else:
-            color = _SEV_COLOR.get(sev, ACCENT)
+            color = _sev_color(sev)
             self._verdict_card.setStyleSheet(
-                f"QFrame#verdictCard {{ background:{BG_CARD};"
-                f" border-left:4px solid {color}; border-top:1px solid {BORDER};"
-                f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
+                f"QFrame#verdictCard {{ background:{_s.BG_CARD};"
+                f" border-left:4px solid {color}; border-top:1px solid {_s.BORDER};"
+                f" border-right:1px solid {_s.BORDER}; border-bottom:1px solid {_s.BORDER}; }}"
             )
             self._verdict_title.setText(f"Diagnosis — {sev}")
             self._verdict_title.setStyleSheet(
@@ -1340,10 +1267,8 @@ class DiagnosisPage(QWidget):
                 self._diff_lbl.show()
             else:
                 self._diff_lbl.setText("No change since last run")
-                self._diff_lbl.setStyleSheet(
-                    f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-                    f" border:none; padding:0 2px;"
-                )
+                _s.themed_ss(self._diff_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+                    " border:none; padding:0 2px;")
                 self._diff_lbl.show()
         else:
             self._diff_lbl.hide()
@@ -1360,15 +1285,11 @@ class DiagnosisPage(QWidget):
 class _DiagHistoryDialog(QDialog):
     """Shows the last 5 diagnosis results stored in QSettings."""
 
-    _SEV_COLOR = {
-        "CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN, "INFO": ACCENT,
-    }
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Diagnosis History")
         self.setMinimumWidth(480)
-        self.setStyleSheet(f"QDialog {{ background:{BG_DARK}; }} QLabel {{ background:transparent; border:none; }}")
+        _s.themed_ss(self, "QDialog {{ background:{BG_DARK}; }} QLabel {{ background:transparent; border:none; }}")
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 16, 16, 12)
@@ -1382,12 +1303,12 @@ class _DiagHistoryDialog(QDialog):
 
         if not history:
             lbl = QLabel("No diagnosis runs recorded yet.")
-            lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:12px;")
+            _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:12px;")
             lay.addWidget(lbl)
         else:
             for entry in history:
                 sev = entry.get("severity", "INFO")
-                color = self._SEV_COLOR.get(sev, ACCENT)
+                color = _sev_color(sev)
                 ts = entry.get("ts", 0)
                 dt_str = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "–"
                 findings = entry.get("findings", [])
@@ -1395,9 +1316,9 @@ class _DiagHistoryDialog(QDialog):
 
                 card = QFrame()
                 card.setStyleSheet(
-                    f"QFrame {{ background:{BG_CARD}; border-left:3px solid {color};"
-                    f" border-top:1px solid {BORDER}; border-right:1px solid {BORDER};"
-                    f" border-bottom:1px solid {BORDER}; border-radius:3px; }}"
+                    f"QFrame {{ background:{_s.BG_CARD}; border-left:3px solid {color};"
+                    f" border-top:1px solid {_s.BORDER}; border-right:1px solid {_s.BORDER};"
+                    f" border-bottom:1px solid {_s.BORDER}; border-radius:3px; }}"
                 )
                 c_lay = QVBoxLayout(card)
                 c_lay.setContentsMargins(12, 8, 12, 8)
@@ -1410,9 +1331,9 @@ class _DiagHistoryDialog(QDialog):
                     f" border:1px solid {color}; border-radius:3px; padding:1px 6px;"
                 )
                 time_lbl = QLabel(dt_str)
-                time_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px;")
+                _s.themed_ss(time_lbl, "color:{TEXT_MUTED}; font-size:11px;")
                 n_lbl = QLabel(f"{len(findings)} finding{'s' if len(findings) != 1 else ''}")
-                n_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+                _s.themed_ss(n_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
                 hdr_row.addWidget(sev_lbl)
                 hdr_row.addWidget(time_lbl)
                 hdr_row.addStretch()
@@ -1422,23 +1343,21 @@ class _DiagHistoryDialog(QDialog):
                 if summary:
                     sum_lbl = QLabel(summary)
                     sum_lbl.setWordWrap(True)
-                    sum_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+                    _s.themed_ss(sum_lbl, "color:{TEXT_PRIMARY}; font-size:11px;")
                     c_lay.addWidget(sum_lbl)
 
                 for f in findings[:3]:
                     hl = f.get("headline", "")
                     if hl:
                         f_lbl = QLabel(f"  • {hl}")
-                        f_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+                        _s.themed_ss(f_lbl, "color:{TEXT_SECONDARY}; font-size:10px;")
                         c_lay.addWidget(f_lbl)
 
                 lay.addWidget(card)
 
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         bb.rejected.connect(self.reject)
-        bb.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:4px 16px; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(bb, "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:4px 16px; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         lay.addWidget(bb)
