@@ -17,12 +17,9 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
-    BG_CARD, BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table, _empty_state_widget, risk_to_label
+from ui import styles as _s
 
 if TYPE_CHECKING:
     pass
@@ -83,9 +80,9 @@ class _ReconTabsMixin:
             "Use only on networks you own or have authorization to test."
         )
         warn.setWordWrap(True)
-        warn.setStyleSheet(f"color:{AMBER};font-size:11px;background:{AMBER_BG};padding:6px;border-radius:4px;")
+        _s.themed_ss(warn, "color:{AMBER};font-size:11px;background:{AMBER_BG};padding:6px;border-radius:4px;")
         self._syn_status = QLabel("SYN scanner idle.")
-        self._syn_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._syn_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl = QHBoxLayout()
         self._syn_host = QLineEdit()
         self._syn_host.setPlaceholderText("IP or hostname…")
@@ -198,7 +195,7 @@ class _ReconTabsMixin:
         port = (port_item.text() if port_item else "")
         svc  = (svc_item.text()  if svc_item  else "")
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
+        _s.themed_ss(menu, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_geo   = menu.addAction(f"🗺  Show {host} on Geolocation Map →")
         act_abuse = menu.addAction(f"🛡  Check {host} (AbuseIPDB) →")
         menu.addSeparator()
@@ -229,9 +226,9 @@ class _ReconTabsMixin:
             "No response = open|filtered (firewall or open service — UDP is ambiguous)."
         )
         warn.setWordWrap(True)
-        warn.setStyleSheet(f"color:{AMBER};font-size:11px;background:{AMBER_BG};padding:6px;border-radius:4px;")
+        _s.themed_ss(warn, "color:{AMBER};font-size:11px;background:{AMBER_BG};padding:6px;border-radius:4px;")
         self._udp_status = QLabel("UDP scanner idle.")
-        self._udp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._udp_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl = QHBoxLayout()
         self._udp_host = QLineEdit()
         self._udp_host.setPlaceholderText("IP or hostname…")
@@ -285,7 +282,7 @@ class _ReconTabsMixin:
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
         self._os_status = QLabel("OS fingerprinter idle. Run Device Fingerprint scan first, or enter IPs manually.")
-        self._os_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._os_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._os_status.setWordWrap(True)
         ctrl = QHBoxLayout()
         self._os_hosts_input = QLineEdit()
@@ -347,7 +344,7 @@ class _ReconTabsMixin:
         self._risk_status = QLabel(
             "Risk scorer idle — will populate automatically after network scan."
         )
-        self._risk_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._risk_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl = QHBoxLayout()
         btn = QPushButton("🎯  Score All Devices")
         btn.setObjectName("btnNetRefresh")
@@ -378,8 +375,8 @@ class _ReconTabsMixin:
             for a in assessments:
                 row = self._recon_risk_table.rowCount()
                 self._recon_risk_table.insertRow(row)
-                color = (RED if a.severity in ("CRITICAL", "HIGH") else
-                         AMBER if a.severity == "MEDIUM" else GREEN)
+                color = (_s.RED if a.severity in ("CRITICAL", "HIGH") else
+                         _s.AMBER if a.severity == "MEDIUM" else _s.GREEN)
                 top_finding = a.findings[0].title if a.findings else "—"
                 for col, val in enumerate([
                     a.ip, a.device_type or a.vendor,
@@ -387,7 +384,7 @@ class _ReconTabsMixin:
                     top_finding, a.top_remediation,
                 ]):
                     item = QTableWidgetItem(str(val))
-                    item.setForeground(QColor(color if col in (2, 3) else TEXT_PRIMARY))
+                    item.setForeground(QColor(color if col in (2, 3) else _s.TEXT_PRIMARY))
                     self._recon_risk_table.setItem(row, col, item)
             critical = sum(1 for a in assessments if a.severity in ("CRITICAL", "HIGH"))
             self._risk_status.setText(
@@ -406,9 +403,9 @@ class _ReconTabsMixin:
             "Set NVD_API_KEY environment variable for higher rate limits."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._cve_status = QLabel("CVE lookup idle. Run the port scanner first (Advanced Tools tab).")
-        self._cve_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._cve_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._cve_status.setWordWrap(True)
         ctrl = QHBoxLayout()
         self._cve_target_input = QLineEdit()
@@ -489,16 +486,14 @@ class _ReconTabsMixin:
             "any forwarded port means that service is internet-accessible."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._exposure_status = QLabel("Internet exposure check idle.")
-        self._exposure_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._exposure_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._exposure_status.setWordWrap(True)
         self._exposure_verdict = QLabel("")
         self._exposure_verdict.setWordWrap(True)
-        self._exposure_verdict.setStyleSheet(
-            f"color:{AMBER};font-size:12px;font-weight:bold;padding:6px;"
-            f"background:{AMBER_BG};border-radius:4px;"
-        )
+        _s.themed_ss(self._exposure_verdict, "color:{AMBER};font-size:12px;font-weight:bold;padding:6px;"
+            "background:{AMBER_BG};border-radius:4px;")
         self._exposure_verdict.hide()
         ctrl = QHBoxLayout()
         btn = QPushButton("🌐  Check Exposure")
@@ -553,7 +548,7 @@ class _ReconTabsMixin:
             "Works on Linux, macOS, and Windows (OpenSSH)."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
         form_w = QWidget()
         form = QFormLayout(form_w)
@@ -584,15 +579,13 @@ class _ReconTabsMixin:
         ctrl.addStretch()
 
         self._cred_status = QLabel("Credentialed scan idle.")
-        self._cred_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(self._cred_status, "color:{TEXT_SECONDARY};font-size:11px;")
         self._cred_status.setWordWrap(True)
 
         self._cred_verdict = QLabel("")
         self._cred_verdict.setWordWrap(True)
-        self._cred_verdict.setStyleSheet(
-            f"color:{GREEN};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:4px;"
-        )
+        _s.themed_ss(self._cred_verdict, "color:{GREEN};font-size:11px;font-weight:bold;padding:4px;"
+            "background:{BG_CARD};border-radius:4px;")
         self._cred_verdict.hide()
 
         self._recon_cred_sw_table   = _table(["Package", "Version", "Source"])
@@ -665,7 +658,7 @@ class _ReconTabsMixin:
             "Typically completes a /24 in under 3 seconds."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
         ctrl = QHBoxLayout()
         self._disc_cidr = QLineEdit()
@@ -684,7 +677,7 @@ class _ReconTabsMixin:
         ctrl.addStretch()
 
         self._disc_status = QLabel("Combined discovery idle.")
-        self._disc_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(self._disc_status, "color:{TEXT_SECONDARY};font-size:11px;")
         self._disc_status.setWordWrap(True)
 
         self._recon_disc_table = _table(["IP", "MAC", "Hostname", "Methods", "Latency (ms)"])
@@ -730,7 +723,7 @@ class _ReconTabsMixin:
             "local groups. Requires impacket or Windows net.exe."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
         form_w = QWidget()
         form = QFormLayout(form_w)
@@ -756,15 +749,13 @@ class _ReconTabsMixin:
         ctrl.addStretch()
 
         self._smb_status = QLabel("SMB enumeration idle.")
-        self._smb_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(self._smb_status, "color:{TEXT_SECONDARY};font-size:11px;")
         self._smb_status.setWordWrap(True)
 
         self._smb_verdict = QLabel("")
         self._smb_verdict.setWordWrap(True)
-        self._smb_verdict.setStyleSheet(
-            f"color:{AMBER};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:4px;"
-        )
+        _s.themed_ss(self._smb_verdict, "color:{AMBER};font-size:11px;font-weight:bold;padding:4px;"
+            "background:{BG_CARD};border-radius:4px;")
         self._smb_verdict.hide()
 
         self._recon_smb_shares_table = _table(["Share", "Type", "Comment", "Risk"])
@@ -817,7 +808,7 @@ class _ReconTabsMixin:
             "Click Reload to re-scan the folder after adding or editing a plugin."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
         ctrl = QHBoxLayout()
         self._btn_plugin_reload = QPushButton("↺  Reload Plugins")
@@ -851,7 +842,7 @@ class _ReconTabsMixin:
         ctrl.addStretch()
 
         self._plugin_dir_lbl = QLabel("")
-        self._plugin_dir_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(self._plugin_dir_lbl, "color:{TEXT_SECONDARY};font-size:10px;")
 
         self._plugin_list_table = _table(["Plugin", "Version", "Status", "Tags", "Description", "Author"])
         self._plugin_list_table.setColumnWidth(0, 180)
@@ -864,16 +855,14 @@ class _ReconTabsMixin:
         self._plugin_list_table.cellClicked.connect(self._on_plugin_status_cell_clicked)
 
         self._plugin_status = QLabel("Click Reload Plugins to discover .py files in the plugins folder.")
-        self._plugin_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(self._plugin_status, "color:{TEXT_SECONDARY};font-size:11px;")
         self._plugin_status.setWordWrap(True)
 
         self._plugin_result_text = QTextEdit()
         self._plugin_result_text.setReadOnly(True)
         self._plugin_result_text.setMaximumHeight(160)
-        self._plugin_result_text.setStyleSheet(
-            f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
-            f"border:1px solid {BORDER};border-radius:{CARD_RADIUS};padding:6px;"
-        )
+        _s.themed_ss(self._plugin_result_text, "background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
+            "border:1px solid {BORDER};border-radius:{CARD_RADIUS};padding:6px;")
         self._plugin_result_text.setPlaceholderText("Plugin output will appear here…")
 
         lay.addWidget(info)
@@ -912,11 +901,11 @@ class _ReconTabsMixin:
 
             # Status badge: green = OK, amber = advisory only, red = error
             if not issues:
-                dot_color = GREEN
+                dot_color = _s.GREEN
                 tooltip = "All validation checks passed."
             else:
                 api_only = all("api_version" in i for i in issues)
-                dot_color = AMBER if api_only else RED
+                dot_color = _s.AMBER if api_only else _s.RED
                 tooltip = "\n".join(issues)
             status_item = QTableWidgetItem("●")
             status_item.setForeground(QColor(dot_color))
@@ -975,7 +964,7 @@ class _ReconTabsMixin:
             "It comes with PLUGIN_META + a run(devices) stub that passes validation."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;padding:4px 0;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;padding:4px 0;")
         vlay.addWidget(note)
 
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -1060,7 +1049,7 @@ class _ReconTabsMixin:
 
         top = QHBoxLayout()
         reg_status = QLabel("Press Refresh to fetch available plugins.")
-        reg_status.setStyleSheet(f"color:{TEXT_MUTED};font-size:10px;")
+        _s.themed_ss(reg_status, "color:{TEXT_MUTED};font-size:10px;")
         top.addWidget(reg_status, 1)
         btn_refresh = QPushButton("↻  Refresh")
         btn_refresh.setObjectName("btnNetRefresh")
@@ -1071,7 +1060,7 @@ class _ReconTabsMixin:
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea{border:none;}")
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(inner, "background:{BG_CARD};")
         cards_lay = QVBoxLayout(inner)
         cards_lay.setContentsMargins(0, 4, 0, 4)
         cards_lay.setSpacing(4)
@@ -1093,27 +1082,23 @@ class _ReconTabsMixin:
             reg_status.setText(f"{len(entries)} plugin(s) available.")
             for entry in entries:
                 row = QFrame()
-                row.setStyleSheet(
-                    f"QFrame{{background:{BG_CARD};border:1px solid {BORDER};"
-                    f"border-radius:{CARD_RADIUS};}}"
-                )
+                _s.themed_ss(row, "QFrame{{background:{BG_CARD};border:1px solid {BORDER};"
+                    "border-radius:{CARD_RADIUS};}}")
                 rlay = QHBoxLayout(row)
                 rlay.setContentsMargins(10, 6, 10, 6)
                 rlay.setSpacing(8)
                 info_col = QVBoxLayout()
                 name_lbl = QLabel(
                     f"<b>{entry.name}</b>  "
-                    f"<span style='color:{TEXT_MUTED};font-size:9px;'>"
+                    f"<span style='color:{_s.TEXT_MUTED};font-size:9px;'>"
                     f"v{entry.version}  by {entry.author}</span>"
                 )
                 name_lbl.setTextFormat(Qt.TextFormat.RichText)
-                name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY};border:none;")
+                _s.themed_ss(name_lbl, "color:{TEXT_PRIMARY};border:none;")
                 info_col.addWidget(name_lbl)
                 if entry.description:
                     desc_lbl = QLabel(entry.description)
-                    desc_lbl.setStyleSheet(
-                        f"color:{TEXT_SECONDARY};font-size:10px;border:none;"
-                    )
+                    _s.themed_ss(desc_lbl, "color:{TEXT_SECONDARY};font-size:10px;border:none;")
                     desc_lbl.setWordWrap(True)
                     info_col.addWidget(desc_lbl)
                 rlay.addLayout(info_col, 1)
@@ -1121,14 +1106,14 @@ class _ReconTabsMixin:
                 btn_inst = QPushButton("✓ Installed" if installed else "⬇ Install")
                 btn_inst.setEnabled(not installed)
                 btn_inst.setFixedHeight(26)
-                _inst_bg = GREEN_BG if installed else ACCENT
-                _inst_fg = GREEN if installed else WHITE
+                _inst_bg = _s.GREEN_BG if installed else _s.ACCENT
+                _inst_fg = _s.GREEN if installed else _s.WHITE
                 btn_inst.setStyleSheet(
                     f"QPushButton{{background:{_inst_bg};color:{_inst_fg};"
                     f"border:none;border-radius:3px;font-size:11px;padding:0 10px;}}"
-                    f"QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
-                    f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-                    f"QPushButton:disabled{{background:{GREEN_BG};color:{GREEN};}}"
+                    f"QPushButton:hover{{background:{_s.ACCENT_DARK};color:{_s.WHITE};}}"
+                    f"QPushButton:pressed{{background:{_s.ACCENT_DARK};color:{_s.WHITE};}}"
+                    f"QPushButton:disabled{{background:{_s.GREEN_BG};color:{_s.GREEN};}}"
                 )
                 if not installed:
                     def _on_install(_, e=entry, b=btn_inst) -> None:
@@ -1202,7 +1187,7 @@ class _ReconTabsMixin:
         ] + tb_lines
         self._plugin_result_text.setPlainText("\n".join(lines))
         self._plugin_status.setText("Plugin failed — see output below.")
-        self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+        _s.themed_ss(self._plugin_status, "color:{RED};font-size:11px;")
 
     def _on_plugin_status_cell_clicked(self, row: int, col: int) -> None:
         """Show validation issues when the Status column cell is clicked (PB-4)."""
@@ -1220,10 +1205,8 @@ class _ReconTabsMixin:
         txt = QTextEdit()
         txt.setReadOnly(True)
         txt.setPlainText("\n".join(f"• {i}" for i in issues))
-        txt.setStyleSheet(
-            f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
-            f"border:1px solid {BORDER};padding:6px;"
-        )
+        _s.themed_ss(txt, "background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
+            "border:1px solid {BORDER};padding:6px;")
         vlay.addWidget(txt)
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         bb.rejected.connect(dlg.reject)
@@ -1268,26 +1251,22 @@ class _ReconTabsMixin:
         output = QTextEdit()
         output.setReadOnly(True)
         output.setPlainText("Running…")
-        output.setStyleSheet(
-            f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
-            f"border:1px solid {BORDER};padding:6px;"
-        )
+        _s.themed_ss(output, "background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
+            "border:1px solid {BORDER};padding:6px;")
         vlay.addWidget(output, 1)
 
         # Collapsible error details section (PB-6)
         details_toggle = QPushButton("▼  Show error details")
         details_toggle.setFlat(True)
-        details_toggle.setStyleSheet(f"color:{AMBER};font-size:10px;text-align:left;")
+        _s.themed_ss(details_toggle, "color:{AMBER};font-size:10px;text-align:left;")
         details_toggle.hide()
         vlay.addWidget(details_toggle)
 
         details_text = QTextEdit()
         details_text.setReadOnly(True)
         details_text.setMaximumHeight(120)
-        details_text.setStyleSheet(
-            f"background:{BG_CARD};color:{TEXT_MUTED};font-size:10px;"
-            f"font-family:'Courier New';border:1px solid {BORDER};padding:4px;"
-        )
+        _s.themed_ss(details_text, "background:{BG_CARD};color:{TEXT_MUTED};font-size:10px;"
+            "font-family:'Courier New';border:1px solid {BORDER};padding:4px;")
         details_text.hide()
         vlay.addWidget(details_text)
 
@@ -1306,7 +1285,7 @@ class _ReconTabsMixin:
         vlay.addWidget(bb)
 
         self._plugin_status.setText(f"Running '{info.name}'…")
-        self._plugin_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(self._plugin_status, "color:{TEXT_SECONDARY};font-size:11px;")
 
         def _on_result(res) -> None:
             if res.error:
@@ -1323,7 +1302,7 @@ class _ReconTabsMixin:
                 details_text.setPlainText("\n".join(tb_lines))
                 details_toggle.show()
                 self._plugin_status.setText(f"'{res.plugin_name}' failed — error details available.")
-                self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+                _s.themed_ss(self._plugin_status, "color:{RED};font-size:11px;")
                 return
             lines = [f"Plugin:  {res.plugin_name}", f"Risk:    {risk_to_label(res.risk_level)}", ""]
             if res.findings:
@@ -1332,8 +1311,8 @@ class _ReconTabsMixin:
             else:
                 lines.append("No findings.")
             output.setPlainText("\n".join(lines))
-            color = RED if res.risk_level in ("HIGH", "CRITICAL") else (
-                AMBER if res.risk_level == "MEDIUM" else GREEN
+            color = _s.RED if res.risk_level in ("HIGH", "CRITICAL") else (
+                _s.AMBER if res.risk_level == "MEDIUM" else _s.GREEN
             )
             self._plugin_status.setText(
                 f"'{res.plugin_name}' complete — {risk_to_label(res.risk_level)} "
@@ -1355,7 +1334,7 @@ class _ReconTabsMixin:
             details_text.setPlainText("\n".join(tb_lines))
             details_toggle.show()
             self._plugin_status.setText("Plugin failed — error details available.")
-            self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+            _s.themed_ss(self._plugin_status, "color:{RED};font-size:11px;")
 
         worker = _ScanPluginWorker(info, devices)
         worker.result.connect(_on_result)
@@ -1372,7 +1351,7 @@ class _ReconTabsMixin:
 
         title = QLabel("🔒  Private Endpoint Checker")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         lay.addWidget(title)
 
         desc = QLabel(
@@ -1381,7 +1360,7 @@ class _ReconTabsMixin:
             "Works for Azure Private Link, AWS PrivateLink, and any internal hostname:port."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(desc, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(desc)
 
         # ── Input area ────────────────────────────────────────────────────────
@@ -1389,16 +1368,14 @@ class _ReconTabsMixin:
         input_frame.setObjectName("peInputCard")
         # RULE-QSS1: objectName-scoped so the card style does not propagate to
         # the Run Checks button (bare declarations wipe its app-QSS #btnDiag style)
-        input_frame.setStyleSheet(
-            f"QFrame#peInputCard {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(input_frame, "QFrame#peInputCard {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
         input_lay = QVBoxLayout(input_frame)
         input_lay.setContentsMargins(14, 10, 14, 10)
         input_lay.setSpacing(6)
 
         input_lbl = QLabel("Endpoints — one per line, format:  hostname:port  or  IP:port  (port optional, defaults to 443)")
-        input_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(input_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         input_lay.addWidget(input_lbl)
 
         self._pe_input = QTextEdit()
@@ -1408,10 +1385,8 @@ class _ReconTabsMixin:
             "10.0.1.55:22"
         )
         self._pe_input.setFixedHeight(100)
-        self._pe_input.setStyleSheet(
-            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-            "border-radius:4px; padding:6px; font-size:12px; font-family:'Courier New';"
-        )
+        _s.themed_ss(self._pe_input, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            "border-radius:4px; padding:6px; font-size:12px; font-family:'Courier New';")
         input_lay.addWidget(self._pe_input)
 
         btn_row = QHBoxLayout()
@@ -1426,7 +1401,7 @@ class _ReconTabsMixin:
             self._pe_status.setText("")
         ))
         self._pe_status = QLabel("")
-        self._pe_status.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._pe_status, "color:{TEXT_SECONDARY}; font-size:11px;")
         btn_row.addWidget(self._btn_pe_run)
         btn_row.addWidget(self._btn_pe_clear)
         btn_row.addWidget(self._pe_status, 1)
@@ -1575,7 +1550,7 @@ class _ReconTabsMixin:
             t.insertRow(row)
             for col, val in enumerate([ip, "—", os_family, confidence, "—", "—"]):
                 item = _TI(val)
-                item.setForeground(_QC(TEXT_SECONDARY if col in (1, 4, 5) else TEXT_PRIMARY))
+                item.setForeground(_QC(_s.TEXT_SECONDARY if col in (1, 4, 5) else _s.TEXT_PRIMARY))
                 t.setItem(row, col, item)
 
         if t.rowCount() > 0:

@@ -18,7 +18,7 @@ from pathlib import Path
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
 
-from ui.styles import BG_CARD, BG_DARK, BORDER, TEXT_PRIMARY
+from ui import styles as _s
 
 
 class _AnalysisIspMixin:
@@ -41,14 +41,14 @@ class _AnalysisIspMixin:
             dlg = QDialog(self)
             dlg.setWindowTitle("Network Health Report — Optional Details")
             dlg.setMinimumWidth(380)
-            dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+            _s.themed_ss(dlg, "background:{BG_DARK}; color:{TEXT_PRIMARY};")
             form = QFormLayout(dlg)
             isp_edit = _QLE()
             isp_edit.setPlaceholderText("e.g. BT, Virgin Media, Comcast…")
-            isp_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
+            _s.themed_ss(isp_edit, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
             ref_edit = _QLE()
             ref_edit.setPlaceholderText("e.g. REF-123456 (optional)")
-            ref_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
+            _s.themed_ss(ref_edit, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
             form.addRow("ISP Name:", isp_edit)
             form.addRow("Account / Ticket Ref:", ref_edit)
             btns = QDialogButtonBox(
@@ -112,23 +112,19 @@ class _AnalysisIspMixin:
             dlg = QDialog(self)
             dlg.setWindowTitle("Copy ISP Complaint — Details")
             dlg.setMinimumWidth(400)
-            dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+            _s.themed_ss(dlg, "background:{BG_DARK}; color:{TEXT_PRIMARY};")
             form = QFormLayout(dlg)
 
             isp_edit = _QLE()
             isp_edit.setPlaceholderText("e.g. BT, Virgin Media, Comcast…")
-            isp_edit.setStyleSheet(
-                f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-                f" border-radius:4px; padding:4px;"
-            )
+            _s.themed_ss(isp_edit, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+                " border-radius:4px; padding:4px;")
             ref_edit = _QLE()
             ref_edit.setPlaceholderText("e.g. REF-123456 (optional)")
-            ref_edit.setStyleSheet(
-                f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-                f" border-radius:4px; padding:4px;"
-            )
+            _s.themed_ss(ref_edit, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+                " border-radius:4px; padding:4px;")
             legal_chk = _QCB("Include UK/EU SLA legal statement (Ofcom / Consumer Rights Act)")
-            legal_chk.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+            _s.themed_ss(legal_chk, "color:{TEXT_PRIMARY}; font-size:11px;")
 
             form.addRow("ISP Name:", isp_edit)
             form.addRow("Account / Ticket Ref:", ref_edit)

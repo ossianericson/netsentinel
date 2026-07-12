@@ -24,13 +24,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    AMBER, BG_CARD, BORDER, CARD_RADIUS,
-    GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-)
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _make_card, _table
+from ui import styles as _s
 
 
 class _LoggerTabMixin:
@@ -54,10 +50,8 @@ class _LoggerTabMixin:
         # ── Page header ───────────────────────────────────────────────────────
         title = QLabel("📋  Network Logger")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            "background:transparent; border:none;"
-        )
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;")
         lay.addWidget(title)
 
         # ── Log Sources card ──────────────────────────────────────────────────
@@ -65,15 +59,13 @@ class _LoggerTabMixin:
 
         def _section_lbl(text: str) -> QLabel:
             lbl = QLabel(text.upper())
-            lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-                "letter-spacing:0.8px; background:transparent; border:none;"
-            )
+            _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+                "letter-spacing:0.8px; background:transparent; border:none;")
             return lbl
 
         def _chk(text: str, tooltip: str = "") -> QCheckBox:
             c = QCheckBox(text)
-            c.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+            _s.themed_ss(c, "color:{TEXT_PRIMARY}; font-size:11px;")
             if tooltip:
                 c.setToolTip(tooltip)
             return c
@@ -84,11 +76,9 @@ class _LoggerTabMixin:
             s.setValue(val)
             s.setSuffix(suffix)
             s.setFixedWidth(w)
-            s.setStyleSheet(
-                f"QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
-                f" border-radius:4px; padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY}; }}"
-                f"QSpinBox:disabled {{ color:{TEXT_MUTED}; }}"
-            )
+            _s.themed_ss(s, "QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
+                " border-radius:4px; padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+                "QSpinBox:disabled {{ color:{TEXT_MUTED}; }}")
             return s
 
         # ── Active Pollers ────────────────────────────────────────────────────
@@ -98,10 +88,10 @@ class _LoggerTabMixin:
         ping_row = QHBoxLayout()
         ping_row.setSpacing(6)
         ping_lbl = QLabel("Ping RTT")
-        ping_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
+        _s.themed_ss(ping_lbl, "color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
         ping_lbl.setToolTip("RTT — Round-Trip Time: how long a packet takes to travel to a host and back, measured in milliseconds.")
         int_lbl = QLabel("Interval:")
-        int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(int_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         self._log_interval = _spin(5, 3600, _qs.value("logger/interval_s", 60, type=int), " s", 72)
         self._log_interval.setToolTip("How often to ping each host")
         self._log_interval.valueChanged.connect(
@@ -148,7 +138,7 @@ class _LoggerTabMixin:
         )
         self._log_chk_modem.setChecked(_qs.value("logging/modem_enabled", False, type=bool))
         modem_int_lbl = QLabel("Log every:")
-        modem_int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(modem_int_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         self._log_modem_interval = _spin(
             1, 60, _qs.value("logging/modem_interval_min", 5, type=int), " min"
         )
@@ -180,7 +170,7 @@ class _LoggerTabMixin:
         )
         self._log_chk_mesh.setChecked(_qs.value("logging/mesh_enabled", False, type=bool))
         mesh_int_lbl = QLabel("Log every:")
-        mesh_int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(mesh_int_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         self._log_mesh_interval = _spin(
             1, 60, _qs.value("logging/mesh_interval_min", 5, type=int), " min"
         )
@@ -265,7 +255,7 @@ class _LoggerTabMixin:
         self._btn_log_chart.clicked.connect(self._view_log_chart)
 
         rot_lbl = QLabel("Rotate file:")
-        rot_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(rot_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         self._log_rotation = QComboBox()
         self._log_rotation.addItems(["Off", "1 hour", "6 hours", "12 hours", "24 hours"])
         self._log_rotation.setFixedWidth(90)
@@ -286,7 +276,7 @@ class _LoggerTabMixin:
         )
 
         self._log_chk_autostart = QCheckBox("Auto-start on launch")
-        self._log_chk_autostart.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
+        _s.themed_ss(self._log_chk_autostart, "color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
         self._log_chk_autostart.setToolTip(
             "Logger will start immediately each time the app launches — no manual step required."
         )
@@ -311,7 +301,7 @@ class _LoggerTabMixin:
         self._log_status_lbl = QLabel(
             "Logger not running.  Start it, then leave the app running in the background."
         )
-        self._log_status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._log_status_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(self._log_status_lbl)
 
         stats_row = QHBoxLayout()
@@ -327,15 +317,13 @@ class _LoggerTabMixin:
 
         # ── Log analysis results panel ────────────────────────────────────────
         analysis_lbl = QLabel("  Log Analysis:")
-        analysis_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
+        _s.themed_ss(analysis_lbl, "color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
         lay.addWidget(analysis_lbl)
         self._log_analysis_box = QTextEdit()
         self._log_analysis_box.setReadOnly(True)
         self._log_analysis_box.setMaximumHeight(160)
-        self._log_analysis_box.setStyleSheet(
-            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
-            f"border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; padding:6px;"
-        )
+        _s.themed_ss(self._log_analysis_box, "background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
+            "border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; padding:6px;")
         self._log_analysis_box.setPlaceholderText(
             "Load a log file to see automatic diagnostic findings here."
         )
@@ -343,7 +331,7 @@ class _LoggerTabMixin:
 
         # ── Outage summary ────────────────────────────────────────────────────
         outage_lbl = QLabel("  Detected Outages:")
-        outage_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(outage_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(outage_lbl)
         self._log_outage_table = _table([
             "Host", "Outage Start", "Outage End", "Duration (s)", "Consecutive Fails"
@@ -353,7 +341,7 @@ class _LoggerTabMixin:
 
         # ── Live ping log ─────────────────────────────────────────────────────
         live_lbl = QLabel("  Live log (most recent pings):")
-        live_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(live_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(live_lbl)
         self._log_live_table = _table([
             "Timestamp", "Host", "RTT (ms)", "Jitter", "DNS (ms)", "HTTP", "ARP Event", "Status"
@@ -465,8 +453,8 @@ class _LoggerTabMixin:
         if hasattr(self, "_protocol_viz_page"):
             self._protocol_viz_page.load_from_event(entry)
         from PyQt6.QtGui import QColor
-        color_map = {"OK": GREEN, "SLOW": AMBER, "FAIL": RED}
-        status_color = color_map.get(entry.status, TEXT_SECONDARY)
+        color_map = {"OK": _s.GREEN, "SLOW": _s.AMBER, "FAIL": _s.RED}
+        status_color = color_map.get(entry.status, _s.TEXT_SECONDARY)
         rtt_str    = f"{entry.rtt_ms:.0f}"    if entry.rtt_ms    >= 0 else "—"
         jitter_str = f"{entry.jitter_ms:.0f}" if entry.jitter_ms >= 0 else ""
         dns_str    = f"{entry.dns_ms:.0f}"    if entry.dns_ms    >= 0 else ""
@@ -479,7 +467,7 @@ class _LoggerTabMixin:
                     dns_str, http_str, arp_str, entry.status]
         for col, val in enumerate(row_vals):
             item = QTableWidgetItem(str(val))
-            c = status_color if col == 7 else (AMBER if col == 6 and val else TEXT_PRIMARY)
+            c = status_color if col == 7 else (_s.AMBER if col == 6 and val else _s.TEXT_PRIMARY)
             item.setForeground(QColor(c))
             self._log_live_table.setItem(0, col, item)
         if self._log_live_table.rowCount() > 500:
@@ -493,12 +481,12 @@ class _LoggerTabMixin:
                                   str(summary.total_pings))
                 self._update_stat(self._log_stat_uptime,
                                   f"{summary.uptime_pct:.1f}%",
-                                  GREEN if summary.uptime_pct >= 99 else (AMBER if summary.uptime_pct >= 95 else RED))
+                                  _s.GREEN if summary.uptime_pct >= 99 else (_s.AMBER if summary.uptime_pct >= 95 else _s.RED))
                 self._update_stat(self._log_stat_avgrtt,
                                   f"{summary.avg_rtt_ms:.0f} ms" if summary.avg_rtt_ms > 0 else "—")
                 self._update_stat(self._log_stat_outages,
                                   str(len(summary.outages)),
-                                  RED if summary.outages else GREEN)
+                                  _s.RED if summary.outages else _s.GREEN)
                 # Update home page monitoring card
                 import time as _t
                 elapsed_s = int(_t.time() - getattr(self, "_logger_start_ts", _t.time()))
@@ -521,7 +509,7 @@ class _LoggerTabMixin:
                     ]):
                         item = QTableWidgetItem(str(val))
                         item.setForeground(
-                            __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(RED)
+                            __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(_s.RED)
                         )
                         self._log_outage_table.setItem(row, col, item)
 
@@ -884,18 +872,18 @@ class _LoggerTabMixin:
         self._update_stat(self._log_stat_total, str(summary.total_pings))
         self._update_stat(self._log_stat_uptime,
                           f"{summary.uptime_pct:.1f}%",
-                          GREEN if summary.uptime_pct >= 99 else (AMBER if summary.uptime_pct >= 95 else RED))
+                          _s.GREEN if summary.uptime_pct >= 99 else (_s.AMBER if summary.uptime_pct >= 95 else _s.RED))
         self._update_stat(self._log_stat_avgrtt,
                           f"{summary.avg_rtt_ms:.0f} ms" if summary.avg_rtt_ms > 0 else "—")
         self._update_stat(self._log_stat_outages,
                           str(len(summary.outages)),
-                          RED if summary.outages else GREEN)
+                          _s.RED if summary.outages else _s.GREEN)
 
         # Populate live table with loaded entries (newest first) — all 8 columns
         from PyQt6.QtGui import QColor as _QColor
         self._log_live_table.setRowCount(0)
         for entry in reversed(summary.entries[-500:]):
-            status_color = {"OK": GREEN, "SLOW": AMBER, "FAIL": RED}.get(entry.status, TEXT_SECONDARY)
+            status_color = {"OK": _s.GREEN, "SLOW": _s.AMBER, "FAIL": _s.RED}.get(entry.status, _s.TEXT_SECONDARY)
             rtt_str    = f"{entry.rtt_ms:.0f}"    if entry.rtt_ms    >= 0 else "—"
             jitter_str = f"{entry.jitter_ms:.0f}" if entry.jitter_ms >= 0 else ""
             dns_str    = f"{entry.dns_ms:.0f}"    if entry.dns_ms    >= 0 else ""
@@ -908,7 +896,7 @@ class _LoggerTabMixin:
                 dns_str, http_str, arp_str, entry.status,
             ]):
                 item = QTableWidgetItem(str(val))
-                c = status_color if col == 7 else (AMBER if col == 6 and val else TEXT_PRIMARY)
+                c = status_color if col == 7 else (_s.AMBER if col == 6 and val else _s.TEXT_PRIMARY)
                 item.setForeground(_QColor(c))
                 self._log_live_table.setItem(row, col, item)
 
@@ -917,7 +905,7 @@ class _LoggerTabMixin:
         for o in summary.outages:
             row = self._log_outage_table.rowCount()
             self._log_outage_table.insertRow(row)
-            out_color = AMBER if o.duration_s < 300 else RED
+            out_color = _s.AMBER if o.duration_s < 300 else _s.RED
             for col, val in enumerate([
                 o.host, o.start, o.end, f"{o.duration_s:.0f}", str(o.consecutive_fails)
             ]):
@@ -938,14 +926,14 @@ class _LoggerTabMixin:
         try:
             from modules.network_logger import analyse_log
             findings = analyse_log(summary)
-            _sev_color = {"HIGH": RED, "WARN": AMBER, "INFO": GREEN}
+            _sev_color = {"HIGH": _s.RED, "WARN": _s.AMBER, "INFO": _s.GREEN}
             html_parts = []
             for f in findings:
-                fc = _sev_color.get(f.severity, TEXT_SECONDARY)
+                fc = _sev_color.get(f.severity, _s.TEXT_SECONDARY)
                 html_parts.append(
                     f"<p style='margin:4px 0'>"
                     f"<span style='color:{fc};font-weight:bold'>[{f.severity}] {f.category}: {f.title}</span>"
-                    f"<br><span style='color:{TEXT_SECONDARY}'>{f.detail}</span></p>"
+                    f"<br><span style='color:{_s.TEXT_SECONDARY}'>{f.detail}</span></p>"
                 )
             self._log_analysis_box.setHtml("".join(html_parts))
         except Exception as _exc:

@@ -433,10 +433,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _PAD   = 4
         _GAP   = 6
 
-        def __init__(self, admin_rows: set, color: str, parent=None):
+        def __init__(self, admin_rows: set, parent=None):
             super().__init__(parent)
             self._admin_rows    = admin_rows
-            self._color         = color
             self._count_badges: dict = {}  # row → (count_str, bg_color)
 
         def set_count_badge(self, row: int, count: int, color: str) -> None:
@@ -474,7 +473,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             painter.save()
             right_offset = 0
             if row in self._admin_rows:
-                right_offset += self._paint_pill(painter, option, self._BADGE, self._color, right_offset)
+                right_offset += self._paint_pill(painter, option, self._BADGE, _s.RED, right_offset)
             if row in self._count_badges:
                 text, bg = self._count_badges[row]
                 self._paint_pill(painter, option, text, bg, right_offset)

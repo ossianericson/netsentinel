@@ -20,13 +20,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    BG_CARD, BORDER, CARD_RADIUS,
-    GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
-)
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table
+from ui import styles as _s
 
 
 class _NetworkTabsMixin:
@@ -46,7 +42,7 @@ class _NetworkTabsMixin:
         if not ip:
             return
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
+        _s.themed_ss(menu, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_scan  = menu.addAction(f"🔍  Port Scan  {ip}")
         act_geo   = menu.addAction(f"🗺  Show on Geolocation Map →")
         act_abuse = menu.addAction(f"🛡  Check IP (AbuseIPDB) →")
@@ -78,7 +74,7 @@ class _NetworkTabsMixin:
         hdr = QHBoxLayout()
         hdr_lbl = QLabel("🌐  Network Configuration")
         hdr_lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        hdr_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(hdr_lbl, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         hdr.addWidget(hdr_lbl)
         hdr.addStretch()
         self._btn_net_refresh = QPushButton("↺  Refresh")
@@ -89,8 +85,9 @@ class _NetworkTabsMixin:
 
         # Info card
         self._net_info_card = QFrame()
-        self._net_info_card.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+        _s.themed_ss(
+            self._net_info_card,
+            "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};",
         )
         self._net_card_layout = QVBoxLayout(self._net_info_card)
         self._net_card_layout.setContentsMargins(18, 14, 18, 14)
@@ -98,22 +95,23 @@ class _NetworkTabsMixin:
 
         self._net_info_label = QLabel("Loading network information…")
         self._net_info_label.setWordWrap(True)
-        self._net_info_label.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        _s.themed_ss(self._net_info_label, "color:{TEXT_SECONDARY}; font-size:12px;")
         self._net_card_layout.addWidget(self._net_info_label)
 
         lay.addWidget(self._net_info_card)
 
         # Router links card
         router_frame = QFrame()
-        router_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+        _s.themed_ss(
+            router_frame,
+            "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};",
         )
         rl = QVBoxLayout(router_frame)
         rl.setContentsMargins(18, 14, 18, 14)
         rl.setSpacing(6)
         rl_title = QLabel("🔗  Router / Modem Admin Panel")
         rl_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        rl_title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(rl_title, "color:{TEXT_PRIMARY};")
         rl.addWidget(rl_title)
         rl_desc = QLabel(
             "Click a link below to open your router's admin page in a browser.\n"
@@ -121,7 +119,7 @@ class _NetworkTabsMixin:
             "have /html/index.html"
         )
         rl_desc.setWordWrap(True)
-        rl_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(rl_desc, "color:{TEXT_SECONDARY}; font-size:11px;")
         rl.addWidget(rl_desc)
 
         self._router_links_layout = QHBoxLayout()
@@ -134,16 +132,17 @@ class _NetworkTabsMixin:
         os_frame.setObjectName("osShortcutsCard")
         # RULE-QSS1: objectName-scoped so the card style does not propagate to
         # the shortcut buttons (bare declarations wipe their app-QSS #btnNetRefresh style)
-        os_frame.setStyleSheet(
-            f"QFrame#osShortcutsCard {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
+        _s.themed_ss(
+            os_frame,
+            "QFrame#osShortcutsCard {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
         )
         os_l = QVBoxLayout(os_frame)
         os_l.setContentsMargins(18, 12, 18, 12)
         os_l.setSpacing(6)
         os_title = QLabel("⚙️  Network Settings Shortcuts")
         os_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        os_title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(os_title, "color:{TEXT_PRIMARY};")
         os_l.addWidget(os_title)
         os_btn_row = QHBoxLayout()
         os_btn_row.setSpacing(8)
@@ -185,25 +184,26 @@ class _NetworkTabsMixin:
 
         # ── DHCP lease card ───────────────────────────────────────────────────
         dhcp_frame = QFrame()
-        dhcp_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+        _s.themed_ss(
+            dhcp_frame,
+            "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};",
         )
         dhcp_l = QVBoxLayout(dhcp_frame)
         dhcp_l.setContentsMargins(18, 12, 18, 12)
         dhcp_l.setSpacing(4)
         dhcp_title = QLabel("🕐  DHCP Lease  &  Adapter Details")
         dhcp_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        dhcp_title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(dhcp_title, "color:{TEXT_PRIMARY};")
         dhcp_l.addWidget(dhcp_title)
         self._dhcp_label = QLabel("Loading…")
         self._dhcp_label.setWordWrap(True)
-        self._dhcp_label.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._dhcp_label, "color:{TEXT_SECONDARY}; font-size:11px;")
         dhcp_l.addWidget(self._dhcp_label)
         lay.addWidget(dhcp_frame)
 
         # ── Adapters table ────────────────────────────────────────────────────
         adp_lbl = QLabel("  Network Adapters")
-        adp_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
+        _s.themed_ss(adp_lbl, "color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
         lay.addWidget(adp_lbl)
         self._adapters_table = _table([
             "Adapter Name", "Type", "IPv4", "MAC Address", "Speed", "WiFi Signal", "SSID", "Status"
@@ -220,7 +220,7 @@ class _NetworkTabsMixin:
 
         # ── All-devices table (populated after scan) ──────────────────────────
         dev_lbl = QLabel("  All Devices Seen on This Network  (populated after scan)")
-        dev_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
+        _s.themed_ss(dev_lbl, "color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
         lay.addWidget(dev_lbl)
 
         self._net_devices_table = _table([
@@ -254,7 +254,7 @@ class _NetworkTabsMixin:
             mask = f" / {entry['mask']}" if entry.get("mask") else ""
             lines.append(
                 f"<b>Local IP:</b>  {entry['ip']}{mask}"
-                f"  <span style='color:{TEXT_SECONDARY}'>(adapter: {entry['adapter']})</span>"
+                f"  <span style='color:{_s.TEXT_SECONDARY}'>(adapter: {entry['adapter']})</span>"
             )
         gw = info.get("gateway")
         if gw:
@@ -267,17 +267,18 @@ class _NetworkTabsMixin:
             lines.append(f"<b>Domain:</b>  {domain}")
 
         self._net_info_label.setTextFormat(Qt.TextFormat.RichText)
-        self._net_info_label.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px; line-height:1.8;")
+        _s.themed_ss(self._net_info_label, "color:{TEXT_PRIMARY}; font-size:12px; line-height:1.8;")
         self._net_info_label.setText("<br>".join(lines) if lines else "No network information available.")
 
         # Show a basic header status once the network is confirmed reachable
         if not self._verdict_badge.isVisible():
             if info.get("gateway") and info.get("local_ips"):
                 self._verdict_badge.setText("● Network healthy")
+                # State-dependent badge (monitor_state recolours it by alert level) —
+                # live _s. read, NOT themed_ss, so a theme switch doesn't pin it green.
                 self._verdict_badge.setStyleSheet(
-                    f"color:{GREEN}; font-size:11px; font-weight:600;"
-                    " background:transparent; border:none; padding:0 12px;"
-                )
+                    f"color:{_s.GREEN}; font-size:11px; font-weight:600;"
+                    " background:transparent; border:none; padding:0 12px;")
                 self._verdict_badge.setVisible(True)
 
         # Rebuild router links
@@ -318,7 +319,7 @@ class _NetworkTabsMixin:
         else:
             dhcp_parts.append("DHCP lease information not available.")
         self._dhcp_label.setTextFormat(Qt.TextFormat.RichText)
-        self._dhcp_label.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; line-height:1.8;")
+        _s.themed_ss(self._dhcp_label, "color:{TEXT_PRIMARY}; font-size:11px; line-height:1.8;")
         self._dhcp_label.setText("  " + "&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;".join(dhcp_parts))
 
         # ── Populate adapters table ──────────────────────────────────────────
@@ -328,13 +329,13 @@ class _NetworkTabsMixin:
             row = self._adapters_table.rowCount()
             self._adapters_table.insertRow(row)
             connected = a.get("connected", False)
-            row_color = TEXT_PRIMARY if connected else TEXT_SECONDARY
+            row_color = _s.TEXT_PRIMARY if connected else _s.TEXT_SECONDARY
             speed = a.get("speed_mbps", 0)
             speed_str = f"{speed} Mbps" if speed else "—"
             sig = a.get("signal_pct", -1)
             sig_str = f"{sig}%" if sig >= 0 else "—"
             status_str = "Connected" if connected else "Disconnected"
-            status_color = GREEN if connected else RED
+            status_color = _s.GREEN if connected else _s.RED
             vals = [
                 a.get("name", ""),
                 a.get("type", ""),

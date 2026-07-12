@@ -20,13 +20,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    AMBER, BG_CARD, BORDER, CARD_RADIUS,
-    GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
-)
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table
+from ui import styles as _s
 
 
 class _DiagExtraTabsMixin:
@@ -47,11 +43,11 @@ class _DiagExtraTabsMixin:
         top = QHBoxLayout()
         title = QLabel("🔁  Continuous Traceroute  (MTR)")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         tgt_lbl = QLabel("Target:")
-        tgt_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(tgt_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         self._mtr_target = QLineEdit("8.8.8.8")
         self._mtr_target.setFixedWidth(130)
         self._btn_mtr = QPushButton("▶  Start MTR")
@@ -64,7 +60,7 @@ class _DiagExtraTabsMixin:
         lay.addLayout(top)
 
         self._mtr_status = QLabel("Click Start MTR to run a continuous hop-by-hop trace.")
-        self._mtr_status.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._mtr_status, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(self._mtr_status)
 
         self._mtr_table = _table(["Hop", "IP Address", "Sent", "Loss %", "Avg RTT (ms)", "Last RTT"])
@@ -90,7 +86,7 @@ class _DiagExtraTabsMixin:
 
         title = QLabel("🔍  Port Scanner")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         lay.addWidget(title)
 
         # Port Scanner card
@@ -98,10 +94,8 @@ class _DiagExtraTabsMixin:
         ps_frame.setObjectName("portScanCard")
         # RULE-QSS1: objectName-scoped so the card style does not propagate to
         # the Scan Ports button (bare declarations wipe its app-QSS #btnDiag style)
-        ps_frame.setStyleSheet(
-            f"QFrame#portScanCard {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(ps_frame, "QFrame#portScanCard {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
         ps_l = QVBoxLayout(ps_frame)
         ps_l.setContentsMargins(16, 12, 16, 12)
         ps_l.setSpacing(6)
@@ -110,7 +104,7 @@ class _DiagExtraTabsMixin:
             "No admin required.  Right-click a device in Device Fingerprinter → Port Scan."
         )
         ps_desc.setWordWrap(True)
-        ps_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(ps_desc, "color:{TEXT_SECONDARY}; font-size:11px;")
         ps_l.addWidget(ps_desc)
         ps_row = QHBoxLayout()
         self._ps_host = QLineEdit()
@@ -131,7 +125,7 @@ class _DiagExtraTabsMixin:
             lambda: self._run_port_scan(self._ps_host.text().strip())
         )
         self._ps_status = QLabel("")
-        self._ps_status.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._ps_status, "color:{TEXT_SECONDARY}; font-size:11px;")
         ps_row.addWidget(self._ps_host)
         ps_row.addWidget(self._ps_mode)
         ps_row.addWidget(self._btn_ps)
@@ -159,7 +153,7 @@ class _DiagExtraTabsMixin:
 
         title = QLabel("⚡  Wake-on-LAN")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         lay.addWidget(title)
 
         # Wake-on-LAN card
@@ -167,10 +161,8 @@ class _DiagExtraTabsMixin:
         wol_frame.setObjectName("wolCard")
         # RULE-QSS1: objectName-scoped so the card style does not propagate to
         # the Send WoL button (bare declarations wipe its app-QSS #btnNetRefresh style)
-        wol_frame.setStyleSheet(
-            f"QFrame#wolCard {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(wol_frame, "QFrame#wolCard {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
         wol_l = QVBoxLayout(wol_frame)
         wol_l.setContentsMargins(16, 12, 16, 12)
         wol_l.setSpacing(6)
@@ -185,7 +177,7 @@ class _DiagExtraTabsMixin:
             lambda: self._send_wol(self._wol_mac.text().strip())
         )
         self._wol_status = QLabel("")
-        self._wol_status.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._wol_status, "color:{TEXT_SECONDARY}; font-size:11px;")
         wol_row.addWidget(QLabel("MAC:"))
         wol_row.addWidget(self._wol_mac)
         wol_row.addWidget(self._btn_wol)
@@ -195,25 +187,23 @@ class _DiagExtraTabsMixin:
 
         # Device Baseline card
         bl_frame = QFrame()
-        bl_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
-        )
+        _s.themed_ss(bl_frame, "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};")
         bl_l = QVBoxLayout(bl_frame)
         bl_l.setContentsMargins(16, 12, 16, 12)
         bl_l.setSpacing(6)
         bl_title = QLabel("📋  New Device Alerts  (baseline diff)")
         bl_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        bl_title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(bl_title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         bl_l.addWidget(bl_title)
         bl_desc = QLabel(
             "After each scan, devices not seen before are highlighted here.  "
             "Baseline is saved to ~/Documents/NetSentinel/device_baseline.json."
         )
         bl_desc.setWordWrap(True)
-        bl_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(bl_desc, "color:{TEXT_SECONDARY}; font-size:11px;")
         bl_l.addWidget(bl_desc)
         self._bl_new_lbl = QLabel("No scan run yet.")
-        self._bl_new_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._bl_new_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         bl_l.addWidget(self._bl_new_lbl)
         self._bl_table = _table(["IP", "Hostname", "MAC", "Vendor", "First Seen"])
         self._bl_table.setMaximumHeight(160)
@@ -277,7 +267,7 @@ class _DiagExtraTabsMixin:
             loss_pct = (lost / sent * 100) if sent else 0
             avg_rtt = (s["total"] / ok) if ok else -1
             last = s.get("last", -1)
-            loss_color = RED if loss_pct > 10 else (AMBER if loss_pct > 0 else GREEN)
+            loss_color = _s.RED if loss_pct > 10 else (_s.AMBER if loss_pct > 0 else _s.GREEN)
             row = self._mtr_table.rowCount()
             self._mtr_table.insertRow(row)
             vals = [
@@ -288,7 +278,7 @@ class _DiagExtraTabsMixin:
             ]
             for col, val in enumerate(vals):
                 item = QTableWidgetItem(val)
-                item.setForeground(QColor(loss_color if col == 3 else TEXT_PRIMARY))
+                item.setForeground(QColor(loss_color if col == 3 else _s.TEXT_PRIMARY))
                 self._mtr_table.setItem(row, col, item)
 
     # ── Port scan handlers ────────────────────────────────────────────────────
@@ -322,7 +312,7 @@ class _DiagExtraTabsMixin:
         from modules.utils import send_wol
         ok = send_wol(mac)
         msg = f"WoL magic packet sent to {mac}" if ok else f"Invalid MAC address: {mac}"
-        color = GREEN if ok else RED
+        color = _s.GREEN if ok else _s.RED
         if hasattr(self, "_wol_status"):
             self._wol_status.setStyleSheet(f"color:{color}; font-size:11px;")
             self._wol_status.setText(msg)
@@ -358,7 +348,7 @@ class _DiagExtraTabsMixin:
             self._nav_rail_go_to(L.THREAT_INTEL)
         elif rule_type == "RATE_SPIKE" and host:
             if hasattr(self, "_live_bandwidth_page"):
-                self._live_bandwidth_page.annotate_event("Rate spike", RED)
+                self._live_bandwidth_page.annotate_event("Rate spike", _s.RED)
             self._nav_rail_go_to(L.LIVE_BANDWIDTH)
         elif host:
             self._on_inventory_device_selected(host)

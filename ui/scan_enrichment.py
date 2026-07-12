@@ -1097,14 +1097,17 @@ class ScanEnrichmentMixin:
 
     @pyqtSlot(bool)
     def _on_node_group_toggled(self, checked: bool) -> None:
+        from ui import styles as _s
         self._m1_group_by_node = checked
         QSettings("NetSentinel", "NetSentinel").setValue("devices/group_by_node", checked)
         if hasattr(self, "_m1_seg_list"):
-            self._m1_seg_list.setStyleSheet(
-                self._m1_seg_inactive_ss if checked else self._m1_seg_active_ss
+            _s.themed_ss(
+                self._m1_seg_list,
+                self._m1_seg_inactive_ss if checked else self._m1_seg_active_ss,
             )
-            self._m1_seg_node.setStyleSheet(
-                self._m1_seg_active_ss if checked else self._m1_seg_inactive_ss
+            _s.themed_ss(
+                self._m1_seg_node,
+                self._m1_seg_active_ss if checked else self._m1_seg_inactive_ss,
             )
         if checked:
             self._regroup_m1_by_satellite()
