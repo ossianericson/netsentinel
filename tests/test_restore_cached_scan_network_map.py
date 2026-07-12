@@ -39,6 +39,14 @@ class _NetworkMapStub:
         self.render_calls.append(kwargs)
 
 
+class _WidgetStub:
+    """Weakref-able stub — themed_ss registers the status label in a
+    WeakKeyDictionary, and SimpleNamespace cannot be weakly referenced."""
+
+    def __init__(self, **methods):
+        self.__dict__.update(methods)
+
+
 class _Stub:
     """Minimal object satisfying _restore_cached_scan()'s attribute reads."""
 
@@ -50,7 +58,7 @@ class _Stub:
             setRowCount=lambda *_a: None,
             setColumnHidden=lambda *_a: None,
         )
-        self._m1_status = SimpleNamespace(
+        self._m1_status = _WidgetStub(
             setText=lambda *_a: None, setStyleSheet=lambda *_a: None,
         )
         self._network_map_page = _NetworkMapStub()

@@ -47,13 +47,8 @@ from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.expanding_table import ExpandingTable
 
-from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
-    TH_BORDER, TH_TEXT, WHITE,
-)
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
+from ui import styles as _s
 
 
 _TABLE_HEADERS = [
@@ -61,15 +56,23 @@ _TABLE_HEADERS = [
     "Port", "Status", "Country", "Path", "Action",
 ]
 
+# Values are theme-token NAMES (resolved live via _status_color) so a theme
+# switch restyles already-populated rows on the next repopulate — a frozen hex
+# dict here would freeze at import time.
 _STATUS_COLOR = {
-    "ESTABLISHED": GREEN,
-    "LISTEN":      ACCENT,
-    "TIME_WAIT":   AMBER,
-    "CLOSE_WAIT":  AMBER,
-    "SYN_SENT":    AMBER,
-    "FIN_WAIT1":   TEXT_MUTED,
-    "FIN_WAIT2":   TEXT_MUTED,
+    "ESTABLISHED": "GREEN",
+    "LISTEN":      "ACCENT",
+    "TIME_WAIT":   "AMBER",
+    "CLOSE_WAIT":  "AMBER",
+    "SYN_SENT":    "AMBER",
+    "FIN_WAIT1":   "TEXT_MUTED",
+    "FIN_WAIT2":   "TEXT_MUTED",
 }
+
+
+def _status_color(status: str) -> str:
+    """Live theme hex for a connection status (falls back to TEXT_MUTED)."""
+    return getattr(_s, _STATUS_COLOR.get(status, "TEXT_MUTED"))
 
 
 # ── Firewall helpers ──────────────────────────────────────────────────────────
@@ -135,10 +138,10 @@ class ConnectionsPage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        _kt, self._lbl_total    = _shared_kpi_tile("Total",       "—", ACCENT)
-        _ke, self._lbl_estab    = _shared_kpi_tile("Established", "—", GREEN)
-        _kx, self._lbl_external = _shared_kpi_tile("External",    "—", AMBER)
-        _kb, self._lbl_blocked  = _shared_kpi_tile("FW Blocked",  "—", RED)
+        _kt, self._lbl_total    = _shared_kpi_tile("Total",       "—", _s.ACCENT)
+        _ke, self._lbl_estab    = _shared_kpi_tile("Established", "—", _s.GREEN)
+        _kx, self._lbl_external = _shared_kpi_tile("External",    "—", _s.AMBER)
+        _kb, self._lbl_blocked  = _shared_kpi_tile("FW Blocked",  "—", _s.RED)
         for t in (_kt, _ke, _kx, _kb):
             kpi_row.addWidget(t, 1)
         root.addLayout(kpi_row)
@@ -148,38 +151,34 @@ class ConnectionsPage(QWidget):
         filter_row.setSpacing(8)
 
         _inp = (
-            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
-            f" font-size:11px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+            "QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
+            " font-size:11px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         _cbo = (
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
-            f" font-size:11px; min-height:26px; }}"
+            "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
+            " font-size:11px; min-height:26px; }}"
         )
 
         self._search = QLineEdit()
         self._search.setPlaceholderText("Filter by process, IP, port…")
         self._search.setClearButtonEnabled(True)
-        self._search.setStyleSheet(_inp)
+        _s.themed_ss(self._search, _inp)
         self._search.textChanged.connect(self._apply_filters)
 
         self._proto_filter = QComboBox()
-        self._proto_filter.setStyleSheet(_cbo)
+        _s.themed_ss(self._proto_filter, _cbo)
         self._proto_filter.addItems(["All Protocols", "TCP", "UDP"])
         self._proto_filter.currentIndexChanged.connect(self._apply_filters)
 
         self._chk_listen = QCheckBox("Show LISTEN")
-        self._chk_listen.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._chk_listen, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._chk_listen.toggled.connect(self._refresh)
 
         self._chk_local = QCheckBox("Show local")
-        self._chk_local.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._chk_local, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._chk_local.setChecked(True)
         self._chk_local.toggled.connect(self._apply_filters)
 
@@ -189,21 +188,17 @@ class ConnectionsPage(QWidget):
         btn_refresh.clicked.connect(self._refresh)
 
         self._chk_auto = QCheckBox("Auto (5s)")
-        self._chk_auto.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._chk_auto, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._chk_auto.toggled.connect(self._on_auto_toggled)
 
         self._btn_group = QPushButton("⊞ Group by Process")
         self._btn_group.setCheckable(True)
         self._btn_group.setFixedHeight(28)
-        self._btn_group.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; background:{BG_HOVER}; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _s.themed_ss(self._btn_group, "QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
+            "QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; background:{BG_HOVER}; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         self._btn_group.toggled.connect(self._on_group_toggled)
 
         filter_row.addWidget(self._search, 2)
@@ -217,38 +212,30 @@ class ConnectionsPage(QWidget):
 
         # Status label
         self._status_lbl = QLabel("Loading…")
-        self._status_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none;")
         root.addWidget(self._status_lbl)
 
         # Undo bar — appears for 10 s after a successful block action
         self._undo_bar = QFrame()
         self._undo_bar.setFixedHeight(32)
-        self._undo_bar.setStyleSheet(
-            f"background:{BG_CARD}; border:none;"
-            f" border-left:3px solid {GREEN}; border-radius:0;"
-        )
+        _s.themed_ss(self._undo_bar, "background:{BG_CARD}; border:none;"
+            " border-left:3px solid {GREEN}; border-radius:0;")
         _ub_lay = QHBoxLayout(self._undo_bar)
         _ub_lay.setContentsMargins(10, 0, 8, 0)
         _ub_lay.setSpacing(8)
         self._undo_lbl = QLabel()
-        self._undo_lbl.setStyleSheet(
-            f"color:{GREEN}; font-size:11px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._undo_lbl, "color:{GREEN}; font-size:11px; font-weight:bold;"
+            " background:transparent; border:none;")
         _ub_lay.addWidget(self._undo_lbl)
         _ub_lay.addStretch()
         self._undo_btn = QPushButton("Undo")
         self._undo_btn.setFixedSize(52, 22)
         self._undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._undo_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _s.themed_ss(self._undo_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         self._undo_btn.clicked.connect(self._do_undo_block)
         _ub_lay.addWidget(self._undo_btn)
         self._undo_bar.setVisible(False)
@@ -281,17 +268,15 @@ class ConnectionsPage(QWidget):
         self._tbl.setColumnWidth(6, 90)   # Status
         self._tbl.setColumnWidth(7, 130)  # Country
         self._tbl.setColumnWidth(9, 70)   # Action
-        self._tbl.setStyleSheet(
-            f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QHeaderView::section {{"
-            f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-            f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid {TH_BORDER};"
-            f"}}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-            f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-        )
+        _s.themed_ss(self._tbl, "QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QHeaderView::section {{"
+            "  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            "  font-weight:bold; padding:4px 5px; border:none;"
+            "  border-right:1px solid {TH_BORDER};"
+            "}}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+            "QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+            "QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}")
         self._tbl.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tbl.customContextMenuRequested.connect(self._context_menu)
 
@@ -338,20 +323,16 @@ class ConnectionsPage(QWidget):
         blocked_frame.setObjectName("blockedRulesFrame")
         # RULE-QSS1: objectName-scoped so the card style does not propagate to
         # the Reload button (bare declarations wipe its app-QSS #btnNetRefresh style)
-        blocked_frame.setStyleSheet(
-            f"QFrame#blockedRulesFrame {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:0; }}"
-        )
+        _s.themed_ss(blocked_frame, "QFrame#blockedRulesFrame {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:0; }}")
         blocked_lay = QVBoxLayout(blocked_frame)
         blocked_lay.setContentsMargins(12, 8, 12, 8)
         blocked_lay.setSpacing(6)
 
         hdr = QHBoxLayout()
         hdr_lbl = QLabel("FIREWALL BLOCKS (NS-Block-* rules)")
-        hdr_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{RED};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr_lbl, "font-size:11px; font-weight:bold; color:{RED};"
+            " background:transparent; border:none;")
         btn_reload_rules = QPushButton("Reload")
         btn_reload_rules.setObjectName("btnNetRefresh")
         # No tight fixed size — the app-QSS #btnNetRefresh style needs
@@ -363,10 +344,8 @@ class ConnectionsPage(QWidget):
         blocked_lay.addLayout(hdr)
 
         self._blocked_lbl = QLabel("Loading…")
-        self._blocked_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._blocked_lbl, "font-size:11px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;")
         self._blocked_lbl.setWordWrap(True)
         blocked_lay.addWidget(self._blocked_lbl)
 
@@ -474,21 +453,21 @@ class ConnectionsPage(QWidget):
             row = self._tbl.rowCount()
             self._tbl.insertRow(row)
 
-            row_color = TEXT_PRIMARY if external else TEXT_SECONDARY
-            status_color = _STATUS_COLOR.get(worst.status, TEXT_MUTED)
+            row_color = _s.TEXT_PRIMARY if external else _s.TEXT_SECONDARY
+            status_color = _status_color(worst.status)
 
             cells = [
                 (exe_name,            row_color),
-                (str(len(grp_conns)), TEXT_MUTED),
-                ("—",                 TEXT_MUTED),
-                ("—",                 TEXT_MUTED),
-                (f"{external} ext",   AMBER if external else TEXT_MUTED),
-                ("—",                 TEXT_MUTED),
+                (str(len(grp_conns)), _s.TEXT_MUTED),
+                ("—",                 _s.TEXT_MUTED),
+                ("—",                 _s.TEXT_MUTED),
+                (f"{external} ext",   _s.AMBER if external else _s.TEXT_MUTED),
+                ("—",                 _s.TEXT_MUTED),
                 (worst.status,        status_color),
-                ("—",                 TEXT_MUTED),
-                (worst.exe_path or "—", TEXT_MUTED),
+                ("—",                 _s.TEXT_MUTED),
+                (worst.exe_path or "—", _s.TEXT_MUTED),
                 ("🔓 Unblock" if is_blocked else "🔒 Block",
-                 RED if not is_blocked else AMBER),
+                 _s.RED if not is_blocked else _s.AMBER),
             ]
             for col, (text, color) in enumerate(cells):
                 item = QTableWidgetItem(text)
@@ -519,13 +498,13 @@ class ConnectionsPage(QWidget):
             # Colour scheme: red for external established, amber for listen,
             # grey for local/system
             if c.status == "ESTABLISHED" and not c.is_local:
-                row_color = TEXT_PRIMARY
+                row_color = _s.TEXT_PRIMARY
             elif c.status in ("LISTEN", "NONE"):
-                row_color = TEXT_MUTED
+                row_color = _s.TEXT_MUTED
             else:
-                row_color = TEXT_SECONDARY
+                row_color = _s.TEXT_SECONDARY
 
-            status_color = _STATUS_COLOR.get(c.status, TEXT_MUTED)
+            status_color = _status_color(c.status)
 
             # Country cell: flag code + country name
             country_str = ""
@@ -539,18 +518,18 @@ class ConnectionsPage(QWidget):
             # Action column: Block / Unblocked
             is_blocked = c.exe_name in self._blocked_rules
             action_str = "🔓 Unblock" if is_blocked else "🔒 Block"
-            action_color = RED if not is_blocked else AMBER
+            action_color = _s.RED if not is_blocked else _s.AMBER
 
             cells = [
                 (c.exe_name,              row_color),
-                (str(c.pid) if c.pid else "—", TEXT_MUTED),
-                (c.proto,                 ACCENT),
-                (c.local_addr,            TEXT_MUTED),
-                (c.remote_ip or "—",      TEXT_PRIMARY if c.remote_ip else TEXT_MUTED),
-                (str(c.remote_port) if c.remote_port else "—", TEXT_MUTED),
+                (str(c.pid) if c.pid else "—", _s.TEXT_MUTED),
+                (c.proto,                 _s.ACCENT),
+                (c.local_addr,            _s.TEXT_MUTED),
+                (c.remote_ip or "—",      _s.TEXT_PRIMARY if c.remote_ip else _s.TEXT_MUTED),
+                (str(c.remote_port) if c.remote_port else "—", _s.TEXT_MUTED),
                 (c.status,                status_color),
-                (country_str,             TEXT_SECONDARY),
-                (c.exe_path or "—",       TEXT_MUTED),
+                (country_str,             _s.TEXT_SECONDARY),
+                (c.exe_path or "—",       _s.TEXT_MUTED),
                 (action_str,              action_color),
             ]
 
@@ -575,18 +554,14 @@ class ConnectionsPage(QWidget):
     def _build_group_detail(self, exe_name: str, grp_conns: list) -> QWidget:
         """Compact table of individual connections within a process group."""
         outer = QWidget()
-        outer.setStyleSheet(
-            f"QWidget {{ background:{BG_HOVER}; border:none; border-left:3px solid {ACCENT}; }}"
-        )
+        _s.themed_ss(outer, "QWidget {{ background:{BG_HOVER}; border:none; border-left:3px solid {ACCENT}; }}")
         lay = QVBoxLayout(outer)
         lay.setContentsMargins(16, 8, 16, 8)
         lay.setSpacing(4)
 
         hdr_lbl = QLabel(f"{exe_name}  —  {len(grp_conns)} connection(s)")
-        hdr_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr_lbl, "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         lay.addWidget(hdr_lbl)
 
         sub_tbl = QTableWidget(0, 5)
@@ -596,23 +571,21 @@ class ConnectionsPage(QWidget):
         sub_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         sub_tbl.verticalHeader().setDefaultSectionSize(24)
         sub_tbl.setFixedHeight(min(24 * len(grp_conns) + 26, 120))
-        sub_tbl.setStyleSheet(
-            f"QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
-            f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
-            f" font-weight:bold; padding:2px 4px; border:none; }}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(sub_tbl, "QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
+            "QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
+            " font-weight:bold; padding:2px 4px; border:none; }}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}")
         sub_tbl.horizontalHeader().setStretchLastSection(True)
         for c in grp_conns:
             r = sub_tbl.rowCount()
             sub_tbl.insertRow(r)
             country_str = f"{c.flag}  {c.country}" if c.flag else (c.country or "")
             for col, (val, color) in enumerate([
-                (c.local_addr, TEXT_MUTED),
-                (c.remote_ip or "—", TEXT_PRIMARY),
-                (str(c.remote_port) if c.remote_port else "—", TEXT_MUTED),
-                (c.status, _STATUS_COLOR.get(c.status, TEXT_MUTED)),
-                (country_str, TEXT_SECONDARY),
+                (c.local_addr, _s.TEXT_MUTED),
+                (c.remote_ip or "—", _s.TEXT_PRIMARY),
+                (str(c.remote_port) if c.remote_port else "—", _s.TEXT_MUTED),
+                (c.status, _status_color(c.status)),
+                (country_str, _s.TEXT_SECONDARY),
             ]):
                 item = QTableWidgetItem(val)
                 item.setForeground(QColor(color))
@@ -628,19 +601,17 @@ class ConnectionsPage(QWidget):
             return self._build_group_detail(entry[1], entry[2])
         c = entry
 
-        status_color = _STATUS_COLOR.get(c.status, TEXT_MUTED)
+        status_color = _status_color(c.status)
         is_blocked = c.exe_name in self._blocked_rules
 
         outer = QWidget()
-        outer.setStyleSheet(
-            f"QWidget {{ background:{BG_HOVER}; border:none;"
-            f" border-left:3px solid {ACCENT}; }}"
-        )
+        _s.themed_ss(outer, "QWidget {{ background:{BG_HOVER}; border:none;"
+            " border-left:3px solid {ACCENT}; }}")
         lay = QHBoxLayout(outer)
         lay.setContentsMargins(16, 10, 16, 10)
         lay.setSpacing(24)
 
-        def _lbl(text: str, color: str = TEXT_PRIMARY) -> QLabel:
+        def _lbl(text: str, color: str = _s.TEXT_PRIMARY) -> QLabel:
             l = QLabel(str(text))
             l.setStyleSheet(
                 f"font-size:11px; color:{color}; background:transparent; border:none;"
@@ -649,10 +620,8 @@ class ConnectionsPage(QWidget):
 
         def _hdr(text: str) -> QLabel:
             l = QLabel(text)
-            l.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
-                " background:transparent; border:none;"
-            )
+            _s.themed_ss(l, "font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
+                " background:transparent; border:none;")
             return l
 
         # Process column
@@ -663,7 +632,7 @@ class ConnectionsPage(QWidget):
         pg.setSpacing(3)
         pg.setHorizontalSpacing(12)
         pg.addRow(_hdr("Process"),  _lbl(f"{c.exe_name}  (PID {c.pid or '—'})"))
-        pg.addRow(_hdr("Protocol"), _lbl(c.proto, ACCENT))
+        pg.addRow(_hdr("Protocol"), _lbl(c.proto, _s.ACCENT))
         pg.addRow(_hdr("Status"),   _lbl(c.status, status_color))
         country_str = f"{c.flag}  {c.country}" if c.flag else (c.country or "—")
         pg.addRow(_hdr("Country"),  _lbl(country_str))
@@ -676,31 +645,25 @@ class ConnectionsPage(QWidget):
         ag.setContentsMargins(0, 0, 0, 0)
         ag.setSpacing(3)
         ag.setHorizontalSpacing(12)
-        ag.addRow(_hdr("Local"),  _lbl(c.local_addr or "—", TEXT_MUTED))
+        ag.addRow(_hdr("Local"),  _lbl(c.local_addr or "—", _s.TEXT_MUTED))
         remote = f"{c.remote_ip}:{c.remote_port}" if c.remote_ip else "—"
         ag.addRow(_hdr("Remote"), _lbl(remote))
         path_lbl = QLabel(c.exe_path or "—")
         path_lbl.setWordWrap(True)
-        path_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(path_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
         ag.addRow(_hdr("EXE Path"), path_lbl)
         lay.addLayout(ag, 1)
 
         # Actions column
         if is_blocked:
             btn_fw = QPushButton(f"Unblock {c.exe_name}")
-            btn_fw.setStyleSheet(
-                f"font-size:11px; font-weight:bold; color:{WHITE}; background:{AMBER};"
-                f" border:none; padding:0 12px; border-radius:4px;"
-            )
+            _s.themed_ss(btn_fw, "font-size:11px; font-weight:bold; color:{WHITE}; background:{AMBER};"
+                " border:none; padding:0 12px; border-radius:4px;")
             btn_fw.clicked.connect(lambda: self._toggle_block(c, True))
         else:
             btn_fw = QPushButton(f"Block {c.exe_name}")
-            btn_fw.setStyleSheet(
-                f"font-size:11px; font-weight:bold; color:{WHITE}; background:{RED};"
-                f" border:none; padding:0 12px; border-radius:4px;"
-            )
+            _s.themed_ss(btn_fw, "font-size:11px; font-weight:bold; color:{WHITE}; background:{RED};"
+                " border:none; padding:0 12px; border-radius:4px;")
             btn_fw.clicked.connect(lambda: self._toggle_block(c, False))
         btn_fw.setFixedHeight(28)
 
@@ -735,12 +698,10 @@ class ConnectionsPage(QWidget):
         c = self._displayed_conns[idx]
 
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
-            f"QMenu::item {{ padding:5px 20px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
+            "QMenu::item {{ padding:5px 20px; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
 
         is_blocked = c.exe_name in self._blocked_rules
         if is_blocked:
@@ -847,7 +808,7 @@ class ConnectionsPage(QWidget):
         dlg = QDialog(self)
         dlg.setWindowTitle("Confirm Firewall Block")
         dlg.setMinimumWidth(420)
-        dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+        _s.themed_ss(dlg, "background:{BG_DARK}; color:{TEXT_PRIMARY};")
         lay = QVBoxLayout(dlg)
         lay.setSpacing(12)
         lay.setContentsMargins(16, 16, 16, 12)
@@ -860,9 +821,7 @@ class ConnectionsPage(QWidget):
             f"You can remove the rule at any time via the Unblock action."
         )
         msg_lbl.setWordWrap(True)
-        msg_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(msg_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
         lay.addWidget(msg_lbl)
 
         btns = QDialogButtonBox(
@@ -870,10 +829,8 @@ class ConnectionsPage(QWidget):
             QDialogButtonBox.StandardButton.Cancel
         )
         btns.button(QDialogButtonBox.StandardButton.Ok).setText("Block Process")
-        btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
-            f"background:{RED}; color:{WHITE}; border:none;"
-            f" border-radius:3px; padding:5px 14px; font-size:11px; font-weight:bold;"
-        )
+        _s.themed_ss(btns.button(QDialogButtonBox.StandardButton.Ok), "background:{RED}; color:{WHITE}; border:none;"
+            " border-radius:3px; padding:5px 14px; font-size:11px; font-weight:bold;")
         btns.accepted.connect(dlg.accept)
         btns.rejected.connect(dlg.reject)
         lay.addWidget(btns)

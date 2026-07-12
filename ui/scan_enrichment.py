@@ -20,11 +20,7 @@ from modules.scan_persistence import (
 
 from ui.tabs import _add_row
 from ui.nav.labels import NavLabel as L
-from ui.styles import (
-    ACCENT, AMBER,
-    BG_CARD, BG_DARK, GREEN, RED,
-    TEXT_PRIMARY, TEXT_MUTED,
-)
+from ui import styles as _s
 
 if TYPE_CHECKING:
     pass
@@ -387,7 +383,7 @@ class ScanEnrichmentMixin:
             ssid_item = QTableWidgetItem(ssid_d)
             if backhaul:
                 from PyQt6.QtGui import QColor
-                ssid_item.setForeground(QColor(TEXT_MUTED))
+                ssid_item.setForeground(QColor(_s.TEXT_MUTED))
                 ssid_item.setToolTip(
                     "Hidden SSID used for inter-node mesh communication.\n"
                     "Not a user network — safe to ignore."
@@ -399,7 +395,7 @@ class ScanEnrichmentMixin:
             if node_count > 1:
                 nodes_item.setToolTip(node_tip)
                 from PyQt6.QtGui import QColor
-                nodes_item.setForeground(QColor(ACCENT))
+                nodes_item.setForeground(QColor(_s.ACCENT))
 
             sig_item  = QTableWidgetItem(sig_d)
             rogue_item = QTableWidgetItem("⚠ Yes" if rogue else "No")
@@ -408,11 +404,11 @@ class ScanEnrichmentMixin:
 
             from PyQt6.QtGui import QColor as _QC
             if rogue:
-                rogue_item.setForeground(_QC(RED))
+                rogue_item.setForeground(_QC(_s.RED))
             if conflict:
-                conf_item.setForeground(_QC(AMBER))
+                conf_item.setForeground(_QC(_s.AMBER))
             if connected:
-                conn_item.setForeground(_QC(GREEN))
+                conn_item.setForeground(_QC(_s.GREEN))
 
             for col, item in enumerate([
                 ssid_item, bssid_item, nodes_item,
@@ -466,7 +462,6 @@ class ScanEnrichmentMixin:
         self._update_overall_verdict()
 
     def _on_diag_result(self, result):
-        from ui.styles import GREEN, AMBER, RED, TEXT_PRIMARY, BLUE
 
         self._diag_result = result
         self._protocol_viz_page.set_context(
@@ -479,28 +474,28 @@ class ScanEnrichmentMixin:
         # Ping table
         self._diag_ping_table.setRowCount(0)
         for p in result.ping_results:
-            color = GREEN if p.status == "OK" else (AMBER if p.status == "SLOW" else RED)
+            color = _s.GREEN if p.status == "OK" else (_s.AMBER if p.status == "SLOW" else _s.RED)
             rtt_str = f"{p.rtt_ms:.0f}" if p.rtt_ms >= 0 else "unreachable"
             row = self._diag_ping_table.rowCount()
             self._diag_ping_table.insertRow(row)
             for col, val in enumerate([p.host, p.ip, rtt_str, p.status]):
                 item = QTableWidgetItem(str(val))
                 item.setForeground(
-                    QColor(color if col == 3 else TEXT_PRIMARY)
+                    QColor(color if col == 3 else _s.TEXT_PRIMARY)
                 )
                 self._diag_ping_table.setItem(row, col, item)
 
         # DNS table
         self._diag_dns_table.setRowCount(0)
         for d in result.dns_results:
-            color = GREEN if d.status == "OK" else (AMBER if d.status == "SLOW" else RED)
+            color = _s.GREEN if d.status == "OK" else (_s.AMBER if d.status == "SLOW" else _s.RED)
             lat_str = f"{d.latency_ms:.0f} ms" if d.latency_ms >= 0 else "failed"
             row = self._diag_dns_table.rowCount()
             self._diag_dns_table.insertRow(row)
             for col, val in enumerate([d.server, lat_str, d.resolved_ip, d.status]):
                 item = QTableWidgetItem(str(val))
                 item.setForeground(
-                    QColor(color if col == 3 else TEXT_PRIMARY)
+                    QColor(color if col == 3 else _s.TEXT_PRIMARY)
                 )
                 self._diag_dns_table.setItem(row, col, item)
 
@@ -508,10 +503,11 @@ class ScanEnrichmentMixin:
         for i, h in enumerate(result.http_results):
             if i < len(self._diag_http_labels):
                 lbl = self._diag_http_labels[i]
-                color = GREEN if h.status == "OK" else (AMBER if h.status == "PARTIAL" else RED)
                 code_str = str(h.status_code) if h.status_code else "—"
                 lbl.setText(f"● {h.url}: {h.status} ({code_str})")
-                lbl.setStyleSheet(f"color:{color}; font-size:11px; padding:0 10px;")
+                _s.themed_ss(lbl, lambda st=h.status: (
+                    f"color:{_s.GREEN if st == 'OK' else (_s.AMBER if st == 'PARTIAL' else _s.RED)};"
+                    f" font-size:11px; padding:0 10px;"))
 
         # Traceroute
         self._diag_trace_table.setRowCount(0)
@@ -525,7 +521,7 @@ class ScanEnrichmentMixin:
         # Summary stats
         gw_ping = next((p for p in result.ping_results if p.host == "Gateway"), None)
         gw_str = (f"{gw_ping.rtt_ms:.0f} ms" if gw_ping and gw_ping.rtt_ms >= 0 else "—")
-        gw_col = GREEN if gw_ping and gw_ping.status == "OK" else (AMBER if gw_ping and gw_ping.status == "SLOW" else RED)
+        gw_col = _s.GREEN if gw_ping and gw_ping.status == "OK" else (_s.AMBER if gw_ping and gw_ping.status == "SLOW" else _s.RED)
         self._update_stat(self._diag_gw_lbl, gw_str, gw_col)
 
         speed_str = (
@@ -533,12 +529,12 @@ class ScanEnrichmentMixin:
             if result.download_mbps >= 1
             else (f"{result.download_mbps * 1000:.0f} Kbps" if result.download_mbps > 0 else "—")
         )
-        self._update_stat(self._diag_speed_lbl, speed_str, GREEN if result.download_mbps > 0 else RED)
-        self._update_stat(self._diag_public_lbl, result.public_ip or "—", BLUE if result.public_ip else RED)
+        self._update_stat(self._diag_speed_lbl, speed_str, _s.GREEN if result.download_mbps > 0 else _s.RED)
+        self._update_stat(self._diag_public_lbl, result.public_ip or "—", _s.BLUE if result.public_ip else _s.RED)
 
         sys_dns = next((d for d in result.dns_results if d.server == "System DNS"), None)
         dns_str = f"{sys_dns.latency_ms:.0f} ms" if sys_dns and sys_dns.latency_ms >= 0 else "—"
-        dns_col = GREEN if sys_dns and sys_dns.status == "OK" else (AMBER if sys_dns and sys_dns.status == "SLOW" else RED)
+        dns_col = _s.GREEN if sys_dns and sys_dns.status == "OK" else (_s.AMBER if sys_dns and sys_dns.status == "SLOW" else _s.RED)
         self._update_stat(self._diag_dns_lbl, dns_str, dns_col)
 
         self._diag_status_lbl.setText(f"Diagnostics complete.  {result.plain_verdict}")
@@ -548,9 +544,9 @@ class ScanEnrichmentMixin:
         leak = getattr(result, "dns_leak", None)
         self._diag_leak_table.setRowCount(0)
         if leak:
-            color = RED if leak.leak_detected else GREEN
             self._diag_leak_lbl.setText(leak.plain_verdict)
-            self._diag_leak_lbl.setStyleSheet(f"color:{color}; font-size:11px; padding-left:10px;")
+            _s.themed_ss(self._diag_leak_lbl, lambda d=leak.leak_detected: (
+                f"color:{_s.RED if d else _s.GREEN}; font-size:11px; padding-left:10px;"))
             for e in leak.resolvers_seen:
                 r = self._diag_leak_table.rowCount()
                 self._diag_leak_table.insertRow(r)
@@ -570,12 +566,11 @@ class ScanEnrichmentMixin:
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.on_cred_result(res)
         flags = res.risk_flags
-        color = RED if flags else GREEN
         self._cred_verdict.setText(res.plain_verdict + (f"\n⚠ {' | '.join(flags)}" if flags else ""))
-        self._cred_verdict.setStyleSheet(
-            f"color:{color};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:4px;"
-        )
+        _s.themed_ss(self._cred_verdict, lambda f=bool(flags): (
+            f"color:{_s.RED if f else _s.GREEN};font-size:11px;font-weight:bold;padding:4px;"
+            f"background:{_s.BG_CARD};border-radius:4px;"
+        ))
         self._cred_verdict.show()
         self._cred_status.setText("Credentialed scan complete.")
         self._nav_set_scan_state(L.LOGIN_TEST, "fresh", ts=time.time(), verdict=res.plain_verdict)
@@ -645,12 +640,12 @@ class ScanEnrichmentMixin:
     def _on_smb_result(self, res):
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
         flags = res.risk_flags
-        color = RED if any("Anonymous" in f or "DC" in f for f in flags) else (AMBER if flags else GREEN)
+        _smb_sev = "RED" if any("Anonymous" in f or "DC" in f for f in flags) else ("AMBER" if flags else "GREEN")
         self._smb_verdict.setText(res.plain_verdict + (f"\n⚠ {' | '.join(flags)}" if flags else ""))
-        self._smb_verdict.setStyleSheet(
-            f"color:{color};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:4px;"
-        )
+        _s.themed_ss(self._smb_verdict, lambda tk=_smb_sev: (
+            f"color:{getattr(_s, tk)};font-size:11px;font-weight:bold;padding:4px;"
+            f"background:{_s.BG_CARD};border-radius:4px;"
+        ))
         self._smb_verdict.show()
         self._smb_status.setText("SMB enumeration complete.")
 
@@ -663,7 +658,7 @@ class ScanEnrichmentMixin:
                 item = _TWI(v)
                 if risk == "HIGH":
                     from PyQt6.QtGui import QColor
-                    item.setForeground(QColor(RED))
+                    item.setForeground(QColor(_s.RED))
                 self._recon_smb_shares_table.setItem(r, c, item)
 
         for u in res.users:
@@ -753,18 +748,18 @@ class ScanEnrichmentMixin:
             # Override hostname (col 1) with Deco-assigned name when it looks like a real name
             if mc.name and not _mac_re.match(mc.name):
                 name_item = QTableWidgetItem(mc.name)
-                name_item.setForeground(QColor(TEXT_PRIMARY))
+                name_item.setForeground(QColor(_s.TEXT_PRIMARY))
                 name_item.setToolTip("Name assigned in Deco app")
                 self._m1_table.setItem(row, 1, name_item)
 
             # Node column (col 6)
             node_item = QTableWidgetItem(mc.unit_name)
-            node_item.setForeground(QColor(TEXT_PRIMARY))
+            node_item.setForeground(QColor(_s.TEXT_PRIMARY))
             self._m1_table.setItem(row, 6, node_item)
 
             # Band column (col 7) with speed tooltip
             band_item = QTableWidgetItem(mc.band)
-            band_item.setForeground(QColor(TEXT_PRIMARY))
+            band_item.setForeground(QColor(_s.TEXT_PRIMARY))
             band_item.setToolTip(
                 f"Upload:   {mc.upload_kbps} KB/s\n"
                 f"Download: {mc.download_kbps} KB/s"
@@ -798,7 +793,7 @@ class ScanEnrichmentMixin:
                 # Backfill MAC into the table row when ARP scan left it blank
                 if (not mac_item or not mac_item.text()) and pc.get("mac"):
                     _mac_fill = QTableWidgetItem(pc["mac"])
-                    _mac_fill.setForeground(QColor(TEXT_PRIMARY))
+                    _mac_fill.setForeground(QColor(_s.TEXT_PRIMARY))
                     _mac_fill.setToolTip(f"MAC from {plugin_name}")
                     self._m1_table.setItem(row, 2, _mac_fill)
                 # Never overwrite the gateway row's hostname with a client hostname
@@ -807,21 +802,21 @@ class ScanEnrichmentMixin:
                     hostname = pc.get("hostname", "")
                     if hostname and not _mac_re.match(hostname):
                         name_item = QTableWidgetItem(hostname)
-                        name_item.setForeground(QColor(TEXT_PRIMARY))
+                        name_item.setForeground(QColor(_s.TEXT_PRIMARY))
                         name_item.setToolTip(f"Name from {plugin_name}")
                         self._m1_table.setItem(row, 1, name_item)
                 # Fall back to hw name so single-AP plugins still enable grouping
                 unit = pc.get("unit", "") or plugin_name
                 if unit:
                     node_item = QTableWidgetItem(unit)
-                    node_item.setForeground(QColor(TEXT_PRIMARY))
+                    node_item.setForeground(QColor(_s.TEXT_PRIMARY))
                     node_item.setToolTip(f"Node from {plugin_name}")
                     self._m1_table.setItem(row, 6, node_item)
                     self._m1_table.setColumnHidden(6, False)
                 band = pc.get("band", "")
                 if band:
                     band_item = QTableWidgetItem(band)
-                    band_item.setForeground(QColor(TEXT_PRIMARY))
+                    band_item.setForeground(QColor(_s.TEXT_PRIMARY))
                     band_item.setToolTip(f"Band from {plugin_name}")
                     self._m1_table.setItem(row, 7, band_item)
                     self._m1_table.setColumnHidden(7, False)
@@ -915,7 +910,7 @@ class ScanEnrichmentMixin:
                 _row2 = _mac_to_row.get(_dmac2)
                 if _row2 is not None:
                     _ti = _QTI(_new_type)
-                    _ti.setForeground(_QC(TEXT_PRIMARY))
+                    _ti.setForeground(_QC(_s.TEXT_PRIMARY))
                     _ti.setToolTip("Device type inferred from hostname")
                     self._m1_table.setItem(_row2, 5, _ti)
 
@@ -931,7 +926,7 @@ class ScanEnrichmentMixin:
                     _ri = self._m1_table.item(_r, 0)
                     if _ri and _ri.text() == _dip:
                         _ti = _QTI(_dtype)
-                        _ti.setForeground(_QC(TEXT_PRIMARY))
+                        _ti.setForeground(_QC(_s.TEXT_PRIMARY))
                         self._m1_table.setItem(_r, 5, _ti)
                         break
         except Exception:
@@ -1097,7 +1092,6 @@ class ScanEnrichmentMixin:
 
     @pyqtSlot(bool)
     def _on_node_group_toggled(self, checked: bool) -> None:
-        from ui import styles as _s
         self._m1_group_by_node = checked
         QSettings("NetSentinel", "NetSentinel").setValue("devices/group_by_node", checked)
         if hasattr(self, "_m1_seg_list"):
@@ -1147,7 +1141,7 @@ class ScanEnrichmentMixin:
             high = rd["risk"] in ("HIGH", "STORM")
             for col, cell in enumerate(rd["cells"]):
                 item = QTableWidgetItem(cell["text"])
-                item.setForeground(_QC(rc if (col == 4 or high) else TEXT_PRIMARY))
+                item.setForeground(_QC(rc if (col == 4 or high) else _s.TEXT_PRIMARY))
                 if cell["tooltip"]:
                     item.setToolTip(cell["tooltip"])
                 self._m1_table.setItem(r, col, item)
@@ -1214,8 +1208,8 @@ class ScanEnrichmentMixin:
             hdr_item = QTableWidgetItem(hdr_text)
             hdr_item.setData(Qt.ItemDataRole.UserRole, "__sat_header__")
             hdr_item.setData(Qt.ItemDataRole.UserRole + 1, node_name)
-            hdr_item.setForeground(QColor(TEXT_PRIMARY))
-            hdr_item.setBackground(QColor(BG_DARK))
+            hdr_item.setForeground(QColor(_s.TEXT_PRIMARY))
+            hdr_item.setBackground(QColor(_s.BG_DARK))
             f = QFont()
             f.setBold(True)
             f.setItalic(True)
@@ -1238,7 +1232,7 @@ class ScanEnrichmentMixin:
                     elif high_risk:
                         item.setForeground(QColor(risk_color))
                     else:
-                        item.setForeground(QColor(TEXT_PRIMARY))
+                        item.setForeground(QColor(_s.TEXT_PRIMARY))
                     if cell["tooltip"]:
                         item.setToolTip(cell["tooltip"])
                     self._m1_table.setItem(dev_row, col, item)
@@ -1368,7 +1362,6 @@ class ScanEnrichmentMixin:
             from modules.deco_client import _norm_mac
             from PyQt6.QtGui import QColor
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
-            from ui import styles as _s
 
             _mac_to_row: dict = {}
             if hasattr(self, "_m1_table"):
@@ -1451,7 +1444,6 @@ class ScanEnrichmentMixin:
             from modules.device_classifier import classify_from_observation as _cfo
             from PyQt6.QtGui import QColor
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
-            from ui import styles as _s
 
             if not self._m1_result:
                 return
