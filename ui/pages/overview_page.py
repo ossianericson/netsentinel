@@ -40,11 +40,7 @@ from PyQt6.QtWidgets import (
 from modules.metric_store import MetricStore
 from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.jargon_tooltip import get_definition
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 from ui.widgets.overview_tile import (
     _COLS, _SETTINGS_KEY, _LAYOUT_VER,
     _TILE_HEIGHT,  # noqa: F401 — re-exported for test imports
@@ -120,7 +116,7 @@ class OverviewPage(QWidget):
     # ── UI shell ──────────────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 8)
         root.setSpacing(10)
@@ -128,14 +124,10 @@ class OverviewPage(QWidget):
         # Header row
         hdr = QHBoxLayout()
         title_lbl = QLabel("Dashboard")
-        title_lbl.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent;"
-        )
+        _s.themed_ss(title_lbl, "font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent;")
         sub_lbl = QLabel("Live dashboard — drag tiles to rearrange in Edit Layout mode.")
-        sub_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(sub_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         title_col = QVBoxLayout()
         title_col.setSpacing(2)
         title_col.addWidget(title_lbl)
@@ -143,13 +135,11 @@ class OverviewPage(QWidget):
         hdr.addLayout(title_col, 1)
 
         self._diagnose_btn = QPushButton("What's Wrong?")
-        self._diagnose_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._diagnose_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._diagnose_btn.setToolTip("Run a full diagnosis to find out what is wrong")
         self._diagnose_btn.clicked.connect(
             lambda: self.navigate_to.emit("What's Wrong?")
@@ -157,11 +147,11 @@ class OverviewPage(QWidget):
         hdr.addWidget(self._diagnose_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
         _btn_qss = (
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px;"
+            f"QPushButton {{ background:{_s.BG_CARD}; color:{_s.ACCENT};"
+            f" border:1px solid {_s.ACCENT}; padding:4px 14px;"
             f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+            f"QPushButton:hover {{ background:{_s.BG_HOVER}; }}"
+            f"QPushButton:disabled {{ color:{_s.TEXT_SECONDARY}; border-color:{_s.TEXT_SECONDARY}; }}"
         )
         self._share_btn = QPushButton("Share Card ▾")
         self._share_btn.setStyleSheet(_btn_qss)
@@ -171,39 +161,33 @@ class OverviewPage(QWidget):
 
         self._edit_btn = QPushButton("Edit Layout")
         self._edit_btn.setCheckable(True)
-        self._edit_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:checked {{ background:{ACCENT}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._edit_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:checked {{ background:{ACCENT}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._edit_btn.toggled.connect(self._on_edit_toggled)
         hdr.addWidget(self._edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
         self._cancel_edit_btn = QPushButton("Cancel")
-        self._cancel_edit_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._cancel_edit_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._cancel_edit_btn.setToolTip("Discard layout changes made since entering Edit Layout")
         self._cancel_edit_btn.clicked.connect(self._on_cancel_edit)
         self._cancel_edit_btn.hide()
         hdr.addWidget(self._cancel_edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
         self._report_btn = QPushButton("▣  Report")
-        self._report_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._report_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._report_btn.setToolTip(
             "Run all modules + diagnostics and auto-open the full HTML report"
         )
@@ -211,14 +195,12 @@ class OverviewPage(QWidget):
         hdr.addWidget(self._report_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
         self._export_btn = QPushButton("⬇  Export…")
-        self._export_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._export_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._export_btn.setToolTip("Export last scan results as HTML, JSON, or CSV")
         self._export_btn.setEnabled(False)
         self._export_btn.clicked.connect(self.export_requested.emit)
@@ -230,9 +212,9 @@ class OverviewPage(QWidget):
         hero = QHBoxLayout()
         hero.setSpacing(8)
         _pill_qss = (
-            f"QLabel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QLabel {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
             f" border-radius:4px; padding:4px 14px;"
-            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
+            f" font-size:11px; color:{_s.TEXT_PRIMARY}; }}"
         )
         self._hero_devices = QLabel("⬡  Devices: —")
         self._hero_grade   = QLabel("◈  Grade: —")
@@ -250,12 +232,10 @@ class OverviewPage(QWidget):
         self._grade_toggle.setFlat(True)
         self._grade_toggle.setCheckable(True)
         self._grade_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._grade_toggle.setStyleSheet(
-            f"QPushButton {{ color:{TEXT_SECONDARY}; font-size:10px; background:transparent;"
-            f" border:none; padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
-        )
+        _s.themed_ss(self._grade_toggle, "QPushButton {{ color:{TEXT_SECONDARY}; font-size:10px; background:transparent;"
+            " border:none; padding:0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT}; }}"
+            "QPushButton:pressed {{ color:{ACCENT_DARK}; }}")
         self._grade_toggle.toggled.connect(self._toggle_grade_panel)
         root.addWidget(self._grade_toggle)
 
@@ -265,16 +245,12 @@ class OverviewPage(QWidget):
 
         # Add-tile strip — only visible in edit mode when tiles are hidden
         self._add_strip = QWidget()
-        self._add_strip.setStyleSheet(
-            f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}"
-        )
+        _s.themed_ss(self._add_strip, "QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}")
         self._add_strip_layout = QHBoxLayout(self._add_strip)
         self._add_strip_layout.setContentsMargins(10, 6, 10, 6)
         self._add_strip_layout.setSpacing(8)
         _add_lbl = QLabel("Add tile:")
-        _add_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(_add_lbl, "font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;")
         self._add_strip_layout.addWidget(_add_lbl)
         self._add_strip_layout.addStretch()
         self._add_strip.hide()
@@ -283,10 +259,8 @@ class OverviewPage(QWidget):
         # ── CTA bar — full-width Quick Network Assessment launcher ────────────
         _cta = QFrame()
         _cta.setObjectName("ctaBar")
-        _cta.setStyleSheet(
-            f"QFrame#ctaBar {{ background:{BG_CARD}; border:1px solid {ACCENT};"
-            f" border-radius:6px; }}"
-        )
+        _s.themed_ss(_cta, "QFrame#ctaBar {{ background:{BG_CARD}; border:1px solid {ACCENT};"
+            " border-radius:6px; }}")
         _cta_lay = QHBoxLayout(_cta)
         _cta_lay.setContentsMargins(16, 10, 12, 10)
         _cta_lay.setSpacing(12)
@@ -294,17 +268,13 @@ class OverviewPage(QWidget):
         _cta_text = QVBoxLayout()
         _cta_text.setSpacing(2)
         _cta_head = QLabel("Quick Network Assessment")
-        _cta_head.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(_cta_head, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " border:none; background:transparent;")
         self._scan_sub = QLabel(
             "Discover every device on your network, measure DNS and connection stability, "
             "and surface active threats — all in one scan."
         )
-        self._scan_sub.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._scan_sub, "font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;")
         _cta_text.addWidget(_cta_head)
         _cta_text.addWidget(self._scan_sub)
 
@@ -312,13 +282,11 @@ class OverviewPage(QWidget):
         self._scan_btn.setFixedHeight(34)
         self._scan_btn.setMinimumWidth(145)
         self._scan_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._scan_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" font-size:12px; font-weight:bold; padding:0 18px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
-            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._scan_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " font-size:12px; font-weight:bold; padding:0 18px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; }}"
+            "QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._scan_btn.clicked.connect(self._on_scan_clicked)
         _cta_lay.addLayout(_cta_text, 1)
         _cta_lay.addWidget(self._scan_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
@@ -326,7 +294,7 @@ class OverviewPage(QWidget):
 
         # ── Content stack: page 0 = empty state, page 1 = tile grid ─────────────
         self._content_stack = QStackedWidget()
-        self._content_stack.setStyleSheet(f"QStackedWidget {{ background:{BG_DARK}; border:none; }}")
+        _s.themed_ss(self._content_stack, "QStackedWidget {{ background:{BG_DARK}; border:none; }}")
 
         # Page 0 — empty state
         _empty_card = EmptyStateCard(
@@ -351,12 +319,10 @@ class OverviewPage(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(
-            f"QScrollArea {{ background:{BG_DARK}; border:none; }}"
-        )
+        _s.themed_ss(scroll, "QScrollArea {{ background:{BG_DARK}; border:none; }}")
 
         self._grid_container = QWidget()
-        self._grid_container.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(self._grid_container, "background:{BG_DARK};")
         self._grid_layout = QGridLayout(self._grid_container)
         self._grid_layout.setSpacing(10)
         self._grid_layout.setContentsMargins(0, 0, 0, 0)
@@ -437,19 +403,15 @@ class OverviewPage(QWidget):
     def _build_grade_panel(self) -> QFrame:
         panel = QFrame()
         panel.setObjectName("gradePanel")
-        panel.setStyleSheet(
-            f"QFrame#gradePanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
-        )
+        _s.themed_ss(panel, "QFrame#gradePanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}")
         lay = QVBoxLayout(panel)
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(6)
 
         hdr = QLabel("How the Network Grade is calculated")
-        hdr.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr, "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         lay.addWidget(hdr)
 
         # Glossary lookup: map dimension names to glossary keys for tooltip enrichment
@@ -465,12 +427,10 @@ class OverviewPage(QWidget):
             link_btn.setFlat(True)
             link_btn.setFixedWidth(148)
             link_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            link_btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:10px; font-weight:bold;"
-                f" background:transparent; border:none; padding:0; text-align:left; }}"
-                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-                f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
-            )
+            _s.themed_ss(link_btn, "QPushButton {{ color:{ACCENT}; font-size:10px; font-weight:bold;"
+                " background:transparent; border:none; padding:0; text-align:left; }}"
+                "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+                "QPushButton:pressed {{ color:{ACCENT_DARK}; }}")
             _gloss_key = _GLOSS_KEYS.get(name)
             if _gloss_key:
                 _defn = get_definition(_gloss_key)
@@ -482,9 +442,7 @@ class OverviewPage(QWidget):
 
             desc_lbl = QLabel(desc)
             desc_lbl.setWordWrap(True)
-            desc_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(desc_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
 
             row.addWidget(link_btn)
             row.addWidget(desc_lbl, 1)
@@ -641,12 +599,10 @@ class OverviewPage(QWidget):
             t.mark_scanned()
         total = len(states)
         down  = sum(1 for s in states.values() if s == "DOWN")
-        pill_colour = RED if down else (AMBER if total == 0 else GREEN)
-        self._hero_devices.setStyleSheet(
-            f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+        pill_colour = _s.RED if down else (_s.AMBER if total == 0 else _s.GREEN)
+        _s.themed_ss(self._hero_devices, lambda pill_colour=pill_colour: f"QLabel {{ background:{_s.BG_CARD}; border:1px solid {pill_colour};"
             f" border-radius:4px; padding:4px 14px;"
-            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
-        )
+            f" font-size:11px; color:{_s.TEXT_PRIMARY}; }}")
         self._hero_devices.setText(
             f"⬡  Devices: {total}" + (f"  ({down} ↓)" if down else "")
         )
@@ -667,12 +623,10 @@ class OverviewPage(QWidget):
         if results:
             up  = sum(1 for r in results if (r.get("status") if isinstance(r, dict) else getattr(r, "status", "")) == "UP")
             dn  = len(results) - up
-            pill_colour = RED if dn else GREEN
-            self._hero_svc.setStyleSheet(
-                f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+            pill_colour = _s.RED if dn else _s.GREEN
+            _s.themed_ss(self._hero_svc, lambda pill_colour=pill_colour: f"QLabel {{ background:{_s.BG_CARD}; border:1px solid {pill_colour};"
                 f" border-radius:4px; padding:4px 14px;"
-                f" font-size:11px; color:{TEXT_PRIMARY}; }}"
-            )
+                f" font-size:11px; color:{_s.TEXT_PRIMARY}; }}")
             self._hero_svc.setText(
                 f"◆  Services: {up} up" + (f" / {dn} ↓" if dn else "")
             )
@@ -689,12 +643,10 @@ class OverviewPage(QWidget):
             n = 0
         n += 1
         sev = alert.get("severity", "INFO") if isinstance(alert, dict) else getattr(alert, "severity", "INFO")
-        pill_colour = RED if sev == "CRITICAL" else AMBER if sev == "WARNING" else ACCENT
-        self._hero_alerts.setStyleSheet(
-            f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+        pill_colour = _s.RED if sev == "CRITICAL" else _s.AMBER if sev == "WARNING" else _s.ACCENT
+        _s.themed_ss(self._hero_alerts, lambda pill_colour=pill_colour: f"QLabel {{ background:{_s.BG_CARD}; border:1px solid {pill_colour};"
             f" border-radius:4px; padding:4px 14px;"
-            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
-        )
+            f" font-size:11px; color:{_s.TEXT_PRIMARY}; }}")
         self._hero_alerts.setText(f"◬  Alerts: {n}")
 
     @pyqtSlot(dict)
@@ -763,13 +715,11 @@ class OverviewPage(QWidget):
             t.update_grade(grade, score)
             t.mark_scanned()
         letter = grade[:1].upper() if grade else "–"
-        _grade_colours = {"A": GREEN, "B": GREEN, "C": AMBER, "D": RED, "F": RED}
-        pill_colour = _grade_colours.get(letter, BORDER)
-        self._hero_grade.setStyleSheet(
-            f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+        _grade_colours = {"A": _s.GREEN, "B": _s.GREEN, "C": _s.AMBER, "D": _s.RED, "F": _s.RED}
+        pill_colour = _grade_colours.get(letter, _s.BORDER)
+        _s.themed_ss(self._hero_grade, lambda pill_colour=pill_colour: f"QLabel {{ background:{_s.BG_CARD}; border:1px solid {pill_colour};"
             f" border-radius:4px; padding:4px 14px;"
-            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
-        )
+            f" font-size:11px; color:{_s.TEXT_PRIMARY}; }}")
         self._hero_grade.setText(f"◈  Grade: {letter}")
 
     def on_trend_result(self, report) -> None:
@@ -854,12 +804,10 @@ class OverviewPage(QWidget):
                 continue
             btn = QPushButton(f"＋  {cls.TILE_LABEL}")
             btn.setFixedHeight(24)
-            btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
-                f" color:{ACCENT}; border-radius:4px; font-size:10px; padding:0 8px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(btn, "QPushButton {{ background:transparent; border:1px solid {ACCENT};"
+                " color:{ACCENT}; border-radius:4px; font-size:10px; padding:0 8px; }}"
+                "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
             btn.clicked.connect(lambda _checked, tid=tile_id: self._add_tile(tid))
             self._add_strip_layout.insertWidget(
                 self._add_strip_layout.count() - 1, btn

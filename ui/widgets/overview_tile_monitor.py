@@ -17,12 +17,9 @@ from PyQt6.QtWidgets import (
 import matplotlib
 matplotlib.use("QtAgg")
 
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, ACCENT_LITE, AMBER,
-    BG_CARD, BG_HOVER, BORDER,
     CHART_DOWN, CHART_UP,
-    GREEN, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 # Base class and animation helper live in overview_tile.py
@@ -47,17 +44,11 @@ class LiveBandwidthTile(_BaseTile):
         up_col = QVBoxLayout()
         up_col.setSpacing(2)
         up_lbl = QLabel("↑ UPLOAD")
-        up_lbl.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(up_lbl, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
         self._up_val = QLabel("—")
-        self._up_val.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:{CHART_UP}; border:none;"
-        )
+        _s.themed_ss(self._up_val, lambda CHART_UP=CHART_UP: f"font-size:20px; font-weight:bold; color:{CHART_UP}; border:none;")
         self._up_unit = QLabel("Mbps")
-        self._up_unit.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(self._up_unit, "font-size:10px; color:{TEXT_SECONDARY}; border:none;")
         up_col.addWidget(up_lbl)
         up_col.addWidget(self._up_val)
         up_col.addWidget(self._up_unit)
@@ -66,17 +57,11 @@ class LiveBandwidthTile(_BaseTile):
         dn_col = QVBoxLayout()
         dn_col.setSpacing(2)
         dn_lbl = QLabel("↓ DOWNLOAD")
-        dn_lbl.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(dn_lbl, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
         self._dn_val = QLabel("—")
-        self._dn_val.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:{CHART_DOWN}; border:none;"
-        )
+        _s.themed_ss(self._dn_val, lambda CHART_DOWN=CHART_DOWN: f"font-size:20px; font-weight:bold; color:{CHART_DOWN}; border:none;")
         self._dn_unit = QLabel("Mbps")
-        self._dn_unit.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(self._dn_unit, "font-size:10px; color:{TEXT_SECONDARY}; border:none;")
         dn_col.addWidget(dn_lbl)
         dn_col.addWidget(self._dn_val)
         dn_col.addWidget(self._dn_unit)
@@ -165,13 +150,9 @@ class DnsStabilityTile(_BaseTile):
 
     def _build_body(self) -> None:
         self._lat_lbl = QLabel("—")
-        self._lat_lbl.setStyleSheet(
-            f"font-size:32px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;"
-        )
+        _s.themed_ss(self._lat_lbl, "font-size:32px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
         self._status_lbl = QLabel("Measuring…")
-        self._status_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY}; border:none;")
         self._body_layout.addWidget(self._lat_lbl)
         self._body_layout.addWidget(self._status_lbl)
         self._body_layout.addStretch()
@@ -199,31 +180,23 @@ class DnsStabilityTile(_BaseTile):
         if ms < 0:
             self._fail_count += 1
             self._lat_lbl.setText("FAIL")
-            self._lat_lbl.setStyleSheet(
-                f"font-size:32px; font-weight:bold; color:{RED}; border:none;"
-            )
-            self._set_health(RED)
+            _s.themed_ss(self._lat_lbl, "font-size:32px; font-weight:bold; color:{RED}; border:none;")
+            self._set_health(_s.RED)
         else:
             self._readings.append(ms)
             self._readings = self._readings[-5:]
             self._fail_count = 0
-            colour = GREEN if ms < 50 else AMBER if ms < 200 else RED
+            colour = _s.GREEN if ms < 50 else _s.AMBER if ms < 200 else _s.RED
             self._lat_lbl.setText(f"{ms:.0f} ms")
-            self._lat_lbl.setStyleSheet(
-                f"font-size:32px; font-weight:bold; color:{colour}; border:none;"
-            )
+            _s.themed_ss(self._lat_lbl, lambda colour=colour: f"font-size:32px; font-weight:bold; color:{colour}; border:none;")
             self._set_health(colour)
         avg = (sum(self._readings) / len(self._readings)) if self._readings else 0
         if self._fail_count:
             self._status_lbl.setText(f"{self._fail_count} failure(s) — resolver unreachable")
-            self._status_lbl.setStyleSheet(
-                f"font-size:11px; color:{RED}; border:none;"
-            )
+            _s.themed_ss(self._status_lbl, "font-size:11px; color:{RED}; border:none;")
         elif self._readings:
             self._status_lbl.setText(f"Avg {avg:.0f} ms over last {len(self._readings)} probe(s)")
-            self._status_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-            )
+            _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY}; border:none;")
 
     def refresh(self, store=None) -> None:
         pass  # live data — no store needed
@@ -254,21 +227,15 @@ class ModemSignalTile(_BaseTile):
         top.setSpacing(10)
 
         self._type_lbl = QLabel("—")
-        self._type_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
-            f" background:{BG_HOVER}; border:1px solid {BORDER};"
-            f" border-radius:3px; padding:1px 8px; border:none;"
-        )
+        _s.themed_ss(self._type_lbl, "font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            " background:{BG_HOVER}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:1px 8px; border:none;")
 
         self._rsrp_lbl = QLabel("—")
-        self._rsrp_lbl.setStyleSheet(
-            f"font-size:28px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;"
-        )
+        _s.themed_ss(self._rsrp_lbl, "font-size:28px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
 
         self._qual_lbl = QLabel("")
-        self._qual_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(self._qual_lbl, "font-size:11px; color:{TEXT_SECONDARY}; border:none;")
 
         top.addWidget(self._type_lbl)
         top.addWidget(self._rsrp_lbl)
@@ -279,13 +246,9 @@ class ModemSignalTile(_BaseTile):
         bot.setSpacing(16)
 
         self._band_lbl = QLabel("—")
-        self._band_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(self._band_lbl, "font-size:11px; color:{TEXT_SECONDARY}; border:none;")
         self._bars_lbl = QLabel("")
-        self._bars_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-        )
+        _s.themed_ss(self._bars_lbl, "font-size:11px; color:{TEXT_SECONDARY}; border:none;")
         bot.addWidget(self._band_lbl)
         bot.addWidget(self._bars_lbl)
         bot.addStretch()
@@ -297,9 +260,7 @@ class ModemSignalTile(_BaseTile):
 
         # Placeholder hint
         self._hint_lbl = QLabel("Import a modem plugin via Hardware →")
-        self._hint_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none; font-style:italic;"
-        )
+        _s.themed_ss(self._hint_lbl, "font-size:10px; color:{TEXT_SECONDARY}; border:none; font-style:italic;")
         self._body_layout.addWidget(self._hint_lbl)
 
     def mousePressEvent(self, event) -> None:
@@ -328,9 +289,7 @@ class ModemSignalTile(_BaseTile):
             from modules.zte_client import ZteMC889Client
             quality = ZteMC889Client.signal_quality_label(rsrp)
             colour = _rsrp_colour(rsrp)
-            self._rsrp_lbl.setStyleSheet(
-                f"font-size:28px; font-weight:bold; color:{colour}; border:none;"
-            )
+            _s.themed_ss(self._rsrp_lbl, lambda colour=colour: f"font-size:28px; font-weight:bold; color:{colour}; border:none;")
             self._qual_lbl.setText(f"dBm  ·  {quality}")
             self._set_health(colour)
         else:
@@ -353,12 +312,12 @@ class ModemSignalTile(_BaseTile):
 
 def _rsrp_colour(rsrp: float) -> str:
     if rsrp >= -80:
-        return GREEN
+        return _s.GREEN
     if rsrp >= -90:
-        return AMBER
+        return _s.AMBER
     if rsrp >= -100:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED
 
 
 # ── Top Talkers tile (OVERVIEW-2) ─────────────────────────────────────────────
@@ -380,9 +339,7 @@ class TopTalkersTile(_BaseTile):
 
         self._empty_lbl = QLabel("Start Live Bandwidth to see top talkers.")
         self._empty_lbl.setWordWrap(True)
-        self._empty_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;"
-        )
+        _s.themed_ss(self._empty_lbl, "font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;")
         self._body_layout.addWidget(self._empty_lbl)
         self._body_layout.addStretch()
 
@@ -442,15 +399,13 @@ class TopTalkersTile(_BaseTile):
                 f"{iface[:18]}  ↓{d['down_mb']:.1f} MB  ↑{d['up_mb']:.1f} MB"
             )
             row_lbl = QLabel(label_text)
-            row_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_PRIMARY}; border:none; border-bottom:1px solid {BORDER};"
-                f" padding:2px 0;"
-            )
+            _s.themed_ss(row_lbl, "font-size:10px; color:{TEXT_PRIMARY}; border:none; border-bottom:1px solid {BORDER};"
+                " padding:2px 0;")
             self._body_layout.insertWidget(
                 self._body_layout.count() - 1, row_lbl
             )
             self._row_widgets.append(row_lbl)
-        self._set_health(ACCENT)
+        self._set_health(_s.ACCENT)
 
     def refresh(self, store=None) -> None:
         pass  # live accumulation only
@@ -468,33 +423,29 @@ class RecentEventsTile(_BaseTile):
     TILE_ICON  = "◷"
     _NAV_LABEL = "Network Timeline"
 
-    _EVENT_ICONS = {
-        "NEW":     ("◆", ACCENT),
-        "GONE":    ("◇", AMBER),
-        "ROGUE":   ("▲", RED),
-        "CHANGE":  ("●", AMBER),
-        "UP":      ("●", GREEN),
-        "DOWN":    ("●", RED),
+    _EVENT_ICONS = {   # (glyph, token-name resolved live via getattr(_s, …))
+        "NEW":     ("◆", "ACCENT"),
+        "GONE":    ("◇", "AMBER"),
+        "ROGUE":   ("▲", "RED"),
+        "CHANGE":  ("●", "AMBER"),
+        "UP":      ("●", "GREEN"),
+        "DOWN":    ("●", "RED"),
     }
 
     def _build_body(self) -> None:
         self._row_labels: list = []
         self._empty_lbl = QLabel("No device events in the last 24 h.")
-        self._empty_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;"
-        )
+        _s.themed_ss(self._empty_lbl, "font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;")
         self._body_layout.addWidget(self._empty_lbl)
         self._body_layout.addStretch()
 
         self._link_btn = QPushButton("View all →")
         self._link_btn.setFlat(True)
         self._link_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._link_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
-            f" background:transparent; text-align:left; padding:0; }}"
-            f"QPushButton:hover {{ text-decoration:underline; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._link_btn, "QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
+            " background:transparent; text-align:left; padding:0; }}"
+            "QPushButton:hover {{ text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._link_btn.clicked.connect(lambda: self.navigate_requested.emit(L.NETWORK_TIMELINE))
         self._link_btn.hide()
         self._body_layout.addWidget(self._link_btn)
@@ -531,8 +482,9 @@ class RecentEventsTile(_BaseTile):
         now = _t.time()
         for evt in events:
             icon, color = self._EVENT_ICONS.get(
-                evt.event_type.upper(), ("●", TEXT_SECONDARY)
+                evt.event_type.upper(), ("●", "TEXT_SECONDARY")
             )
+            color = getattr(_s, color)
             delta = int(now - evt.ts)
             if delta < 60:
                 elapsed = "just now"
@@ -546,11 +498,11 @@ class RecentEventsTile(_BaseTile):
             row.setSpacing(4)
             icon_lbl = QLabel(icon)
             icon_lbl.setFixedWidth(12)
-            icon_lbl.setStyleSheet(f"color:{color}; font-size:10px; border:none;")
+            _s.themed_ss(icon_lbl, lambda color=color: f"color:{color}; font-size:10px; border:none;")
             desc_lbl = QLabel(f"{ip_short}  {evt.event_type}")
-            desc_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY}; border:none;")
+            _s.themed_ss(desc_lbl, "font-size:10px; color:{TEXT_PRIMARY}; border:none;")
             time_lbl = QLabel(elapsed)
-            time_lbl.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED}; border:none;")
+            _s.themed_ss(time_lbl, "font-size:9px; color:{TEXT_MUTED}; border:none;")
             row.addWidget(icon_lbl)
             row.addWidget(desc_lbl, 1)
             row.addWidget(time_lbl)
@@ -563,7 +515,7 @@ class RecentEventsTile(_BaseTile):
             )
             self._row_labels.append(container)
 
-        self._set_health(GREEN if events else BORDER)
+        self._set_health(_s.GREEN if events else _s.BORDER)
         self.mark_scanned()
 
 
@@ -581,9 +533,7 @@ class TrendStatusTile(_BaseTile):
 
     def _build_body(self) -> None:
         self._summary_lbl = QLabel("No trend data yet.")
-        self._summary_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;"
-        )
+        _s.themed_ss(self._summary_lbl, "font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;")
         self._body_layout.addWidget(self._summary_lbl)
 
         row = QHBoxLayout()
@@ -592,39 +542,27 @@ class TrendStatusTile(_BaseTile):
         crit_col = QVBoxLayout()
         crit_col.setSpacing(0)
         self._crit_num = QLabel("–")
-        self._crit_num.setStyleSheet(
-            f"font-size:28px; font-weight:bold; color:{RED}; border:none;"
-        )
+        _s.themed_ss(self._crit_num, "font-size:28px; font-weight:bold; color:{RED}; border:none;")
         self._crit_sub = QLabel("Critical")
-        self._crit_sub.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{RED}; border:none;"
-        )
+        _s.themed_ss(self._crit_sub, "font-size:9px; font-weight:bold; color:{RED}; border:none;")
         crit_col.addWidget(self._crit_num)
         crit_col.addWidget(self._crit_sub)
 
         warn_col = QVBoxLayout()
         warn_col.setSpacing(0)
         self._warn_num = QLabel("–")
-        self._warn_num.setStyleSheet(
-            f"font-size:28px; font-weight:bold; color:{AMBER}; border:none;"
-        )
+        _s.themed_ss(self._warn_num, "font-size:28px; font-weight:bold; color:{AMBER}; border:none;")
         self._warn_sub = QLabel("Warning")
-        self._warn_sub.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{AMBER}; border:none;"
-        )
+        _s.themed_ss(self._warn_sub, "font-size:9px; font-weight:bold; color:{AMBER}; border:none;")
         warn_col.addWidget(self._warn_num)
         warn_col.addWidget(self._warn_sub)
 
         clean_col = QVBoxLayout()
         clean_col.setSpacing(0)
         self._clean_num = QLabel("–")
-        self._clean_num.setStyleSheet(
-            f"font-size:28px; font-weight:bold; color:{GREEN}; border:none;"
-        )
+        _s.themed_ss(self._clean_num, "font-size:28px; font-weight:bold; color:{GREEN}; border:none;")
         self._clean_sub = QLabel("Clean")
-        self._clean_sub.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{GREEN}; border:none;"
-        )
+        _s.themed_ss(self._clean_sub, "font-size:9px; font-weight:bold; color:{GREEN}; border:none;")
         clean_col.addWidget(self._clean_num)
         clean_col.addWidget(self._clean_sub)
 
@@ -649,11 +587,11 @@ class TrendStatusTile(_BaseTile):
         self._warn_num.setText(str(n_warn))
         self._clean_num.setText(str(n_clean))
         if n_crit:
-            self._set_health(RED)
+            self._set_health(_s.RED)
         elif n_warn:
-            self._set_health(AMBER)
+            self._set_health(_s.AMBER)
         else:
-            self._set_health(GREEN)
+            self._set_health(_s.GREEN)
         self.mark_scanned()
 
     def refresh(self, store=None) -> None:
@@ -691,33 +629,27 @@ class _SecurityScanPanel(QWidget):
         self._toggle_btn = QPushButton("▾  🔐  Security Scan")
         self._toggle_btn.setFixedHeight(36)
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{RED};"
-            f" border:1px solid {BORDER}; border-left:3px solid {RED};"
-            f" border-radius:0px; text-align:left;"
-            f" padding:0 12px; font-size:12px; font-weight:bold; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._toggle_btn, "QPushButton {{ background:{BG_CARD}; color:{RED};"
+            " border:1px solid {BORDER}; border-left:3px solid {RED};"
+            " border-radius:0px; text-align:left;"
+            " padding:0 12px; font-size:12px; font-weight:bold; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._toggle_btn.clicked.connect(self._toggle)
         outer.addWidget(self._toggle_btn)
 
         # Body (expanded by default)
         self._body = QFrame()
-        self._body.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-top:none; border-bottom-left-radius:4px;"
-            f" border-bottom-right-radius:4px; }}"
-        )
+        _s.themed_ss(self._body, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-top:none; border-bottom-left-radius:4px;"
+            " border-bottom-right-radius:4px; }}")
         body_lay = QVBoxLayout(self._body)
         body_lay.setContentsMargins(12, 10, 12, 12)
         body_lay.setSpacing(8)
 
         # Warning strip
         warn_frame = QFrame()
-        warn_frame.setStyleSheet(
-            f"QFrame {{ background:transparent; border:1px solid {AMBER}; border-radius:3px; }}"
-        )
+        _s.themed_ss(warn_frame, "QFrame {{ background:transparent; border:1px solid {AMBER}; border-radius:3px; }}")
         warn_inner = QHBoxLayout(warn_frame)
         warn_inner.setContentsMargins(8, 5, 8, 5)
         warn_lbl = QLabel(
@@ -725,9 +657,7 @@ class _SecurityScanPanel(QWidget):
             "Only use on networks you own or have permission to test."
         )
         warn_lbl.setWordWrap(True)
-        warn_lbl.setStyleSheet(
-            f"font-size:10px; color:{AMBER}; border:none; background:transparent;"
-        )
+        _s.themed_ss(warn_lbl, "font-size:10px; color:{AMBER}; border:none; background:transparent;")
         warn_inner.addWidget(warn_lbl)
         body_lay.addWidget(warn_frame)
 
@@ -738,11 +668,9 @@ class _SecurityScanPanel(QWidget):
         for i, (nav_lbl, display, checked, is_active) in enumerate(self._TOOLS):
             chk = QCheckBox(display)
             chk.setChecked(checked)
-            colour = AMBER if is_active else TEXT_PRIMARY
-            chk.setStyleSheet(
-                f"QCheckBox {{ font-size:11px; color:{colour}; background:transparent; spacing:5px; }}"
-                f"QCheckBox::indicator {{ width:13px; height:13px; }}"
-            )
+            colour = _s.AMBER if is_active else _s.TEXT_PRIMARY
+            _s.themed_ss(chk, lambda colour=colour: f"QCheckBox {{ font-size:11px; color:{colour}; background:transparent; spacing:5px; }}"
+                f"QCheckBox::indicator {{ width:13px; height:13px; }}")
             chk.stateChanged.connect(self._on_check_changed)
             self._checkboxes[nav_lbl] = chk
             chk_grid.addWidget(chk, i // 2, i % 2)
@@ -752,20 +680,16 @@ class _SecurityScanPanel(QWidget):
         run_row = QHBoxLayout()
         run_row.setSpacing(8)
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._status_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._run_btn = QPushButton("Run Selected")
         self._run_btn.setFixedHeight(28)
         self._run_btn.setMinimumWidth(110)
         self._run_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._run_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" font-size:11px; font-weight:bold; padding:0 14px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
-            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._run_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " font-size:11px; font-weight:bold; padding:0 14px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; }}"
+            "QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._run_btn.clicked.connect(self._on_run)
         run_row.addWidget(self._status_lbl, 1)
         run_row.addWidget(self._run_btn)
@@ -779,14 +703,12 @@ class _SecurityScanPanel(QWidget):
         self._toggle_btn.setText(
             "▾  🔐  Security Scan" if expanded else "▸  🔐  Security Scan"
         )
-        self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{RED};"
-            f" border:1px solid {BORDER}; border-left:3px solid {RED};"
-            f" border-radius:0px; text-align:left;"
-            f" padding:0 12px; font-size:12px; font-weight:bold; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._toggle_btn, "QPushButton {{ background:{BG_CARD}; color:{RED};"
+            " border:1px solid {BORDER}; border-left:3px solid {RED};"
+            " border-radius:0px; text-align:left;"
+            " padding:0 12px; font-size:12px; font-weight:bold; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
 
     def _on_check_changed(self) -> None:
         any_checked = any(c.isChecked() for c in self._checkboxes.values())
