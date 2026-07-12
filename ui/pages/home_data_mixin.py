@@ -1187,8 +1187,9 @@ class _HomeDataMixin:
 
         card = QFrame()
         card.setObjectName("scanCenterCard")
-        card.setStyleSheet(
-            f"QFrame#scanCenterCard {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER}; }}"
+        _s.themed_ss(
+            card,
+            "QFrame#scanCenterCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
         )
         outer = QVBoxLayout(card)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -1197,15 +1198,17 @@ class _HomeDataMixin:
         # Card header
         hdr_frame = QFrame()
         hdr_frame.setFixedHeight(32)
-        hdr_frame.setStyleSheet(
-            f"QFrame {{ background:{_s.BG_CARD}; border-bottom:1px solid {_s.BORDER}; }}"
+        _s.themed_ss(
+            hdr_frame,
+            "QFrame {{ background:{BG_CARD}; border-bottom:1px solid {BORDER}; }}"
         )
         hdr_lay = QHBoxLayout(hdr_frame)
         hdr_lay.setContentsMargins(12, 0, 10, 0)
         hdr_lay.setSpacing(8)
         hdr_lbl = QLabel("SCAN CENTER")
-        hdr_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:700; color:{_s.TEXT_SECONDARY}; border:none;"
+        _s.themed_ss(
+            hdr_lbl,
+            "font-size:10px; font-weight:700; color:{TEXT_SECONDARY}; border:none;"
             " letter-spacing:1.5px;"
         )
         run_all_btn = QPushButton("▶  Rescan")
@@ -1215,11 +1218,12 @@ class _HomeDataMixin:
             "Runs a full device scan. For Security Audit, Speed Test, and other "
             "categories, use each row's own button below."
         )
-        run_all_btn.setStyleSheet(
-            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; font-size:10px;"
-            f" border:none; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover   {{ background:{_s.ACCENT_DARK}; color:{_s.WHITE}; }}"
-            f"QPushButton:pressed {{ background:{_s.ACCENT_DARK}; color:{_s.WHITE}; }}"
+        _s.themed_ss(
+            run_all_btn,
+            "QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:10px;"
+            " border:none; border-radius:3px; padding:0 8px; }}"
+            "QPushButton:hover   {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         run_all_btn.clicked.connect(self.rescan_requested)
         hdr_lay.addWidget(hdr_lbl)
@@ -1241,7 +1245,7 @@ class _HomeDataMixin:
         self._scan_center_age_labels:  list = []
 
         rows_frame = QFrame()
-        rows_frame.setStyleSheet(f"QFrame {{ background:{_s.BG_CARD}; border:none; }}")
+        _s.themed_ss(rows_frame, "QFrame {{ background:{BG_CARD}; border:none; }}")
         rows_lay = QVBoxLayout(rows_frame)
         rows_lay.setContentsMargins(12, 2, 10, 4)
         rows_lay.setSpacing(0)
@@ -1259,24 +1263,27 @@ class _HomeDataMixin:
 
             name_lbl = QLabel(display)
             name_lbl.setFixedWidth(110)
-            name_lbl.setStyleSheet(
-                f"font-size:11px; color:{_s.TEXT_PRIMARY}; background:transparent; border:none;"
+            _s.themed_ss(
+                name_lbl,
+                "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
             )
 
             age_lbl = QLabel("Never")
-            age_lbl.setStyleSheet(
-                f"font-size:10px; color:{_s.TEXT_MUTED}; background:transparent; border:none;"
+            _s.themed_ss(
+                age_lbl,
+                "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
             )
 
             btn = QPushButton(btn_text)
             btn.setFixedHeight(22)
             btn.setFixedWidth(96)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{_s.ACCENT}; font-size:10px;"
-                f" border:1px solid {_s.BORDER}; border-radius:3px; padding:0 6px; }}"
-                f"QPushButton:hover   {{ background:{_s.BG_HOVER}; border-color:{_s.ACCENT}; }}"
-                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
+            _s.themed_ss(
+                btn,
+                "QPushButton {{ background:transparent; color:{ACCENT}; font-size:10px;"
+                " border:1px solid {BORDER}; border-radius:3px; padding:0 6px; }}"
+                "QPushButton:hover   {{ background:{BG_HOVER}; border-color:{ACCENT}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             if nav_target is None:
                 btn.clicked.connect(self.rescan_requested)

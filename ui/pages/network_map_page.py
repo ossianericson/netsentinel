@@ -302,6 +302,18 @@ class NetworkMapPage(QWidget):
         # the widget is actually on screen.
         self._traffic_overlay_defaulted = False
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: restyle the classic matplotlib map immediately.
+
+        The interactive Cytoscape view (QWebEngineView) bakes its theme colours
+        into generated HTML; per the Phase 5 decision it is NOT re-rendered on a
+        bare theme switch — it adopts the new palette on the next scan render
+        (which rebuilds the HTML from live tokens).
+        """
+        w = getattr(self, "_classic_widget", None)
+        if w is not None and hasattr(w, "refresh_theme"):
+            w.refresh_theme()
+
     def _build_toolbar(self) -> QHBoxLayout:
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 2, 0, 2)

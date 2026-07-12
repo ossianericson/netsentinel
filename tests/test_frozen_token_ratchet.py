@@ -113,7 +113,6 @@ def _ui_files() -> list[Path]:
 _BASELINE: dict[str, int] = {
     "ui/first_run_dialog.py": 15,
     "ui/help_tab.py": 85,
-    "ui/live_graph.py": 17,
     "ui/monitor_state.py": 64,
     "ui/nav/rail.py": 19,
     "ui/npcap_banner.py": 8,
@@ -183,7 +182,6 @@ _BASELINE: dict[str, int] = {
     "ui/tabs_network.py": 28,
     "ui/tabs_recon.py": 86,
     "ui/tabs_scan.py": 59,
-    "ui/topology_widget.py": 82,
     "ui/widgets/alert_drawer.py": 83,
     "ui/widgets/bandwidth_hog_card.py": 12,
     "ui/widgets/coach_mark.py": 7,

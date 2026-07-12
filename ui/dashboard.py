@@ -1757,6 +1757,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             w = self._stack.widget(i)
             if w and hasattr(w, "refresh_theme"):
                 w.refresh_theme()
+        # The DNS/ping LiveGraphWidget is embedded inside a QStackedWidget page
+        # that has no refresh_theme, so the fan-out above cannot reach it —
+        # forward the live theme switch to it explicitly.
+        _graph = getattr(self, "_graph", None)
+        if _graph is not None and hasattr(_graph, "refresh_theme"):
+            _graph.refresh_theme()
         for btn in getattr(self, "_nav_rail_buttons", {}).values():
             if hasattr(btn, "refresh_theme"):
                 btn.refresh_theme()

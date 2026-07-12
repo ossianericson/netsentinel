@@ -377,3 +377,38 @@ class TestLiveThemeSwitch:
             assert mid_card in page._pill_dhcp.styleSheet()
         finally:
             _s.apply_theme(original)
+
+    def test_scan_center_card_restyles_both_directions(self):
+        """RULE-T3 regression: the Scan Center card must flip on a live switch.
+
+        Phase 4a left it as a build-once ``setStyleSheet(f"...{_s.BG_CARD}...")``
+        that never re-applied, so the card stayed dark after Midnight -> Arctic.
+        It is now themed_ss-registered → apply_theme() re-renders it both ways.
+        """
+        from ui import styles as _s
+        arctic = _s.THEMES["Arctic Clean"]["BG_CARD"]
+        midnight = _s.THEMES["Midnight Pro"]["BG_CARD"]
+        original = _s.get_active_theme_name()
+        card = None
+        try:
+            _s.apply_theme("Midnight Pro")
+            page = _make_page(store=None)
+            card = page._build_scan_center_card()
+            assert midnight in card.styleSheet()
+
+            _s.apply_theme("Arctic Clean")   # _reapply_themed runs inside apply_theme
+            assert arctic in card.styleSheet() and midnight not in card.styleSheet()
+
+            _s.apply_theme("Midnight Pro")
+            assert midnight in card.styleSheet()
+        finally:
+            _s.apply_theme(original)
+            if card is not None:
+                try:
+                    card.deleteLater()
+                except RuntimeError:
+                    pass  # non-fatal — already gone
+                app = QApplication.instance()
+                if app:
+                    for _ in range(3):
+                        app.processEvents()
