@@ -41,17 +41,17 @@ from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from PyQt6.QtGui import QColor
 
+from ui import styles as _s
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BORDER, CHART_AXIS, CHART_BG,
-    CHART_DOWN, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
+    BORDER, CHART_AXIS, CHART_DOWN, CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
     TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     TH_BG, TH_BORDER, TH_TEXT,
 )
 
 _HISTORY_LEN  = 60          # seconds of rolling history
-_DOWN_COLOR   = CHART_DOWN  # blue  — download
-_UP_COLOR     = CHART_UP    # green — upload
+_DOWN_COLOR   = CHART_DOWN  # blue  — download (theme-independent)
+_UP_COLOR     = CHART_UP    # green — upload (theme-independent)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -191,17 +191,18 @@ class LiveBandwidthPage(QWidget):
 
         # Matplotlib chart
         chart_frame = QFrame()
-        chart_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;"
+        _s.themed_ss(
+            chart_frame,
+            "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;",
         )
         chart_lay = QVBoxLayout(chart_frame)
         chart_lay.setContentsMargins(8, 8, 8, 8)
 
-        self._fig = Figure(figsize=(10, 3.2), facecolor=CHART_BG)
+        self._fig = Figure(figsize=(10, 3.2), facecolor=_s.CHART_BG)
         self._ax = self._fig.add_subplot(111)
         self._fig.subplots_adjust(left=0.06, right=0.99, top=0.93, bottom=0.15)
         self._canvas = FigureCanvas(self._fig)
-        self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")
+        _s.themed_ss(self._canvas, "background:{CHART_BG}; border:none;")
         self._canvas.setMinimumHeight(80)
         chart_lay.addWidget(self._canvas)
         content_lay.addWidget(chart_frame, 2)
@@ -351,7 +352,7 @@ class LiveBandwidthPage(QWidget):
     def _draw_empty_chart(self) -> None:
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         ax.fill_between(range(_HISTORY_LEN), 0, color=_DOWN_COLOR, alpha=0.15)
         ax.fill_between(range(_HISTORY_LEN), 0, color=_UP_COLOR,   alpha=0.15)
         ax.set_xlim(0, _HISTORY_LEN - 1)
@@ -360,8 +361,8 @@ class LiveBandwidthPage(QWidget):
         ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
         ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
-        ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
+            sp.set_edgecolor(_s.CHART_SPINE)
+        ax.grid(True, linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         self._canvas.draw_idle()
 
     @pyqtSlot()
@@ -369,7 +370,7 @@ class LiveBandwidthPage(QWidget):
         up, down = self._get_chart_data()
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
 
         xs = list(range(_HISTORY_LEN))
         ax.fill_between(xs, down, alpha=0.35, color=_DOWN_COLOR, label="↓ Download")
@@ -387,10 +388,10 @@ class LiveBandwidthPage(QWidget):
         ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
         ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
-        ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
+            sp.set_edgecolor(_s.CHART_SPINE)
+        ax.grid(True, linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         ax.legend(loc="upper left", fontsize=7, framealpha=0.7,
-                  facecolor=CHART_BG, edgecolor=CHART_SPINE)
+                  facecolor=_s.CHART_BG, edgecolor=_s.CHART_SPINE)
 
         # Event annotation ticks (device join = green, rate spike = red)
         y_top = ax.get_ylim()[1]
@@ -408,9 +409,18 @@ class LiveBandwidthPage(QWidget):
         ax.set_title(
             f"{sel}  —  "
             f"↑ {up[-1]:.2f} Mbps  ↓ {down[-1]:.2f} Mbps",
-            fontsize=8, color=TEXT_SECONDARY, pad=4,
+            fontsize=8, color=_s.TEXT_SECONDARY, pad=4,
         )
         self._canvas.draw_idle()
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the matplotlib colour tokens and redraw.
+
+        The canvas widget background re-applies automatically (themed_ss
+        registry); this re-reads the figure facecolor and repaints the chart.
+        """
+        self._fig.set_facecolor(_s.CHART_BG)
+        self._redraw_chart()
 
     # ── Breakdown table ───────────────────────────────────────────────────────
 

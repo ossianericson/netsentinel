@@ -21,8 +21,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.npcap_banner import NpcapMissingBanner
+from ui import styles as _s
 from ui.styles import (
-    BG_CARD, BORDER, CHART_BG, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
+    BG_CARD, BORDER,
     GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 from ui.tabs_helpers import _empty_state_widget, _table
@@ -472,21 +473,22 @@ class _MonitorTabsMixin:
         try:
             from matplotlib.figure import Figure
             from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-            self._snmp_if_fig = Figure(facecolor=CHART_BG, figsize=(4, 2.5))
+            self._snmp_if_fig = Figure(facecolor=_s.CHART_BG, figsize=(4, 2.5))
             self._snmp_if_fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.22)
             self._snmp_if_ax  = self._snmp_if_fig.add_subplot(111)
-            self._snmp_if_ax.set_facecolor(CHART_PLOT_BG)
-            self._snmp_if_ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-            self._snmp_if_ax.grid(True, color=CHART_GRID, linewidth=0.8)
+            self._snmp_if_ax.set_facecolor(_s.CHART_PLOT_BG)
+            self._snmp_if_ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+            self._snmp_if_ax.grid(True, color=_s.CHART_GRID, linewidth=0.8)
             for sp in ("top", "right"):
                 self._snmp_if_ax.spines[sp].set_visible(False)
             for sp in ("bottom", "left"):
-                self._snmp_if_ax.spines[sp].set_color(CHART_SPINE)
+                self._snmp_if_ax.spines[sp].set_color(_s.CHART_SPINE)
             self._snmp_if_ax.set_title(
                 "Error distribution per interface", fontsize=9,
-                color=TEXT_PRIMARY, pad=4,
+                color=_s.TEXT_PRIMARY, pad=4,
             )
             self._snmp_if_canvas = FigureCanvasQTAgg(self._snmp_if_fig)
+            _s.themed_ss(self._snmp_if_canvas, "background:{CHART_BG}; border:none;")
             content_split.addWidget(self._snmp_if_canvas)
         except Exception:
             pass  # matplotlib not available — chart omitted gracefully
@@ -496,6 +498,38 @@ class _MonitorTabsMixin:
         if_lay.addWidget(content_split, 1)
         lay.addWidget(if_card, 1)
         return w
+
+    def refresh_snmp_if_theme(self) -> None:
+        """Live theme switch: recolour the SNMP interface-errors bar chart.
+
+        The chart lives on the Dashboard (this mixin), not on a stack page, so
+        the dashboard's theme fan-out forwards here explicitly. When data has
+        been plotted it re-invokes the (now theme-live) result handler with the
+        cached entries; otherwise it just re-reads the empty-axes colours.
+        """
+        fig    = getattr(self, "_snmp_if_fig", None)
+        ax     = getattr(self, "_snmp_if_ax", None)
+        canvas = getattr(self, "_snmp_if_canvas", None)
+        if fig is None or ax is None or canvas is None:
+            return
+        fig.set_facecolor(_s.CHART_BG)
+        entries = getattr(self, "_snmp_if_last_entries", None)
+        if entries:
+            self._on_snmp_if_result(entries)   # full recolour with cached data
+            return
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.8)
+        for sp in ("bottom", "left"):
+            ax.spines[sp].set_color(_s.CHART_SPINE)
+        ax.set_title(
+            "Error distribution per interface", fontsize=9,
+            color=_s.TEXT_PRIMARY, pad=4,
+        )
+        try:
+            canvas.draw_idle()
+        except Exception:
+            pass  # non-fatal if canvas is detached
 
     @pyqtSlot()
     def _on_snmp_table_selection(self) -> None:

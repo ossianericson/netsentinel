@@ -110,11 +110,12 @@ from modules.geo_locator import (
     get_locator,
 )
 from ui.tabs_helpers import _table
+from ui import styles as _s
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER,
     BG_CARD, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_GRID,
-    CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER,
+    CARD_HDR_BORDER, CARD_RADIUS,
+    GREEN, INPUT_PLACEHOLDER,
     MAP_LAND_BG, MAP_LAND_BORDER, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     WHITE,
@@ -224,11 +225,13 @@ _CAT_THREAT  = "Threat Intel"
 _CAT_EXPOSED = "Exposed Service"
 _CAT_MANUAL  = "Manual Entry"
 
-_MARKER_COLOR = {
-    _CAT_THREAT:  RED,
-    _CAT_EXPOSED: AMBER,
-    _CAT_MANUAL:  ACCENT,
-}
+def _marker_color() -> dict:
+    """Category → dot colour, read live so a theme switch recolours the map."""
+    return {
+        _CAT_THREAT:  _s.RED,
+        _CAT_EXPOSED: _s.AMBER,
+        _CAT_MANUAL:  _s.ACCENT,
+    }
 
 
 # ── Main page ─────────────────────────────────────────────────────────────────
@@ -452,7 +455,7 @@ class GeoMapPage(QWidget):
         self._import_layout.addLayout(row)
 
         legend_row = QHBoxLayout()
-        for cat, color in _MARKER_COLOR.items():
+        for cat, color in _marker_color().items():
             legend_row.addWidget(_dot(color))
             lbl = QLabel(cat)
             lbl.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
@@ -483,9 +486,10 @@ class GeoMapPage(QWidget):
         lay.setContentsMargins(0, 0, 4, 0)
         lay.setSpacing(0)
 
-        self._fig = Figure(facecolor=CHART_PLOT_BG, dpi=96)
+        self._fig = Figure(facecolor=_s.CHART_PLOT_BG, dpi=96)
         self._ax  = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
+        _s.themed_ss(self._canvas, "background:{CHART_PLOT_BG}; border:none;")
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         lay.addWidget(self._canvas)
@@ -643,7 +647,7 @@ class GeoMapPage(QWidget):
         """Clear axes and redraw world outline using stored zoom limits."""
         ax = self._ax
         ax.cla()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         xlim, ylim = self._screen_limits()
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
@@ -651,27 +655,27 @@ class GeoMapPage(QWidget):
 
         # Grid lines
         for lon in range(-180, 181, 30):
-            ax.axvline(lon, color=CHART_GRID, linewidth=0.4, zorder=0)
+            ax.axvline(lon, color=_s.CHART_GRID, linewidth=0.4, zorder=0)
         for lat in range(-90, 91, 30):
-            ax.axhline(lat, color=CHART_GRID, linewidth=0.4, zorder=0)
+            ax.axhline(lat, color=_s.CHART_GRID, linewidth=0.4, zorder=0)
 
         try:
             self._draw_country_borders()
         except Exception:
             ax.text(0, 0,
                     "Install Cartopy or Natural Earth shapefiles for country borders.",
-                    ha="center", va="center", color=TEXT_MUTED,
+                    ha="center", va="center", color=_s.TEXT_MUTED,
                     fontsize=8, transform=ax.transData)
 
         self._fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
     def _draw_country_borders(self) -> None:
-        patches = _load_country_patches(CHART_GRID, alpha=1.0)
+        patches = _load_country_patches(_s.CHART_GRID, alpha=1.0)
         if not patches:
             self._ax.text(
                 0, 0,
                 "Map data not found. The file ui/assets/world_110m.geojson is missing.",
-                ha="center", va="center", color=TEXT_MUTED,
+                ha="center", va="center", color=_s.TEXT_MUTED,
                 fontsize=8, transform=self._ax.transData,
             )
             return
@@ -683,6 +687,12 @@ class GeoMapPage(QWidget):
             zorder=1,
         )
         self._ax.add_collection(col)
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and redraw the map
+        (canvas background re-applies via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.CHART_PLOT_BG)
+        self._redraw_map()
 
     def _redraw_map(self, *_args) -> None:
         """Redraw base map then overlay clustered data points and optional arcs."""
@@ -708,7 +718,7 @@ class GeoMapPage(QWidget):
                         (result.longitude, result.latitude),
                         connectionstyle="arc3,rad=0.15",
                         arrowstyle="-",
-                        color=RED,
+                        color=_s.RED,
                         linewidth=0.5,
                         alpha=0.18,
                         zorder=2,
@@ -721,8 +731,8 @@ class GeoMapPage(QWidget):
             if show_heatmap:
                 from matplotlib.patches import Circle
                 _glow_cfg = {
-                    _CAT_THREAT:  (RED,   0.09, 8.0),
-                    _CAT_EXPOSED: (AMBER, 0.06, 6.0),
+                    _CAT_THREAT:  (_s.RED,   0.09, 8.0),
+                    _CAT_EXPOSED: (_s.AMBER, 0.06, 6.0),
                 }
                 for _ip, result, cat in plottable:
                     if cat not in _glow_cfg:
@@ -741,13 +751,14 @@ class GeoMapPage(QWidget):
                         self._ax.add_patch(circle)
 
             # Screen-space clustered dots
+            marker_color = _marker_color()
             for cluster in self._cluster_points(plottable):
-                color = _MARKER_COLOR.get(cluster["cat"], ACCENT)
+                color = marker_color.get(cluster["cat"], _s.ACCENT)
                 lon, lat = cluster["lon"], cluster["lat"]
                 selected = cluster["selected"]
                 count = cluster["count"]
                 size = 90 if selected else (45 + min(count - 1, 15) * 4 if count > 1 else 40)
-                edge = TEXT_PRIMARY if selected else "none"
+                edge = _s.TEXT_PRIMARY if selected else "none"
                 self._ax.scatter(
                     lon, lat, s=size, c=color, zorder=3,
                     edgecolors=edge, linewidths=1.2, alpha=0.85,
@@ -756,7 +767,7 @@ class GeoMapPage(QWidget):
                     self._ax.text(
                         lon, lat, str(count),
                         ha="center", va="center",
-                        fontsize=6, color=WHITE, fontweight="bold", zorder=4,
+                        fontsize=6, color=_s.WHITE, fontweight="bold", zorder=4,
                     )
 
         self._canvas.draw()
@@ -814,7 +825,7 @@ class GeoMapPage(QWidget):
             self._detail_org.setVisible(False)
 
         # -- Category chip ---
-        cat_color = _MARKER_COLOR.get(category, ACCENT)
+        cat_color = _marker_color().get(category, ACCENT)
         self._detail_cat.setText(f"Category:  ● {category}")
         self._detail_cat.setStyleSheet(f"color:{cat_color}; font-size:10px;")
         self._detail_cat.setVisible(True)
@@ -1164,7 +1175,7 @@ class GeoMapPage(QWidget):
                 QTableWidgetItem(", ".join(links) if links else ""),
             ]
             # Colour the category cell
-            cat_color = _MARKER_COLOR.get(category, ACCENT)
+            cat_color = _marker_color().get(category, ACCENT)
             items[5].setForeground(QColor(cat_color))
 
             for col, item in enumerate(items):

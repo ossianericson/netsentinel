@@ -46,10 +46,10 @@ from modules.cdn_ranges import cdn_breakdown_label
 from modules.colours import APP_CATEGORY_COLORS
 from modules.app_traffic_classifier import CATEGORY_ORDER as _CAT_ORDER
 from modules.metric_store import MetricStore
+from ui import styles as _s
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE,
-    BG_ALT_ROW, BG_CARD, BORDER,
-    CHART_AXIS, CHART_BG, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
+    BG_ALT_ROW, BG_CARD, BORDER, CHART_AXIS,
     GREEN, RED, RED_DARK, RED_HOVER, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     TH_BG, TH_BORDER, TH_TEXT, WHITE,
@@ -225,11 +225,11 @@ class AppTrafficPage(QWidget):
         bar_card, bar_body = _make_card(
             "HOST BREAKDOWN  —  BYTES PER PROTOCOL CATEGORY  (LAST 10 s)"
         )
-        self._fig = Figure(figsize=(10, 3.5), facecolor=CHART_BG)
+        self._fig = Figure(figsize=(10, 3.5), facecolor=_s.CHART_BG)
         self._fig.subplots_adjust(left=0.25, right=0.98, top=0.95, bottom=0.15)
         self._ax = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
-        self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")
+        _s.themed_ss(self._canvas, "background:{CHART_BG}; border:none;")
         self._canvas.setMinimumHeight(120)
         bar_body.addWidget(self._canvas)
         cl.addWidget(bar_card, 2)
@@ -250,11 +250,11 @@ class AppTrafficPage(QWidget):
         hist_card, hist_body = _make_card(
             "LAST 24 HOURS BY CATEGORY  —  CLICK A BAR FOR DEVICE & PROVIDER BREAKDOWN"
         )
-        self._fig_hist = Figure(figsize=(10, 2.6), facecolor=CHART_BG)
+        self._fig_hist = Figure(figsize=(10, 2.6), facecolor=_s.CHART_BG)
         self._fig_hist.subplots_adjust(left=0.25, right=0.98, top=0.92, bottom=0.18)
         self._ax_hist = self._fig_hist.add_subplot(111)
         self._canvas_hist = FigureCanvas(self._fig_hist)
-        self._canvas_hist.setStyleSheet(f"background:{CHART_BG}; border:none;")
+        _s.themed_ss(self._canvas_hist, "background:{CHART_BG}; border:none;")
         self._canvas_hist.setMinimumHeight(100)
         self._canvas_hist.mpl_connect("button_press_event", self._on_hist_bar_click)
         hist_body.addWidget(self._canvas_hist)
@@ -433,11 +433,11 @@ class AppTrafficPage(QWidget):
 
     def _on_error(self, msg: str) -> None:
         self._ax.clear()
-        self._ax.set_facecolor(CHART_PLOT_BG)
+        self._ax.set_facecolor(_s.CHART_PLOT_BG)
         self._ax.text(
             0.5, 0.5, msg,
             ha="center", va="center", fontsize=8,
-            color=RED, transform=self._ax.transAxes,
+            color=_s.RED, transform=self._ax.transAxes,
         )
         self._canvas.draw_idle()
         self._stop_worker()
@@ -464,19 +464,27 @@ class AppTrafficPage(QWidget):
 
     # ── Chart ─────────────────────────────────────────────────────────────────
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read both figure facecolors and re-render the
+        per-host and 24-hour charts (canvas backgrounds re-apply via themed_ss)."""
+        self._fig.patch.set_facecolor(_s.CHART_BG)
+        self._fig_hist.patch.set_facecolor(_s.CHART_BG)
+        self._redraw_chart()
+        self._refresh_hist_chart()
+
     def _draw_empty_chart(self) -> None:
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        self._fig.patch.set_facecolor(CHART_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        self._fig.patch.set_facecolor(_s.CHART_BG)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
+            sp.set_edgecolor(_s.CHART_SPINE)
         ax.text(
             0.5, 0.5,
             "Start monitoring to see per-host protocol breakdown",
             ha="center", va="center", fontsize=9,
-            color=TEXT_MUTED, transform=ax.transAxes,
+            color=_s.TEXT_MUTED, transform=ax.transAxes,
         )
         self._canvas.draw_idle()
 
@@ -484,8 +492,8 @@ class AppTrafficPage(QWidget):
     def _redraw_chart(self) -> None:
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        self._fig.patch.set_facecolor(CHART_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        self._fig.patch.set_facecolor(_s.CHART_BG)
 
         if not self._snapshots:
             self._draw_empty_chart()
@@ -529,8 +537,8 @@ class AppTrafficPage(QWidget):
         ax.set_xlabel("KB (this window)", fontsize=8, color=CHART_AXIS)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
-        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=CHART_GRID)
+            sp.set_edgecolor(_s.CHART_SPINE)
+        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         self._canvas.draw_idle()
 
     # ── Legend ────────────────────────────────────────────────────────────────
@@ -555,11 +563,11 @@ class AppTrafficPage(QWidget):
     def _refresh_hist_chart(self) -> None:
         ax = self._ax_hist
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        self._fig_hist.patch.set_facecolor(CHART_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        self._fig_hist.patch.set_facecolor(_s.CHART_BG)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
+            sp.set_edgecolor(_s.CHART_SPINE)
 
         totals: Dict[str, int] = {}
         if self._store:
@@ -573,7 +581,7 @@ class AppTrafficPage(QWidget):
                 0.5, 0.5,
                 "No traffic history yet — start monitoring to build 24-hour data",
                 ha="center", va="center", fontsize=9,
-                color=TEXT_MUTED, transform=ax.transAxes,
+                color=_s.TEXT_MUTED, transform=ax.transAxes,
             )
             self._hist_categories = []
             self._canvas_hist.draw_idle()
@@ -592,7 +600,7 @@ class AppTrafficPage(QWidget):
         )
         ax.invert_yaxis()
         ax.set_xlabel("MB (last 24 hours)", fontsize=8, color=CHART_AXIS)
-        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=CHART_GRID)
+        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         self._canvas_hist.draw_idle()
 
         if self._selected_hist_category in self._hist_categories:

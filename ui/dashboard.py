@@ -1763,6 +1763,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _graph = getattr(self, "_graph", None)
         if _graph is not None and hasattr(_graph, "refresh_theme"):
             _graph.refresh_theme()
+        # The SNMP interface-errors chart lives on the Dashboard (tabs_monitors
+        # mixin), not on a stack page, so the fan-out cannot reach it either.
+        if hasattr(self, "refresh_snmp_if_theme"):
+            self.refresh_snmp_if_theme()
         for btn in getattr(self, "_nav_rail_buttons", {}).values():
             if hasattr(btn, "refresh_theme"):
                 btn.refresh_theme()

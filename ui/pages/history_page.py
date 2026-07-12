@@ -29,12 +29,12 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, BTN_DISABLED_BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, CHART_PURPLE, CHART_SPINE,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, TH_BG, WHITE,
+    ACCENT, BG_CARD, BG_DARK,
+    BG_HOVER, BORDER, BTN_DISABLED_BORDER, CHART_PURPLE,
+    GREEN, RED, TEXT_PRIMARY,
+    TEXT_SECONDARY, WHITE,
 )
 
 if TYPE_CHECKING:
@@ -42,20 +42,26 @@ if TYPE_CHECKING:
 
 
 # ── Chart style helpers ───────────────────────────────────────────────────────
+# Colour lists are read live (via _s) so a theme switch recolours the series.
+# CHART_PURPLE is theme-independent (module constant), so it stays a bare import.
 
-_SERIES_COLORS = [ACCENT, GREEN, AMBER, TEXT_SECONDARY, RED, CHART_PURPLE]
-_STATE_COLORS  = {"UP": GREEN, "DEGRADED": AMBER, "DOWN": RED}
+def _series_colors() -> list:
+    return [_s.ACCENT, _s.GREEN, _s.AMBER, _s.TEXT_SECONDARY, _s.RED, CHART_PURPLE]
+
+
+def _state_colors() -> dict:
+    return {"UP": _s.GREEN, "DEGRADED": _s.AMBER, "DOWN": _s.RED}
 
 
 def _style_ax(ax, title: str) -> None:
-    ax.set_facecolor(CHART_PLOT_BG)
+    ax.set_facecolor(_s.CHART_PLOT_BG)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     for spine in ("bottom", "left"):
-        ax.spines[spine].set_color(CHART_SPINE)
-    ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-    ax.set_title(title, color=TH_BG, fontsize=10, fontweight="bold", pad=6)
-    ax.grid(True, color=CHART_GRID, linewidth=0.7, axis="y")
+        ax.spines[spine].set_color(_s.CHART_SPINE)
+    ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+    ax.set_title(title, color=_s.TH_BG, fontsize=10, fontweight="bold", pad=6)
+    ax.grid(True, color=_s.CHART_GRID, linewidth=0.7, axis="y")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=8))
 
@@ -104,9 +110,10 @@ class _ChartCard(QFrame):
     def __init__(self, title: str, height: int = 220, parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+        _s.themed_ss(
+            self,
+            "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}",
         )
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -115,21 +122,23 @@ class _ChartCard(QFrame):
         # Card title bar
         hdr = QWidget()
         hdr.setFixedHeight(32)
-        hdr.setStyleSheet(
-            f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
+        _s.themed_ss(
+            hdr,
+            "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};",
         )
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(12, 0, 12, 0)
         lbl = QLabel(title)
-        lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f"background:transparent; border:none;"
+        _s.themed_ss(
+            lbl,
+            "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            "background:transparent; border:none;",
         )
         hl.addWidget(lbl)
         outer.addWidget(hdr)
 
         # Figure
-        self._fig = Figure(figsize=(8, height / 96), dpi=96, facecolor=BG_CARD)
+        self._fig = Figure(figsize=(8, height / 96), dpi=96, facecolor=_s.BG_CARD)
         self._ax  = self._fig.add_subplot(111)
         self._fig.set_tight_layout({"pad": 0.8})  # applied once; avoids per-redraw accumulation
         self._canvas = FigureCanvas(self._fig)
@@ -137,7 +146,14 @@ class _ChartCard(QFrame):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         self._canvas.setFixedHeight(height)
+        _s.themed_ss(self._canvas, "background:{BG_CARD}; border:none;")
         outer.addWidget(self._canvas)
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor (frame/header/canvas
+        backgrounds re-apply automatically via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.BG_CARD)
+        self._canvas.draw_idle()
 
     @property
     def ax(self):
@@ -374,9 +390,9 @@ class HistoryPage(QWidget):
         self._hover_annot = ax.annotate(
             "", xy=(0, 0), xytext=(10, 10),
             textcoords="offset points",
-            bbox=dict(boxstyle="round,pad=0.4", fc=BG_CARD, ec=CHART_SPINE, alpha=0.9),
+            bbox=dict(boxstyle="round,pad=0.4", fc=_s.BG_CARD, ec=_s.CHART_SPINE, alpha=0.9),
             fontsize=9,
-            color=TEXT_PRIMARY,
+            color=_s.TEXT_PRIMARY,
         )
         self._hover_annot.set_visible(False)
 
@@ -640,9 +656,22 @@ class HistoryPage(QWidget):
         if not has_data:
             return
 
+        self._last_data = data   # cached so a live theme switch can re-render
         self._draw_rtt(data)
         self._draw_availability(data)
         self._update_kpis(data)
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: recolour both chart cards and re-render the last
+        fetched data so the matplotlib series adopt the new palette."""
+        for card in (getattr(self, "_rtt_card", None),
+                     getattr(self, "_avail_card", None)):
+            if card is not None and hasattr(card, "refresh_theme"):
+                card.refresh_theme()
+        data = getattr(self, "_last_data", None)
+        if data:
+            self._draw_rtt(data)
+            self._draw_availability(data)
 
     def _populate_host_combo_from_data(self, hosts: list, selected: str) -> None:
         self._host_combo.blockSignals(True)
@@ -669,12 +698,13 @@ class HistoryPage(QWidget):
         series_hosts = data.get("series_hosts", [])
         rtt_series   = data.get("rtt_series", {})
 
+        colors = _series_colors()
         plotted = False
         for i, host in enumerate(series_hosts):
             pts   = rtt_series.get(host, [])
             if not pts:
                 continue
-            color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+            color = colors[i % len(colors)]
             times_ok = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms >= 0]
             rtts_ok  = [p.rtt_ms for p in pts if p.rtt_ms >= 0]
             times_to = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms < 0]
@@ -686,18 +716,18 @@ class HistoryPage(QWidget):
                 plotted = True
             if times_to:
                 ax.scatter(times_to, [0] * len(times_to),
-                           color=RED, marker="x", s=30, zorder=5)
+                           color=_s.RED, marker="x", s=30, zorder=5)
 
         if not plotted:
             ax.text(0.5, 0.5, "No RTT data in this window",
-                    ha="center", va="center", color=TEXT_SECONDARY,
+                    ha="center", va="center", color=_s.TEXT_SECONDARY,
                     fontsize=10, transform=ax.transAxes)
         else:
-            ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
+            ax.set_ylabel("RTT (ms)", color=_s.TEXT_SECONDARY, fontsize=9)
             if len(series_hosts) > 1:
                 ax.legend(fontsize=8, framealpha=0.9, loc="upper right")
-            ax.axhline(100, color=AMBER, linewidth=1.0, linestyle="--", alpha=0.7, zorder=2)
-            ax.text(1.0, 100, " 100ms threshold", color=AMBER, fontsize=8,
+            ax.axhline(100, color=_s.AMBER, linewidth=1.0, linestyle="--", alpha=0.7, zorder=2)
+            ax.text(1.0, 100, " 100ms threshold", color=_s.AMBER, fontsize=8,
                     va="bottom", ha="right", transform=ax.get_yaxis_transform(), alpha=0.8)
 
         self._rtt_card.canvas.draw_idle()
@@ -716,12 +746,13 @@ class HistoryPage(QWidget):
         series_hosts  = data.get("series_hosts", [])
         rollup_series = data.get("rollup_series", {})
 
+        colors = _series_colors()
         plotted = False
         for i, host in enumerate(series_hosts):
             pts = rollup_series.get(host, [])
             if not pts:
                 continue
-            color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+            color = colors[i % len(colors)]
             days  = [datetime.datetime.strptime(p.day, "%Y-%m-%d") for p in pts]
             mins  = [p.min for p in pts]
             avgs  = [p.avg for p in pts]
@@ -732,10 +763,10 @@ class HistoryPage(QWidget):
 
         if not plotted:
             ax.text(0.5, 0.5, "No long-term data yet — check back after 30+ days",
-                    ha="center", va="center", color=TEXT_SECONDARY,
+                    ha="center", va="center", color=_s.TEXT_SECONDARY,
                     fontsize=10, transform=ax.transAxes)
         else:
-            ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
+            ax.set_ylabel("RTT (ms)", color=_s.TEXT_SECONDARY, fontsize=9)
             if len(series_hosts) > 1:
                 ax.legend(fontsize=8, framealpha=0.9, loc="upper right")
 
@@ -752,26 +783,27 @@ class HistoryPage(QWidget):
 
         if not series_hosts:
             ax.text(0.5, 0.5, "No availability data in this window",
-                    ha="center", va="center", color=TEXT_SECONDARY,
+                    ha="center", va="center", color=_s.TEXT_SECONDARY,
                     fontsize=10, transform=ax.transAxes)
             self._avail_card.canvas.draw_idle()
             return
 
         ips = series_hosts
         ax.set_yticks(range(len(ips)))
-        ax.set_yticklabels(ips[::-1], fontsize=8, color=TEXT_PRIMARY)
+        ax.set_yticklabels(ips[::-1], fontsize=8, color=_s.TEXT_PRIMARY)
         ax.set_ylim(-0.5, len(ips) - 0.5)
 
+        state_colors = _state_colors()
         for y, ip in enumerate(reversed(ips)):
             hist = state_series.get(ip, [])
             for pt in hist:
                 dt    = datetime.datetime.fromtimestamp(pt.ts)
-                color = _STATE_COLORS.get(pt.state, TEXT_MUTED)
+                color = state_colors.get(pt.state, _s.TEXT_MUTED)
                 ax.barh(y, 1 / 60, left=mdates.date2num(dt),
                         height=0.6, color=color, linewidth=0)
 
         import matplotlib.patches as mpatches
-        patches = [mpatches.Patch(color=v, label=k) for k, v in _STATE_COLORS.items()]
+        patches = [mpatches.Patch(color=v, label=k) for k, v in state_colors.items()]
         ax.legend(handles=patches, fontsize=8, loc="upper right", framealpha=0.9)
         ax.xaxis_date()
 

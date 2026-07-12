@@ -30,10 +30,11 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.metric_store      import MetricStore
+from ui import styles as _s
 from ui.styles                 import (
     ACCENT, BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS, CHART_BG,
-    CHART_GRID, CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER,
+    BORDER, CARD_HDR_BORDER, CARD_RADIUS,
+    INPUT_PLACEHOLDER,
     TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -143,10 +144,11 @@ class ReportsPage(QWidget):
 
         # ── Sparkline preview chart (POLISH-14) ───────────────────────────────
         preview_card, preview_lay = _card("Network Health — Last 7 Days")
-        self._preview_fig = Figure(facecolor=CHART_BG, figsize=(6, 1.4), dpi=96)
+        self._preview_fig = Figure(facecolor=_s.CHART_BG, figsize=(6, 1.4), dpi=96)
         self._preview_ax = self._preview_fig.add_subplot(111)
         self._preview_fig.set_tight_layout({"pad": 0.4})  # applied once; avoids per-redraw accumulation
         self._preview_canvas = FigureCanvas(self._preview_fig)
+        _s.themed_ss(self._preview_canvas, "background:{CHART_BG}; border:none;")
         self._preview_canvas.setFixedHeight(140)
         self._preview_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         preview_lay.addWidget(self._preview_canvas)
@@ -302,18 +304,24 @@ class ReportsPage(QWidget):
 
     # ── Preview chart (POLISH-14) ─────────────────────────────────────────────
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and re-render the
+        sparkline preview (canvas background re-applies via themed_ss)."""
+        self._preview_fig.set_facecolor(_s.CHART_BG)
+        self._load_preview_chart()
+
     def _load_preview_chart(self) -> None:
         """Render sparklines for device count and grade over the last 7 days."""
         ax = self._preview_ax
         ax.cla()
-        ax.set_facecolor(CHART_PLOT_BG)
-        self._preview_fig.set_facecolor(CHART_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        self._preview_fig.set_facecolor(_s.CHART_BG)
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
-        ax.spines["bottom"].set_color(CHART_GRID)
-        ax.spines["left"].set_color(CHART_GRID)
-        ax.tick_params(colors=TEXT_MUTED, labelsize=8)
-        ax.grid(True, color=CHART_GRID, linewidth=0.6, linestyle="-")
+        ax.spines["bottom"].set_color(_s.CHART_GRID)
+        ax.spines["left"].set_color(_s.CHART_GRID)
+        ax.tick_params(colors=_s.TEXT_MUTED, labelsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.6, linestyle="-")
 
         try:
             device_dates, device_counts, grade_dates, grade_scores = (
@@ -324,24 +332,24 @@ class ReportsPage(QWidget):
 
         if len(device_counts) >= 2 or len(grade_scores) >= 2:
             if len(device_counts) >= 2:
-                ax.plot(device_dates, device_counts, color=ACCENT,
+                ax.plot(device_dates, device_counts, color=_s.ACCENT,
                         linewidth=1.5, label="Devices", marker="o", markersize=3)
             if len(grade_scores) >= 2:
                 ax2 = ax.twinx()
-                ax2.set_facecolor(CHART_PLOT_BG)
+                ax2.set_facecolor(_s.CHART_PLOT_BG)
                 ax2.spines["top"].set_visible(False)
-                ax2.spines["right"].set_color(CHART_GRID)
-                ax2.tick_params(colors=TEXT_MUTED, labelsize=8)
-                ax2.plot(grade_dates, grade_scores, color=GREEN,
+                ax2.spines["right"].set_color(_s.CHART_GRID)
+                ax2.tick_params(colors=_s.TEXT_MUTED, labelsize=8)
+                ax2.plot(grade_dates, grade_scores, color=_s.GREEN,
                          linewidth=1.5, label="Grade", marker="s", markersize=3)
                 ax2.set_ylim(0, 100)
-                ax2.set_ylabel("Grade", color=GREEN, fontsize=8)
-            ax.set_ylabel("Devices", color=ACCENT, fontsize=8)
+                ax2.set_ylabel("Grade", color=_s.GREEN, fontsize=8)
+            ax.set_ylabel("Devices", color=_s.ACCENT, fontsize=8)
             self._preview_status.setVisible(False)
         else:
             ax.text(0.5, 0.5, "No data yet — run a scan to populate.",
                     ha="center", va="center", transform=ax.transAxes,
-                    color=TEXT_MUTED, fontsize=9)
+                    color=_s.TEXT_MUTED, fontsize=9)
             self._preview_status.setVisible(False)
 
         self._preview_canvas.draw()

@@ -19,8 +19,9 @@ from modules.scan_persistence import persist_alert, upsert_known_device
 from ui.tabs import _add_row
 from ui.tabs_helpers import format_scan_status, risk_to_label
 
+from ui import styles as _s
 from ui.styles import (
-    ACCENT_LITE, AMBER, AMBER_BG, BLUE, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
+    ACCENT_LITE, AMBER, AMBER_BG, BLUE,
     GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
 )
 from ui.nav.labels import NavLabel as L
@@ -227,8 +228,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._snmp_table.setItem(row, col, QTableWidgetItem(str(val)))
 
     def _on_snmp_if_result(self, entries: list) -> None:
-        """Populate interface error table and bar chart (V4 — Cat2)."""
+        """Populate interface error table and bar chart (V4 — Cat2).
+
+        Colours are read live (via ``_s``) so ``refresh_theme`` (which re-invokes
+        this with the cached ``_snmp_if_last_entries``) recolours the chart.
+        """
         from PyQt6.QtGui import QColor
+        self._snmp_if_last_entries = list(entries)   # cached for live theme redraw
         self._snmp_if_table.setRowCount(0)
         for entry in entries:
             row = self._snmp_if_table.rowCount()
@@ -243,7 +249,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             for col, val in enumerate(cells):
                 item = QTableWidgetItem(val)
                 if col > 0 and int(val) > 0:
-                    item.setForeground(QColor(RED if int(val) > 10 else AMBER))
+                    item.setForeground(QColor(_s.RED if int(val) > 10 else _s.AMBER))
                 self._snmp_if_table.setItem(row, col, item)
 
         # Update chart
@@ -252,13 +258,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if ax is None or canvas is None or not entries:
             return
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-        ax.grid(True, color=CHART_GRID, linewidth=0.8, axis="y")
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.8, axis="y")
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
         for sp in ("bottom", "left"):
-            ax.spines[sp].set_color(CHART_SPINE)
+            ax.spines[sp].set_color(_s.CHART_SPINE)
 
         labels  = [e.if_descr[:12] for e in entries]
         in_err  = [e.in_errors   for e in entries]
@@ -267,14 +273,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
         out_dis = [e.out_discards for e in entries]
         xs = list(range(len(labels)))
         w  = 0.2
-        ax.bar([x - 1.5 * w for x in xs], in_err,  w, label="In Errors",    color=RED)
-        ax.bar([x - 0.5 * w for x in xs], out_err, w, label="Out Errors",   color=AMBER)
-        ax.bar([x + 0.5 * w for x in xs], in_dis,  w, label="In Discards",  color=BLUE)
-        ax.bar([x + 1.5 * w for x in xs], out_dis, w, label="Out Discards", color=GREEN)
+        ax.bar([x - 1.5 * w for x in xs], in_err,  w, label="In Errors",    color=_s.RED)
+        ax.bar([x - 0.5 * w for x in xs], out_err, w, label="Out Errors",   color=_s.AMBER)
+        ax.bar([x + 0.5 * w for x in xs], in_dis,  w, label="In Discards",  color=_s.BLUE)
+        ax.bar([x + 1.5 * w for x in xs], out_dis, w, label="Out Discards", color=_s.GREEN)
         ax.set_xticks(xs)
         ax.set_xticklabels(labels, rotation=25, ha="right")
         ax.legend(fontsize=7, framealpha=0.7)
-        ax.set_title("Error distribution per interface", fontsize=9, color=TEXT_PRIMARY, pad=4)
+        ax.set_title("Error distribution per interface", fontsize=9, color=_s.TEXT_PRIMARY, pad=4)
         try:
             canvas.draw()
         except Exception:

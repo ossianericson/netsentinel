@@ -42,11 +42,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
     ACCENT, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, GREEN,
-    PROGRESS_TRACK, RED, RED_BG, TABLE_ROW_BORDER, TABLE_SEL,
+    CARD_RADIUS, GREEN,
+    RED, RED_BG, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_BORDER, TH_TEXT,
 )
@@ -68,8 +69,14 @@ _GAUGE_CENTER    = (0.0, -0.06)
 _GAUGE_TICKS = [1, 5, 10, 50, 100, 250, 500, 1000]
 _GAUGE_MAJOR = {0, 10, 100, 1000}   # ticks that get a text label
 
-_COLOR_DOWNLOAD = ACCENT             # brand blue
-_COLOR_UPLOAD   = GREEN              # green
+# Gauge/series phase colours — read live (via _s) so a theme switch recolours
+# them the moment refresh_theme() redraws.
+def _color_download() -> str:
+    return _s.ACCENT             # brand blue
+
+
+def _color_upload() -> str:
+    return _s.GREEN              # green
 
 
 # ── S8-4: trend history helpers (pure — no Qt/matplotlib deps) ───────────────
@@ -209,8 +216,12 @@ def _fmt_sinr(v) -> tuple:
         return "—", TEXT_MUTED
 
 
-_COLOR_IDLE     = TEXT_MUTED         # muted grey
-_COLOR_TRACK    = PROGRESS_TRACK     # light grey track
+def _color_idle() -> str:
+    return _s.TEXT_MUTED         # muted grey
+
+
+def _color_track() -> str:
+    return _s.PROGRESS_TRACK     # light grey track
 
 
 def _speed_fraction(mbps: float, max_mbps: float = _GAUGE_MAX_MBPS) -> float:
@@ -234,12 +245,13 @@ class SpeedGaugeWidget(QWidget):
         self._phase  = "idle"   # "idle" | "download" | "upload"
         self._status = ""
 
-        self._fig    = Figure(figsize=(3.6, 2.6), dpi=96, facecolor=BG_CARD)
+        self._fig    = Figure(figsize=(3.6, 2.6), dpi=96, facecolor=_s.BG_CARD)
         self._ax     = self._fig.add_axes([0, 0, 1, 1])
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
+        _s.themed_ss(self._canvas, "background:{BG_CARD}; border:none;")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -269,7 +281,7 @@ class SpeedGaugeWidget(QWidget):
     def _draw(self) -> None:
         ax = self._ax
         ax.cla()
-        ax.set_facecolor(BG_CARD)
+        ax.set_facecolor(_s.BG_CARD)
         ax.set_xlim(-0.62, 0.62)
         ax.set_ylim(-0.40, 0.58)
         ax.set_aspect("equal")
@@ -290,7 +302,7 @@ class SpeedGaugeWidget(QWidget):
         ax.fill(
             np.concatenate([xo, xi]),
             np.concatenate([yo, yi]),
-            color=_COLOR_TRACK, zorder=1,
+            color=_color_track(), zorder=1,
         )
 
         # --- Fill arc ---
@@ -307,9 +319,9 @@ class SpeedGaugeWidget(QWidget):
             xif = cx + _GAUGE_R_INNER * np.cos(theta_f[::-1])
             yif = cy + _GAUGE_R_INNER * np.sin(theta_f[::-1])
             fill_color = (
-                _COLOR_UPLOAD if self._phase == "upload"
-                else _COLOR_DOWNLOAD if self._phase == "download"
-                else ACCENT
+                _color_upload() if self._phase == "upload"
+                else _color_download() if self._phase == "download"
+                else _s.ACCENT
             )
             ax.fill(
                 np.concatenate([xof, xif]),
@@ -336,7 +348,7 @@ class SpeedGaugeWidget(QWidget):
             ax.plot(
                 [cx + r_inner_tick * math.cos(rad), cx + r_outer_tick * math.cos(rad)],
                 [cy + r_inner_tick * math.sin(rad), cy + r_outer_tick * math.sin(rad)],
-                color=_COLOR_IDLE, linewidth=0.9, zorder=3,
+                color=_color_idle(), linewidth=0.9, zorder=3,
             )
             if t in _GAUGE_MAJOR:
                 r_lbl = _GAUGE_R_OUTER + 0.115
@@ -345,7 +357,7 @@ class SpeedGaugeWidget(QWidget):
                     cy + r_lbl * math.sin(rad),
                     str(t),
                     ha="center", va="center",
-                    fontsize=6.5, color=TEXT_MUTED, fontfamily="Segoe UI",
+                    fontsize=6.5, color=_s.TEXT_MUTED, fontfamily="Segoe UI",
                 )
 
         # --- Centre speed value ---
@@ -354,24 +366,24 @@ class SpeedGaugeWidget(QWidget):
             cx, cy + 0.04, val_str,
             ha="center", va="center",
             fontsize=26, fontweight="bold",
-            color=TEXT_PRIMARY, fontfamily="Segoe UI",
+            color=_s.TEXT_PRIMARY, fontfamily="Segoe UI",
         )
         ax.text(
             cx, cy - 0.11, "Mbps",
             ha="center", va="center",
-            fontsize=9, color=TEXT_SECONDARY, fontfamily="Segoe UI",
+            fontsize=9, color=_s.TEXT_SECONDARY, fontfamily="Segoe UI",
         )
 
         # --- Phase label ---
         if self._phase == "download":
             phase_label = "↓  DOWNLOAD"
-            phase_color = _COLOR_DOWNLOAD
+            phase_color = _color_download()
         elif self._phase == "upload":
             phase_label = "↑  UPLOAD"
-            phase_color = _COLOR_UPLOAD
+            phase_color = _color_upload()
         else:
             phase_label = self._status or ("Run a test to begin" if self._value == 0.0 else "READY")
-            phase_color = TEXT_MUTED
+            phase_color = _s.TEXT_MUTED
 
         ax.text(
             cx, cy + 0.20, phase_label,
@@ -382,6 +394,12 @@ class SpeedGaugeWidget(QWidget):
 
         self._fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
         self._canvas.draw_idle()
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and redraw the gauge
+        (the canvas background re-applies via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.BG_CARD)
+        self._draw()
 
 
 # ── Server list widget ────────────────────────────────────────────────────────
@@ -864,8 +882,9 @@ class SpeedTestPage(QWidget):
         hist_body.addLayout(_date_row)
 
         # ── History trend chart (VIZ-5) ───────────────────────────────────────
-        self._hist_chart_fig = Figure(figsize=(1, 1.4), facecolor=BG_CARD)
+        self._hist_chart_fig = Figure(figsize=(1, 1.4), facecolor=_s.BG_CARD)
         self._hist_chart_canvas = FigureCanvas(self._hist_chart_fig)
+        _s.themed_ss(self._hist_chart_canvas, "background:{BG_CARD}; border:none;")
         self._hist_chart_canvas.setFixedHeight(140)
         self._hist_chart_canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -1660,6 +1679,16 @@ class SpeedTestPage(QWidget):
         self._disconnect_hist_hover()
         super().hideEvent(event)
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: recolour the gauge and the history trend chart."""
+        gauge = getattr(self, "_gauge", None)
+        if gauge is not None and hasattr(gauge, "refresh_theme"):
+            gauge.refresh_theme()
+        fig = getattr(self, "_hist_chart_fig", None)
+        if fig is not None:
+            fig.set_facecolor(_s.BG_CARD)
+            self._refresh_history_chart()
+
     def _refresh_history_chart(self) -> None:
         """VIZ-5: Rebuild the download/upload history line chart."""
         import datetime as _dt
@@ -1669,14 +1698,14 @@ class SpeedTestPage(QWidget):
         fig = self._hist_chart_fig
         fig.clear()
         ax = fig.add_subplot(111)
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["bottom"].set_color(CHART_SPINE)
-        ax.spines["left"].set_color(CHART_SPINE)
-        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-        ax.grid(True, color=CHART_GRID, linewidth=0.8, linestyle="-")
-        ax.set_ylabel("Mbps", fontsize=8, color=TEXT_SECONDARY)
+        ax.spines["bottom"].set_color(_s.CHART_SPINE)
+        ax.spines["left"].set_color(_s.CHART_SPINE)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.8, linestyle="-")
+        ax.set_ylabel("Mbps", fontsize=8, color=_s.TEXT_SECONDARY)
 
         if not self._store:
             fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.22)
@@ -1692,7 +1721,7 @@ class SpeedTestPage(QWidget):
         if len(points) < 2:
             ax.text(0.5, 0.5, "Not enough data yet — run more speed tests",
                     ha="center", va="center", transform=ax.transAxes,
-                    color=TEXT_SECONDARY, fontsize=9)
+                    color=_s.TEXT_SECONDARY, fontsize=9)
             fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.22)
             self._hist_chart_canvas.draw_idle()
             self._time_of_day_lbl.setVisible(False)
@@ -1703,20 +1732,21 @@ class SpeedTestPage(QWidget):
         dl    = [p.download_mbps for p in pts_sorted]
         ul    = [p.upload_mbps   for p in pts_sorted]
 
-        ax.plot(dates, dl, color=_COLOR_DOWNLOAD, linewidth=1.5,
+        _dl_color = _color_download()
+        ax.plot(dates, dl, color=_dl_color, linewidth=1.5,
                 marker="o", markersize=3.5, label="↓ Download", zorder=3)
-        ax.plot(dates, ul, color=_COLOR_UPLOAD, linewidth=1.5,
+        ax.plot(dates, ul, color=_color_upload(), linewidth=1.5,
                 marker="o", markersize=3.5, label="↑ Upload", zorder=3)
 
         # ── S8-4: 7/30-day rolling average overlay — only when there's enough span ──
         span_days = (pts_sorted[-1].ts - pts_sorted[0].ts) / 86400.0
         if span_days >= 7:
             avg7 = _rolling_average_download(pts_sorted, 7.0)
-            ax.plot(dates, avg7, color=_COLOR_DOWNLOAD, linewidth=1.0,
+            ax.plot(dates, avg7, color=_dl_color, linewidth=1.0,
                     linestyle="--", alpha=0.5, label="7-day avg", zorder=2)
         if span_days >= 30:
             avg30 = _rolling_average_download(pts_sorted, 30.0)
-            ax.plot(dates, avg30, color=_COLOR_DOWNLOAD, linewidth=1.0,
+            ax.plot(dates, avg30, color=_dl_color, linewidth=1.0,
                     linestyle=":", alpha=0.5, label="30-day avg", zorder=2)
 
         ax.xaxis.set_major_formatter(_mdates.DateFormatter("%m/%d"))
@@ -1734,9 +1764,9 @@ class SpeedTestPage(QWidget):
 
         annot = ax.annotate(
             "", xy=(0, 0), xytext=(8, 8), textcoords="offset points",
-            bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=CHART_SPINE, lw=0.8),
-            fontsize=8, color=TEXT_PRIMARY,
-            arrowprops=dict(arrowstyle="->", color=TEXT_SECONDARY, lw=0.8),
+            bbox=dict(boxstyle="round,pad=0.3", fc=_s.BG_CARD, ec=_s.CHART_SPINE, lw=0.8),
+            fontsize=8, color=_s.TEXT_PRIMARY,
+            arrowprops=dict(arrowstyle="->", color=_s.TEXT_SECONDARY, lw=0.8),
         )
         annot.set_visible(False)
         self._hist_chart_annot = annot

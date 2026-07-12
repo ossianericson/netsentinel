@@ -47,10 +47,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, GREEN,
+    CARD_HDR_BORDER, GREEN,
     RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_BORDER,
     TH_TEXT,
@@ -231,13 +232,15 @@ class _DeviceEditDialog(QDialog):
 class _RttMiniChart(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._fig    = Figure(figsize=(3.5, 1.4), dpi=96, facecolor=BG_CARD)
+        self._fig    = Figure(figsize=(3.5, 1.4), dpi=96, facecolor=_s.BG_CARD)
         self._ax     = self._fig.add_subplot(111)
         self._fig.set_layout_engine("tight", pad=0.5)  # applied once; avoids per-redraw accumulation
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
+        _s.themed_ss(self._canvas, "background:{BG_CARD}; border:none;")
+        self._last_points: list = []   # remembered so a theme switch can redraw
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self._canvas)
@@ -246,31 +249,32 @@ class _RttMiniChart(QWidget):
     def _draw_empty(self) -> None:
         ax = self._ax
         ax.cla()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color(CHART_SPINE)
-        ax.spines["bottom"].set_color(CHART_SPINE)
-        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
+        ax.spines["left"].set_color(_s.CHART_SPINE)
+        ax.spines["bottom"].set_color(_s.CHART_SPINE)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
         ax.set_xlabel("", fontsize=0)
-        ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
+        ax.set_ylabel("RTT ms", color=_s.TEXT_SECONDARY, fontsize=8)
         ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
-                ha="center", va="center", color=TEXT_MUTED, fontsize=9)
-        ax.grid(True, color=CHART_GRID, linewidth=0.6)
+                ha="center", va="center", color=_s.TEXT_MUTED, fontsize=9)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.6)
         self._canvas.draw_idle()
 
     def plot(self, points: list) -> None:
         """points: list of RttPoint objects."""
+        self._last_points = list(points) if points else []
         ax = self._ax
         ax.cla()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color(CHART_SPINE)
-        ax.spines["bottom"].set_color(CHART_SPINE)
-        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-        ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
-        ax.grid(True, color=CHART_GRID, linewidth=0.6)
+        ax.spines["left"].set_color(_s.CHART_SPINE)
+        ax.spines["bottom"].set_color(_s.CHART_SPINE)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.set_ylabel("RTT ms", color=_s.TEXT_SECONDARY, fontsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.6)
 
         if not points:
             self._draw_empty()
@@ -284,12 +288,18 @@ class _RttMiniChart(QWidget):
         y    = [r if r is not None else float("nan") for r in rtts]
         drops = [xi for xi, ri in zip(x, rtts) if ri is None]
 
-        ax.plot(x, y, color=ACCENT, linewidth=1.2)
+        ax.plot(x, y, color=_s.ACCENT, linewidth=1.2)
         if drops:
-            ax.scatter(drops, [0] * len(drops), color=RED, marker="x", s=30)
+            ax.scatter(drops, [0] * len(drops), color=_s.RED, marker="x", s=30)
 
-        ax.set_xlabel("Min ago", color=TEXT_SECONDARY, fontsize=8)
+        ax.set_xlabel("Min ago", color=_s.TEXT_SECONDARY, fontsize=8)
         self._canvas.draw_idle()
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and redraw the last
+        data (canvas background re-applies via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.BG_CARD)
+        self.plot(self._last_points)
 
 
 # ── Pinned widget mini-tile ───────────────────────────────────────────────────
@@ -384,6 +394,13 @@ class HomeAutomationPage(QWidget):
         self._setup_ui()
         self._load_devices()
         self._refresh_timer.start()
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: forward to the embedded RTT mini-chart so its
+        matplotlib figure adopts the new palette."""
+        chart = getattr(self, "_rtt_chart", None)
+        if chart is not None and hasattr(chart, "refresh_theme"):
+            chart.refresh_theme()
 
     # ── UI construction ───────────────────────────────────────────────────────
 

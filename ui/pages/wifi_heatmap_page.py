@@ -60,10 +60,11 @@ from modules.wifi_heatmap import (
     surveys_dir,
 )
 from modules.wifi_scanner import scan as wifi_scan
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER,
+    ACCENT, ACCENT_DARK,
     BG_CARD, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_PLOT_BG, CHART_SPINE, GREEN, INPUT_PLACEHOLDER, RED,
+    CARD_HDR_BORDER, CARD_RADIUS, INPUT_PLACEHOLDER, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE,
 )
@@ -158,6 +159,7 @@ class WifiHeatmapPage(QWidget):
         self._pending_pos: Optional[tuple[float, float]] = None
         self._sampling_mode: bool = False   # True = next canvas click records a sample
         self._floor_plan_img: Optional[np.ndarray] = None
+        self._overlay_active: bool = False   # True once a heatmap layer is rendered
         self._cid: Optional[int] = None     # matplotlib button_press connection id
 
         self._build_ui()
@@ -339,11 +341,12 @@ class WifiHeatmapPage(QWidget):
         lay.setContentsMargins(4, 0, 0, 0)
         lay.setSpacing(0)
 
-        self._fig = Figure(facecolor=BG_CARD, dpi=96)
+        self._fig = Figure(facecolor=_s.BG_CARD, dpi=96)
         self._ax  = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        _s.themed_ss(self._canvas, "background:{BG_CARD}; border:none;")
         lay.addWidget(self._canvas)
 
         self._cid = self._canvas.mpl_connect(
@@ -353,21 +356,30 @@ class WifiHeatmapPage(QWidget):
 
     # ── Canvas helpers ────────────────────────────────────────────────────────
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and redraw the floor
+        plan (canvas background re-applies via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.BG_CARD)
+        if self._floor_plan_img is None:
+            self._reset_canvas()
+        else:
+            self._redraw_floor_plan(overlay=self._overlay_active)
+
     def _reset_canvas(self) -> None:
         self._ax.cla()
-        self._ax.set_facecolor(CHART_PLOT_BG)
+        self._ax.set_facecolor(_s.CHART_PLOT_BG)
         self._ax.set_xticks([])
         self._ax.set_yticks([])
         self._ax.spines["top"].set_visible(False)
         self._ax.spines["right"].set_visible(False)
-        self._ax.spines["bottom"].set_color(CHART_SPINE)
-        self._ax.spines["left"].set_color(CHART_SPINE)
+        self._ax.spines["bottom"].set_color(_s.CHART_SPINE)
+        self._ax.spines["left"].set_color(_s.CHART_SPINE)
         self._ax.text(0.5, 0.5,
                       "Import a floor plan to begin.\n"
                       "Then walk around and click your position\n"
                       "after each scan.",
                       ha="center", va="center",
-                      color=TEXT_MUTED, fontsize=11,
+                      color=_s.TEXT_MUTED, fontsize=11,
                       transform=self._ax.transAxes)
         self._fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
         self._canvas.draw()
@@ -427,7 +439,7 @@ class WifiHeatmapPage(QWidget):
             avg_dbm = float(np.mean(list(r.readings.values())))
             color = _dbm_color(avg_dbm)
             size = 120 if idx in selected_rows else 70
-            edgecolor = TEXT_PRIMARY if idx in selected_rows else "none"
+            edgecolor = _s.TEXT_PRIMARY if idx in selected_rows else "none"
             self._ax.scatter(
                 r.x_frac, r.y_frac,
                 s=size, c=color, zorder=3,
@@ -436,7 +448,7 @@ class WifiHeatmapPage(QWidget):
             self._ax.text(
                 r.x_frac + 0.012, r.y_frac - 0.012,
                 f"{avg_dbm:.0f}",
-                fontsize=7, color=TEXT_PRIMARY, zorder=4,
+                fontsize=7, color=_s.TEXT_PRIMARY, zorder=4,
             )
 
     # ── Button handlers ───────────────────────────────────────────────────────
@@ -627,6 +639,7 @@ class WifiHeatmapPage(QWidget):
         if not self._survey or len(self._survey.readings) < 3:
             self._set_status("Need at least 3 samples to render a heatmap.", error=True)
             return
+        self._overlay_active = True
         self._redraw_floor_plan(overlay=True)
         self._set_status(
             f"Heatmap rendered ({len(self._survey.readings)} samples, "
@@ -637,6 +650,7 @@ class WifiHeatmapPage(QWidget):
         if not self._survey:
             return
         self._survey.readings.clear()
+        self._overlay_active = False
         self._refresh_sample_table()
         self._refresh_ap_combo()
         self._sample_count_lbl.setText("0 samples")
@@ -770,7 +784,7 @@ class WifiHeatmapPage(QWidget):
 
 def _dbm_color(dbm: float) -> str:
     if dbm >= -60:
-        return GREEN
+        return _s.GREEN
     if dbm >= -75:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED

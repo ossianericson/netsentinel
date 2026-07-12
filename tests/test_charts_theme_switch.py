@@ -98,3 +98,118 @@ class TestTopologyThemeSwitch:
             _s.apply_theme(original)
             if w is not None:
                 _teardown(w)
+
+
+class TestSpeedGaugeThemeSwitch:
+    """Phase 5 commit 2 — Speed Test gauge widget restyles live."""
+
+    def test_canvas_figure_and_phase_colours_restyle(self):
+        from ui.pages.speed_test_page import (
+            SpeedGaugeWidget, _color_download, _color_upload,
+        )
+
+        arctic = _s.THEMES["Arctic Clean"]["BG_CARD"]
+        midnight = _s.THEMES["Midnight Pro"]["BG_CARD"]
+        assert arctic != midnight
+
+        original = _s.get_active_theme_name()
+        w = None
+        try:
+            _s.apply_theme("Arctic Clean")
+            w = SpeedGaugeWidget()
+            assert arctic in w._canvas.styleSheet()
+            assert _color_download() == _s.THEMES["Arctic Clean"]["ACCENT"]
+
+            _s.apply_theme("Midnight Pro")
+            assert midnight in w._canvas.styleSheet() and arctic not in w._canvas.styleSheet()
+            w.refresh_theme()
+            assert w._fig.get_facecolor() == to_rgba(midnight)
+            assert _color_download() == _s.THEMES["Midnight Pro"]["ACCENT"]
+            assert _color_upload() == _s.THEMES["Midnight Pro"]["GREEN"]
+
+            _s.apply_theme("Arctic Clean")
+            w.refresh_theme()
+            assert w._fig.get_facecolor() == to_rgba(arctic)
+        finally:
+            _s.apply_theme(original)
+            if w is not None:
+                _teardown(w)
+
+
+class TestHistoryChartCardThemeSwitch:
+    """Phase 5 commit 2 — history page's _ChartCard + series colours live."""
+
+    def test_card_restyle_and_series_colours(self):
+        from ui.pages.history_page import _ChartCard, _series_colors, _state_colors
+
+        arctic = _s.THEMES["Arctic Clean"]["BG_CARD"]
+        midnight = _s.THEMES["Midnight Pro"]["BG_CARD"]
+        assert arctic != midnight
+
+        original = _s.get_active_theme_name()
+        w = None
+        try:
+            _s.apply_theme("Arctic Clean")
+            w = _ChartCard("RTT", height=160)
+            assert arctic in w._canvas.styleSheet()
+            assert _series_colors()[0] == _s.THEMES["Arctic Clean"]["ACCENT"]
+            assert _state_colors()["UP"] == _s.THEMES["Arctic Clean"]["GREEN"]
+
+            _s.apply_theme("Midnight Pro")
+            assert midnight in w._canvas.styleSheet() and arctic not in w._canvas.styleSheet()
+            w.refresh_theme()
+            assert w._fig.get_facecolor() == to_rgba(midnight)
+            assert _series_colors()[0] == _s.THEMES["Midnight Pro"]["ACCENT"]
+            assert _state_colors()["DOWN"] == _s.THEMES["Midnight Pro"]["RED"]
+        finally:
+            _s.apply_theme(original)
+            if w is not None:
+                _teardown(w)
+
+
+class TestRttMiniChartThemeSwitch:
+    """Phase 5 commit 2 — home-automation RTT mini-chart restyles live."""
+
+    def test_canvas_and_figure_restyle(self):
+        from ui.pages.home_automation_page import _RttMiniChart
+
+        arctic = _s.THEMES["Arctic Clean"]["BG_CARD"]
+        midnight = _s.THEMES["Midnight Pro"]["BG_CARD"]
+        assert arctic != midnight
+
+        original = _s.get_active_theme_name()
+        w = None
+        try:
+            _s.apply_theme("Arctic Clean")
+            w = _RttMiniChart()
+            assert arctic in w._canvas.styleSheet()
+
+            _s.apply_theme("Midnight Pro")
+            assert midnight in w._canvas.styleSheet() and arctic not in w._canvas.styleSheet()
+            w.refresh_theme()   # no data → redraws empty, must not raise
+            assert w._fig.get_facecolor() == to_rgba(midnight)
+        finally:
+            _s.apply_theme(original)
+            if w is not None:
+                _teardown(w)
+
+
+class TestGeoAndWifiLiveColours:
+    """Phase 5 commit 2 — map/heatmap live colour accessors track the theme."""
+
+    def test_marker_and_dbm_colours_follow_active_theme(self):
+        from ui.pages.geo_map_page import _marker_color, _CAT_THREAT
+        from ui.pages.wifi_heatmap_page import _dbm_color
+
+        original = _s.get_active_theme_name()
+        try:
+            _s.apply_theme("Arctic Clean")
+            assert _marker_color()[_CAT_THREAT] == _s.THEMES["Arctic Clean"]["RED"]
+            assert _dbm_color(-50.0) == _s.THEMES["Arctic Clean"]["GREEN"]
+
+            _s.apply_theme("Midnight Pro")
+            assert _marker_color()[_CAT_THREAT] == _s.THEMES["Midnight Pro"]["RED"]
+            assert _dbm_color(-50.0) == _s.THEMES["Midnight Pro"]["GREEN"]
+            assert _dbm_color(-90.0) == _s.THEMES["Midnight Pro"]["RED"]
+        finally:
+            _s.apply_theme(original)
