@@ -45,14 +45,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
-    BG_CARD, BG_HOVER,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
+from ui import styles as _s
 
 # ── Keyring constants (exported so notifications_page.py can import them) ─────
 
@@ -95,25 +88,19 @@ def _load_secret(key: str) -> str:
 def _page_header(title: str, subtitle: str = "") -> QFrame:
     container = QFrame()
     container.setObjectName("pageHeader")
-    container.setStyleSheet(
-        f"QFrame#pageHeader {{ background: transparent; border: none;"
-        f" border-bottom: 1px solid {BORDER}; }}"
-    )
+    _s.themed_ss(container, "QFrame#pageHeader {{ background: transparent; border: none;"
+        " border-bottom: 1px solid {BORDER}; }}")
     vbox = QVBoxLayout(container)
     vbox.setContentsMargins(20, 16, 20, 12)
     vbox.setSpacing(2)
     t = QLabel(title)
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-        "padding:0; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;")
     vbox.addWidget(t)
     if subtitle:
         s = QLabel(subtitle)
-        s.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            "padding:0; background:transparent; border:none;"
-        )
+        _s.themed_ss(s, "color:{TEXT_SECONDARY}; font-size:11px;"
+            "padding:0; background:transparent; border:none;")
         vbox.addWidget(s)
     return container
 
@@ -121,24 +108,22 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
 def _card(title: str) -> "tuple[QFrame, QVBoxLayout]":
     card = QFrame()
     card.setObjectName("card")
-    card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}")
     cl = QVBoxLayout(card)
     cl.setContentsMargins(0, 0, 0, 0)
     cl.setSpacing(0)
     tb = QFrame()
     tb.setFixedHeight(32)
-    tb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     tbl = QHBoxLayout(tb)
     tbl.setContentsMargins(12, 0, 12, 0)
     lbl = QLabel(title)
-    lbl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(lbl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     tbl.addWidget(lbl)
     tbl.addStretch()
     cl.addWidget(tb)
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(body, "background:{BG_CARD};")
     bl = QVBoxLayout(body)
     bl.setContentsMargins(16, 12, 16, 14)
     bl.setSpacing(8)
@@ -151,7 +136,7 @@ def _field_row(label: str, widget: QWidget) -> QHBoxLayout:
     row.setSpacing(10)
     lbl = QLabel(label)
     lbl.setFixedWidth(160)
-    lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+    _s.themed_ss(lbl, "color:{TEXT_SECONDARY};font-size:11px;")
     row.addWidget(lbl)
     row.addWidget(widget, 1)
     return row
@@ -163,11 +148,9 @@ def _lineedit(placeholder: str = "", password: bool = False) -> QLineEdit:
     le.setFixedHeight(26)
     if password:
         le.setEchoMode(QLineEdit.EchoMode.Password)
-    le.setStyleSheet(
-        f"QLineEdit{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-        f"border-radius:2px;padding:0 6px;font-size:11px;}}"
-        f"QLineEdit:focus{{border-color:{ACCENT};}}"
-    )
+    _s.themed_ss(le, "QLineEdit{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+        "border-radius:2px;padding:0 6px;font-size:11px;}}"
+        "QLineEdit:focus{{border-color:{ACCENT};}}")
     return le
 
 
@@ -177,13 +160,11 @@ def _severity_combo(default: str = "WARNING") -> QComboBox:
         cb.addItem(lvl)
     cb.setCurrentText(default)
     cb.setFixedHeight(26)
-    cb.setStyleSheet(
-        f"QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-        f"border-radius:2px;padding:0 6px;font-size:11px;}}"
-        f"QComboBox::drop-down{{border:none;}}"
-        f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
-        f"border:1px solid {BORDER};selection-background-color:{ACCENT};}}"
-    )
+    _s.themed_ss(cb, "QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+        "border-radius:2px;padding:0 6px;font-size:11px;}}"
+        "QComboBox::drop-down{{border:none;}}"
+        "QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+        "border:1px solid {BORDER};selection-background-color:{ACCENT};}}")
     return cb
 
 
@@ -252,19 +233,15 @@ class _NotifChannelsMixin:
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
         note = QLabel("Stored securely in your OS keychain — not in any config file")
-        note.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(note, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         row.addWidget(note)
         change_btn = QPushButton("Change ›")
         change_btn.setFixedHeight(18)
         change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        change_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
-            f" font-size:10px; padding:0; }}"
-            f"QPushButton:hover {{ text-decoration:underline; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(change_btn, "QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
+            " font-size:10px; padding:0; }}"
+            "QPushButton:hover {{ text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         change_btn.setVisible(False)
         change_btn.clicked.connect(
             lambda _=False, k=kr_key, f=field, b=change_btn:
@@ -307,37 +284,31 @@ class _NotifChannelsMixin:
     def _build_alert_rules_card(self) -> QWidget:
         card, bl = _card("Alert Rules")
         self._active_rules_lbl = QLabel("0 rules active")
-        self._active_rules_lbl.setStyleSheet(
-            f"font-size:11px; color:{AMBER}; font-weight:bold; border:none;"
-        )
+        _s.themed_ss(self._active_rules_lbl, "font-size:11px; color:{AMBER}; font-weight:bold; border:none;")
         bl.addWidget(self._active_rules_lbl)
         info = QLabel(
             "All alert rules are disabled by default — you must opt in. "
             "Enable the rules you want; alerts only fire for rules that are active."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none; padding-bottom:4px;"
-        )
+        _s.themed_ss(info, "font-size:11px; color:{TEXT_SECONDARY}; border:none; padding-bottom:4px;")
         bl.addWidget(info)
 
         sens_row = QHBoxLayout()
         sens_row.setSpacing(8)
         sens_lbl = QLabel("Alert sensitivity:")
-        sens_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        _s.themed_ss(sens_lbl, "font-size:11px; color:{TEXT_PRIMARY}; border:none;")
         sens_row.addWidget(sens_lbl)
         self._combo_sensitivity = QComboBox()
         self._combo_sensitivity.addItem("Conservative — fewer, higher-confidence alerts", "conservative")
         self._combo_sensitivity.addItem("Balanced (default)", "balanced")
         self._combo_sensitivity.addItem("Aggressive — more, earlier alerts", "aggressive")
         self._combo_sensitivity.setFixedWidth(280)
-        self._combo_sensitivity.setStyleSheet(
-            f"QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
-            f"QComboBox::drop-down{{border:none;}}"
-            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
-            f"border:1px solid {BORDER};selection-background-color:{ACCENT};}}"
-        )
+        _s.themed_ss(self._combo_sensitivity, "QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 6px;font-size:11px;}}"
+            "QComboBox::drop-down{{border:none;}}"
+            "QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            "border:1px solid {BORDER};selection-background-color:{ACCENT};}}")
         self._combo_sensitivity.currentIndexChanged.connect(self._save)
         sens_row.addWidget(self._combo_sensitivity)
         sens_row.addStretch()
@@ -347,34 +318,26 @@ class _NotifChannelsMixin:
             "does not change which rules are enabled. Applies the next time NetSentinel starts."
         )
         sens_hint.setWordWrap(True)
-        sens_hint.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;"
-        )
+        _s.themed_ss(sens_hint, "font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;")
         bl.addWidget(sens_hint)
 
         self._zero_rules_banner = QFrame()
-        self._zero_rules_banner.setStyleSheet(
-            f"QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:4px; }}"
-        )
+        _s.themed_ss(self._zero_rules_banner, "QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:4px; }}")
         banner_lay = QHBoxLayout(self._zero_rules_banner)
         banner_lay.setContentsMargins(10, 6, 10, 6)
         banner_lay.setSpacing(10)
         banner_txt = QLabel(
             "No alert rules are active — you won't receive any alerts."
         )
-        banner_txt.setStyleSheet(
-            f"color:{AMBER}; font-size:11px; border:none; background:transparent;"
-        )
+        _s.themed_ss(banner_txt, "color:{AMBER}; font-size:11px; border:none; background:transparent;")
         banner_lay.addWidget(banner_txt, 1)
         rec_btn = QPushButton("Enable recommended rules →")
         rec_btn.setFlat(True)
         rec_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        rec_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(rec_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         rec_btn.clicked.connect(self._enable_recommended_rules)
         banner_lay.addWidget(rec_btn)
         self._zero_rules_banner.setVisible(False)
@@ -387,10 +350,10 @@ class _NotifChannelsMixin:
         for row_idx, (name, _rule_type, description) in enumerate(_ALERT_RULE_DEFS):
             chk = QCheckBox(name)
             chk.setFixedWidth(175)
-            chk.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+            _s.themed_ss(chk, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
             chk.stateChanged.connect(self._save)
             desc_lbl = QLabel(description)
-            desc_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; border:none;")
+            _s.themed_ss(desc_lbl, "font-size:10px; color:{TEXT_SECONDARY}; border:none;")
             grid.addWidget(chk, row_idx, 0)
             grid.addWidget(desc_lbl, row_idx, 1)
             self._rule_checkboxes[name] = chk
@@ -401,16 +364,14 @@ class _NotifChannelsMixin:
         esc_row.setContentsMargins(20, 0, 0, 0)
         esc_row.setSpacing(8)
         self._chk_service_escalation = QCheckBox("Diagnose why (recommended)")
-        self._chk_service_escalation.setStyleSheet(
-            f"QCheckBox{{color:{TEXT_SECONDARY};font-size:10px;}}"
-        )
+        _s.themed_ss(self._chk_service_escalation, "QCheckBox{{color:{TEXT_SECONDARY};font-size:10px;}}")
         self._chk_service_escalation.stateChanged.connect(self._save)
         esc_row.addWidget(self._chk_service_escalation)
         esc_desc = QLabel(
             "Runs a background diagnostic and explains why (filtered by a firewall, "
             "local network issue, or a real outage)"
         )
-        esc_desc.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; border:none;")
+        _s.themed_ss(esc_desc, "font-size:10px; color:{TEXT_SECONDARY}; border:none;")
         esc_row.addWidget(esc_desc, 1)
         bl.addLayout(esc_row)
 
@@ -425,11 +386,11 @@ class _NotifChannelsMixin:
         noun = "rule" if count == 1 else "rules"
         lbl.setText(f"{count} {noun} active")
         if count == 0:
-            lbl.setStyleSheet(f"font-size:11px; color:{AMBER}; font-weight:bold; border:none;")
+            _s.themed_ss(lbl, "font-size:11px; color:{AMBER}; font-weight:bold; border:none;")
             if banner:
                 banner.setVisible(True)
         else:
-            lbl.setStyleSheet(f"font-size:11px; color:{GREEN}; font-weight:bold; border:none;")
+            _s.themed_ss(lbl, "font-size:11px; color:{GREEN}; font-weight:bold; border:none;")
             if banner:
                 banner.setVisible(False)
 
@@ -444,7 +405,7 @@ class _NotifChannelsMixin:
     def _build_toast_card(self) -> QWidget:
         card, bl = _card("Desktop Notification (Toast)")
         self._chk_toast = QCheckBox("Enable desktop toast notifications")
-        self._chk_toast.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_toast, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_toast.stateChanged.connect(self._save)
         bl.addWidget(self._chk_toast)
         self._toast_severity = _severity_combo("WARNING")
@@ -455,14 +416,14 @@ class _NotifChannelsMixin:
             "Requires NetSentinel to be running."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(note)
         return card
 
     def _build_webhook_card(self) -> QWidget:
         card, bl = _card("Webhook (Slack / Teams / Generic HTTP POST)")
         self._chk_webhook = QCheckBox("Enable webhook")
-        self._chk_webhook.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_webhook, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_webhook.stateChanged.connect(self._save)
         bl.addWidget(self._chk_webhook)
         self._webhook_url = _lineedit("https://hooks.slack.com/services/…")
@@ -477,16 +438,14 @@ class _NotifChannelsMixin:
             "and any HTTP endpoint that accepts JSON."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(note)
         btn_test = QPushButton("Send Test Alert")
         btn_test.setFixedHeight(26)
-        btn_test.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
-            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
-            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(btn_test, "QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            "border-radius:2px;padding:0 14px;font-size:11px;}}"
+            "QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         btn_test.clicked.connect(self._test_webhook)
         self._test_btns["webhook"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -501,7 +460,7 @@ class _NotifChannelsMixin:
     def _build_email_card(self) -> QWidget:
         card, bl = _card("Email Alert (SMTP)")
         self._chk_email = QCheckBox("Enable email alerts")
-        self._chk_email.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_email, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_email.stateChanged.connect(self._save)
         bl.addWidget(self._chk_email)
         self._email_host = _lineedit("smtp.gmail.com")
@@ -531,16 +490,14 @@ class _NotifChannelsMixin:
             "For Gmail, create an App Password in Google Account settings."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(note)
         btn_test = QPushButton("Send Test Email")
         btn_test.setFixedHeight(26)
-        btn_test.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
-            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
-            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(btn_test, "QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            "border-radius:2px;padding:0 14px;font-size:11px;}}"
+            "QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         btn_test.clicked.connect(self._test_email)
         self._test_btns["email"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -559,9 +516,7 @@ class _NotifChannelsMixin:
         btn = self._test_btns.get(key)
         if lbl:
             lbl.setTextFormat(Qt.TextFormat.PlainText)
-            lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
-            )
+            _s.themed_ss(lbl, "font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;")
             lbl.setText("Testing…")
             lbl.setVisible(True)
         if btn:
@@ -571,7 +526,7 @@ class _NotifChannelsMixin:
             try:
                 deliver_fn(ch, alert)
                 html = (
-                    f'<span style="color:{GREEN};">'
+                    f'<span style="color:{_s.GREEN};">'
                     f"✓ Sent — check your channel for a test alert.</span>"
                 )
                 self._test_done.emit(key, html)
@@ -580,7 +535,7 @@ class _NotifChannelsMixin:
                 t.start()
             except Exception as exc:
                 err = f"{type(exc).__name__}: {str(exc)[:120]}"
-                html = f'<span style="color:{RED};">✗ {err}</span>'
+                html = f'<span style="color:{_s.RED};">✗ {err}</span>'
                 self._test_done.emit(key, html)
 
         threading.Thread(target=_worker, daemon=True).start()
