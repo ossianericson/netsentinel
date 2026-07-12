@@ -20,8 +20,6 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     alpha,
-    ACCENT, ACCENT_DARK, ACCENT_LITE, BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 if TYPE_CHECKING:
@@ -30,6 +28,7 @@ if TYPE_CHECKING:
 from modules.device_admin import (
     clear_classification_override, set_classification_override, update_device_ha_info,
 )
+from ui import styles as _s
 
 
 # ── Device label editor dialog (DEVICE-1) ────────────────────────────────────
@@ -44,13 +43,11 @@ class _DeviceLabelDialog(QDialog):
         self.setWindowTitle("Edit Device")
         self.setMinimumWidth(380)
         self.setModal(True)
-        self.setStyleSheet(
-            f"QDialog {{ background:{BG_CARD}; }}"
-            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
-            f"QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self, "QDialog {{ background:{BG_CARD}; }}"
+            "QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
+            "QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}")
 
         known = store.get_known_devices()
         device = known.get(mac.lower()) or known.get(mac)
@@ -59,8 +56,8 @@ class _DeviceLabelDialog(QDialog):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        hdr = QLabel(f"Device  <span style='color:{TEXT_MUTED};font-size:10px;'>{mac}</span>")
-        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        hdr = QLabel(f"Device  <span style='color:{_s.TEXT_MUTED};font-size:10px;'>{mac}</span>")
+        _s.themed_ss(hdr, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         lay.addWidget(hdr)
 
         form = QFormLayout()
@@ -85,7 +82,7 @@ class _DeviceLabelDialog(QDialog):
 
         def _lbl(t: str) -> QLabel:
             lb = QLabel(t)
-            lb.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            _s.themed_ss(lb, "font-size:11px; color:{TEXT_MUTED};")
             return lb
 
         form.addRow(_lbl("Name"), self._name)
@@ -97,16 +94,14 @@ class _DeviceLabelDialog(QDialog):
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
         btns.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0xdd)}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0xdd)}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
         )
-        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btns.button(QDialogButtonBox.StandardButton.Cancel), "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:4px 14px; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btns.accepted.connect(self._save)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)
@@ -146,15 +141,13 @@ class _TypeOverrideDialog(QDialog):
         info = QLabel(f"<b>{mac}</b><br>Current type: {current_type}")
         info.setTextFormat(Qt.TextFormat.RichText)
         info.setWordWrap(True)
-        info.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        _s.themed_ss(info, "font-size:11px; color:{TEXT_PRIMARY};")
         lay.addWidget(info)
 
         self._combo = QComboBox()
         self._combo.addItems(all_types)
-        self._combo.setStyleSheet(
-            f"QComboBox {{ font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 6px; }}"
-        )
+        _s.themed_ss(self._combo, "QComboBox {{ font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:3px 6px; }}")
         sel = current_override or current_type
         idx = self._combo.findText(sel)
         if idx >= 0:
@@ -164,35 +157,29 @@ class _TypeOverrideDialog(QDialog):
         btns = QHBoxLayout()
         set_btn = QPushButton("Set Override")
         set_btn.setFixedHeight(28)
-        set_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:11px; padding:0 12px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(set_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:11px; padding:0 12px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         set_btn.clicked.connect(self._set_override)
         btns.addWidget(set_btn)
 
         if current_override:
             clr_btn = QPushButton("Clear Override")
             clr_btn.setFixedHeight(28)
-            clr_btn.setStyleSheet(
-                f"QPushButton {{ background:{BG_CARD}; color:{RED};"
-                f" border:1px solid {RED}; border-radius:3px; font-size:11px; }}"
-                f"QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}"
-            )
+            _s.themed_ss(clr_btn, "QPushButton {{ background:{BG_CARD}; color:{RED};"
+                " border:1px solid {RED}; border-radius:3px; font-size:11px; }}"
+                "QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
+                "QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}")
             clr_btn.clicked.connect(self._clear_override)
             btns.addWidget(clr_btn)
 
         cancel_btn = QPushButton("Cancel")
         cancel_btn.setFixedHeight(28)
-        cancel_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; font-size:11px; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _s.themed_ss(cancel_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; border-radius:3px; font-size:11px; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         cancel_btn.clicked.connect(self.reject)
         btns.addWidget(cancel_btn)
         lay.addLayout(btns)
@@ -225,18 +212,16 @@ class _ScanCompareDialog(QDialog):
         self._sessions = sessions  # list of (ts, label)
         self._ts_a = 0
         self._ts_b = 0
-        self.setStyleSheet(
-            f"QDialog {{ background:{BG_CARD}; }}"
-            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; padding:3px 6px; font-size:11px; }}"
-        )
+        _s.themed_ss(self, "QDialog {{ background:{BG_CARD}; }}"
+            "QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; padding:3px 6px; font-size:11px; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
         hdr = QLabel("Compare two scan sessions")
-        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        _s.themed_ss(hdr, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         lay.addWidget(hdr)
 
         desc = QLabel(
@@ -244,7 +229,7 @@ class _ScanCompareDialog(QDialog):
             "New devices appear green; devices that disappeared appear red."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(desc, "font-size:11px; color:{TEXT_SECONDARY};")
         lay.addWidget(desc)
 
         labels = [s[1] for s in sessions]
@@ -255,7 +240,7 @@ class _ScanCompareDialog(QDialog):
 
         def _lbl(t: str) -> QLabel:
             lb = QLabel(t)
-            lb.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            _s.themed_ss(lb, "font-size:11px; color:{TEXT_MUTED};")
             return lb
 
         self._combo_a = QComboBox()
@@ -275,16 +260,14 @@ class _ScanCompareDialog(QDialog):
         )
         btns.button(QDialogButtonBox.StandardButton.Ok).setText("Compare")
         btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0xdd)}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0xdd)}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
         )
-        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btns.button(QDialogButtonBox.StandardButton.Cancel), "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:4px 14px; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btns.accepted.connect(self._on_accept)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)
@@ -311,21 +294,19 @@ class _SegmentEditorDialog(QDialog):
         self.setWindowTitle("Edit Segment" if segment else "New Segment")
         self.setMinimumWidth(380)
         self.setModal(True)
-        self.setStyleSheet(
-            f"QDialog {{ background:{BG_CARD}; }}"
-            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
-            f"QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}"
-            f"QComboBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; padding:3px 6px; }}"
-        )
+        _s.themed_ss(self, "QDialog {{ background:{BG_CARD}; }}"
+            "QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
+            "QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}"
+            "QComboBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:4px; padding:3px 6px; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
         hdr = QLabel("Segment" if not segment else segment.name)
-        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        _s.themed_ss(hdr, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         lay.addWidget(hdr)
 
         form = QFormLayout()
@@ -334,7 +315,7 @@ class _SegmentEditorDialog(QDialog):
 
         def _lbl(t: str) -> QLabel:
             lb = QLabel(t)
-            lb.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            _s.themed_ss(lb, "font-size:11px; color:{TEXT_MUTED};")
             return lb
 
         self._name_edit = QLineEdit()
@@ -347,10 +328,8 @@ class _SegmentEditorDialog(QDialog):
         if segment:
             self._cidr_edit.setText(segment.cidr)
             self._cidr_edit.setReadOnly(True)
-            self._cidr_edit.setStyleSheet(
-                f"QLineEdit {{ background:{BG_DARK}; color:{TEXT_MUTED};"
-                f" border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
-            )
+            _s.themed_ss(self._cidr_edit, "QLineEdit {{ background:{BG_DARK}; color:{TEXT_MUTED};"
+                " border:1px solid {BORDER}; border-radius:4px; padding:4px; }}")
 
         self._color_combo = QComboBox()
         _color_names = [
@@ -387,17 +366,13 @@ class _SegmentEditorDialog(QDialog):
         btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
-        btns.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
-        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btns.button(QDialogButtonBox.StandardButton.Save), "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; padding:4px 14px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
+        _s.themed_ss(btns.button(QDialogButtonBox.StandardButton.Cancel), "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:4px 14px; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)

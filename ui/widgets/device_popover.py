@@ -27,17 +27,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ui.styles import (
-    ACCENT,
-    BG_CARD,
-    BG_DARK,
-    BORDER,
-    RED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    BG_HOVER,
-    WHITE,
-)
+from ui import styles as _s
 
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
@@ -81,10 +71,8 @@ class DevicePopover(QFrame):
             Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
         )
         self.setFixedWidth(self._WIDTH)
-        self.setStyleSheet(
-            f"DevicePopover {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:6px; }}"
-        )
+        _s.themed_ss(self, "DevicePopover {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:6px; }}")
         self._store = None
         self._current_key = ""
         self._build_ui()
@@ -113,25 +101,19 @@ class DevicePopover(QFrame):
         # Header
         hdr = QFrame()
         hdr.setFixedHeight(36)
-        hdr.setStyleSheet(
-            f"background:{BG_DARK}; border-bottom:1px solid {BORDER};"
-            " border-top-left-radius:6px; border-top-right-radius:6px;"
-        )
+        _s.themed_ss(hdr, "background:{BG_DARK}; border-bottom:1px solid {BORDER};"
+            " border-top-left-radius:6px; border-top-right-radius:6px;")
         hlay = QHBoxLayout(hdr)
         hlay.setContentsMargins(12, 0, 8, 0)
         hlay.setSpacing(6)
 
         self._name_lbl = QLabel("Device Info")
-        self._name_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._name_lbl, "color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold;"
+            " background:transparent; border:none;")
 
         self._alert_badge = QLabel()
-        self._alert_badge.setStyleSheet(
-            f"color:white; font-size:9px; font-weight:bold;"
-            f" background:{RED}; border-radius:3px; padding:1px 5px; border:none;"
-        )
+        _s.themed_ss(self._alert_badge, "color:white; font-size:9px; font-weight:bold;"
+            " background:{RED}; border-radius:3px; padding:1px 5px; border:none;")
         self._alert_badge.setVisible(False)
 
         hlay.addWidget(self._name_lbl, 1)
@@ -140,7 +122,7 @@ class DevicePopover(QFrame):
 
         # Body
         body = QFrame()
-        body.setStyleSheet(f"background:{BG_CARD}; border:none;")
+        _s.themed_ss(body, "background:{BG_CARD}; border:none;")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(12, 10, 12, 8)
         bl.setSpacing(4)
@@ -160,10 +142,8 @@ class DevicePopover(QFrame):
 
         # Footer buttons
         ftr = QFrame()
-        ftr.setStyleSheet(
-            f"background:{BG_DARK}; border-top:1px solid {BORDER};"
-            " border-bottom-left-radius:6px; border-bottom-right-radius:6px;"
-        )
+        _s.themed_ss(ftr, "background:{BG_DARK}; border-top:1px solid {BORDER};"
+            " border-bottom-left-radius:6px; border-bottom-right-radius:6px;")
         flay = QHBoxLayout(ftr)
         flay.setContentsMargins(8, 6, 8, 6)
         flay.setSpacing(6)
@@ -171,23 +151,19 @@ class DevicePopover(QFrame):
         self._inv_btn = QPushButton("Open in Inventory →")
         self._inv_btn.setFixedHeight(24)
         self._inv_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._inv_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ opacity:0.9; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._inv_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:10px; padding:0 8px; }}"
+            "QPushButton:hover {{ opacity:0.9; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._inv_btn.clicked.connect(self._on_open_inventory)
 
         self._ti_btn = QPushButton("Threat Intel →")
         self._ti_btn.setFixedHeight(24)
         self._ti_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._ti_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT};"
-            f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._ti_btn, "QPushButton {{ background:transparent; color:{ACCENT};"
+            " border:1px solid {BORDER}; border-radius:3px; font-size:10px; padding:0 8px; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._ti_btn.clicked.connect(self._on_open_threat_intel)
 
         flay.addWidget(self._inv_btn)
@@ -197,9 +173,7 @@ class DevicePopover(QFrame):
     @staticmethod
     def _row_label() -> QLabel:
         lbl = QLabel()
-        lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         lbl.setVisible(False)
         return lbl
 

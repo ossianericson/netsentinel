@@ -19,14 +19,13 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     alpha,
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
 )
 
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
 
 from modules.device_admin import update_device_ha_info
+from ui import styles as _s
 
 class _DeviceLabelDialog(QDialog):
     """Edit custom name, tags, and notes for a known device."""
@@ -38,13 +37,11 @@ class _DeviceLabelDialog(QDialog):
         self.setWindowTitle("Edit Device")
         self.setMinimumWidth(380)
         self.setModal(True)
-        self.setStyleSheet(
-            f"QDialog {{ background:{BG_CARD}; }}"
-            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
-            f"QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self, "QDialog {{ background:{BG_CARD}; }}"
+            "QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
+            "QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}")
 
         known = store.get_known_devices()
         device = known.get(mac.lower()) or known.get(mac)
@@ -54,8 +51,8 @@ class _DeviceLabelDialog(QDialog):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        hdr = QLabel(f"Device  <span style='color:{TEXT_MUTED};font-size:10px;'>{mac}</span>")
-        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        hdr = QLabel(f"Device  <span style='color:{_s.TEXT_MUTED};font-size:10px;'>{mac}</span>")
+        _s.themed_ss(hdr, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         lay.addWidget(hdr)
 
         form = QFormLayout()
@@ -80,7 +77,7 @@ class _DeviceLabelDialog(QDialog):
 
         def _lbl(t: str) -> QLabel:
             l = QLabel(t)
-            l.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            _s.themed_ss(l, "font-size:11px; color:{TEXT_MUTED};")
             return l
 
         form.addRow(_lbl("Name"), self._name)
@@ -92,16 +89,14 @@ class _DeviceLabelDialog(QDialog):
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
         btns.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0xdd)}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0xdd)}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
         )
-        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btns.button(QDialogButtonBox.StandardButton.Cancel), "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:4px 14px; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btns.accepted.connect(self._save)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)
@@ -142,10 +137,8 @@ class _DeviceDrawer(QFrame):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("deviceDrawer")
-        self.setStyleSheet(
-            f"QFrame#deviceDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}"
-            f"QLabel {{ background:transparent; border:none; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self, "QFrame#deviceDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}"
+            "QLabel {{ background:transparent; border:none; color:{TEXT_PRIMARY}; }}")
         self.setFixedWidth(self._DRAWER_WIDTH)
         self.setVisible(False)
 
@@ -156,33 +149,27 @@ class _DeviceDrawer(QFrame):
         # ── Header (always visible above tabs) ───────────────────────────────
         hdr_row = QHBoxLayout()
         self._title_lbl = QLabel("Device")
-        self._title_lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-        )
+        _s.themed_ss(self._title_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         close_btn = QPushButton("×")
         close_btn.setFixedSize(22, 22)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:15px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:15px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         close_btn.clicked.connect(self.close_drawer)
         hdr_row.addWidget(self._title_lbl, 1)
         hdr_row.addWidget(close_btn)
         lay.addLayout(hdr_row)
 
         self._mac_lbl = QLabel("")
-        self._mac_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _s.themed_ss(self._mac_lbl, "font-size:10px; color:{TEXT_MUTED};")
         lay.addWidget(self._mac_lbl)
 
         # ── Tab widget ────────────────────────────────────────────────────────
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet(
-            f"QTabWidget::pane {{ border:1px solid {BORDER}; }}"
-            f"QTabBar::tab {{ font-size:10px; padding:3px 10px; color:{TEXT_SECONDARY}; }}"
-            f"QTabBar::tab:selected {{ color:{ACCENT}; font-weight:bold; }}"
-        )
+        _s.themed_ss(self._tabs, "QTabWidget::pane {{ border:1px solid {BORDER}; }}"
+            "QTabBar::tab {{ font-size:10px; padding:3px 10px; color:{TEXT_SECONDARY}; }}"
+            "QTabBar::tab:selected {{ color:{ACCENT}; font-weight:bold; }}")
         lay.addWidget(self._tabs, 1)
 
         # ── Details tab ───────────────────────────────────────────────────────
@@ -194,8 +181,8 @@ class _DeviceDrawer(QFrame):
         def _row(label: str, value_lbl: QLabel) -> None:
             r = QHBoxLayout()
             l = QLabel(label)
-            l.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; min-width:90px;")
-            value_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            _s.themed_ss(l, "font-size:10px; color:{TEXT_MUTED}; min-width:90px;")
+            _s.themed_ss(value_lbl, "font-size:10px; color:{TEXT_PRIMARY};")
             r.addWidget(l)
             r.addWidget(value_lbl, 1)
             _details_lay.addLayout(r)
@@ -233,7 +220,7 @@ class _DeviceDrawer(QFrame):
         _scroll = QScrollArea()
         _scroll.setWidgetResizable(True)
         _scroll.setWidget(self._history_inner)
-        _scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{BG_CARD}; }}")
+        _s.themed_ss(_scroll, "QScrollArea {{ border:none; background:{BG_CARD}; }}")
         _hist_outer.addWidget(_scroll, 1)
         self._tabs.addTab(_hist_container, "History")
 
@@ -280,7 +267,7 @@ class _DeviceDrawer(QFrame):
 
         if store is None:
             _lbl = QLabel("No store available")
-            _lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+            _s.themed_ss(_lbl, "font-size:10px; color:{TEXT_MUTED};")
             self._history_layout.addWidget(_lbl)
             self._history_layout.addStretch()
             return
@@ -293,20 +280,20 @@ class _DeviceDrawer(QFrame):
 
         if not events:
             _lbl = QLabel("No history recorded yet")
-            _lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; padding:4px;")
+            _s.themed_ss(_lbl, "font-size:10px; color:{TEXT_MUTED}; padding:4px;")
             self._history_layout.addWidget(_lbl)
             self._history_layout.addStretch()
             return
 
         _COLORS = {
-            "ip_changed":        RED,
-            "hostname_changed":  AMBER,
-            "class_changed":     GREEN,
-            "vendor_changed":    GREEN,
-            "first_seen":        GREEN,
-            "went_offline":      RED,
-            "came_online":       GREEN,
-            "annotation_changed": ACCENT,
+            "ip_changed":        _s.RED,
+            "hostname_changed":  _s.AMBER,
+            "class_changed":     _s.GREEN,
+            "vendor_changed":    _s.GREEN,
+            "first_seen":        _s.GREEN,
+            "went_offline":      _s.RED,
+            "came_online":       _s.GREEN,
+            "annotation_changed": _s.ACCENT,
         }
         _LABELS = {
             "ip_changed":        "IP changed",
@@ -321,7 +308,7 @@ class _DeviceDrawer(QFrame):
 
         for ev in events:
             etype = ev.get("event_type", "")
-            color = _COLORS.get(etype, TEXT_MUTED)
+            color = _COLORS.get(etype, _s.TEXT_MUTED)
             label = _LABELS.get(etype, etype)
             old_v = ev.get("old_value", "")
             new_v = ev.get("new_value", "")
@@ -354,12 +341,12 @@ class _DeviceDrawer(QFrame):
             dot.setStyleSheet(f"color:{color}; font-size:8px; background:transparent;")
             dot.setFixedWidth(10)
 
-            text_lbl = QLabel(f"<b>{label}</b>" + (f"<br><span style='color:{TEXT_MUTED};'>{_desc}</span>" if _desc else ""))
-            text_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            text_lbl = QLabel(f"<b>{label}</b>" + (f"<br><span style='color:{_s.TEXT_MUTED};'>{_desc}</span>" if _desc else ""))
+            _s.themed_ss(text_lbl, "font-size:10px; color:{TEXT_PRIMARY};")
             text_lbl.setWordWrap(True)
 
             time_lbl = QLabel(_rel)
-            time_lbl.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED};")
+            _s.themed_ss(time_lbl, "font-size:9px; color:{TEXT_MUTED};")
             time_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
 
             row_lay.addWidget(dot)
@@ -407,13 +394,13 @@ class _DeviceDrawer(QFrame):
 # ── Event type display config ─────────────────────────────────────────────────
 
 _EVENT_STYLE: dict[str, tuple[str, str]] = {
-    # event_type: (badge_color, label)
-    "JOINED":    (GREEN,  "JOINED"),
-    "LEFT":      (AMBER,  "LEFT"),
-    "DOWN":      (RED,    "DOWN"),
-    "UP":        (GREEN,  "UP"),
-    "DEGRADED":  (AMBER,  "DEGRADED"),
-    "RECOVERED": (GREEN,  "RECOVERED"),
+    # event_type: (badge_color_token, label) — colour resolved live via _s in _badge_item
+    "JOINED":    ("GREEN",  "JOINED"),
+    "LEFT":      ("AMBER",  "LEFT"),
+    "DOWN":      ("RED",    "DOWN"),
+    "UP":        ("GREEN",  "UP"),
+    "DEGRADED":  ("AMBER",  "DEGRADED"),
+    "RECOVERED": ("GREEN",  "RECOVERED"),
 }
 
 _ALL_TYPES = list(_EVENT_STYLE.keys())
@@ -425,7 +412,7 @@ _WINDOWS = {"1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
 
 def _badge_item(text: str, color: str) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
-    item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(color))
+    item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(getattr(_s, color)))
     item.setFont(
         __import__("PyQt6.QtGui", fromlist=["QFont"]).QFont("Segoe UI", 9, 75)  # Bold
     )
@@ -452,18 +439,16 @@ class _ScanCompareDialog(QDialog):
         self._sessions = sessions  # list of (ts, label)
         self._ts_a = 0
         self._ts_b = 0
-        self.setStyleSheet(
-            f"QDialog {{ background:{BG_CARD}; }}"
-            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; padding:3px 6px; font-size:11px; }}"
-        )
+        _s.themed_ss(self, "QDialog {{ background:{BG_CARD}; }}"
+            "QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; padding:3px 6px; font-size:11px; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
         hdr = QLabel("Compare two scan sessions")
-        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        _s.themed_ss(hdr, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         lay.addWidget(hdr)
 
         desc = QLabel(
@@ -471,7 +456,7 @@ class _ScanCompareDialog(QDialog):
             "New devices appear green; devices that disappeared appear red."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(desc, "font-size:11px; color:{TEXT_SECONDARY};")
         lay.addWidget(desc)
 
         labels = [s[1] for s in sessions]
@@ -482,7 +467,7 @@ class _ScanCompareDialog(QDialog):
 
         def _lbl(t):
             l = QLabel(t)
-            l.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            _s.themed_ss(l, "font-size:11px; color:{TEXT_MUTED};")
             return l
 
         self._combo_a = QComboBox()
@@ -502,16 +487,14 @@ class _ScanCompareDialog(QDialog):
         )
         btns.button(QDialogButtonBox.StandardButton.Ok).setText("Compare")
         btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0xdd)}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0xdd)}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
         )
-        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btns.button(QDialogButtonBox.StandardButton.Cancel), "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:4px 14px; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btns.accepted.connect(self._on_accept)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)

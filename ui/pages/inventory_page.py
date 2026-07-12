@@ -37,12 +37,6 @@ from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from ui.styles import (
     alpha,
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, BTN_DISABLED_BORDER,
-    CARD_RADIUS, GREEN, RED,
-    TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, TH_BG, TH_TEXT,
-    WHITE,
 )
 
 if TYPE_CHECKING:
@@ -56,6 +50,7 @@ from modules.network_segments import upsert_segment
 from ui.widgets.inventory_dialogs import (
     _DeviceLabelDialog, _TypeOverrideDialog, _ScanCompareDialog, _SegmentEditorDialog,
 )
+from ui import styles as _s
 
 # ── Device history drawer (DEVICE-2) ─────────────────────────────────────────
 
@@ -69,10 +64,8 @@ class _DeviceDrawer(QFrame):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("deviceDrawer")
-        self.setStyleSheet(
-            f"QFrame#deviceDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}"
-            f"QLabel {{ background:transparent; border:none; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self, "QFrame#deviceDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}"
+            "QLabel {{ background:transparent; border:none; color:{TEXT_PRIMARY}; }}")
         self.setFixedWidth(self._DRAWER_WIDTH)
         self.setVisible(False)
 
@@ -85,23 +78,17 @@ class _DeviceDrawer(QFrame):
         outer_lay.setSpacing(0)
 
         hdr_frame = QFrame()
-        hdr_frame.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(hdr_frame, "QFrame {{ background:{BG_CARD}; border-bottom:1px solid {BORDER}; }}")
         hdr_row = QHBoxLayout(hdr_frame)
         hdr_row.setContentsMargins(14, 10, 10, 10)
         self._title_lbl = QLabel("Device")
-        self._title_lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-        )
+        _s.themed_ss(self._title_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         close_btn = QPushButton("×")
         close_btn.setFixedSize(22, 22)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:15px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:15px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         close_btn.clicked.connect(self.close_drawer)
         hdr_row.addWidget(self._title_lbl, 1)
         hdr_row.addWidget(close_btn)
@@ -126,31 +113,29 @@ class _DeviceDrawer(QFrame):
         scroll.setWidget(body)
 
         self._mac_lbl = QLabel("")
-        self._mac_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _s.themed_ss(self._mac_lbl, "font-size:10px; color:{TEXT_MUTED};")
         lay.addWidget(self._mac_lbl)
 
         def _sep() -> None:
             s = QFrame()
             s.setFrameShape(QFrame.Shape.HLine)
-            s.setStyleSheet(f"color:{BORDER}; background:{BORDER}; max-height:1px;")
+            _s.themed_ss(s, "color:{BORDER}; background:{BORDER}; max-height:1px;")
             lay.addWidget(s)
 
         def _info_row(label: str, val_lbl: QLabel) -> None:
             r = QHBoxLayout()
             l = QLabel(label)
-            l.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; min-width:90px;")
-            val_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            _s.themed_ss(l, "font-size:10px; color:{TEXT_MUTED}; min-width:90px;")
+            _s.themed_ss(val_lbl, "font-size:10px; color:{TEXT_PRIMARY};")
             r.addWidget(l)
             r.addWidget(val_lbl, 1)
             lay.addLayout(r)
 
         def _section_hdr(title: str) -> None:
             h = QLabel(title)
-            h.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
-                f" text-transform:uppercase; letter-spacing:1px;"
-                f" padding-top:4px;"
-            )
+            _s.themed_ss(h, "font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+                " text-transform:uppercase; letter-spacing:1px;"
+                " padding-top:4px;")
             lay.addWidget(h)
 
         # ── Classification section (Sprint 6) ─────────────────────────────────
@@ -161,46 +146,38 @@ class _DeviceDrawer(QFrame):
         _cf_lay.setSpacing(3)
 
         _ch = QLabel("CLASSIFICATION")
-        _ch.setStyleSheet(
-            f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
-            f" text-transform:uppercase; letter-spacing:1px;"
-        )
+        _s.themed_ss(_ch, "font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+            " text-transform:uppercase; letter-spacing:1px;")
         _cf_lay.addWidget(_ch)
 
         _ct_row = QHBoxLayout()
         self._class_type_val = QLabel("—")
-        self._class_type_val.setStyleSheet(
-            f"font-size:10px; font-weight:bold; color:{TEXT_PRIMARY};"
-        )
+        _s.themed_ss(self._class_type_val, "font-size:10px; font-weight:bold; color:{TEXT_PRIMARY};")
         self._class_override_badge = QLabel("★ Override")
         self._class_override_badge.setVisible(False)
-        self._class_override_badge.setStyleSheet(
-            f"font-size:9px; color:{ACCENT}; padding:1px 4px;"
-            f" border:1px solid {ACCENT}; border-radius:2px;"
-        )
+        _s.themed_ss(self._class_override_badge, "font-size:9px; color:{ACCENT}; padding:1px 4px;"
+            " border:1px solid {ACCENT}; border-radius:2px;")
         _ct_row.addWidget(self._class_type_val)
         _ct_row.addWidget(self._class_override_badge)
         _ct_row.addStretch()
         _cf_lay.addLayout(_ct_row)
 
         self._class_conf_val = QLabel("Confidence: —")
-        self._class_conf_val.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _s.themed_ss(self._class_conf_val, "font-size:10px; color:{TEXT_MUTED};")
         _cf_lay.addWidget(self._class_conf_val)
 
         self._class_evidence_val = QLabel("")
-        self._class_evidence_val.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _s.themed_ss(self._class_evidence_val, "font-size:10px; color:{TEXT_MUTED};")
         self._class_evidence_val.setWordWrap(True)
         _cf_lay.addWidget(self._class_evidence_val)
 
         self._class_clear_btn = QPushButton("Clear Override")
         self._class_clear_btn.setFixedHeight(24)
         self._class_clear_btn.setVisible(False)
-        self._class_clear_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{RED}; border:1px solid {RED};"
-            f" border-radius:3px; font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._class_clear_btn, "QPushButton {{ background:{BG_CARD}; color:{RED}; border:1px solid {RED};"
+            " border-radius:3px; font-size:10px; padding:0 8px; }}"
+            "QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}")
         self._class_clear_btn.clicked.connect(self._clear_type_override)
         _cf_lay.addWidget(self._class_clear_btn)
 
@@ -208,9 +185,7 @@ class _DeviceDrawer(QFrame):
 
         self._class_sep = QFrame()
         self._class_sep.setFrameShape(QFrame.Shape.HLine)
-        self._class_sep.setStyleSheet(
-            f"color:{BORDER}; background:{BORDER}; max-height:1px;"
-        )
+        _s.themed_ss(self._class_sep, "color:{BORDER}; background:{BORDER}; max-height:1px;")
         self._class_sep.setVisible(False)
         lay.addWidget(self._class_sep)
 
@@ -241,9 +216,9 @@ class _DeviceDrawer(QFrame):
 
         _field_ss = (
             f"QLineEdit, QPlainTextEdit {{"
-            f" background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:3px; font-size:10px; }}"
-            f"QLineEdit:focus, QPlainTextEdit:focus {{ border-color:{ACCENT}; }}"
+            f" background:{_s.BG_DARK}; color:{_s.TEXT_PRIMARY};"
+            f" border:1px solid {_s.BORDER}; border-radius:3px; padding:3px; font-size:10px; }}"
+            f"QLineEdit:focus, QPlainTextEdit:focus {{ border-color:{_s.ACCENT}; }}"
         )
         form_frame = QFrame()
         form_frame.setStyleSheet(_field_ss)
@@ -254,7 +229,7 @@ class _DeviceDrawer(QFrame):
 
         def _flbl(t: str) -> QLabel:
             lb = QLabel(t)
-            lb.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+            _s.themed_ss(lb, "font-size:10px; color:{TEXT_MUTED};")
             return lb
 
         self._ann_label    = QLineEdit()
@@ -278,12 +253,10 @@ class _DeviceDrawer(QFrame):
 
         save_btn = QPushButton("Save Changes")
         save_btn.setFixedHeight(26)
-        save_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:10px; padding:0 12px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(save_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:10px; padding:0 12px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         save_btn.clicked.connect(self._save_annotations)
         lay.addWidget(save_btn)
 
@@ -438,7 +411,7 @@ class _DeviceDrawer(QFrame):
             hist = []  # non-fatal — table may not exist on first run
         if not hist:
             empty = QLabel("No IP history recorded yet")
-            empty.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; padding:2px 0;")
+            _s.themed_ss(empty, "font-size:10px; color:{TEXT_MUTED}; padding:2px 0;")
             self._ip_history_body.addWidget(empty)
             return
         for entry in hist:
@@ -446,7 +419,7 @@ class _DeviceDrawer(QFrame):
                 f"{entry['ip']}  ·  {_fmt_ago(entry['last_seen'])}  "
                 f"({entry['seen_count']}×)"
             )
-            row_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            _s.themed_ss(row_lbl, "font-size:10px; color:{TEXT_PRIMARY};")
             self._ip_history_body.addWidget(row_lbl)
 
     def _rebuild_timeline(self, mac: str, store: "Optional[MetricStore]") -> None:
@@ -496,7 +469,7 @@ class _DeviceDrawer(QFrame):
 
         if not entries:
             empty = QLabel("No timeline events recorded yet")
-            empty.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; padding:2px 0;")
+            _s.themed_ss(empty, "font-size:10px; color:{TEXT_MUTED}; padding:2px 0;")
             self._timeline_body.addWidget(empty)
             return
 
@@ -504,7 +477,7 @@ class _DeviceDrawer(QFrame):
         for _, text in entries[:15]:
             row_lbl = QLabel(text)
             row_lbl.setWordWrap(True)
-            row_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            _s.themed_ss(row_lbl, "font-size:10px; color:{TEXT_PRIMARY};")
             self._timeline_body.addWidget(row_lbl)
 
     def _save_annotations(self) -> None:
@@ -577,13 +550,13 @@ def _fmt_ago(ts_str: str) -> str:
 # ── Event type display config ─────────────────────────────────────────────────
 
 _EVENT_STYLE: dict[str, tuple[str, str]] = {
-    # event_type: (badge_color, label)
-    "JOINED":    (GREEN,  "JOINED"),
-    "LEFT":      (AMBER,  "LEFT"),
-    "DOWN":      (RED,    "DOWN"),
-    "UP":        (GREEN,  "UP"),
-    "DEGRADED":  (AMBER,  "DEGRADED"),
-    "RECOVERED": (GREEN,  "RECOVERED"),
+    # event_type: (badge_color_token, label) — colour resolved live via _s at use
+    "JOINED":    ("GREEN",  "JOINED"),
+    "LEFT":      ("AMBER",  "LEFT"),
+    "DOWN":      ("RED",    "DOWN"),
+    "UP":        ("GREEN",  "UP"),
+    "DEGRADED":  ("AMBER",  "DEGRADED"),
+    "RECOVERED": ("GREEN",  "RECOVERED"),
 }
 
 _ALL_TYPES = list(_EVENT_STYLE.keys())
@@ -595,7 +568,7 @@ _WINDOWS = {"1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
 
 def _badge_item(text: str, color: str) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
-    item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(color))
+    item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(getattr(_s, color)))
     item.setFont(
         __import__("PyQt6.QtGui", fromlist=["QFont"]).QFont("Segoe UI", 9, 75)  # Bold
     )
@@ -704,9 +677,9 @@ class InventoryPage(QWidget):
 
         # Title — always visible
         t = QLabel("Inventory Change History")
-        t.setStyleSheet(f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};")
+        _s.themed_ss(t, "font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};")
         s = QLabel("Device join, leave, and state-change events — recorded by the background monitor")
-        s.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(s, "font-size:11px; color:{TEXT_SECONDARY};")
         root.addWidget(t)
         root.addWidget(s)
 
@@ -736,18 +709,14 @@ class InventoryPage(QWidget):
         # ── Segment filter bar (hidden until scan data arrives) ───────────────
         self._seg_bar_frame = QFrame()
         self._seg_bar_frame.setVisible(False)
-        self._seg_bar_frame.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; padding:4px 8px; }}"
-        )
+        _s.themed_ss(self._seg_bar_frame, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; padding:4px 8px; }}")
         seg_bar_outer = QHBoxLayout(self._seg_bar_frame)
         seg_bar_outer.setContentsMargins(8, 4, 8, 4)
         seg_bar_outer.setSpacing(0)
         _seg_lbl = QLabel("Segment:")
-        _seg_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
-            f" background:transparent; border:none; padding-right:6px;"
-        )
+        _s.themed_ss(_seg_lbl, "font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; padding-right:6px;")
         seg_bar_outer.addWidget(_seg_lbl)
         self._seg_scroll = QScrollArea()
         self._seg_scroll.setWidgetResizable(True)
@@ -769,28 +738,22 @@ class InventoryPage(QWidget):
         # ── Room/Owner group filter bar (S5-2, hidden until annotations exist) ─
         self._group_bar_frame = QFrame()
         self._group_bar_frame.setVisible(False)
-        self._group_bar_frame.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; padding:4px 8px; }}"
-        )
+        _s.themed_ss(self._group_bar_frame, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; padding:4px 8px; }}")
         group_bar_outer = QHBoxLayout(self._group_bar_frame)
         group_bar_outer.setContentsMargins(8, 4, 8, 4)
         group_bar_outer.setSpacing(6)
         _group_lbl = QLabel("Group:")
-        _group_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
-            f" background:transparent; border:none; padding-right:6px;"
-        )
+        _s.themed_ss(_group_lbl, "font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; padding-right:6px;")
         group_bar_outer.addWidget(_group_lbl)
         self._group_dim_combo = QComboBox()
         self._group_dim_combo.addItem("Room", "location")
         self._group_dim_combo.addItem("Owner", "owner")
         self._group_dim_combo.setFixedHeight(24)
-        self._group_dim_combo.setStyleSheet(
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            f" font-size:11px; }}"
-        )
+        _s.themed_ss(self._group_dim_combo, "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
+            " font-size:11px; }}")
         self._group_dim_combo.currentIndexChanged.connect(self._on_group_dim_changed)
         group_bar_outer.addWidget(self._group_dim_combo)
         self._group_scroll = QScrollArea()
@@ -813,29 +776,21 @@ class InventoryPage(QWidget):
         # ── Current Devices snapshot card ──────────────────────────────────────
         snap_card = QFrame()
         snap_card.setObjectName("snapCard")
-        snap_card.setStyleSheet(
-            f"QFrame#snapCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(snap_card, "QFrame#snapCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         snap_card_lay = QVBoxLayout(snap_card)
         snap_card_lay.setContentsMargins(0, 0, 0, 0)
         snap_card_lay.setSpacing(0)
 
         snap_hdr = QFrame()
-        snap_hdr.setStyleSheet(
-            f"QFrame {{ background:{TH_BG}; border-radius:{CARD_RADIUS} {CARD_RADIUS} 0 0; }}"
-        )
+        _s.themed_ss(snap_hdr, "QFrame {{ background:{TH_BG}; border-radius:{CARD_RADIUS} {CARD_RADIUS} 0 0; }}")
         snap_hdr_lay = QHBoxLayout(snap_hdr)
         snap_hdr_lay.setContentsMargins(10, 5, 10, 5)
         snap_hdr_lay.setSpacing(8)
         snap_title = QLabel("Current Devices")
-        snap_title.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TH_TEXT}; background:transparent; border:none;"
-        )
+        _s.themed_ss(snap_title, "font-size:11px; font-weight:bold; color:{TH_TEXT}; background:transparent; border:none;")
         self._snap_count_lbl = QLabel("Run a scan to see all devices")
-        self._snap_count_lbl.setStyleSheet(
-            f"font-size:10px; color:{TH_TEXT}; background:transparent; border:none; opacity:0.7;"
-        )
+        _s.themed_ss(self._snap_count_lbl, "font-size:10px; color:{TH_TEXT}; background:transparent; border:none; opacity:0.7;")
         self._hide_offline_btn = QPushButton("Hide offline")
         self._hide_offline_btn.setCheckable(True)
         self._hide_offline_btn.setFixedHeight(20)
@@ -843,11 +798,11 @@ class InventoryPage(QWidget):
             "Hide cached/stale devices — devices not seen in this scan"
         )
         self._hide_offline_btn.setStyleSheet(
-            f"QPushButton {{ font-size:10px; color:{TH_TEXT}; background:transparent;"
-            f" border:1px solid {alpha(TH_TEXT, 0x44)}; border-radius:3px; padding:0 7px; }}"
-            f"QPushButton:hover {{ background:{alpha(TH_TEXT, 0x22)}; }}"
-            f"QPushButton:checked {{ background:{alpha(TH_TEXT, 0x33)}; border-color:{TH_TEXT}; }}"
-            f"QPushButton:pressed {{ background:{alpha(TH_TEXT, 0x22)}; color:{TH_TEXT}; }}"
+            f"QPushButton {{ font-size:10px; color:{_s.TH_TEXT}; background:transparent;"
+            f" border:1px solid {alpha(_s.TH_TEXT, 0x44)}; border-radius:3px; padding:0 7px; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.TH_TEXT, 0x22)}; }}"
+            f"QPushButton:checked {{ background:{alpha(_s.TH_TEXT, 0x33)}; border-color:{_s.TH_TEXT}; }}"
+            f"QPushButton:pressed {{ background:{alpha(_s.TH_TEXT, 0x22)}; color:{_s.TH_TEXT}; }}"
         )
         self._hide_offline_btn.toggled.connect(self._on_hide_offline_toggled)
         snap_hdr_lay.addWidget(snap_title)
@@ -859,48 +814,38 @@ class InventoryPage(QWidget):
         # ── Health summary top-line (S5-3) ─────────────────────────────────────
         self._health_summary_lbl = QLabel("")
         self._health_summary_lbl.setVisible(False)
-        self._health_summary_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:{BG_ALT_ROW};"
-            f" border:none; border-bottom:1px solid {BORDER}; padding:4px 10px;"
-        )
+        _s.themed_ss(self._health_summary_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:{BG_ALT_ROW};"
+            " border:none; border-bottom:1px solid {BORDER}; padding:4px 10px;")
         snap_card_lay.addWidget(self._health_summary_lbl)
 
         # ── Unknown-device alert prompt (S9-3, one-time, dismissible) ─────────
         self._unknown_device_prompt = QFrame()
         self._unknown_device_prompt.setVisible(False)
-        self._unknown_device_prompt.setStyleSheet(
-            f"QFrame {{ background:{BG_HOVER}; border:none;"
-            f" border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self._unknown_device_prompt, "QFrame {{ background:{BG_HOVER}; border:none;"
+            " border-bottom:1px solid {BORDER}; }}")
         _udp_lay = QHBoxLayout(self._unknown_device_prompt)
         _udp_lay.setContentsMargins(10, 4, 8, 4)
         _udp_lay.setSpacing(8)
         self._unknown_device_lbl = QLabel("")
         self._unknown_device_lbl.setWordWrap(True)
-        self._unknown_device_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._unknown_device_lbl, "font-size:10px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         _udp_lay.addWidget(self._unknown_device_lbl, 1)
         _udp_btn = QPushButton("Set up alerts →")
         _udp_btn.setFlat(True)
         _udp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _udp_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(_udp_btn, "QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         _udp_btn.clicked.connect(self._on_unknown_device_alert_clicked)
         _udp_lay.addWidget(_udp_btn)
         _udp_dismiss = QPushButton("×")
         _udp_dismiss.setFixedSize(18, 18)
         _udp_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
-        _udp_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:12px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(_udp_dismiss, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:12px; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}")
         _udp_dismiss.clicked.connect(self._dismiss_unknown_device_prompt)
         _udp_lay.addWidget(_udp_dismiss)
         snap_card_lay.addWidget(self._unknown_device_prompt)
@@ -915,8 +860,7 @@ class InventoryPage(QWidget):
         self._snap_table.verticalHeader().setDefaultSectionSize(24)
         self._snap_table.setShowGrid(False)
         self._snap_table.setSortingEnabled(True)
-        self._snap_table.setStyleSheet(
-            f"""
+        _s.themed_ss(self._snap_table, """
             QTableWidget {{
                 font-size:11px; color:{TEXT_PRIMARY};
                 background:{BG_CARD}; border:none; outline:none;
@@ -930,8 +874,7 @@ class InventoryPage(QWidget):
                 font-size:11px; font-weight:bold;
                 padding:4px 5px; border:none;
             }}
-            """
-        )
+            """)
         _sh = self._snap_table.horizontalHeader()
         _sh.resizeSection(0, 22)   # ●
         _sh.resizeSection(1, 24)   # Segment colour dot
@@ -960,9 +903,7 @@ class InventoryPage(QWidget):
 
         self._snap_empty_lbl = QLabel("Run a scan to see discovered devices here.")
         self._snap_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._snap_empty_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:12px; padding:24px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._snap_empty_lbl, "color:{TEXT_MUTED}; font-size:12px; padding:24px; background:transparent; border:none;")
         snap_card_lay.addWidget(self._snap_empty_lbl)
         self._snap_table.setVisible(False)
 
@@ -981,22 +922,18 @@ class InventoryPage(QWidget):
             ctrl_row.addWidget(btn)
         rb = QPushButton("↻ Refresh")
         rb.setFixedHeight(26)
-        rb.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{ACCENT}; background:{BG_CARD};"
-            f" border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(rb, "QPushButton {{ font-size:11px; color:{ACCENT}; background:{BG_CARD};"
+            " border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         rb.clicked.connect(self._refresh)
         ctrl_row.addWidget(rb)
         btn_compare = QPushButton("⊞ Compare Scans")
         btn_compare.setFixedHeight(26)
-        btn_compare.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _s.themed_ss(btn_compare, "QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         btn_compare.clicked.connect(self._open_compare_dialog)
         ctrl_row.addWidget(btn_compare)
         cl.addLayout(ctrl_row)
@@ -1005,24 +942,22 @@ class InventoryPage(QWidget):
         self._compare_banner = QFrame()
         self._compare_banner.setVisible(False)
         self._compare_banner.setStyleSheet(
-            f"QFrame {{ background:{alpha(ACCENT, 0x18)}; border:1px solid {alpha(ACCENT, 0x44)};"
+            f"QFrame {{ background:{alpha(_s.ACCENT, 0x18)}; border:1px solid {alpha(_s.ACCENT, 0x44)};"
             f" border-radius:3px; }}"
         )
         _cb_lay = QHBoxLayout(self._compare_banner)
         _cb_lay.setContentsMargins(10, 5, 10, 5)
         _cb_lay.setSpacing(10)
         self._compare_banner_lbl = QLabel("")
-        self._compare_banner_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{ACCENT}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._compare_banner_lbl, "font-size:11px; font-weight:bold; color:{ACCENT}; background:transparent; border:none;")
         _cb_lay.addWidget(self._compare_banner_lbl, 1)
         _back_btn = QPushButton("← Back to live view")
         _back_btn.setFixedHeight(24)
         _back_btn.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{ACCENT}; background:transparent;"
-            f" border:1px solid {ACCENT}; border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            f"QPushButton {{ font-size:11px; color:{_s.ACCENT}; background:transparent;"
+            f" border:1px solid {_s.ACCENT}; border-radius:3px; padding:0 10px; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0x22)}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
         )
         _back_btn.clicked.connect(self._exit_compare_mode)
         _cb_lay.addWidget(_back_btn)
@@ -1030,11 +965,11 @@ class InventoryPage(QWidget):
 
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_total   = self._make_kpi("Total Events",  "—", ACCENT)
-        self._kpi_joined  = self._make_kpi("Joined",        "—", GREEN)
-        self._kpi_left    = self._make_kpi("Left",          "—", AMBER)
-        self._kpi_down    = self._make_kpi("Down Events",   "—", RED)
-        self._kpi_devices = self._make_kpi("Devices Known", "—", ACCENT)
+        self._kpi_total   = self._make_kpi("Total Events",  "—", _s.ACCENT)
+        self._kpi_joined  = self._make_kpi("Joined",        "—", _s.GREEN)
+        self._kpi_left    = self._make_kpi("Left",          "—", _s.AMBER)
+        self._kpi_down    = self._make_kpi("Down Events",   "—", _s.RED)
+        self._kpi_devices = self._make_kpi("Devices Known", "—", _s.ACCENT)
         for w in (self._kpi_total, self._kpi_joined, self._kpi_left,
                   self._kpi_down, self._kpi_devices):
             kpi_row.addWidget(w)
@@ -1044,7 +979,7 @@ class InventoryPage(QWidget):
         filter_row = QHBoxLayout()
         filter_row.setSpacing(12)
         filter_lbl = QLabel("Filter:")
-        filter_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(filter_lbl, "font-size:11px; color:{TEXT_SECONDARY};")
         filter_row.addWidget(filter_lbl)
         _event_tips = {
             "JOINED":    "New device appeared on the network for the first time.",
@@ -1056,10 +991,10 @@ class InventoryPage(QWidget):
         }
         self._type_checks: dict[str, QCheckBox] = {}
         for et in _ALL_TYPES:
-            color, label = _EVENT_STYLE[et]
+            color, label = _EVENT_STYLE[et]   # color is a token name
             cb = QCheckBox(label)
             cb.setChecked(True)
-            cb.setStyleSheet(f"QCheckBox {{ font-size:11px; color:{color}; font-weight:bold; }}")
+            _s.themed_ss(cb, lambda c=color: f"QCheckBox {{ font-size:11px; color:{getattr(_s, c)}; font-weight:bold; }}")
             cb.setToolTip(_event_tips.get(et, ""))
             cb.toggled.connect(lambda checked, t=et: self._toggle_type(t, checked))
             self._type_checks[et] = cb
@@ -1069,12 +1004,10 @@ class InventoryPage(QWidget):
         btn_export_inv = QPushButton("↓ Export")
         btn_export_inv.setFixedHeight(24)
         btn_export_inv.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_export_inv.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
-            f" background:transparent; padding:0 10px; border-radius:3px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _s.themed_ss(btn_export_inv, "QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+            " background:transparent; padding:0 10px; border-radius:3px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         btn_export_inv.clicked.connect(self._export_csv)
         filter_row.addWidget(btn_export_inv)
         cl.addLayout(filter_row)
@@ -1083,7 +1016,7 @@ class InventoryPage(QWidget):
         tag_row_lay = QHBoxLayout()
         tag_row_lay.setSpacing(4)
         _tag_lbl = QLabel("Tags:")
-        _tag_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(_tag_lbl, "font-size:11px; color:{TEXT_SECONDARY};")
         tag_row_lay.addWidget(_tag_lbl)
         self._tag_chip_area = QHBoxLayout()
         self._tag_chip_area.setSpacing(4)
@@ -1093,9 +1026,7 @@ class InventoryPage(QWidget):
         cl.addLayout(tag_row_lay)
 
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
@@ -1114,8 +1045,7 @@ class InventoryPage(QWidget):
         self._table.verticalHeader().setDefaultSectionSize(24)
         self._table.setSortingEnabled(True)
         self._table.setShowGrid(False)
-        self._table.setStyleSheet(
-            f"""
+        _s.themed_ss(self._table, """
             QTableWidget {{
                 font-size:11px; color:{TEXT_PRIMARY};
                 background:{BG_CARD}; gridline-color:{BORDER};
@@ -1130,8 +1060,7 @@ class InventoryPage(QWidget):
                 padding:4px 5px; border:none;
                 border-right:1px solid TH_BORDER;
             }}
-            """
-        )
+            """)
         hdr = self._table.horizontalHeader()
         hdr.resizeSection(0, 22)   # ● status dot
         hdr.resizeSection(1, 140)  # Time
@@ -1242,16 +1171,12 @@ class InventoryPage(QWidget):
         # OUTPUT-5: bulk action bar (hidden until ≥2 rows selected)
         self._bulk_bar = QFrame()
         self._bulk_bar.setVisible(False)
-        self._bulk_bar.setStyleSheet(
-            f"QFrame {{ background:{BG_HOVER}; border-top:2px solid {ACCENT}; }}"
-        )
+        _s.themed_ss(self._bulk_bar, "QFrame {{ background:{BG_HOVER}; border-top:2px solid {ACCENT}; }}")
         _bb_lay = QHBoxLayout(self._bulk_bar)
         _bb_lay.setContentsMargins(12, 6, 12, 6)
         _bb_lay.setSpacing(10)
         self._bulk_count_lbl = QLabel("0 rows selected")
-        self._bulk_count_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._bulk_count_lbl, "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         _bb_lay.addWidget(self._bulk_count_lbl)
         _bb_lay.addStretch()
         for _lbl, _slot in [
@@ -1264,10 +1189,10 @@ class InventoryPage(QWidget):
             _b.setFixedHeight(24)
             _b.setCursor(Qt.CursorShape.PointingHandCursor)
             _b.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {alpha(ACCENT, 0x44)};"
+                f"QPushButton {{ background:transparent; color:{_s.ACCENT}; border:1px solid {alpha(_s.ACCENT, 0x44)};"
                 f" border-radius:3px; font-size:11px; padding:0 10px; }}"
-                f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0x22)}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
             )
             _b.clicked.connect(getattr(self, _slot))
             _bb_lay.addWidget(_b)
@@ -1281,9 +1206,7 @@ class InventoryPage(QWidget):
         cmp_lay.setContentsMargins(0, 0, 0, 0)
         cmp_lay.setSpacing(0)
         cmp_card = QFrame()
-        cmp_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(cmp_card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
         cmp_card_lay = QVBoxLayout(cmp_card)
         cmp_card_lay.setContentsMargins(0, 0, 0, 0)
         cmp_card_lay.setSpacing(0)
@@ -1305,8 +1228,7 @@ class InventoryPage(QWidget):
         _cmp_hdr.resizeSection(5, 130)
         _cmp_hdr.setStretchLastSection(False)
         _cmp_hdr.setSectionResizeMode(2, _cmp_hdr.ResizeMode.Stretch)
-        self._cmp_table.setStyleSheet(
-            f"""
+        _s.themed_ss(self._cmp_table, """
             QTableWidget {{
                 font-size:11px; color:{TEXT_PRIMARY};
                 background:{BG_CARD}; border:none; outline:none;
@@ -1320,8 +1242,7 @@ class InventoryPage(QWidget):
                 padding:4px 5px; border:none;
                 border-right:1px solid TH_BORDER;
             }}
-            """
-        )
+            """)
         cmp_card_lay.addWidget(self._cmp_table)
         cmp_lay.addWidget(cmp_card, 1)
         self._content_stack.addWidget(compare_page)
@@ -1420,29 +1341,29 @@ class InventoryPage(QWidget):
     def _tag_chip_style(active: bool) -> str:
         if active:
             return (
-                f"QPushButton {{ font-size:10px; font-weight:bold; color:{ACCENT};"
-                f" background:{alpha(ACCENT, 0x18)}; border:1px solid {ACCENT}; border-radius:10px;"
+                f"QPushButton {{ font-size:10px; font-weight:bold; color:{_s.ACCENT};"
+                f" background:{alpha(_s.ACCENT, 0x18)}; border:1px solid {_s.ACCENT}; border-radius:10px;"
                 f" padding:1px 8px; }}"
-                f"QPushButton:hover {{ background:{alpha(ACCENT, 0x30)}; }}"
+                f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0x30)}; }}"
             )
         return (
-            f"QPushButton {{ font-size:10px; color:{TEXT_MUTED};"
-            f" background:transparent; border:1px solid {BORDER}; border-radius:10px;"
+            f"QPushButton {{ font-size:10px; color:{_s.TEXT_MUTED};"
+            f" background:transparent; border:1px solid {_s.BORDER}; border-radius:10px;"
             f" padding:1px 8px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:hover {{ background:{_s.BG_HOVER}; }}"
         )
 
     @staticmethod
     def _zoom_style(active: bool) -> str:
         if active:
             return (
-                f"QPushButton {{ font-size:11px; background:{ACCENT}; color:{WHITE};"
-                f" border:1px solid {ACCENT}; border-radius:3px; }}"
+                f"QPushButton {{ font-size:11px; background:{_s.ACCENT}; color:{_s.WHITE};"
+                f" border:1px solid {_s.ACCENT}; border-radius:3px; }}"
             )
         return (
-            f"QPushButton {{ font-size:11px; background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {BTN_DISABLED_BORDER}; border-radius:3px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton {{ font-size:11px; background:{_s.BG_CARD}; color:{_s.ACCENT};"
+            f" border:1px solid {_s.BTN_DISABLED_BORDER}; border-radius:3px; }}"
+            f"QPushButton:hover {{ background:{_s.BG_HOVER}; }}"
         )
 
     # ── KPI helper ────────────────────────────────────────────────────────────
@@ -1452,22 +1373,18 @@ class InventoryPage(QWidget):
         f = QFrame()
         f.setObjectName("kpiTile")
         f.setStyleSheet(
-            f"QFrame#kpiTile {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#kpiTile {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
             f" border-left:3px solid {accent}; min-width:100px; max-width:180px; }}"
         )
         lay = QVBoxLayout(f)
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(1)
         lbl_w = QLabel(label.upper())
-        lbl_w.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY};"
-            "background:transparent; border:none;"
-        )
+        _s.themed_ss(lbl_w, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY};"
+            "background:transparent; border:none;")
         val_w = QLabel(value)
-        val_w.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
-            "background:transparent; border:none;"
-        )
+        _s.themed_ss(val_w, "font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
+            "background:transparent; border:none;")
         val_w.setObjectName("kpiVal")
         lay.addWidget(lbl_w)
         lay.addWidget(val_w)
@@ -1564,7 +1481,7 @@ class InventoryPage(QWidget):
             row = self._table.rowCount()
             self._table.insertRow(row)
             dt_str = datetime.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
-            color, _ = _EVENT_STYLE.get(evt.event_type, (TEXT_SECONDARY, evt.event_type))
+            color, _ = _EVENT_STYLE.get(evt.event_type, ("TEXT_SECONDARY", evt.event_type))
             hostname = (kd.hostname if kd and kd.hostname else "") or ""
             host_cell = custom_name or hostname or evt.ip or "—"
 
@@ -1572,11 +1489,11 @@ class InventoryPage(QWidget):
             from ui.widgets.pulsing_dot import PulsingDot
             _keys = {k for k in (evt.ip, evt.mac) if k}
             if _keys & _crit_hosts:
-                _dot_hex, _dot_tip = RED, "CRITICAL alert active"
+                _dot_hex, _dot_tip = _s.RED, "CRITICAL alert active"
             elif _keys & _alert_hosts:
-                _dot_hex, _dot_tip = AMBER, "Unacked alert active"
+                _dot_hex, _dot_tip = _s.AMBER, "Unacked alert active"
             else:
-                _dot_hex, _dot_tip = TEXT_MUTED, ""
+                _dot_hex, _dot_tip = _s.TEXT_MUTED, ""
             _dot = PulsingDot()
             _is_new = prev_ts > 0 and evt.ts > prev_ts
             _dot.set_status(
@@ -1624,8 +1541,8 @@ class InventoryPage(QWidget):
         from modules.device_tracker import get_all_annotations as _get_all_ann
         from modules.network_segments import classify_device_segment
         _RISK_COLOR = {
-            "HIGH": RED, "STORM": RED, "MEDIUM": AMBER,
-            "WARNING": AMBER, "LOW": GREEN, "CLEAN": GREEN,
+            "HIGH": _s.RED, "STORM": _s.RED, "MEDIUM": _s.AMBER,
+            "WARNING": _s.AMBER, "LOW": _s.GREEN, "CLEAN": _s.GREEN,
         }
         _annotations: dict = {}
         if self._store:
@@ -1669,19 +1586,19 @@ class InventoryPage(QWidget):
             # Confidence indicator prefix (★ override, ● high, ◑ medium, ○ low)
             if _is_ovr:
                 _ci_char  = "★"
-                _ci_color = ACCENT
+                _ci_color = _s.ACCENT
                 _ci_tip   = f"User override: {_overrides[_mac_key]}"
             elif conf >= 0.7 or _is_gw:
                 _ci_char  = "●"
-                _ci_color = GREEN
+                _ci_color = _s.GREEN
                 _ci_tip   = f"Confidence: {conf:.0%} (high)"
             elif conf >= 0.3:
                 _ci_char  = "◑"
-                _ci_color = AMBER
+                _ci_color = _s.AMBER
                 _ci_tip   = f"Confidence: {conf:.0%} (medium)"
             else:
                 _ci_char  = "○"
-                _ci_color = TEXT_MUTED
+                _ci_color = _s.TEXT_MUTED
                 _ci_tip   = "Confidence: unknown" if conf == 0.0 else f"Confidence: {conf:.0%} (low)"
             dtype_display = f"{_ci_char} {dtype or '—'}"
 
@@ -1699,25 +1616,25 @@ class InventoryPage(QWidget):
                               else getattr(d, "last_seen_ts", 0)) or 0
             if _display_state == "pinned":
                 dot_char  = "⬡"
-                dot_color = ACCENT
+                dot_color = _s.ACCENT
                 dot_tip   = "Pinned — always shown"
             elif _display_state in ("cached", "stale"):
                 _ago = _time.time() - _last_seen_ts if _last_seen_ts else 0
                 if _display_state == "cached":
                     dot_char  = "◌"
-                    dot_color = AMBER
+                    dot_color = _s.AMBER
                     _h = int(_ago // 3600)
                     _m = int((_ago % 3600) // 60)
                     dot_tip = f"Cached — last seen {_h}h {_m}m ago"
                 else:
                     dot_char  = "○"
-                    dot_color = TEXT_MUTED
+                    dot_color = _s.TEXT_MUTED
                     _days = int(_ago // 86400)
                     dot_tip = f"Stale — last seen {_days}d ago"
             else:
                 # Live scan result — use risk colour
                 dot_char  = "●"
-                dot_color = _RISK_COLOR.get(level, TEXT_MUTED)
+                dot_color = _RISK_COLOR.get(level, _s.TEXT_MUTED)
                 dot_tip   = f"Online  ·  Risk: {level}"
             dot_item = QTableWidgetItem(dot_char)
             dot_item.setForeground(QColor(dot_color))
@@ -1743,7 +1660,7 @@ class InventoryPage(QWidget):
                 seg_dot.setData(Qt.ItemDataRole.UserRole, seg_key)
             else:
                 seg_dot = QTableWidgetItem("○")
-                seg_dot.setForeground(QColor(TEXT_MUTED))
+                seg_dot.setForeground(QColor(_s.TEXT_MUTED))
                 seg_dot.setToolTip("Unknown segment")
                 seg_dot.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 seg_dot.setData(Qt.ItemDataRole.UserRole, None)
@@ -1754,7 +1671,7 @@ class InventoryPage(QWidget):
             for col, val in enumerate(_vals, 2):
                 item = _plain_item(val)
                 if col == 3 and label:
-                    item.setForeground(QColor(ACCENT))
+                    item.setForeground(QColor(_s.ACCENT))
                 elif col == 7:
                     item.setForeground(QColor(_ci_color))
                     item.setToolTip(_ci_tip)
@@ -1963,23 +1880,23 @@ class InventoryPage(QWidget):
         return btn
 
     def _apply_pill_style(self, btn: QPushButton, color: Optional[str], active: bool) -> None:
-        dot_color = color or ACCENT
+        dot_color = color or _s.ACCENT
         if active:
             btn.setStyleSheet(
-                f"QPushButton {{ background:{dot_color}22; color:{TEXT_PRIMARY};"
+                f"QPushButton {{ background:{dot_color}22; color:{_s.TEXT_PRIMARY};"
                 f" border:1.5px solid {dot_color}; border-radius:12px;"
                 f" font-size:11px; padding:0 10px; font-weight:bold; }}"
-                f"QPushButton:hover {{ background:{dot_color}33; color:{TEXT_PRIMARY}; }}"
-                f"QPushButton:pressed {{ background:{dot_color}44; color:{TEXT_PRIMARY}; }}"
+                f"QPushButton:hover {{ background:{dot_color}33; color:{_s.TEXT_PRIMARY}; }}"
+                f"QPushButton:pressed {{ background:{dot_color}44; color:{_s.TEXT_PRIMARY}; }}"
             )
         else:
             btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
-                f" border:1px solid {BORDER}; border-radius:12px;"
+                f"QPushButton {{ background:transparent; color:{_s.TEXT_SECONDARY};"
+                f" border:1px solid {_s.BORDER}; border-radius:12px;"
                 f" font-size:11px; padding:0 10px; }}"
-                f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY};"
+                f"QPushButton:hover {{ background:{_s.BG_HOVER}; color:{_s.TEXT_PRIMARY};"
                 f" border-color:{dot_color}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_SECONDARY}; }}"
             )
 
     def _toggle_segment(self, seg_key) -> None:
@@ -2068,10 +1985,8 @@ class InventoryPage(QWidget):
         """Right-click context menu on a segment pill."""
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         edit_act = menu.addAction("Edit Segment")
         action = menu.exec(self.cursor().pos())
         if action == edit_act:
@@ -2176,23 +2091,23 @@ class InventoryPage(QWidget):
         if logical_row >= len(self._rows):
             return QWidget()
         evt, vendor = self._rows[logical_row]
-        color, _ = _EVENT_STYLE.get(evt.event_type, (TEXT_SECONDARY, evt.event_type))
+        color, _ = _EVENT_STYLE.get(evt.event_type, ("TEXT_SECONDARY", evt.event_type))
 
         outer = QWidget()
-        outer.setStyleSheet(
-            f"QWidget {{ background:{BG_HOVER}; border:none;"
-            f" border-left:3px solid {color}; }}"
-        )
+        _s.themed_ss(outer, lambda c=color: (
+            f"QWidget {{ background:{_s.BG_HOVER}; border:none;"
+            f" border-left:3px solid {getattr(_s, c)}; }}"
+        ))
         lay = QHBoxLayout(outer)
         lay.setContentsMargins(16, 10, 16, 10)
         lay.setSpacing(32)
 
         def _hdr(t):
             l = QLabel(t)
-            l.setStyleSheet(f"font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
+            _s.themed_ss(l, "font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
             return l
 
-        def _val(t, c=TEXT_PRIMARY):
+        def _val(t, c=_s.TEXT_PRIMARY):
             l = QLabel(str(t))
             l.setStyleSheet(f"font-size:11px; color:{c}; background:transparent; border:none;")
             return l
@@ -2463,11 +2378,11 @@ class InventoryPage(QWidget):
         # Build table rows: (sort_key, mac, status, color, bg)
         table_rows = []
         for mac in new_macs:
-            table_rows.append((0, mac, "NEW", GREEN, f"{alpha(GREEN, 0x18)}"))
+            table_rows.append((0, mac, "NEW", _s.GREEN, f"{alpha(_s.GREEN, 0x18)}"))
         for mac in gone_macs:
-            table_rows.append((1, mac, "GONE", RED, f"{alpha(RED, 0x18)}"))
+            table_rows.append((1, mac, "GONE", _s.RED, f"{alpha(_s.RED, 0x18)}"))
         for mac in both_macs:
-            table_rows.append((2, mac, "UNCHANGED", TEXT_MUTED, BG_CARD))
+            table_rows.append((2, mac, "UNCHANGED", _s.TEXT_MUTED, _s.BG_CARD))
 
         self._cmp_table.setRowCount(0)
         for _sort, mac, status, color, bg in sorted(table_rows, key=lambda x: x[0]):
@@ -2488,7 +2403,7 @@ class InventoryPage(QWidget):
 
             for col, text in enumerate([status, host, mac, vendor, first], start=1):
                 item = QTableWidgetItem(text)
-                item.setForeground(QColor(color if col == 1 else TEXT_PRIMARY))
+                item.setForeground(QColor(color if col == 1 else _s.TEXT_PRIMARY))
                 item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 self._cmp_table.setItem(row, col, item)
 
