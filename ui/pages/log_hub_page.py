@@ -37,18 +37,14 @@ from PyQt6.QtWidgets import (
 from ui.tabs_helpers import _table as _make_table
 from ui.styles import (
     alpha,
-    ACCENT, ACCENT_DARK, AMBER,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_RADIUS, RED, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
 )
 
 from ui.pages.log_source_panel import (
     _LogSourcePanelMixin,
     _SOURCES, _MAX_ROWS, _LIVE_CHALLENGE_COOLDOWN,
-    _fmt_ts, _status_color, _build_live_scenario,
+    _fmt_ts, _status_color, _source_color, _build_live_scenario,
 )
+from ui import styles as _s
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -181,14 +177,12 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
 
         hdr = QLabel("Monitor")
         hdr.setFixedHeight(36)
-        hdr.setStyleSheet(
-            f"QLabel {{ background:{BG_DARK}; font-size:15px; font-weight:bold;"
-            f" color:{TEXT_PRIMARY}; padding:0 16px; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(hdr, "QLabel {{ background:{BG_DARK}; font-size:15px; font-weight:bold;"
+            " color:{TEXT_PRIMARY}; padding:0 16px; border-bottom:1px solid {BORDER}; }}")
         root.addWidget(hdr)
 
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         inner_lay = QVBoxLayout(inner)
         inner_lay.setContentsMargins(16, 10, 16, 12)
         inner_lay.setSpacing(8)
@@ -200,10 +194,8 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
 
         card = QFrame()
         card.setObjectName("logcard")
-        card.setStyleSheet(
-            f"QFrame#logcard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame#logcard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
@@ -212,17 +204,13 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._history_bar = QFrame()
         self._history_bar.setObjectName("historyBar")
         self._history_bar.setVisible(False)
-        self._history_bar.setStyleSheet(
-            f"QFrame#historyBar {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
-            f" border-radius:0; padding:0; }}"
-        )
+        _s.themed_ss(self._history_bar, "QFrame#historyBar {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
+            " border-radius:0; padding:0; }}")
         _hb_lay = QHBoxLayout(self._history_bar)
         _hb_lay.setContentsMargins(12, 6, 12, 6)
         _hb_lay.setSpacing(8)
         _hb_from_lbl = QLabel("From:")
-        _hb_from_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_hb_from_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         from PyQt6.QtCore import QDate, QTime
         _today = _dt.date.today()
         _yesterday = _today - _dt.timedelta(days=1)
@@ -234,9 +222,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._hist_from_time.setTime(QTime(0, 0))
         self._hist_from_time.setFixedWidth(72)
         _hb_to_lbl = QLabel("To:")
-        _hb_to_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_hb_to_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._hist_to_date = QDateEdit()
         self._hist_to_date.setCalendarPopup(True)
         self._hist_to_date.setDate(QDate(_today.year, _today.month, _today.day))
@@ -246,29 +232,23 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._hist_to_time.setFixedWidth(72)
         for _w in (self._hist_from_date, self._hist_from_time,
                    self._hist_to_date, self._hist_to_time):
-            _w.setStyleSheet(
-                f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px;"
-                f" padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY};"
-            )
+            _s.themed_ss(_w, "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px;"
+                " padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY};")
         _hb_load = QPushButton("Load")
         _hb_load.setFixedHeight(24)
         _hb_load.setCursor(Qt.CursorShape.PointingHandCursor)
-        _hb_load.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; padding:0 12px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(_hb_load, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; padding:0 12px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         _hb_load.clicked.connect(self._load_history_range)
         _hb_export = QPushButton("Export →")
         _hb_export.setFlat(True)
         _hb_export.setCursor(Qt.CursorShape.PointingHandCursor)
-        _hb_export.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(_hb_export, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         _hb_export.clicked.connect(self._open_export_dialog)
         _hb_lay.addWidget(_hb_from_lbl)
         _hb_lay.addWidget(self._hist_from_date)
@@ -285,36 +265,30 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._challenge_banner = QFrame()
         self._challenge_banner.setObjectName("challengeBanner")
         self._challenge_banner.setVisible(False)
-        self._challenge_banner.setStyleSheet(
-            f"QFrame#challengeBanner {{ background:{alpha(AMBER, 0x22)}; border-bottom:1px solid {alpha(AMBER, 0x55)};"
+        _s.themed_ss(self._challenge_banner, lambda: (
+            f"QFrame#challengeBanner {{ background:{alpha(_s.AMBER, 0x22)}; border-bottom:1px solid {alpha(_s.AMBER, 0x55)};"
             f" border-radius:0; padding:0; }}"
-        )
+        ))
         _cb_lay = QHBoxLayout(self._challenge_banner)
         _cb_lay.setContentsMargins(12, 6, 12, 6)
         _cb_lay.setSpacing(8)
         self._challenge_time_lbl = QLabel("")
-        self._challenge_time_lbl.setStyleSheet(
-            f"font-size:11px; color:{AMBER}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._challenge_time_lbl, "font-size:11px; color:{AMBER}; background:transparent; border:none;")
         _cb_view_btn = QPushButton("View alert →")
         _cb_view_btn.setFlat(True)
         _cb_view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _cb_view_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(_cb_view_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         _cb_view_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
         _cb_x = QPushButton("×")
         _cb_x.setFixedSize(18, 18)
         _cb_x.setCursor(Qt.CursorShape.PointingHandCursor)
-        _cb_x.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:13px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(_cb_x, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:13px; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         _cb_x.clicked.connect(self._hide_challenge_banner)
         _cb_lay.addWidget(self._challenge_time_lbl, 1)
         _cb_lay.addWidget(_cb_view_btn)
@@ -329,28 +303,22 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._cap_banner = QFrame()
         self._cap_banner.setObjectName("capBanner")
         self._cap_banner.setVisible(False)
-        self._cap_banner.setStyleSheet(
-            f"QFrame#capBanner {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
-            f" border-radius:0; padding:0; }}"
-        )
+        _s.themed_ss(self._cap_banner, "QFrame#capBanner {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
+            " border-radius:0; padding:0; }}")
         _cap_lay = QHBoxLayout(self._cap_banner)
         _cap_lay.setContentsMargins(12, 5, 12, 5)
         _cap_lay.setSpacing(8)
         _cap_lbl = QLabel(
             f"Showing last {_MAX_ROWS:,} entries — older entries are in your database."
         )
-        _cap_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_cap_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         _cap_export_btn = QPushButton("Export log →")
         _cap_export_btn.setFlat(True)
         _cap_export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _cap_export_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(_cap_export_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         _cap_export_btn.clicked.connect(self._open_export_dialog)
         _cap_lay.addWidget(_cap_lbl, 1)
         _cap_lay.addWidget(_cap_export_btn)
@@ -397,24 +365,18 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._alert_corr_panel = QFrame()
         self._alert_corr_panel.setObjectName("alertCorrPanel")
         self._alert_corr_panel.setVisible(False)
-        self._alert_corr_panel.setStyleSheet(
-            f"QFrame#alertCorrPanel {{ background:{BG_HOVER}; border-top:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self._alert_corr_panel, "QFrame#alertCorrPanel {{ background:{BG_HOVER}; border-top:1px solid {BORDER}; }}")
         _acp_lay = QVBoxLayout(self._alert_corr_panel)
         _acp_lay.setContentsMargins(12, 8, 12, 8)
         _acp_lay.setSpacing(4)
         _acp_hdr = QHBoxLayout()
         _acp_title = QLabel("Alerts near this time (±10 min)")
-        _acp_title.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_acp_title, "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         _acp_close = QPushButton("×")
         _acp_close.setFixedSize(18, 18)
-        _acp_close.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(_acp_close, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:14px; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         _acp_close.clicked.connect(lambda: self._alert_corr_panel.setVisible(False))
         _acp_hdr.addWidget(_acp_title, 1)
         _acp_hdr.addWidget(_acp_close)
@@ -454,7 +416,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         scroll.setWidget(inner)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(f"QScrollArea {{ background:{BG_DARK}; border:none; }}")
+        _s.themed_ss(scroll, "QScrollArea {{ background:{BG_DARK}; border:none; }}")
         root.addWidget(scroll, 1)
 
     # ── Entry management ──────────────────────────────────────────────────────
@@ -514,7 +476,6 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
             return
 
         from PyQt6.QtGui import QColor
-        from ui.styles import BG_CARD
 
         n_cols = self._table.columnCount()
         final_colors: list[tuple[int, QColor | None]] = []
@@ -522,7 +483,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
             item = self._table.item(0, col)
             final_colors.append((col, QColor(item.foreground().color()) if item else None))
 
-        bg = QColor(BG_CARD)
+        bg = QColor(_s.BG_CARD)
 
         def _apply(weight: float) -> None:
             for col, final in final_colors:
@@ -593,8 +554,8 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
 
     def _set_table_row(self, idx: int, e: dict) -> None:
         row = e["row"]
-        _, src_color = _SOURCES.get(e["source_key"], ("", TEXT_PRIMARY))
-        sc = _status_color(row[5]) if row[5] else TEXT_SECONDARY
+        src_color = _source_color(e["source_key"])
+        sc = _status_color(row[5]) if row[5] else _s.TEXT_SECONDARY
         raw_ts = e.get("ts")
 
         for col, val in enumerate(row):
@@ -602,12 +563,10 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
             if (col == 3 and e["raw"] is not None
                     and hasattr(e["raw"], "arp_event") and e["raw"].arp_event):
                 btn = QPushButton(f"▶ ARP  {str(val)[:30]}")
-                btn.setStyleSheet(
-                    f"QPushButton {{ background:transparent; border:none; color:{AMBER};"
-                    f" font-size:10px; text-align:left; padding:0 4px; }}"
-                    f"QPushButton:hover {{ color:{ACCENT}; text-decoration:underline; }}"
-                    f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
-                )
+                _s.themed_ss(btn, "QPushButton {{ background:transparent; border:none; color:{AMBER};"
+                    " font-size:10px; text-align:left; padding:0 4px; }}"
+                    "QPushButton:hover {{ color:{ACCENT}; text-decoration:underline; }}"
+                    "QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}")
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 _raw = e["raw"]
                 btn.clicked.connect(lambda _=False, r=_raw: self.animate_requested.emit(r))
@@ -622,7 +581,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
                 elif col == 5:
                     item.setForeground(QColor(sc))
                 else:
-                    item.setForeground(QColor(TEXT_PRIMARY))
+                    item.setForeground(QColor(_s.TEXT_PRIMARY))
                 item.setTextAlignment(
                     Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
                 )
@@ -865,10 +824,8 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         ip = ip_match.group(1) if ip_match else None
 
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
-            f"QMenu::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
+            "QMenu::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}")
 
         corr_act = None
         if row_ts is not None:
@@ -909,13 +866,13 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
 
         if not nearby:
             lbl = QLabel("No alerts in this ±10 min window")
-            lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;")
+            _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;")
             self._alert_corr_rows_lay.addWidget(lbl)
         else:
-            sev_color = {"critical": RED, "warning": AMBER}
+            sev_color = {"critical": _s.RED, "warning": _s.AMBER}
             for a in nearby:
                 sev = a.get("severity", "info").lower()
-                color = sev_color.get(sev, TEXT_MUTED)
+                color = sev_color.get(sev, _s.TEXT_MUTED)
                 ts_str = _fmt_ts(a.get("ts", ts))
                 rule = a.get("rule", a.get("message", "Alert"))
                 host = a.get("host", a.get("ip", ""))

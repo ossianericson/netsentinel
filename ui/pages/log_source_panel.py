@@ -5,7 +5,7 @@ Extracted from log_hub_page.py (S14-3b) to reduce that file's size.
 
 Provides:
   • Module-level constants/helpers shared between LogHubPage and the mixin
-    (_SOURCES, _MAX_ROWS, _fmt_ts, _status_color, _SYSLOG_SEVERITY_COLOR,
+    (_SOURCES, _MAX_ROWS, _fmt_ts, _status_color,
      _SOURCE_TIPS, _LABEL_TO_KEY, _source_key, _build_live_scenario)
   • _LogSourcePanelMixin — all panel-building and source-toggle methods
     inherited by LogHubPage
@@ -35,12 +35,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
     alpha,
-    ACCENT, AMBER, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, CARD_RADIUS, GREEN,
-    LOG_SOURCE_PLUGIN, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
+    LOG_SOURCE_PLUGIN,
 )
 
 # ── Module-level constants (imported by log_hub_page.py too) ─────────────────
@@ -48,21 +46,23 @@ from ui.styles import (
 _MAX_ROWS = 2000
 _LIVE_CHALLENGE_COOLDOWN = 60.0
 
+# Colours are theme token NAME strings (resolved live via getattr(_s, name)) —
+# a bare-token tuple would freeze at import and never follow a theme switch.
 _SOURCES: dict[str, tuple[str, str]] = {
-    "net":    ("RTT",         ACCENT),
-    "modem":  ("5G Modem",    GREEN),
-    "mesh":   ("Mesh Router", AMBER),
-    "syslog": ("Syslog",      TEXT_SECONDARY),
-    "snmp":   ("SNMP Traps",  RED),
-    "plugin": ("PLUGIN",      LOG_SOURCE_PLUGIN),
+    "net":    ("RTT",         "ACCENT"),
+    "modem":  ("5G Modem",    "GREEN"),
+    "mesh":   ("Mesh Router", "AMBER"),
+    "syslog": ("Syslog",      "TEXT_SECONDARY"),
+    "snmp":   ("SNMP Traps",  "RED"),
+    "plugin": ("PLUGIN",      "LOG_SOURCE_PLUGIN"),
 }
 _LABEL_TO_KEY = {label: key for key, (label, _) in _SOURCES.items()}
 
-_SYSLOG_SEVERITY_COLOR = {
-    "EMERG": RED, "ALERT": RED, "CRIT": RED,
-    "ERR": AMBER, "WARNING": AMBER,
-    "NOTICE": TEXT_PRIMARY, "INFO": TEXT_PRIMARY, "DEBUG": TEXT_MUTED,
-}
+
+def _source_color(key: str) -> str:
+    """Live theme colour for a log source key (falls back to TEXT_PRIMARY)."""
+    _, cname = _SOURCES.get(key, ("", "TEXT_PRIMARY"))
+    return getattr(_s, cname)
 
 _SOURCE_TIPS: dict[str, str] = {
     "net":    "Network RTT — continuous latency measurements to gateway and DNS (higher is worse).",
@@ -86,7 +86,21 @@ def _fmt_ts(ts: float) -> str:
 
 
 def _status_color(status: str) -> str:
-    return {"OK": GREEN, "SLOW": AMBER, "FAIL": RED}.get(status.upper(), TEXT_SECONDARY)
+    return {"OK": _s.GREEN, "SLOW": _s.AMBER, "FAIL": _s.RED}.get(status.upper(), _s.TEXT_SECONDARY)
+
+
+def _pill_seg_style(active: bool) -> str:
+    """Live QSS for a Live/History pill segment button."""
+    if active:
+        return (
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; font-size:11px; font-weight:bold;"
+            f" border:none; border-radius:11px; padding:2px 12px; }}"
+        )
+    return (
+        f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; font-size:11px;"
+        f" border:none; border-radius:11px; padding:2px 12px; }}"
+        f"QPushButton:hover {{ color:{_s.TEXT_PRIMARY}; }}"
+    )
 
 
 def _build_live_scenario(entry, consecutive_fails: int = 0):
@@ -168,10 +182,8 @@ class _LogSourcePanelMixin:
 
         header = QFrame()
         header.setObjectName("accordionHeader")
-        header.setStyleSheet(
-            f"QFrame#accordionHeader {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(header, "QFrame#accordionHeader {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         hdr_lay = QHBoxLayout(header)
         hdr_lay.setContentsMargins(12, 6, 12, 6)
         hdr_lay.setSpacing(8)
@@ -179,47 +191,41 @@ class _LogSourcePanelMixin:
         toggle_btn.setText("▶  Scan Configuration")
         toggle_btn.setCheckable(True)
         toggle_btn.setChecked(False)
-        toggle_btn.setStyleSheet(
-            f"QToolButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-            f" font-weight:bold; border:none; padding:0; }}"
-            f"QToolButton:checked {{ color:{ACCENT}; }}"
-            f"QToolButton::menu-indicator {{ image:none; }}"
-        )
+        _s.themed_ss(toggle_btn, "QToolButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+            " font-weight:bold; border:none; padding:0; }}"
+            "QToolButton:checked {{ color:{ACCENT}; }}"
+            "QToolButton::menu-indicator {{ image:none; }}")
         hdr_lay.addWidget(toggle_btn)
         hdr_lay.addStretch()
         sub = QLabel("Controls which modules run when you click Scan")
-        sub.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(sub, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         hdr_lay.addWidget(sub)
         outer_lay.addWidget(header)
 
         body = QFrame()
         body.setObjectName("accordionBody")
         body.setVisible(False)
-        body.setStyleSheet(
-            f"QFrame#accordionBody {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-top:none; border-radius:0 0 {CARD_RADIUS} {CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(body, "QFrame#accordionBody {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-top:none; border-radius:0 0 {CARD_RADIUS} {CARD_RADIUS}; }}")
         body_lay = QVBoxLayout(body)
         body_lay.setContentsMargins(16, 10, 16, 12)
         body_lay.setSpacing(8)
 
         _chk_qss = (
-            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; padding:3px 0; }}"
-            f"QCheckBox::indicator {{ width:12px; height:12px; border:1px solid {BORDER};"
-            f" border-radius:2px; background:{BG_DARK}; }}"
-            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
+            "QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; padding:3px 0; }}"
+            "QCheckBox::indicator {{ width:12px; height:12px; border:1px solid {BORDER};"
+            " border-radius:2px; background:{BG_DARK}; }}"
+            "QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
         )
         _spin_qss = (
-            f"QSpinBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:1px 4px; font-size:11px; }}"
+            "QSpinBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:1px 4px; font-size:11px; }}"
         )
 
         def _chk_row(label: str, key: str) -> QCheckBox:
             chk = QCheckBox(label)
             chk.setChecked(_qs.value(f"scan/{key}_enabled", True, type=bool))
-            chk.setStyleSheet(_chk_qss)
+            _s.themed_ss(chk, _chk_qss)
             chk.toggled.connect(
                 lambda v, k=key: QSettings("NetSentinel", "NetSentinel").setValue(
                     f"scan/{k}_enabled", v
@@ -234,14 +240,12 @@ class _LogSourcePanelMixin:
             rl.setContentsMargins(0, 0, 0, 0)
             rl.setSpacing(8)
             lbl = QLabel(label)
-            lbl.setStyleSheet(
-                f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent;"
-            )
+            _s.themed_ss(lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent;")
             spin = QSpinBox()
             spin.setRange(5, 120)
             spin.setValue(_qs.value(f"scan/{key}_duration_s", default, type=int))
             spin.setFixedWidth(64)
-            spin.setStyleSheet(_spin_qss)
+            _s.themed_ss(spin, _spin_qss)
             spin.valueChanged.connect(
                 lambda v, k=key: QSettings("NetSentinel", "NetSentinel").setValue(
                     f"scan/{k}_duration_s", v
@@ -289,10 +293,8 @@ class _LogSourcePanelMixin:
     def _build_control_bar(self) -> QWidget:
         bar = QFrame()
         bar.setObjectName("controlBar")
-        bar.setStyleSheet(
-            f"QFrame#controlBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(bar, "QFrame#controlBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(6)
@@ -303,25 +305,23 @@ class _LogSourcePanelMixin:
         self._search_box.setMaximumWidth(230)
         self._search_box.setFixedHeight(26)
         self._search_box.setClearButtonEnabled(True)
-        self._search_box.setStyleSheet(
-            f"QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px;"
-            f" padding:1px 8px; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._search_box, "QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px;"
+            " padding:1px 8px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._search_box.textChanged.connect(self._apply_filter)
         lay.addWidget(self._search_box)
 
         _div = QFrame()
         _div.setFrameShape(QFrame.Shape.VLine)
         _div.setFixedWidth(1)
-        _div.setStyleSheet(f"background:{BORDER}; border:none;")
+        _s.themed_ss(_div, "background:{BORDER}; border:none;")
         lay.addWidget(_div)
 
         all_btn = QPushButton("● All")
         all_btn.setCheckable(True)
         all_btn.setChecked(True)
         all_btn.setFixedHeight(26)
-        self._style_toggle(all_btn, True, ACCENT)
+        self._style_toggle(all_btn, True, "ACCENT")
         all_btn.clicked.connect(self._on_all_toggled)
         self._all_btn = all_btn
         lay.addWidget(all_btn)
@@ -347,12 +347,10 @@ class _LogSourcePanelMixin:
         self._source_plus_btn.setFixedSize(26, 26)
         self._source_plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._source_plus_btn.setToolTip("Add source filter")
-        self._source_plus_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:13px;"
-            f" font-weight:bold; border:1px solid {BORDER}; border-radius:4px; padding:0; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._source_plus_btn, "QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:13px;"
+            " font-weight:bold; border:1px solid {BORDER}; border-radius:4px; padding:0; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._source_plus_btn.clicked.connect(self._open_source_picker)
         lay.addWidget(self._source_plus_btn)
         lay.addStretch()
@@ -361,41 +359,30 @@ class _LogSourcePanelMixin:
         _export_btn.setFixedHeight(26)
         _export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _export_btn.setToolTip("Export currently visible (filtered) rows to CSV")
-        _export_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:11px;"
-            f" font-weight:600; border:1px solid {alpha(ACCENT, 0x44)}; border-radius:4px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x11)}; border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(_export_btn, lambda: (
+            f"QPushButton {{ background:transparent; color:{_s.ACCENT}; font-size:11px;"
+            f" font-weight:600; border:1px solid {alpha(_s.ACCENT, 0x44)}; border-radius:4px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0x11)}; border-color:{_s.ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
+        ))
         _export_btn.clicked.connect(self._export_visible)
         lay.addWidget(_export_btn)
 
         _pill = QFrame()
         _pill.setObjectName("liveHistoryPill")
-        _pill.setStyleSheet(
-            f"QFrame#liveHistoryPill {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:13px; }}"
-        )
+        _s.themed_ss(_pill, "QFrame#liveHistoryPill {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:13px; }}")
         _pill_lay = QHBoxLayout(_pill)
         _pill_lay.setContentsMargins(2, 2, 2, 2)
         _pill_lay.setSpacing(0)
-        _pill_seg_on = (
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
-            f" border:none; border-radius:11px; padding:2px 12px; }}"
-        )
-        _pill_seg_off = (
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-            f" border:none; border-radius:11px; padding:2px 12px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-        )
         self._live_mode_btn = QPushButton("● Live")
         self._live_mode_btn.setFixedHeight(24)
         self._live_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._live_mode_btn.setStyleSheet(_pill_seg_on)
+        _s.themed_ss(self._live_mode_btn, lambda: _pill_seg_style(True))
         self._live_mode_btn.clicked.connect(self._on_mode_live)
         self._hist_mode_btn = QPushButton("⊙ History")
         self._hist_mode_btn.setFixedHeight(24)
         self._hist_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._hist_mode_btn.setStyleSheet(_pill_seg_off)
+        _s.themed_ss(self._hist_mode_btn, lambda: _pill_seg_style(False))
         self._hist_mode_btn.clicked.connect(self._on_mode_history)
         _pill_lay.addWidget(self._live_mode_btn)
         _pill_lay.addWidget(self._hist_mode_btn)
@@ -406,9 +393,9 @@ class _LogSourcePanelMixin:
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
         menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; padding:2px; }}"
-            f"QMenu::item {{ padding:5px 14px; color:{TEXT_PRIMARY}; font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{alpha(ACCENT, 0x22)}; color:{TEXT_PRIMARY}; }}"
+            f"QMenu {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER}; border-radius:4px; padding:2px; }}"
+            f"QMenu::item {{ padding:5px 14px; color:{_s.TEXT_PRIMARY}; font-size:11px; }}"
+            f"QMenu::item:selected {{ background:{alpha(_s.ACCENT, 0x22)}; color:{_s.TEXT_PRIMARY}; }}"
         )
         has_hidden = False
         for key, (label, _color) in _SOURCES.items():
@@ -434,23 +421,19 @@ class _LogSourcePanelMixin:
     def _build_source_bar(self) -> QWidget:
         bar = QFrame()
         bar.setObjectName("sourceBar")
-        bar.setStyleSheet(
-            f"QFrame#sourceBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(bar, "QFrame#sourceBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(12, 7, 12, 7)
         lay.setSpacing(6)
         lbl = QLabel("Show:")
-        lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;")
         lay.addWidget(lbl)
         all_btn = QPushButton("● All")
         all_btn.setCheckable(True)
         all_btn.setChecked(True)
         all_btn.setFixedHeight(26)
-        self._style_toggle(all_btn, True, ACCENT)
+        self._style_toggle(all_btn, True, "ACCENT")
         all_btn.clicked.connect(self._on_all_toggled)
         self._all_btn = all_btn
         lay.addWidget(all_btn)
@@ -471,9 +454,7 @@ class _LogSourcePanelMixin:
             if key == "modem" and not enabled:
                 btn.setToolTip("Connect a modem plugin to enable modem logging.")
         cfg_lbl = QLabel("· Configure in Network Logger")
-        cfg_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(cfg_lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         lay.addWidget(cfg_lbl)
         lay.addStretch()
         self._search_box = QLineEdit()
@@ -481,11 +462,9 @@ class _LogSourcePanelMixin:
         self._search_box.setFixedWidth(260)
         self._search_box.setFixedHeight(26)
         self._search_box.setClearButtonEnabled(True)
-        self._search_box.setStyleSheet(
-            f"QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px;"
-            f" padding:1px 8px; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._search_box, "QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px;"
+            " padding:1px 8px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._search_box.textChanged.connect(self._apply_filter)
         lay.addWidget(self._search_box)
         return bar
@@ -495,21 +474,19 @@ class _LogSourcePanelMixin:
     def _build_mode_bar(self) -> QWidget:
         bar = QFrame()
         bar.setObjectName("modeBar")
-        bar.setStyleSheet(
-            f"QFrame#modeBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(bar, "QFrame#modeBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(10, 5, 10, 5)
         lay.setSpacing(4)
         _seg_on = (
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; font-size:11px; font-weight:bold;"
             f" border:none; border-radius:3px; padding:2px 14px; }}"
         )
         _seg_off = (
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+            f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; font-size:11px;"
             f" border:none; border-radius:3px; padding:2px 14px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_HOVER}; }}"
+            f"QPushButton:hover {{ color:{_s.TEXT_PRIMARY}; background:{_s.BG_HOVER}; }}"
         )
         self._live_mode_btn = QPushButton("● Live")
         self._live_mode_btn.setFixedHeight(24)
@@ -525,9 +502,7 @@ class _LogSourcePanelMixin:
         lay.addWidget(self._hist_mode_btn)
         lay.addStretch()
         hint = QLabel("History mode queries your database for any time range")
-        hint.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(hint, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
         lay.addWidget(hint)
         return bar
 
@@ -536,25 +511,19 @@ class _LogSourcePanelMixin:
     def _build_logged_sources_bar(self) -> QWidget:
         bar = QFrame()
         bar.setObjectName("loggedSourcesBar")
-        bar.setStyleSheet(
-            f"QFrame#loggedSourcesBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(bar, "QFrame#loggedSourcesBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         lay = QVBoxLayout(bar)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(6)
         hdr = QLabel("LOGGING TO DATABASE")
-        hdr.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-            f" letter-spacing:0.08em; background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+            " letter-spacing:0.08em; background:transparent; border:none;")
         lay.addWidget(hdr)
         self._plugin_db_empty_lbl = QLabel(
             "No hardware plugins configured — add one in Hardware Integrations"
         )
-        self._plugin_db_empty_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._plugin_db_empty_lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         lay.addWidget(self._plugin_db_empty_lbl)
         self._plugin_db_container = QWidget()
         self._plugin_db_container.setStyleSheet("background:transparent;")
@@ -563,9 +532,7 @@ class _LogSourcePanelMixin:
         self._plugin_db_container_lay.setSpacing(6)
         lay.addWidget(self._plugin_db_container)
         self._db_feedback_lbl = QLabel("")
-        self._db_feedback_lbl.setStyleSheet(
-            f"color:{GREEN}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._db_feedback_lbl, "color:{GREEN}; font-size:10px; background:transparent; border:none;")
         self._db_feedback_lbl.setVisible(False)
         lay.addWidget(self._db_feedback_lbl)
         return bar
@@ -574,19 +541,19 @@ class _LogSourcePanelMixin:
 
     def _style_db_btn(self, btn: QPushButton, enabled: bool) -> None:
         if enabled:
-            btn.setStyleSheet(
-                f"QPushButton {{ background:{alpha(GREEN, 0x22)}; color:{GREEN}; font-size:10px;"
-                f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px; padding:1px 10px; }}"
-                f"QPushButton:hover {{ background:{alpha(GREEN, 0x44)}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(btn, lambda: (
+                f"QPushButton {{ background:{alpha(_s.GREEN, 0x22)}; color:{_s.GREEN}; font-size:10px;"
+                f" font-weight:bold; border:1px solid {_s.GREEN}; border-radius:11px; padding:1px 10px; }}"
+                f"QPushButton:hover {{ background:{alpha(_s.GREEN, 0x44)}; }}"
+                f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
+            ))
         else:
-            btn.setStyleSheet(
-                f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
-                f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
-                f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(btn, (
+                "QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
+                " border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                "QPushButton:hover {{ background:{BG_HOVER}; }}"
+                "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            ))
 
     def _on_db_toggled(self, key: str, checked: bool, btn: QPushButton) -> None:
         label = _SOURCES[key][0]
@@ -594,10 +561,10 @@ class _LogSourcePanelMixin:
         self._style_db_btn(btn, checked)
         QSettings("NetSentinel", "NetSentinel").setValue(f"logging/{key}_enabled", checked)
         if checked:
-            self._show_db_feedback(f"{label} data will be saved to your database.", GREEN)
+            self._show_db_feedback(f"{label} data will be saved to your database.", _s.GREEN)
         else:
             self._show_db_feedback(
-                f"{label} logging stopped. History recorded so far is preserved.", TEXT_SECONDARY
+                f"{label} logging stopped. History recorded so far is preserved.", _s.TEXT_SECONDARY
             )
 
     def _on_interval_changed(self, key: str, combo: QComboBox) -> None:
@@ -632,25 +599,15 @@ class _LogSourcePanelMixin:
 
     def _on_mode_live(self) -> None:
         self._is_history_mode = False
-        _on  = (f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
-                f" border:none; border-radius:11px; padding:2px 12px; }}")
-        _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-                f" border:none; border-radius:11px; padding:2px 12px; }}"
-                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}")
-        self._live_mode_btn.setStyleSheet(_on)
-        self._hist_mode_btn.setStyleSheet(_off)
+        _s.themed_ss(self._live_mode_btn, lambda: _pill_seg_style(True))
+        _s.themed_ss(self._hist_mode_btn, lambda: _pill_seg_style(False))
         self._history_bar.setVisible(False)
         self._apply_filter()
 
     def _on_mode_history(self) -> None:
         self._is_history_mode = True
-        _on  = (f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
-                f" border:none; border-radius:11px; padding:2px 12px; }}")
-        _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-                f" border:none; border-radius:11px; padding:2px 12px; }}"
-                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}")
-        self._hist_mode_btn.setStyleSheet(_on)
-        self._live_mode_btn.setStyleSheet(_off)
+        _s.themed_ss(self._hist_mode_btn, lambda: _pill_seg_style(True))
+        _s.themed_ss(self._live_mode_btn, lambda: _pill_seg_style(False))
         self._history_bar.setVisible(True)
         self._load_history_range()
 
@@ -881,29 +838,30 @@ class _LogSourcePanelMixin:
         QSettings("NetSentinel", "NetSentinel").setValue(f"logging/{qs_key}_enabled", checked)
         self.logging_active_changed.emit(checked)
         if checked:
-            self._show_db_feedback(f"{name} data will be saved to your database.", GREEN)
+            self._show_db_feedback(f"{name} data will be saved to your database.", _s.GREEN)
         else:
             self._show_db_feedback(
-                f"{name} logging stopped. History recorded so far is preserved.", TEXT_SECONDARY
+                f"{name} logging stopped. History recorded so far is preserved.", _s.TEXT_SECONDARY
             )
 
     # ── Source toggle helpers ─────────────────────────────────────────────────
 
-    def _style_toggle(self, btn: QPushButton, enabled: bool, color: str) -> None:
+    def _style_toggle(self, btn: QPushButton, enabled: bool, color_name: str) -> None:
+        """color_name: a ui/styles.py token NAME (e.g. "ACCENT"), not a resolved value."""
         if enabled:
-            btn.setStyleSheet(
-                f"QPushButton {{ background:{color}22; color:{color}; font-size:11px;"
-                f" font-weight:bold; border:1px solid {color}; border-radius:12px; padding:1px 10px; }}"
-                f"QPushButton:hover {{ background:{color}44; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(btn, lambda c=color_name: (
+                f"QPushButton {{ background:{getattr(_s, c)}22; color:{getattr(_s, c)}; font-size:11px;"
+                f" font-weight:bold; border:1px solid {getattr(_s, c)}; border-radius:12px; padding:1px 10px; }}"
+                f"QPushButton:hover {{ background:{getattr(_s, c)}44; }}"
+                f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
+            ))
         else:
-            btn.setStyleSheet(
-                f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:11px;"
-                f" border:1px solid {BORDER}; border-radius:12px; padding:1px 10px; }}"
-                f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(btn, (
+                "QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:11px;"
+                " border:1px solid {BORDER}; border-radius:12px; padding:1px 10px; }}"
+                "QPushButton:hover {{ background:{BG_HOVER}; }}"
+                "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            ))
 
     def _on_source_toggled(self, key: str, checked: bool) -> None:
         label, color = _SOURCES[key]
@@ -926,7 +884,7 @@ class _LogSourcePanelMixin:
                 self._style_toggle(btn, True, color)
         if self._all_btn:
             self._all_btn.setChecked(True)
-            self._style_toggle(self._all_btn, True, ACCENT)
+            self._style_toggle(self._all_btn, True, "ACCENT")
         self._apply_filter()
 
     def _sync_all_btn(self) -> None:
@@ -938,7 +896,7 @@ class _LogSourcePanelMixin:
             if btn.isVisible()
         )
         self._all_btn.setChecked(all_on)
-        self._style_toggle(self._all_btn, all_on, ACCENT)
+        self._style_toggle(self._all_btn, all_on, "ACCENT")
 
     def _is_source_enabled(self, key: str) -> bool:
         btn = self._toggle_btns.get(key)

@@ -30,13 +30,7 @@ from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.tabs_helpers import _table
-from ui.styles import (
-    ACCENT, AMBER, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
+from ui import styles as _s
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -44,22 +38,18 @@ from ui.styles import (
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     outer = QFrame()
     outer.setObjectName("card")
-    outer.setStyleSheet(
-        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(outer, "QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer_lay = QVBoxLayout(outer)
     outer_lay.setContentsMargins(0, 0, 0, 0)
     outer_lay.setSpacing(0)
 
     title_bar = QLabel(title)
-    title_bar.setStyleSheet(
-        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
-        f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(title_bar, "QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
+        " padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}")
     outer_lay.addWidget(title_bar)
 
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD}; border:none;")
+    _s.themed_ss(body, "background:{BG_CARD}; border:none;")
     body_lay = QVBoxLayout(body)
     body_lay.setContentsMargins(0, 0, 0, 0)
     body_lay.setSpacing(0)
@@ -67,38 +57,45 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     return outer, body_lay
 
 
-def _kpi_tile(label: str, value: str = "0", accent: str = ACCENT) -> tuple[QWidget, QLabel]:
+def _kpi_tile(label: str, value: str = "0", accent_name: str = "ACCENT") -> tuple[QWidget, QLabel]:
     tile = QWidget()
-    tile.setStyleSheet(
-        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {accent}; }}"
-    )
+    _s.themed_ss(tile, lambda a=accent_name: (
+        f"QWidget {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
+        f" border-left:3px solid {getattr(_s, a)}; }}"
+    ))
     tile.setMinimumWidth(110)
     tile.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     lay = QVBoxLayout(tile)
     lay.setContentsMargins(8, 4, 8, 4)
     lay.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
+    _s.themed_ss(lbl, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
     val = QLabel(value)
-    val.setStyleSheet(f"font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
+    _s.themed_ss(val, "font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return tile, val
 
 
 # ── Severity colour coding ────────────────────────────────────────────────────
+# Token NAME strings (resolved live via getattr(_s, name)) — a bare-token dict
+# would freeze at import and never follow a theme switch.
 
 _SEV_COLOUR = {
-    0: RED,    # EMERG
-    1: RED,    # ALERT
-    2: RED,    # CRIT
-    3: AMBER,  # ERR
-    4: AMBER,  # WARNING
-    5: TEXT_SECONDARY,  # NOTICE
-    6: TEXT_SECONDARY,  # INFO
-    7: TEXT_SECONDARY,  # DEBUG
+    0: "RED",    # EMERG
+    1: "RED",    # ALERT
+    2: "RED",    # CRIT
+    3: "AMBER",  # ERR
+    4: "AMBER",  # WARNING
+    5: "TEXT_SECONDARY",  # NOTICE
+    6: "TEXT_SECONDARY",  # INFO
+    7: "TEXT_SECONDARY",  # DEBUG
 }
+
+
+def _sev_color(sev: int) -> str:
+    """Live theme colour for a syslog severity level."""
+    return getattr(_s, _SEV_COLOUR.get(sev, "TEXT_SECONDARY"))
 
 
 # ── Detail dialog ─────────────────────────────────────────────────────────────
@@ -125,28 +122,22 @@ class _MsgDetailDialog(QDialog):
         detail = QTextEdit()
         detail.setReadOnly(True)
         detail.setPlainText(info)
-        detail.setStyleSheet(
-            f"QTextEdit {{ font-size:11px; color:{TEXT_PRIMARY}; "
-            f"background:{BG_CARD}; border:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(detail, "QTextEdit {{ font-size:11px; color:{TEXT_PRIMARY}; "
+            "background:{BG_CARD}; border:1px solid {BORDER}; }}")
         lay.addWidget(QLabel("Raw message:"))
         raw_box = QTextEdit()
         raw_box.setReadOnly(True)
         raw_box.setPlainText(row_data.get("raw", ""))
         raw_box.setMaximumHeight(80)
-        raw_box.setStyleSheet(
-            f"QTextEdit {{ font-size:11px; color:{TEXT_SECONDARY}; "
-            f"font-family:Consolas,monospace; background:{BG_CARD}; border:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(raw_box, "QTextEdit {{ font-size:11px; color:{TEXT_SECONDARY}; "
+            "font-family:Consolas,monospace; background:{BG_CARD}; border:1px solid {BORDER}; }}")
         lay.addWidget(detail)
         lay.addWidget(raw_box)
 
         close_btn = QPushButton("Close")
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" padding:4px 16px; font-size:11px; border-radius:4px; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(close_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " padding:4px 16px; font-size:11px; border-radius:4px; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         close_btn.clicked.connect(self.accept)
         lay.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
 
@@ -173,7 +164,7 @@ class SyslogPage(QWidget):
     # ── UI build ──────────────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -181,28 +172,24 @@ class SyslogPage(QWidget):
 
         # Page title
         title = QLabel("Syslog Receiver")
-        title.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(title, "font-size:18px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
         sub = QLabel("Passive UDP listener — receives syslog from routers, switches, and Linux hosts (RFC 3164 / RFC 5424).")
-        sub.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        _s.themed_ss(sub, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         root.addWidget(title)
         root.addWidget(sub)
 
         # Status bar
         self._status_lbl = QLabel("Not listening.")
-        self._status_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         root.addWidget(self._status_lbl)
 
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
         tile_total, self._kpi_total = _kpi_tile("Total Messages")
-        tile_crit,  self._kpi_crit  = _kpi_tile("Critical",        "0", RED)
-        tile_err,   self._kpi_err   = _kpi_tile("Errors/Warnings",  "0", AMBER)
-        tile_info,  self._kpi_info  = _kpi_tile("Info/Debug",       "0", GREEN)
+        tile_crit,  self._kpi_crit  = _kpi_tile("Critical",        "0", "RED")
+        tile_err,   self._kpi_err   = _kpi_tile("Errors/Warnings",  "0", "AMBER")
+        tile_info,  self._kpi_info  = _kpi_tile("Info/Debug",       "0", "GREEN")
         for parent_tile in (tile_total, tile_crit, tile_err, tile_info):
             kpi_row.addWidget(parent_tile)
         kpi_row.addStretch()
@@ -213,7 +200,7 @@ class SyslogPage(QWidget):
         filter_row.setSpacing(8)
 
         sev_label = QLabel("Severity:")
-        sev_label.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        _s.themed_ss(sev_label, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._sev_filter = QComboBox()
         self._sev_filter.addItem("All severities", -1)
         for sev_id, sev_name in [
@@ -222,26 +209,20 @@ class SyslogPage(QWidget):
             (6, "INFO"),  (7, "DEBUG"),
         ]:
             self._sev_filter.addItem(sev_name, sev_id)
-        self._sev_filter.setStyleSheet(
-            f"QComboBox {{ font-size:11px; border:1px solid {BORDER};"
-            f" background:{BG_CARD}; color:{TEXT_PRIMARY}; padding:2px 8px; }}"
-        )
+        _s.themed_ss(self._sev_filter, "QComboBox {{ font-size:11px; border:1px solid {BORDER};"
+            " background:{BG_CARD}; color:{TEXT_PRIMARY}; padding:2px 8px; }}")
         self._sev_filter.currentIndexChanged.connect(self._on_filter_changed)
 
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Search hostname, app, message…")
-        self._search_box.setStyleSheet(
-            f"QLineEdit {{ font-size:11px; border:1px solid {BORDER};"
-            f" background:{BG_CARD}; color:{TEXT_PRIMARY}; padding:2px 8px; }}"
-        )
+        _s.themed_ss(self._search_box, "QLineEdit {{ font-size:11px; border:1px solid {BORDER};"
+            " background:{BG_CARD}; color:{TEXT_PRIMARY}; padding:2px 8px; }}")
         self._search_box.textChanged.connect(self._on_filter_changed)
 
         clear_btn = QPushButton("Clear")
-        clear_btn.setStyleSheet(
-            f"QPushButton {{ font-size:11px; border:1px solid {BORDER};"
-            f" background:{BG_CARD}; color:{TEXT_PRIMARY}; padding:2px 12px; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(clear_btn, "QPushButton {{ font-size:11px; border:1px solid {BORDER};"
+            " background:{BG_CARD}; color:{TEXT_PRIMARY}; padding:2px 12px; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         clear_btn.clicked.connect(self._clear)
 
         filter_row.addWidget(sev_label)
@@ -354,7 +335,7 @@ class SyslogPage(QWidget):
             f"Syslog receiver error — {text}. "
             "Check that UDP port 514 is not blocked by another application or firewall."
         )
-        self._status_lbl.setStyleSheet(f"font-size:11px; color:{AMBER}; background:transparent;")
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{AMBER}; background:transparent;")
 
     # ── Filter / table rebuild ────────────────────────────────────────────────
 
@@ -396,7 +377,7 @@ class SyslogPage(QWidget):
 
         ts_str = datetime.datetime.fromtimestamp(r.get("ts", 0)).strftime("%Y-%m-%d %H:%M:%S")
         sev    = r.get("severity", 6)
-        colour = _SEV_COLOUR.get(sev, TEXT_SECONDARY)
+        colour = _sev_color(sev)
 
         cells = [
             ts_str,
@@ -409,7 +390,7 @@ class SyslogPage(QWidget):
         ]
         for col, text in enumerate(cells):
             item = QTableWidgetItem(str(text))
-            item.setForeground(QColor(colour) if col == 2 else QColor(TEXT_PRIMARY))
+            item.setForeground(QColor(colour) if col == 2 else QColor(_s.TEXT_PRIMARY))
             self._table.setItem(row_idx, col, item)
 
     def _update_kpis(self) -> None:

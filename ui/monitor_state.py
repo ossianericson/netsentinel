@@ -20,28 +20,19 @@ from PyQt6.QtWidgets import (
 
 from modules.alert_types import SECURITY_RELEVANT_RULE_TYPES
 
+from ui import styles as _s
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_CARD,
-    BORDER,
-    GREEN,
-    RED,
     RISK_BG,
     RISK_COLORS,
     STATUS_ICON_CRIT,
     STATUS_ICON_OK,
     STATUS_ICON_WARN,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    WHITE,
 )
 
 # ── Module-level colour helpers ───────────────────────────────────────────────
 
 def _color_for_level(level: str) -> str:
-    return RISK_COLORS.get(level.upper(), TEXT_SECONDARY)
+    return RISK_COLORS.get(level.upper(), _s.TEXT_SECONDARY)
 
 
 def _icon_for_level(level: str) -> str:
@@ -57,7 +48,7 @@ def _icon_for_level(level: str) -> str:
 
 
 def _bg_for_level(level: str) -> str:
-    return RISK_BG.get(level.upper(), BG_CARD)
+    return RISK_BG.get(level.upper(), _s.BG_CARD)
 
 
 # ── Widget classes ────────────────────────────────────────────────────────────
@@ -100,29 +91,27 @@ class VerdictPanel(QFrame):
         self._title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
 
         _btn_style = (
-            f"QPushButton {{ background:transparent; border:none;"
-            f" color:{TEXT_MUTED}; font-size:11px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
+            "QPushButton {{ background:transparent; border:none;"
+            " color:{TEXT_MUTED}; font-size:11px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
         )
 
         self._toggle_btn = QPushButton("▼")
         self._toggle_btn.setFixedSize(22, 22)
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle_btn.setToolTip("Collapse / expand verdict")
-        self._toggle_btn.setStyleSheet(_btn_style)
+        _s.themed_ss(self._toggle_btn, _btn_style)
         self._toggle_btn.clicked.connect(self._on_toggle)
 
         self._close_btn = QPushButton("×")
         self._close_btn.setFixedSize(22, 22)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.setToolTip("Dismiss — reappears after next scan")
-        self._close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; border:none;"
-            f" color:{TEXT_PRIMARY}; font-size:14px; font-weight:bold; }}"
-            f"QPushButton:hover {{ color:{RED}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(self._close_btn, "QPushButton {{ background:transparent; border:none;"
+            " color:{TEXT_PRIMARY}; font-size:14px; font-weight:bold; }}"
+            "QPushButton:hover {{ color:{RED}; }}"
+            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}")
         self._close_btn.clicked.connect(self.close_requested)
 
         hdr_lay.addWidget(self._title, 1)
@@ -159,15 +148,13 @@ class VerdictPanel(QFrame):
         bg    = _bg_for_level(level)
         self.setStyleSheet(
             f"QFrame#verdictFrame {{ background:{bg}; border-left:4px solid {color};"
-            f"border-radius:0px; border-top:1px solid {BORDER};"
-            f"border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
+            f"border-radius:0px; border-top:1px solid {_s.BORDER};"
+            f"border-right:1px solid {_s.BORDER}; border-bottom:1px solid {_s.BORDER}; }}"
         )
         self._title.setStyleSheet(
             f"color:{color}; font-weight:bold; background:transparent;"
         )
-        self._text.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; padding:2px 12px 8px 12px; font-size:11px;"
-        )
+        _s.themed_ss(self._text, "color:{TEXT_PRIMARY}; padding:2px 12px 8px 12px; font-size:11px;")
 
     def update(self, text: str, level: str = "UNKNOWN"):
         self._set_level(level)
@@ -201,14 +188,17 @@ class _MonitorStateMixin:
         row.setContentsMargins(0, 0, 0, 6)
         row.setSpacing(8)
 
-        def _tile(dot_color: str, label: str, start_val: str, start_color: str):
-            """Return (tile QFrame, dot QLabel, value QLabel)."""
+        def _tile(dot_cname: str, label: str, start_val: str, start_cname: str):
+            """Return (tile QFrame, dot QLabel, value QLabel).
+
+            dot_cname/start_cname are ui/styles.py token NAMES, not resolved values.
+            """
             tile = QFrame()
             tile.setObjectName("card")
-            tile.setStyleSheet(
-                f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-                f"border-left:3px solid {dot_color};border-radius:0px;}}"
-            )
+            _s.themed_ss(tile, lambda c=dot_cname: (
+                f"QFrame#card{{background:{_s.BG_CARD};border:1px solid {_s.BORDER};"
+                f"border-left:3px solid {getattr(_s, c)};border-radius:0px;}}"
+            ))
             vl = QVBoxLayout(tile)
             vl.setContentsMargins(8, 4, 8, 4)
             vl.setSpacing(1)
@@ -216,29 +206,27 @@ class _MonitorStateMixin:
             hdr = QHBoxLayout()
             hdr.setSpacing(4)
             dot = QLabel("●")
-            dot.setStyleSheet(
-                f"color:{dot_color}; font-size:9px; background:transparent; border:none;"
-            )
+            _s.themed_ss(dot, lambda c=dot_cname: (
+                f"color:{getattr(_s, c)}; font-size:9px; background:transparent; border:none;"
+            ))
             lbl_w = QLabel(label)
-            lbl_w.setStyleSheet(
-                f"color:{TEXT_SECONDARY}; font-size:9px; background:transparent; border:none;"
-            )
+            _s.themed_ss(lbl_w, "color:{TEXT_SECONDARY}; font-size:9px; background:transparent; border:none;")
             hdr.addWidget(dot)
             hdr.addWidget(lbl_w)
             hdr.addStretch()
             val = QLabel(start_val)
-            val.setStyleSheet(
-                f"color:{start_color}; font-size:18px; font-weight:bold;"
+            _s.themed_ss(val, lambda c=start_cname: (
+                f"color:{getattr(_s, c)}; font-size:18px; font-weight:bold;"
                 "background:transparent; border:none;"
-            )
+            ))
             vl.addLayout(hdr)
             vl.addWidget(val)
             return tile, dot, val
 
-        t1, _d1, v1 = _tile(ACCENT, "TOTAL NODES",    "—", ACCENT)
-        t2, d2,  v2 = _tile(GREEN,  "CRITICAL RISKS",  "—", GREEN)
-        t3, d3,  v3 = _tile(GREEN,  "UNAUTHORIZED",    "—", GREEN)
-        t4, d4,  v4 = _tile(ACCENT, "SCAN STATUS",     "Idle", ACCENT)
+        t1, _d1, v1 = _tile("ACCENT", "TOTAL NODES",    "—", "ACCENT")
+        t2, d2,  v2 = _tile("GREEN",  "CRITICAL RISKS",  "—", "GREEN")
+        t3, d3,  v3 = _tile("GREEN",  "UNAUTHORIZED",    "—", "GREEN")
+        t4, d4,  v4 = _tile("ACCENT", "SCAN STATUS",     "Idle", "ACCENT")
 
         self._kpi_nodes_val  = v1
         self._kpi_risk_val   = v2;  self._kpi_risk_dot   = d2;  self._kpi_risk_tile   = t2
@@ -261,13 +249,11 @@ class _MonitorStateMixin:
 
         # Nodes tile — always blue
         self._kpi_nodes_val.setText(str(total))
-        self._kpi_nodes_val.setStyleSheet(
-            f"color:{ACCENT}; font-size:18px; font-weight:bold;"
-            "background:transparent; border:none;"
-        )
+        _s.themed_ss(self._kpi_nodes_val, "color:{ACCENT}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;")
 
         # Critical risks tile — green if 0, amber if 1-2, red if 3+
-        risk_color = GREEN if high_risk == 0 else (AMBER if high_risk <= 2 else RED)
+        risk_color = _s.GREEN if high_risk == 0 else (_s.AMBER if high_risk <= 2 else _s.RED)
         self._kpi_risk_val.setText(str(high_risk))
         self._kpi_risk_val.setStyleSheet(
             f"color:{risk_color}; font-size:18px; font-weight:bold;"
@@ -277,12 +263,12 @@ class _MonitorStateMixin:
             f"color:{risk_color}; font-size:9px; background:transparent; border:none;"
         )
         self._kpi_risk_tile.setStyleSheet(
-            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"QFrame#card{{background:{_s.BG_CARD};border:1px solid {_s.BORDER};"
             f"border-left:3px solid {risk_color};border-radius:0px;}}"
         )
 
         # Unauthorized tile — green if 0, red if >0
-        unauth_color = GREEN if unauth == 0 else RED
+        unauth_color = _s.GREEN if unauth == 0 else _s.RED
         self._kpi_unauth_val.setText(str(unauth))
         self._kpi_unauth_val.setStyleSheet(
             f"color:{unauth_color}; font-size:18px; font-weight:bold;"
@@ -292,28 +278,22 @@ class _MonitorStateMixin:
             f"color:{unauth_color}; font-size:9px; background:transparent; border:none;"
         )
         self._kpi_unauth_tile.setStyleSheet(
-            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"QFrame#card{{background:{_s.BG_CARD};border:1px solid {_s.BORDER};"
             f"border-left:3px solid {unauth_color};border-radius:0px;}}"
         )
 
         # Scan status tile — green "Complete"
         self._kpi_scan_val.setText("Complete")
-        self._kpi_scan_dot.setStyleSheet(
-            f"color:{GREEN}; font-size:9px; background:transparent; border:none;"
-        )
-        self._kpi_scan_val.setStyleSheet(
-            f"color:{GREEN}; font-size:18px; font-weight:bold;"
-            "background:transparent; border:none;"
-        )
+        _s.themed_ss(self._kpi_scan_dot, "color:{GREEN}; font-size:9px; background:transparent; border:none;")
+        _s.themed_ss(self._kpi_scan_val, "color:{GREEN}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;")
 
     # ── Verdict area ──────────────────────────────────────────────────────────
 
     def _build_verdict_area(self) -> QWidget:
         """Compact verdict strip at bottom — thin, doesn't waste screen space."""
         w = QWidget()
-        w.setStyleSheet(
-            f"background:{BG_CARD}; border-top:1px solid {BORDER};"
-        )
+        _s.themed_ss(w, "background:{BG_CARD}; border-top:1px solid {BORDER};")
         lay = QHBoxLayout(w)
         lay.setContentsMargins(12, 4, 12, 4)
         lay.setSpacing(0)
@@ -328,19 +308,15 @@ class _MonitorStateMixin:
     def _stat_label(self, title: str, value: str) -> QFrame:
         """KPI card: coloured left border, label above, large number below."""
         frame = QFrame()
-        frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER};"
-            f"border-left:3px solid {ACCENT}; border-radius:3px;"
-        )
+        _s.themed_ss(frame, "background:{BG_CARD}; border:1px solid {BORDER};"
+            "border-left:3px solid {ACCENT}; border-radius:3px;")
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(10, 6, 10, 6)
         fl.setSpacing(1)
         t = QLabel(title.upper())
-        t.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:9px; font-weight:bold; letter-spacing:0.5px;"
-        )
+        _s.themed_ss(t, "color:{TEXT_SECONDARY}; font-size:9px; font-weight:bold; letter-spacing:0.5px;")
         v = QLabel(value)
-        v.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;")
+        _s.themed_ss(v, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;")
         v.setObjectName(f"stat_{title.replace('/','_').replace(' ','_')}")
         fl.addWidget(t)
         fl.addWidget(v)
@@ -352,7 +328,9 @@ class _MonitorStateMixin:
                 return child
         return None
 
-    def _update_stat(self, frame: QFrame, value: str, color: str = TEXT_PRIMARY):
+    def _update_stat(self, frame: QFrame, value: str, color: str = None):
+        if color is None:
+            color = _s.TEXT_PRIMARY
         lbl = self._find_stat_value(frame)
         if lbl:
             lbl.setText(value)
@@ -369,10 +347,10 @@ class _MonitorStateMixin:
         """Update the four permanent status-bar indicators (called every 10 s)."""
         import time as _t
 
-        _muted  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {TEXT_MUTED}; }} QLabel:hover {{ color: {WHITE}; }}"
-        _green  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {GREEN}; }} QLabel:hover {{ color: {WHITE}; }}"
-        _amber  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {AMBER}; }} QLabel:hover {{ color: {WHITE}; }}"
-        _red    = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {RED}; }} QLabel:hover {{ color: {WHITE}; }}"
+        _muted  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {_s.TEXT_MUTED}; }} QLabel:hover {{ color: {_s.WHITE}; }}"
+        _green  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {_s.GREEN}; }} QLabel:hover {{ color: {_s.WHITE}; }}"
+        _amber  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {_s.AMBER}; }} QLabel:hover {{ color: {_s.WHITE}; }}"
+        _red    = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {_s.RED}; }} QLabel:hover {{ color: {_s.WHITE}; }}"
 
         # Online / Offline
         status = self._last_log_status
@@ -448,12 +426,12 @@ class _MonitorStateMixin:
         mon_btn = self._nav_rail_buttons.get("Monitor")
         if mon_btn:
             mon_btn.set_badge("")   # top-right badge not used for Monitor
-            mon_btn.set_left_dot(GREEN if logger else TEXT_MUTED)
+            mon_btn.set_left_dot(_s.GREEN if logger else _s.TEXT_MUTED)
         # Analysis — left dot: green when ARP watch or broadcast storm is running
         ana_btn = self._nav_rail_buttons.get("Analysis")
         if ana_btn:
             ana_btn.set_badge("")   # top-right badge not used for Analysis
-            ana_btn.set_left_dot(GREEN if (arp or storm) else TEXT_MUTED)
+            ana_btn.set_left_dot(_s.GREEN if (arp or storm) else _s.TEXT_MUTED)
         # Security Audit — numeric red pill when unacked alerts exist, green dot when DHCP running
         sec_btn = self._nav_rail_buttons.get("Security Audit")
         if sec_btn:
@@ -468,7 +446,7 @@ class _MonitorStateMixin:
                 sec_btn.set_badge(alert_count)   # numeric red pill
                 sec_btn.setToolTip(f"Security Audit — {alert_count} unacknowledged alert(s)")
             elif dhcp:
-                sec_btn.set_badge(GREEN)
+                sec_btn.set_badge(_s.GREEN)
                 sec_btn.setToolTip("Security Audit")
             else:
                 sec_btn.set_badge(0)
@@ -500,7 +478,7 @@ class _MonitorStateMixin:
                 expired = expiring = 0
             cert_total = expired + expiring
             if cert_total > 0:
-                tls_btn.set_badge(RED if expired > 0 else AMBER)
+                tls_btn.set_badge(_s.RED if expired > 0 else _s.AMBER)
                 tls_btn.setToolTip(
                     f"TLS & Exposure — {expired} expired, {expiring} expiring soon"
                     if expired else f"TLS & Exposure — {expiring} cert{'s' if expiring != 1 else ''} expiring soon"
@@ -512,7 +490,7 @@ class _MonitorStateMixin:
         base_btn = self._nav_rail_buttons.get("Config Snapshots")
         if base_btn:
             if getattr(self, "_baseline_has_drift", False):
-                base_btn.set_badge(AMBER)
+                base_btn.set_badge(_s.AMBER)
                 base_btn.setToolTip("Config Snapshots — baseline drift detected")
             else:
                 base_btn.set_badge(0)
@@ -555,10 +533,10 @@ class _MonitorStateMixin:
                 except Exception:
                     pass  # non-fatal
         # Flyout item dots — always reflect current state
-        self._set_flyout_dot("ARP Spoof Watch",    GREEN if arp    else "")
-        self._set_flyout_dot("DHCP Rogue Monitor", GREEN if dhcp   else "")
-        self._set_flyout_dot("Broadcast Storm",    GREEN if storm  else "")
-        self._set_flyout_dot("Network Logger",     GREEN if logger else "")
+        self._set_flyout_dot("ARP Spoof Watch",    _s.GREEN if arp    else "")
+        self._set_flyout_dot("DHCP Rogue Monitor", _s.GREEN if dhcp   else "")
+        self._set_flyout_dot("Broadcast Storm",    _s.GREEN if storm  else "")
+        self._set_flyout_dot("Network Logger",     _s.GREEN if logger else "")
         # AUTO-1/2: Automation dot and tile — green if any rule fired in last 24h
         try:
             from modules.automation_hooks import get_engine as _get_ae
@@ -567,7 +545,7 @@ class _MonitorStateMixin:
             _auto_rules = _ae.get_rules()
             import time as _t
             _auto_active = _auto_ts > 0 and (_t.time() - _auto_ts) < 86400
-            self._set_flyout_dot("Automation Hooks", GREEN if _auto_active else "")
+            self._set_flyout_dot("Automation Hooks", _s.GREEN if _auto_active else "")
             if hasattr(self, "_monitor_overview_page"):
                 self._monitor_overview_page.set_automation_status(
                     len(_auto_rules), _auto_ts

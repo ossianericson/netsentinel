@@ -30,12 +30,7 @@ from ui.widgets.context_menu import install_copy_menu
 
 from modules.metric_store import MetricStore
 from ui.tabs_helpers import _table
-from ui.styles import (
-    ACCENT, AMBER, BG_CARD,
-    BG_DARK, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
-)
+from ui import styles as _s
 
 
 # ── Helpers (mirrors dashboard helpers, no dependency on dashboard) ───────────
@@ -43,22 +38,18 @@ from ui.styles import (
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     outer = QFrame()
     outer.setObjectName("card")
-    outer.setStyleSheet(
-        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(outer, "QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer_lay = QVBoxLayout(outer)
     outer_lay.setContentsMargins(0, 0, 0, 0)
     outer_lay.setSpacing(0)
 
     title_bar = QLabel(title)
-    title_bar.setStyleSheet(
-        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
-        f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(title_bar, "QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
+        " padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}")
     outer_lay.addWidget(title_bar)
 
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD}; border:none;")
+    _s.themed_ss(body, "background:{BG_CARD}; border:none;")
     body_lay = QVBoxLayout(body)
     body_lay.setContentsMargins(0, 0, 0, 0)
     body_lay.setSpacing(0)
@@ -68,19 +59,17 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
 
 def _kpi_tile(label: str, value: str = "0") -> tuple[QWidget, QLabel]:
     tile = QWidget()
-    tile.setStyleSheet(
-        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {ACCENT}; }}"
-    )
+    _s.themed_ss(tile, "QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-left:3px solid {ACCENT}; }}")
     tile.setMinimumWidth(110)
     tile.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     lay = QVBoxLayout(tile)
     lay.setContentsMargins(8, 4, 8, 4)
     lay.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
+    _s.themed_ss(lbl, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
     val = QLabel(value)
-    val.setStyleSheet(f"font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
+    _s.themed_ss(val, "font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return tile, val
@@ -107,7 +96,7 @@ class SnmpTrapPage(QWidget):
     # ── UI ────────────────────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -126,9 +115,7 @@ class SnmpTrapPage(QWidget):
 
         # Status bar
         self._status_lbl = QLabel("Not listening.")
-        self._status_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         root.addWidget(self._status_lbl)
 
         # KPI row
@@ -241,7 +228,7 @@ class SnmpTrapPage(QWidget):
             item = QTableWidgetItem(str(val))
             # Colour error rows amber
             if trap.get("raw_error"):
-                item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(AMBER))
+                item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(_s.AMBER))
             self._table.setItem(row, col, item)
 
         # Store full trap data for detail view
@@ -253,16 +240,12 @@ class SnmpTrapPage(QWidget):
     def on_status(self, msg: str) -> None:
         self._listen_port = _parse_port(msg)
         self._status_lbl.setText(f"● {msg}")
-        self._status_lbl.setStyleSheet(
-            f"font-size:11px; color:{GREEN}; background:transparent;"
-        )
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{GREEN}; background:transparent;")
 
     @pyqtSlot(str)
     def on_error(self, msg: str) -> None:
         self._status_lbl.setText(f"⚠ {msg}")
-        self._status_lbl.setStyleSheet(
-            f"font-size:11px; color:{RED}; background:transparent;"
-        )
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{RED}; background:transparent;")
 
     # ── Detail dialog ─────────────────────────────────────────────────────────
 
@@ -304,21 +287,17 @@ class _TrapDetailDialog(QDialog):
             info += f"\nParse error: {trap['raw_error']}\n"
 
         info_lbl = QLabel(info)
-        info_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; font-family:'Consolas','Courier New',monospace;"
-        )
+        _s.themed_ss(info_lbl, "font-size:11px; color:{TEXT_PRIMARY}; font-family:'Consolas','Courier New',monospace;")
         lay.addWidget(info_lbl)
 
         vb_lbl = QLabel("Variable Bindings:")
-        vb_lbl.setStyleSheet(f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};")
+        _s.themed_ss(vb_lbl, "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};")
         lay.addWidget(vb_lbl)
 
         vb_text = QTextEdit()
         vb_text.setReadOnly(True)
-        vb_text.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
-            f" border:1px solid {BORDER}; font-family:'Consolas','Courier New',monospace;"
-        )
+        _s.themed_ss(vb_text, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            " border:1px solid {BORDER}; font-family:'Consolas','Courier New',monospace;")
         varbinds = trap.get("varbinds", [])
         if varbinds:
             vb_text.setPlainText("\n".join(f"  {oid}  =  {val}" for oid, val in varbinds))
@@ -328,10 +307,8 @@ class _TrapDetailDialog(QDialog):
 
         btn = QPushButton("Close")
         btn.setFixedHeight(30)
-        btn.setStyleSheet(
-            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" background:{BG_CARD}; padding:0 16px; border-radius:4px;"
-        )
+        _s.themed_ss(btn, "font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            " background:{BG_CARD}; padding:0 16px; border-radius:4px;")
         btn.clicked.connect(self.accept)
         lay.addWidget(btn, alignment=Qt.AlignmentFlag.AlignRight)
 

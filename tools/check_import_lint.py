@@ -361,7 +361,6 @@ BASELINE_UNUSED_GLOBALS: frozenset[tuple[str, str]] = frozenset({
     ("modules/syslog_receiver.py", "_MONTHS"),
     ("modules/wifi_scanner.py", "CHANNELS_24GHZ"),
     ("modules/wifi_scanner.py", "CHANNELS_5GHZ"),
-    ("ui/pages/log_source_panel.py", "_SYSLOG_SEVERITY_COLOR"),
     ("ui/pages/trend_page.py", "_SEV_BG"),
     ("ui/pages/trigger_builder_page.py", "_BUILDER_METRICS"),
     ("ui/pages/trigger_builder_page.py", "_BUILDER_OPS"),
