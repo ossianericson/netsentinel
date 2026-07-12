@@ -17,13 +17,10 @@ from PyQt6.QtWidgets import (
     QScrollArea, QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    alpha,
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_CARD, BG_DARK, BORDER,
-    CARD_RADIUS, GRADE_B_COLOR, GREEN, NAV_BAR,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
+# GRADE_B_COLOR is theme-independent (fixed hex, not a theme-dict key) so it stays a
+# plain import + bare read -- live conversion does not apply (see migration plan scope).
+from ui.styles import GRADE_B_COLOR
 
 
 # ── FreshnessStrip ────────────────────────────────────────────────────────────
@@ -38,21 +35,17 @@ class FreshnessStrip(QFrame):
         super().__init__(parent)
         self.setObjectName("freshnessStrip")
         self.setFixedHeight(30)
-        self.setStyleSheet(
-            f"QFrame#freshnessStrip {{ background:{NAV_BAR}; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self, "QFrame#freshnessStrip {{ background:{NAV_BAR}; border-bottom:1px solid {BORDER}; }}")
         row = QHBoxLayout(self)
         row.setContentsMargins(14, 0, 8, 0)
         row.setSpacing(12)
 
         self._fs_scan_lbl = QLabel("Last scan: —")
-        self._fs_scan_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._fs_scan_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         row.addWidget(self._fs_scan_lbl)
 
         _sep = QLabel("|")
-        _sep.setStyleSheet(f"font-size:11px; color:{BORDER}; background:transparent; border:none;")
+        _s.themed_ss(_sep, "font-size:11px; color:{BORDER}; background:transparent; border:none;")
         row.addWidget(_sep)
 
         # Pills are QPushButton (flat) so they support tooltips and click events
@@ -75,22 +68,18 @@ class FreshnessStrip(QFrame):
             row.addWidget(pill)
 
         _sep2 = QLabel("|")
-        _sep2.setStyleSheet(f"font-size:11px; color:{BORDER}; background:transparent; border:none;")
+        _s.themed_ss(_sep2, "font-size:11px; color:{BORDER}; background:transparent; border:none;")
         row.addWidget(_sep2)
 
         self._fs_next_scan_lbl = QLabel("")
-        self._fs_next_scan_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._fs_next_scan_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         row.addWidget(self._fs_next_scan_lbl)
         self.refresh_next_scan_label()
 
         row.addStretch()
 
         self._scan_progress_lbl = QLabel("")
-        self._scan_progress_lbl.setStyleSheet(
-            f"font-size:10px; color:{AMBER}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._scan_progress_lbl, "font-size:10px; color:{AMBER}; background:transparent; border:none;")
         self._scan_progress_lbl.setVisible(False)
         row.addWidget(self._scan_progress_lbl)
 
@@ -98,12 +87,10 @@ class FreshnessStrip(QFrame):
         _btn.setFixedSize(24, 22)
         _btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _btn.setToolTip("Rescan network")
-        _btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
-            f" font-size:14px; border-radius:3px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
-        )
+        _s.themed_ss(_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            " font-size:14px; border-radius:3px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}")
         _btn.clicked.connect(self.rescan_requested)
         row.addWidget(_btn)
 
@@ -121,12 +108,10 @@ class FreshnessStrip(QFrame):
         btn = QPushButton(f"○ {label}")
         btn.setFlat(True)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet(
-            f"QPushButton {{ font-size:10px; color:{TEXT_MUTED}; background:transparent;"
-            f" border:none; padding:0 2px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _s.themed_ss(btn, "QPushButton {{ font-size:10px; color:{TEXT_MUTED}; background:transparent;"
+            " border:none; padding:0 2px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
         return btn
 
     @staticmethod
@@ -166,21 +151,17 @@ class FreshnessStrip(QFrame):
             self._fs_pill_active[pill] = active
             if active:
                 pill.setText(f"● {name}")
-                pill.setStyleSheet(
-                    f"QPushButton {{ font-size:10px; color:{GREEN}; background:transparent;"
-                    f" border:none; padding:0 2px; }}"
-                    f"QPushButton:hover {{ color:{GREEN}; background:transparent; }}"
-                    f"QPushButton:pressed {{ color:{GREEN}; background:transparent; }}"
-                )
+                _s.themed_ss(pill, "QPushButton {{ font-size:10px; color:{GREEN}; background:transparent;"
+                    " border:none; padding:0 2px; }}"
+                    "QPushButton:hover {{ color:{GREEN}; background:transparent; }}"
+                    "QPushButton:pressed {{ color:{GREEN}; background:transparent; }}")
                 pill.setToolTip(_PILL_ON_TIPS.get(name, ""))
             else:
                 pill.setText(f"○ {name}")
-                pill.setStyleSheet(
-                    f"QPushButton {{ font-size:10px; color:{TEXT_MUTED}; background:transparent;"
-                    f" border:none; padding:0 2px; }}"
-                    f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-                )
+                _s.themed_ss(pill, "QPushButton {{ font-size:10px; color:{TEXT_MUTED}; background:transparent;"
+                    " border:none; padding:0 2px; }}"
+                    "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+                    "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
                 pill.setToolTip(_PILL_OFF_TIPS.get(name, ""))
 
         _set_pill(self._fs_pill_arp,   arp,    "ARP")
@@ -251,13 +232,14 @@ class GettingStartedCard(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("gettingStartedCard")
-        self.setStyleSheet(
-            f"QFrame#gettingStartedCard {{"
-            f" background:{BG_CARD};"
-            f" border:1px solid {BORDER};"
-            f" border-left:3px solid {ACCENT};"
-            f" border-radius:{CARD_RADIUS};"
-            f"}}"
+        _s.themed_ss(
+            self,
+            "QFrame#gettingStartedCard {{"
+            " background:{BG_CARD};"
+            " border:1px solid {BORDER};"
+            " border-left:3px solid {ACCENT};"
+            " border-radius:{CARD_RADIUS};"
+            "}}"
         )
         outer = QVBoxLayout(self)
         outer.setContentsMargins(14, 10, 12, 12)
@@ -268,23 +250,17 @@ class GettingStartedCard(QFrame):
         hdr_row.setSpacing(8)
 
         self._setup_hdr_lbl = QLabel("GETTING STARTED")
-        self._setup_hdr_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:700; color:{ACCENT};"
-            " background:transparent; border:none; letter-spacing:1.5px;"
-        )
+        _s.themed_ss(self._setup_hdr_lbl, "font-size:10px; font-weight:700; color:{ACCENT};"
+            " background:transparent; border:none; letter-spacing:1.5px;")
         self._setup_progress_lbl = QLabel("")
-        self._setup_progress_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._setup_progress_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
         self._setup_collapse_btn = QPushButton("▼")
         self._setup_collapse_btn.setFixedSize(18, 18)
         self._setup_collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._setup_collapse_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:10px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _s.themed_ss(self._setup_collapse_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:10px; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
         self._setup_collapse_btn.clicked.connect(self._toggle_collapse)
         hdr_row.addWidget(self._setup_hdr_lbl)
         hdr_row.addWidget(self._setup_progress_lbl)
@@ -340,23 +316,17 @@ class GettingStartedCard(QFrame):
 
             chk = QLabel("○")
             chk.setFixedWidth(14)
-            chk.setStyleSheet(
-                f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
-            )
+            _s.themed_ss(chk, "font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;")
             self._setup_check_lbls[key] = chk
 
             text_col = QVBoxLayout()
             text_col.setSpacing(1)
             title_lbl = QLabel(title)
-            title_lbl.setStyleSheet(
-                f"font-size:11px; font-weight:500; color:{TEXT_PRIMARY};"
-                " background:transparent; border:none;"
-            )
+            _s.themed_ss(title_lbl, "font-size:11px; font-weight:500; color:{TEXT_PRIMARY};"
+                " background:transparent; border:none;")
             self._setup_title_lbls[key] = title_lbl
             sub_lbl = QLabel(subtitle)
-            sub_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(sub_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
             text_col.addWidget(title_lbl)
             text_col.addWidget(sub_lbl)
 
@@ -365,24 +335,20 @@ class GettingStartedCard(QFrame):
                 btn.setFixedHeight(24)
                 btn.setFixedWidth(72)
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet(
-                    f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-                    f" border-radius:3px; font-size:10px; font-weight:600; padding:0 8px; }}"
-                    f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-                    f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-                )
+                _s.themed_ss(btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+                    " border-radius:3px; font-size:10px; font-weight:600; padding:0 8px; }}"
+                    "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+                    "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
                 _p = plugin_path
                 btn.clicked.connect(lambda _=False, p=_p: self.add_plugin_requested.emit(p))
             else:
                 btn = QPushButton("→")
                 btn.setFlat(True)
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet(
-                    f"QPushButton {{ color:{ACCENT}; font-size:14px; background:transparent;"
-                    f" border:none; padding:0 4px; }}"
-                    f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
-                    f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
-                )
+                _s.themed_ss(btn, "QPushButton {{ color:{ACCENT}; font-size:14px; background:transparent;"
+                    " border:none; padding:0 4px; }}"
+                    "QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+                    "QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}")
                 _t = nav_target
                 if key == "npcap":
                     btn.clicked.connect(
@@ -467,33 +433,25 @@ class GettingStartedCard(QFrame):
             done = states.get(key, False)
             if done:
                 chk.setText("✓")
-                chk.setStyleSheet(
-                    f"font-size:13px; color:{GREEN}; background:transparent; border:none;"
-                )
+                _s.themed_ss(chk, "font-size:13px; color:{GREEN}; background:transparent; border:none;")
                 btn = self._setup_step_btns.get(key)
                 if btn:
                     btn.setEnabled(False)
                     if key == "hw_setup":
                         btn.setText("✓ Done")
-                    btn.setStyleSheet(
-                        f"QPushButton {{ color:{GREEN}; font-size:10px; background:transparent;"
-                        f" border:none; padding:0 4px; }}"
-                        f"QPushButton:hover   {{ color:{GREEN}; background:transparent; }}"
-                        f"QPushButton:pressed {{ color:{GREEN}; background:transparent; }}"
-                        f"QPushButton:disabled {{ color:{GREEN}; background:transparent; }}"
-                    )
+                    _s.themed_ss(btn, "QPushButton {{ color:{GREEN}; font-size:10px; background:transparent;"
+                        " border:none; padding:0 4px; }}"
+                        "QPushButton:hover   {{ color:{GREEN}; background:transparent; }}"
+                        "QPushButton:pressed {{ color:{GREEN}; background:transparent; }}"
+                        "QPushButton:disabled {{ color:{GREEN}; background:transparent; }}")
             else:
                 chk.setText("○")
-                chk.setStyleSheet(
-                    f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
-                )
+                _s.themed_ss(chk, "font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;")
         self._setup_progress_lbl.setText(f"{done_count}/{total} done")
         if done_count == total:
             self._setup_hdr_lbl.setText("✓ SETUP COMPLETE")
-            self._setup_hdr_lbl.setStyleSheet(
-                f"font-size:10px; font-weight:700; color:{GREEN};"
-                " background:transparent; border:none; letter-spacing:1.5px;"
-            )
+            _s.themed_ss(self._setup_hdr_lbl, "font-size:10px; font-weight:700; color:{GREEN};"
+                " background:transparent; border:none; letter-spacing:1.5px;")
             from PyQt6.QtCore import QTimer as _QT
             _t = _QT(self)
             _t.setSingleShot(True)
@@ -501,14 +459,11 @@ class GettingStartedCard(QFrame):
             _t.start(2000)
         else:
             self._setup_hdr_lbl.setText("GETTING STARTED")
-            self._setup_hdr_lbl.setStyleSheet(
-                f"font-size:10px; font-weight:700; color:{ACCENT};"
-                " background:transparent; border:none; letter-spacing:1.5px;"
-            )
+            _s.themed_ss(self._setup_hdr_lbl, "font-size:10px; font-weight:700; color:{ACCENT};"
+                " background:transparent; border:none; letter-spacing:1.5px;")
 
     def notify_hw_detected(self, hw_type: str) -> None:
         """Mark a hardware step as 'detected nearby' with amber indicator."""
-        from ui.styles import AMBER
         key_map = {"modem": "hw_setup", "router": "hw_setup"}
         key = key_map.get(hw_type)
         if not key:
@@ -520,9 +475,7 @@ class GettingStartedCard(QFrame):
         btn = self._setup_step_btns.get(key)
         if chk:
             chk.setText("◉")
-            chk.setStyleSheet(
-                f"font-size:13px; color:{AMBER}; background:transparent; border:none;"
-            )
+            _s.themed_ss(chk, "font-size:13px; color:{AMBER}; background:transparent; border:none;")
         if btn and btn.isEnabled():
             btn.setText("Add it now →")
 
@@ -538,19 +491,17 @@ class _GradeBreakdownDialog:
             QScrollArea, QWidget, QFrame, QPushButton,
         )
         from PyQt6.QtCore import Qt
-        from ui.styles import (
-            ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, GREEN, RED,
-            TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-        )
 
+        # Transient dialog rebuilt per open -> read theme tokens live via _s.* so each
+        # open reflects the current theme (recipe G, no themed_ss registration needed).
         _GRADE_COLOR = {
-            "A": GREEN, "B": GRADE_B_COLOR, "C": AMBER, "D": RED, "F": RED,
+            "A": _s.GREEN, "B": GRADE_B_COLOR, "C": _s.AMBER, "D": _s.RED, "F": _s.RED,
         }
 
         dlg = QDialog(parent)
         dlg.setWindowTitle("Network Grade Breakdown")
         dlg.setMinimumWidth(440)
-        dlg.setStyleSheet(f"QDialog {{ background:{BG_DARK}; }}")
+        _s.themed_ss(dlg, "QDialog {{ background:{BG_DARK}; }}")
 
         lay = QVBoxLayout(dlg)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -558,22 +509,22 @@ class _GradeBreakdownDialog:
 
         hdr_row = QHBoxLayout()
         overall_lbl = QLabel(grade)
-        _fg = _GRADE_COLOR.get(grade, TEXT_SECONDARY)
+        _fg = _GRADE_COLOR.get(grade, _s.TEXT_SECONDARY)
         overall_lbl.setStyleSheet(
             f"font-size:36px; font-weight:bold; color:{_fg};"
-            f" background:{BG_CARD}; border:3px solid {_fg}; border-radius:28px;"
+            f" background:{_s.BG_CARD}; border:3px solid {_fg}; border-radius:28px;"
             f" min-width:56px; min-height:56px;"
         )
         overall_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         overall_lbl.setFixedSize(56, 56)
         hdr_text = QLabel(
             "<b>Network Grade Breakdown</b><br>"
-            f"<span style='font-size:11px; color:{TEXT_SECONDARY};'>"
+            f"<span style='font-size:11px; color:{_s.TEXT_SECONDARY};'>"
             "Hover each row for thresholds. The lowest score determines the overall grade.</span>"
         )
         hdr_text.setTextFormat(Qt.TextFormat.RichText)
         hdr_text.setWordWrap(True)
-        hdr_text.setStyleSheet(f"background:transparent; border:none; color:{TEXT_PRIMARY};")
+        _s.themed_ss(hdr_text, "background:transparent; border:none; color:{TEXT_PRIMARY};")
         hdr_row.addWidget(overall_lbl)
         hdr_row.addSpacing(12)
         hdr_row.addWidget(hdr_text, 1)
@@ -599,31 +550,27 @@ class _GradeBreakdownDialog:
                 tip_frame = QFrame()
                 tip_frame.setObjectName("breakdownTip")
                 tip_frame.setStyleSheet(
-                    f"QFrame#breakdownTip {{ background:{BG_CARD}; border:1px solid {alpha(AMBER, 0x44)};"
-                    f" border-left:3px solid {AMBER}; border-radius:4px; }}"
+                    f"QFrame#breakdownTip {{ background:{_s.BG_CARD}; border:1px solid {_s.alpha(_s.AMBER, 0x44)};"
+                    f" border-left:3px solid {_s.AMBER}; border-radius:4px; }}"
                 )
                 tip_lay = QHBoxLayout(tip_frame)
                 tip_lay.setContentsMargins(10, 6, 10, 6)
                 tip_lay.setSpacing(8)
                 tip_lbl = QLabel(
                     f"<b>Biggest improvement:</b> {tip_name} is grade "
-                    f"<b style='color:{_GRADE_COLOR.get(tip_grade, AMBER)}'>{tip_grade}</b>"
+                    f"<b style='color:{_GRADE_COLOR.get(tip_grade, _s.AMBER)}'>{tip_grade}</b>"
                 )
                 tip_lbl.setTextFormat(Qt.TextFormat.RichText)
-                tip_lbl.setStyleSheet(
-                    f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-                )
+                _s.themed_ss(tip_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
                 tip_lay.addWidget(tip_lbl, 1)
                 if tip_nav:
                     go_btn = QPushButton(f"Go to {tip_nav} →")
                     go_btn.setFlat(True)
                     go_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                    go_btn.setStyleSheet(
-                        f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-                        f" border:none; padding:0; }}"
-                        f"QPushButton:hover {{ color:{ACCENT}; text-decoration:underline; }}"
-                        f"QPushButton:pressed {{ color:{ACCENT}; }}"
-                    )
+                    _s.themed_ss(go_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                        " border:none; padding:0; }}"
+                        "QPushButton:hover {{ color:{ACCENT}; text-decoration:underline; }}"
+                        "QPushButton:pressed {{ color:{ACCENT}; }}")
                     go_btn.clicked.connect(dlg.accept)
                     tip_lay.addWidget(go_btn)
                 lay.addWidget(tip_frame)
@@ -633,7 +580,7 @@ class _GradeBreakdownDialog:
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setMaximumHeight(340)
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         inner_lay = QVBoxLayout(inner)
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(4)
@@ -657,11 +604,9 @@ class _GradeBreakdownDialog:
 
             row = QFrame()
             row.setObjectName("breakdownRow")
-            row.setStyleSheet(
-                f"QFrame#breakdownRow {{ background:{BG_CARD}; border:1px solid {BORDER};"
-                f" border-radius:3px; }}"
-            )
-            _fg2 = _GRADE_COLOR.get(dgrade, TEXT_SECONDARY)
+            _s.themed_ss(row, "QFrame#breakdownRow {{ background:{BG_CARD}; border:1px solid {BORDER};"
+                " border-radius:3px; }}")
+            _fg2 = _GRADE_COLOR.get(dgrade, _s.TEXT_SECONDARY)
             _th  = " | ".join(_THRESHOLDS.get(name, ()))
             if _th:
                 row.setToolTip(f"Thresholds: {_th}")
@@ -675,14 +620,12 @@ class _GradeBreakdownDialog:
             grade_badge.setFixedSize(28, 28)
             grade_badge.setStyleSheet(
                 f"font-size:13px; font-weight:bold; color:{_fg2};"
-                f" background:{BG_DARK}; border:2px solid {_fg2}; border-radius:14px;"
+                f" background:{_s.BG_DARK}; border:2px solid {_fg2}; border-radius:14px;"
             )
 
             name_lbl = QLabel(name)
-            name_lbl.setStyleSheet(
-                f"font-size:11px; font-weight:500; color:{TEXT_PRIMARY};"
-                " background:transparent; border:none;"
-            )
+            _s.themed_ss(name_lbl, "font-size:11px; font-weight:500; color:{TEXT_PRIMARY};"
+                " background:transparent; border:none;")
 
             right_col = QVBoxLayout()
             right_col.setSpacing(1)
@@ -691,9 +634,7 @@ class _GradeBreakdownDialog:
                 f"font-size:10px; color:{_fg2}; background:transparent; border:none;"
             )
             msg_lbl = QLabel(msg)
-            msg_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-            )
+            _s.themed_ss(msg_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
             msg_lbl.setWordWrap(True)
             right_col.addWidget(val_lbl)
             right_col.addWidget(msg_lbl)
@@ -708,12 +649,10 @@ class _GradeBreakdownDialog:
         close_btn = QPushButton("Close")
         close_btn.setFixedHeight(28)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(close_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; padding:0 16px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         close_btn.clicked.connect(dlg.accept)
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -731,23 +670,25 @@ class StandardWelcomePage(QWidget):
     Displays a 2-column feature card grid: 'WHAT EACH SECTION GIVES YOU'.
     """
 
+    # icon colour stored as a theme-token NAME (resolved live via getattr(_s, name) at
+    # card-build time) so a theme switch restyles the icons -- see _make_card.
     _FEATURES = [
-        ("⚡", "Speed test",      AMBER,        ["Download / upload speed",
+        ("⚡", "Speed test",      "AMBER",        ["Download / upload speed",
                                                       "Ookla or fallback backends",
                                                       "Historical trend chart"]),
-        ("◎", "DNS & Stability", ACCENT,        ["Live ping + DNS latency graph",
+        ("◎", "DNS & Stability", "ACCENT",        ["Live ping + DNS latency graph",
                                                       "Outage detection & log",
                                                       "STP reconvergence signature"]),
-        ("⊕", "Devices",         TEXT_PRIMARY,  ["IP, MAC, vendor, model",
+        ("⊕", "Devices",         "TEXT_PRIMARY",  ["IP, MAC, vendor, model",
                                                       "Right-click How to Fix",
                                                       "Availability history per device"]),
-        ("▲", "Live Bandwidth",  TEXT_PRIMARY,  ["Per-device rx/tx Mbps",
+        ("▲", "Live Bandwidth",  "TEXT_PRIMARY",  ["Per-device rx/tx Mbps",
                                                       "60-second rolling area chart",
                                                       "Session totals table"]),
-        ("◼", "Network Grade",   TEXT_PRIMARY,  ["A–F across 8 dimensions",
+        ("◼", "Network Grade",   "TEXT_PRIMARY",  ["A–F across 8 dimensions",
                                                       "Colour-coded verdict per metric",
                                                       "Actionable fix tip per grade"]),
-        ("↗", "Network Health Report", TEXT_PRIMARY, ["Self-contained HTML export",
+        ("↗", "Network Health Report", "TEXT_PRIMARY", ["Self-contained HTML export",
                                                            "MTR hop table + outage log",
                                                            "Great for ISP support tickets"]),
     ]
@@ -765,7 +706,7 @@ class StandardWelcomePage(QWidget):
 
         inner = QWidget()
         inner.setObjectName("homepageInner")
-        inner.setStyleSheet(f"QWidget#homepageInner {{ background:{BG_DARK}; }}")
+        _s.themed_ss(inner, "QWidget#homepageInner {{ background:{BG_DARK}; }}")
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
@@ -774,14 +715,12 @@ class StandardWelcomePage(QWidget):
         lay.setSpacing(16)
 
         hdr = QLabel("WHAT EACH SECTION GIVES YOU")
-        hdr.setStyleSheet(
-            f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
-            " background:transparent; border:none; letter-spacing:1.5px;"
-        )
+        _s.themed_ss(hdr, "font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; letter-spacing:1.5px;")
         lay.addWidget(hdr)
 
         grid_w = QWidget()
-        grid_w.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(grid_w, "background:{BG_DARK};")
         grid = QGridLayout(grid_w)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(8)
@@ -798,9 +737,7 @@ class StandardWelcomePage(QWidget):
                    bullets: list[str]) -> QFrame:
         card = QFrame()
         card.setObjectName("stdCapabilityCard")
-        card.setStyleSheet(
-            f"QFrame#stdCapabilityCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(card, "QFrame#stdCapabilityCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}")
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(12, 10, 12, 10)
         card_lay.setSpacing(4)
@@ -808,13 +745,14 @@ class StandardWelcomePage(QWidget):
         title_row = QHBoxLayout()
         title_row.setSpacing(6)
         icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet(
-            f"font-size:14px; color:{icon_colour}; background:transparent; border:none;"
-        )
+        # icon_colour is a theme-token NAME; resolve live so a theme switch restyles it.
+        _s.themed_ss(icon_lbl, lambda name=icon_colour:
+                     f"font-size:14px; color:{getattr(_s, name)}; background:transparent; border:none;")
         icon_lbl.setFixedWidth(18)
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+        _s.themed_ss(
+            title_lbl,
+            "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
             " background:transparent; border:none;"
         )
         title_row.addWidget(icon_lbl)
@@ -823,8 +761,9 @@ class StandardWelcomePage(QWidget):
 
         for bullet in bullets:
             b = QLabel(bullet)
-            b.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY};"
+            _s.themed_ss(
+                b,
+                "font-size:11px; color:{TEXT_SECONDARY};"
                 " background:transparent; border:none; padding-left:4px;"
             )
             card_lay.addWidget(b)
@@ -868,7 +807,7 @@ class ProWelcomePage(QWidget):
 
         inner = QWidget()
         inner.setObjectName("homepageInner")
-        inner.setStyleSheet(f"QWidget#homepageInner {{ background:{BG_DARK}; }}")
+        _s.themed_ss(inner, "QWidget#homepageInner {{ background:{BG_DARK}; }}")
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
@@ -877,14 +816,12 @@ class ProWelcomePage(QWidget):
         lay.setSpacing(16)
 
         hdr = QLabel("SECURITY AUDIT CAPABILITIES")
-        hdr.setStyleSheet(
-            f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
-            " background:transparent; letter-spacing:1.5px; border:none;"
-        )
+        _s.themed_ss(hdr, "font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
+            " background:transparent; letter-spacing:1.5px; border:none;")
         lay.addWidget(hdr)
 
         grid_w = QWidget()
-        grid_w.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(grid_w, "background:{BG_DARK};")
         grid = QGridLayout(grid_w)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(8)
@@ -900,9 +837,7 @@ class ProWelcomePage(QWidget):
     def _make_card(icon: str, title: str, bullets: list[str]) -> QFrame:
         card = QFrame()
         card.setObjectName("secCapabilityCard")
-        card.setStyleSheet(
-            f"QFrame#secCapabilityCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(card, "QFrame#secCapabilityCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}")
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(12, 10, 12, 10)
         card_lay.setSpacing(4)
@@ -910,13 +845,12 @@ class ProWelcomePage(QWidget):
         title_row = QHBoxLayout()
         title_row.setSpacing(6)
         icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet(
-            f"font-size:14px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(icon_lbl, "font-size:14px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         icon_lbl.setFixedWidth(18)
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+        _s.themed_ss(
+            title_lbl,
+            "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
             " background:transparent; border:none;"
         )
         title_row.addWidget(icon_lbl)
@@ -925,8 +859,9 @@ class ProWelcomePage(QWidget):
 
         for bullet in bullets:
             b = QLabel(bullet)
-            b.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY};"
+            _s.themed_ss(
+                b,
+                "font-size:11px; color:{TEXT_SECONDARY};"
                 " background:transparent; border:none; padding-left:4px;"
             )
             card_lay.addWidget(b)
