@@ -22,11 +22,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 from modules.mqtt_publisher import MqttPublisher, get_publisher, _PAHO_AVAILABLE
 
 
@@ -72,24 +68,18 @@ class _ConnectWorker(QThread):
 def _card(title: str) -> tuple[QFrame, QVBoxLayout, QHBoxLayout]:
     frame = QFrame()
     frame.setObjectName("card")
-    frame.setStyleSheet(
-        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(frame, "QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
     hdr = QFrame()
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0px;"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0px;")
     hdr_lay = QHBoxLayout(hdr)
     hdr_lay.setContentsMargins(12, 0, 10, 0)
     t = QLabel(title.upper())
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-        f" letter-spacing:0.5px; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+        " letter-spacing:0.5px; background:transparent; border:none;")
     hdr_lay.addWidget(t)
     hdr_lay.addStretch()
     outer.addWidget(hdr)
@@ -135,19 +125,15 @@ class MqttPage(QWidget):
 
         # Page header
         title = QLabel("MQTT / Home Assistant")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            " background:transparent; border:none;")
         sub = QLabel(
             "Publish device join/leave, alerts, and uptime events to an MQTT broker. "
             "Home Assistant MQTT discovery is supported."
         )
         sub.setWordWrap(True)
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none; padding:0 0 4px 0;"
-        )
+        _s.themed_ss(sub, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none; padding:0 0 4px 0;")
         root.addWidget(title)
         root.addWidget(sub)
 
@@ -155,9 +141,9 @@ class MqttPage(QWidget):
         cfg_frame, cfg_body, _ = _card("Broker Configuration")
 
         _in_qss = (
-            f"QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+            "QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
 
         def _row(label: str, widget: QWidget) -> None:
@@ -165,50 +151,48 @@ class MqttPage(QWidget):
             row.setSpacing(8)
             lbl = QLabel(label)
             lbl.setFixedWidth(100)
-            lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+            _s.themed_ss(lbl, "color:{TEXT_PRIMARY}; font-size:11px;")
             row.addWidget(lbl)
             row.addWidget(widget, 1)
             cfg_body.addLayout(row)
 
         self._host = QLineEdit()
         self._host.setPlaceholderText("192.168.1.x or hostname")
-        self._host.setStyleSheet(_in_qss)
+        _s.themed_ss(self._host, _in_qss)
         _row("Broker host:", self._host)
 
         self._port = QSpinBox()
         self._port.setRange(1, 65535)
         self._port.setValue(1883)
-        self._port.setStyleSheet(
-            f"QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._port, "QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}")
         _row("Port:", self._port)
 
         self._username = QLineEdit()
         self._username.setPlaceholderText("Leave blank for anonymous")
-        self._username.setStyleSheet(_in_qss)
+        _s.themed_ss(self._username, _in_qss)
         _row("Username:", self._username)
 
         self._password = QLineEdit()
         self._password.setEchoMode(QLineEdit.EchoMode.Password)
         self._password.setPlaceholderText("Stored in OS keychain")
-        self._password.setStyleSheet(_in_qss)
+        _s.themed_ss(self._password, _in_qss)
         _row("Password:", self._password)
 
         self._base_topic = QLineEdit()
         self._base_topic.setPlaceholderText("netsentinel")
-        self._base_topic.setStyleSheet(_in_qss)
+        _s.themed_ss(self._base_topic, _in_qss)
         _row("Base topic:", self._base_topic)
 
         _chk_qss = (
-            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
-            f"QCheckBox::indicator {{ width:13px; height:13px; border:1px solid {BORDER};"
-            f" border-radius:2px; background:{BG_CARD}; }}"
-            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
+            "QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
+            "QCheckBox::indicator {{ width:13px; height:13px; border:1px solid {BORDER};"
+            " border-radius:2px; background:{BG_CARD}; }}"
+            "QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
         )
         self._chk_ha = QCheckBox("Enable Home Assistant MQTT Discovery")
         self._chk_ha.setChecked(True)
-        self._chk_ha.setStyleSheet(_chk_qss)
+        _s.themed_ss(self._chk_ha, _chk_qss)
         cfg_body.addWidget(self._chk_ha)
 
         self._chk_devices = QCheckBox("Publish device join / leave events")
@@ -216,7 +200,7 @@ class MqttPage(QWidget):
         self._chk_uptime  = QCheckBox("Publish uptime / RTT state changes")
         for c in (self._chk_devices, self._chk_alerts, self._chk_uptime):
             c.setChecked(True)
-            c.setStyleSheet(_chk_qss)
+            _s.themed_ss(c, _chk_qss)
             cfg_body.addWidget(c)
 
         root.addWidget(cfg_frame)
@@ -227,40 +211,40 @@ class MqttPage(QWidget):
         status_row.setSpacing(10)
 
         self._status_dot = QLabel("●")
-        self._status_dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:16px; border:none; background:transparent;")
+        _s.themed_ss(self._status_dot, "color:{TEXT_MUTED}; font-size:16px; border:none; background:transparent;")
         self._status_lbl = QLabel("Disconnected")
-        self._status_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px; border:none; background:transparent;")
+        _s.themed_ss(self._status_lbl, "color:{TEXT_MUTED}; font-size:11px; border:none; background:transparent;")
         status_row.addWidget(self._status_dot)
         status_row.addWidget(self._status_lbl, 1)
 
         self._btn_connect = QPushButton("Connect")
         self._btn_connect.setFixedHeight(28)
         self._btn_connect.setMinimumWidth(90)
-        self._btn_connect.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:2px; padding:0 14px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:disabled {{ background:{TEXT_MUTED}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._btn_connect, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:2px; padding:0 14px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:disabled {{ background:{TEXT_MUTED}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._btn_connect.clicked.connect(self._connect)
+
+        _secondary_btn_ss = (
+            "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:2px; padding:0 12px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{RED}; color:{WHITE}; border-color:{RED}; }}"
+            "QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
 
         self._btn_disconnect = QPushButton("Disconnect")
         self._btn_disconnect.setFixedHeight(28)
         self._btn_disconnect.setEnabled(False)
-        self._btn_disconnect.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:2px; padding:0 12px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{RED}; color:{WHITE}; border-color:{RED}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._btn_disconnect, _secondary_btn_ss)
         self._btn_disconnect.clicked.connect(self._disconnect)
 
         self._btn_test = QPushButton("Test Publish")
         self._btn_test.setFixedHeight(28)
         self._btn_test.setEnabled(False)
-        self._btn_test.setStyleSheet(self._btn_disconnect.styleSheet())
+        _s.themed_ss(self._btn_test, _secondary_btn_ss)
         self._btn_test.clicked.connect(self._test_publish)
 
         status_row.addWidget(self._btn_connect)
@@ -273,21 +257,17 @@ class MqttPage(QWidget):
         log_frame, log_body, log_hdr_lay = _card("Event Log")
         btn_clear = QPushButton("Clear")
         btn_clear.setFixedHeight(22)
-        btn_clear.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:2px; padding:0 8px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{BG_CARD}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btn_clear, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:2px; padding:0 8px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{BG_CARD}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btn_clear.clicked.connect(self._log.clear if hasattr(self, "_log") else lambda: None)
         log_hdr_lay.addWidget(btn_clear)
 
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
-        self._log.setStyleSheet(
-            f"QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" font-size:11px; font-family:Consolas; border:none; padding:4px 8px; }}"
-        )
+        _s.themed_ss(self._log, "QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " font-size:11px; font-family:Consolas; border:none; padding:4px 8px; }}")
         self._log.setMaximumBlockCount(500)
         # Now wire the clear button properly
         btn_clear.clicked.disconnect()
@@ -392,16 +372,16 @@ class MqttPage(QWidget):
     def _apply_status(self) -> None:
         connected, msg = getattr(self, "_pending_status", (False, ""))
         if connected:
-            self._status_dot.setStyleSheet(f"color:{GREEN}; font-size:16px; border:none; background:transparent;")
-            self._status_lbl.setStyleSheet(f"color:{GREEN}; font-size:11px; border:none; background:transparent;")
+            _s.themed_ss(self._status_dot, "color:{GREEN}; font-size:16px; border:none; background:transparent;")
+            _s.themed_ss(self._status_lbl, "color:{GREEN}; font-size:11px; border:none; background:transparent;")
             self._status_lbl.setText(f"Connected — {msg}")
             self._btn_connect.setEnabled(False)
             self._btn_connect.setText("Connected")
             self._btn_disconnect.setEnabled(True)
             self._btn_test.setEnabled(True)
         else:
-            self._status_dot.setStyleSheet(f"color:{RED}; font-size:16px; border:none; background:transparent;")
-            self._status_lbl.setStyleSheet(f"color:{RED}; font-size:11px; border:none; background:transparent;")
+            _s.themed_ss(self._status_dot, "color:{RED}; font-size:16px; border:none; background:transparent;")
+            _s.themed_ss(self._status_lbl, "color:{RED}; font-size:11px; border:none; background:transparent;")
             self._status_lbl.setText(f"Disconnected — {msg}")
             self._btn_connect.setEnabled(True)
             self._btn_connect.setText("Connect")

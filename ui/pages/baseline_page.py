@@ -39,13 +39,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
-    alpha,
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN,
     HTML_TEXT,
-    RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
@@ -113,8 +109,8 @@ def _port_label(port: int) -> str:
 def _opened_port_color(port: int) -> str:
     """Return a colour token for a newly opened port."""
     if port in _SUSPICIOUS_PORTS:
-        return RED
-    return AMBER
+        return _s.RED
+    return _s.AMBER
 
 
 # ── Background worker ─────────────────────────────────────────────────────────
@@ -142,25 +138,19 @@ class _SnapshotWorker(QThread):
 def _page_header(title: str, subtitle: str = "") -> QFrame:
     container = QFrame()
     container.setObjectName("pageHeader")
-    container.setStyleSheet(
-        f"QFrame#pageHeader {{ background: transparent; border: none;"
-        f" border-bottom: 1px solid {BORDER}; }}"
-    )
+    _s.themed_ss(container, "QFrame#pageHeader {{ background: transparent; border: none;"
+        " border-bottom: 1px solid {BORDER}; }}")
     vbox = QVBoxLayout(container)
     vbox.setContentsMargins(20, 16, 20, 12)
     vbox.setSpacing(2)
     t = QLabel(title)
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-        "padding:0; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;")
     vbox.addWidget(t)
     if subtitle:
         s = QLabel(subtitle)
-        s.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            "padding:0; background:transparent; border:none;"
-        )
+        _s.themed_ss(s, "color:{TEXT_SECONDARY}; font-size:11px;"
+            "padding:0; background:transparent; border:none;")
         vbox.addWidget(s)
     return container
 
@@ -168,24 +158,22 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     card = QFrame()
     card.setObjectName("card")
-    card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}")
     cl = QVBoxLayout(card)
     cl.setContentsMargins(0, 0, 0, 0)
     cl.setSpacing(0)
     tb = QFrame()
     tb.setFixedHeight(32)
-    tb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     tbl = QHBoxLayout(tb)
     tbl.setContentsMargins(12, 0, 12, 0)
     lbl = QLabel(title)
-    lbl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(lbl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     tbl.addWidget(lbl)
     tbl.addStretch()
     cl.addWidget(tb)
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(body, "background:{BG_CARD};")
     bl = QVBoxLayout(body)
     bl.setContentsMargins(16, 12, 16, 14)
     bl.setSpacing(8)
@@ -193,19 +181,19 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     return card, bl
 
 
-def _kpi_tile(label: str, value: str, accent_color: str = ACCENT) -> QWidget:
+def _kpi_tile(label: str, value: str, accent_name: str = "ACCENT") -> QWidget:
     w = QFrame()
-    w.setStyleSheet(
-        f"QFrame{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-left:3px solid {accent_color};min-width:110px;}}"
-    )
+    _s.themed_ss(w, lambda an=accent_name: (
+        f"QFrame{{background:{_s.BG_CARD};border:1px solid {_s.BORDER};"
+        f"border-left:3px solid {getattr(_s, an)};min-width:110px;}}"
+    ))
     vl = QVBoxLayout(w)
     vl.setContentsMargins(10, 8, 10, 8)
     vl.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:9px;font-weight:bold;")
+    _s.themed_ss(lbl, "color:{TEXT_SECONDARY};font-size:9px;font-weight:bold;")
     val = QLabel(value)
-    val.setStyleSheet(f"color:{TEXT_PRIMARY};font-size:22px;font-weight:bold;")
+    _s.themed_ss(val, "color:{TEXT_PRIMARY};font-size:22px;font-weight:bold;")
     val.setObjectName("kpi_val")
     vl.addWidget(lbl)
     vl.addWidget(val)
@@ -216,21 +204,17 @@ def _btn(text: str, primary: bool = False) -> QPushButton:
     b = QPushButton(text)
     b.setFixedHeight(26)
     if primary:
-        b.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
-            f"border-radius:2px;padding:0 14px;font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
-            f"QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
+            "border-radius:2px;padding:0 14px;font-size:11px;font-weight:bold;}}"
+            "QPushButton:hover{{background:{ACCENT_DARK};}}"
+            "QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     else:
-        b.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
-            f"QPushButton:disabled{{color:{BORDER};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 12px;font-size:11px;}}"
+            "QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+            "QPushButton:disabled{{color:{BORDER};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     return b
 
 
@@ -265,7 +249,7 @@ class BaselinePage(QWidget):
         # KPI row
         self._kpi_count   = _kpi_tile("Snapshots",    "—")
         self._kpi_last    = _kpi_tile("Last Taken",   "—")
-        self._kpi_drift   = _kpi_tile("Last Diff",    "—", GREEN)
+        self._kpi_drift   = _kpi_tile("Last Diff",    "—", "GREEN")
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         kpi_row.addWidget(self._kpi_count)
@@ -280,7 +264,7 @@ class BaselinePage(QWidget):
         scroll.setStyleSheet("background:transparent;")
 
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         il = QVBoxLayout(inner)
         il.setContentsMargins(16, 8, 16, 16)
         il.setSpacing(12)
@@ -316,13 +300,11 @@ class BaselinePage(QWidget):
         self._snap_table.setAlternatingRowColors(True)
         self._snap_table.setFixedHeight(220)
         self._snap_table.setColumnHidden(4, True)  # hide ID column
-        self._snap_table.setStyleSheet(
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
-        )
+        _s.themed_ss(self._snap_table, "QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            "gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            "QTableWidget::item{{padding:2px 5px;}}")
         for w, col in zip((140, 0, 70, 80), range(4)):
             if w:
                 self._snap_table.setColumnWidth(col, w)
@@ -374,9 +356,7 @@ class BaselinePage(QWidget):
             "Future snapshots are compared against it to detect unauthorized changes."
         )
         _explain.setWordWrap(True)
-        _explain.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; padding:2px 0;"
-        )
+        _s.themed_ss(_explain, "color:{TEXT_SECONDARY}; font-size:11px; padding:2px 0;")
         bl.addWidget(_explain)
 
         # Label input + action buttons
@@ -387,11 +367,9 @@ class BaselinePage(QWidget):
         self._label_edit.setPlaceholderText("Snapshot label (optional)")
         self._label_edit.setFixedHeight(26)
         self._label_edit.setMaximumWidth(240)
-        self._label_edit.setStyleSheet(
-            f"QLineEdit{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
-            f"QLineEdit:focus{{border-color:{ACCENT};}}"
-        )
+        _s.themed_ss(self._label_edit, "QLineEdit{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 6px;font-size:11px;}}"
+            "QLineEdit:focus{{border-color:{ACCENT};}}")
 
         self._btn_take   = _btn("📸  Take Snapshot", primary=True)
         self._btn_delete = _btn("Delete")
@@ -411,7 +389,7 @@ class BaselinePage(QWidget):
 
         # Status label
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(self._status_lbl)
 
         return card
@@ -422,9 +400,7 @@ class BaselinePage(QWidget):
         card, bl = _card("Snapshot Comparison — Drift Report")
 
         self._diff_summary = QLabel("")
-        self._diff_summary.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-size:11px;padding:4px 0;"
-        )
+        _s.themed_ss(self._diff_summary, "color:{TEXT_PRIMARY};font-size:11px;padding:4px 0;")
         bl.addWidget(self._diff_summary)
 
         self._diff_table = QTableWidget(0, 3)
@@ -435,13 +411,11 @@ class BaselinePage(QWidget):
         self._diff_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._diff_table.setAlternatingRowColors(True)
         self._diff_table.setMinimumHeight(180)
-        self._diff_table.setStyleSheet(
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
-        )
+        _s.themed_ss(self._diff_table, "QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            "gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            "QTableWidget::item{{padding:2px 5px;}}")
         for w, col in zip((130, 100), range(2)):
             self._diff_table.setColumnWidth(col, w)
         def _diff_export_row():
@@ -624,11 +598,13 @@ class BaselinePage(QWidget):
 
         # Update drift KPI
         drift_txt = "Yes" if diff.has_drift else "None"
-        drift_col = RED if diff.has_drift else GREEN
+        drift_col_name = "RED" if diff.has_drift else "GREEN"
         kpi = self._kpi_drift.findChild(QLabel, "kpi_val")
         if kpi:
             kpi.setText(drift_txt)
-            kpi.setStyleSheet(f"color:{drift_col};font-size:22px;font-weight:bold;")
+            _s.themed_ss(kpi, lambda dc=drift_col_name: (
+                f"color:{getattr(_s, dc)};font-size:22px;font-weight:bold;"
+            ))
 
         if diff.has_drift:
             self.drift_detected.emit(
@@ -637,7 +613,7 @@ class BaselinePage(QWidget):
 
         self._diff_table.setRowCount(0)
 
-        def _add_row(ip: str, category: str, change: str, color: str = TEXT_PRIMARY):
+        def _add_row(ip: str, category: str, change: str, color: str):
             row = self._diff_table.rowCount()
             self._diff_table.insertRow(row)
             for col, val in enumerate([ip, category, change]):
@@ -648,26 +624,26 @@ class BaselinePage(QWidget):
                 self._diff_table.setItem(row, col, item)
 
         for ip in diff.added_devices:
-            _add_row(ip, "Device", "Added", GREEN)
+            _add_row(ip, "Device", "Added", _s.GREEN)
         for ip in diff.removed_devices:
-            _add_row(ip, "Device", "Removed", RED)
+            _add_row(ip, "Device", "Removed", _s.RED)
         for ip, ch in sorted(diff.changed_ports.items()):
             for p in ch.get("added", []):
                 col = _opened_port_color(p)
                 risk_tag = " ⚠" if p in _SUSPICIOUS_PORTS else ""
                 _add_row(ip, "Port Opened", f"{_port_label(p)}{risk_tag}", col)
             for p in ch.get("removed", []):
-                _add_row(ip, "Port Closed", _port_label(p), TEXT_MUTED)
+                _add_row(ip, "Port Closed", _port_label(p), _s.TEXT_MUTED)
         for ip, ch in sorted(diff.changed_fields.items()):
             for field_name, vals in ch.items():
                 _add_row(ip, field_name.capitalize(),
-                         f"{vals['old'] or '(blank)'} → {vals['new'] or '(blank)'}", AMBER)
+                         f"{vals['old'] or '(blank)'} → {vals['new'] or '(blank)'}", _s.AMBER)
         for ip, oid_ch in sorted(diff.changed_snmp.items()):
             for oid, vals in oid_ch.items():
-                _add_row(ip, f"SNMP/{oid}", f"{vals['old']} → {vals['new']}", AMBER)
+                _add_row(ip, f"SNMP/{oid}", f"{vals['old']} → {vals['new']}", _s.AMBER)
 
         if self._diff_table.rowCount() == 0:
-            _add_row("—", "—", "No changes detected between these snapshots", GREEN)
+            _add_row("—", "—", "No changes detected between these snapshots", _s.GREEN)
 
         self._diff_card_widget.setVisible(True)
         self._last_diff_summary = self._diff_summary.text()
@@ -694,10 +670,10 @@ class BaselinePage(QWidget):
         summary_txt = getattr(self, "_last_diff_summary", "")
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>NetSentinel Baseline Diff</title>
-<style>body{{font-family:sans-serif;background:{BG_DARK};padding:16px}}
-table{{border-collapse:collapse;width:100%;background:{BG_CARD};box-shadow:0 1px 3px {BORDER}}}
-th{{background:{ACCENT};color:{WHITE};padding:6px 8px;text-align:left}}
-tr:nth-child(even){{background:{BG_ALT_ROW}}}
+<style>body{{font-family:sans-serif;background:{_s.BG_DARK};padding:16px}}
+table{{border-collapse:collapse;width:100%;background:{_s.BG_CARD};box-shadow:0 1px 3px {_s.BORDER}}}
+th{{background:{_s.ACCENT};color:{_s.WHITE};padding:6px 8px;text-align:left}}
+tr:nth-child(even){{background:{_s.BG_ALT_ROW}}}
 </style></head><body>
 <h2>NetSentinel — Baseline Drift Report</h2>
 <p>{summary_txt}</p>
@@ -716,18 +692,14 @@ tr:nth-child(even){{background:{BG_ALT_ROW}}}
 
     def _build_schedule_strip(self) -> QFrame:
         strip = QFrame()
-        strip.setStyleSheet(
-            f"QFrame {{ background:{BG_HOVER}; border:none;"
-            f" border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(strip, "QFrame {{ background:{BG_HOVER}; border:none;"
+            " border-bottom:1px solid {BORDER}; }}")
         lay = QHBoxLayout(strip)
         lay.setContentsMargins(16, 6, 16, 6)
         lay.setSpacing(8)
 
         self._sched_lbl = QLabel()
-        self._sched_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._sched_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         lay.addWidget(self._sched_lbl)
         lay.addStretch()
 
@@ -738,33 +710,27 @@ tr:nth-child(even){{background:{BG_ALT_ROW}}}
         edit_lay.setContentsMargins(0, 0, 0, 0)
         edit_lay.setSpacing(6)
         _every_lbl = QLabel("every")
-        _every_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
+        _s.themed_ss(_every_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._sched_spin = QSpinBox()
         self._sched_spin.setRange(1, 10)
         self._sched_spin.setValue(3)
         self._sched_spin.setFixedWidth(55)
         self._sched_spin.setFixedHeight(24)
-        self._sched_spin.setStyleSheet(
-            f"font-size:11px; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _s.themed_ss(self._sched_spin, "font-size:11px; border:1px solid {BORDER}; padding:2px 4px;")
         _scans_lbl = QLabel("scans")
-        _scans_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
+        _s.themed_ss(_scans_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         btn_save = QPushButton("Save")
         btn_save.setFixedHeight(24)
-        btn_save.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; padding:0 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(btn_save, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; padding:0 10px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         btn_save.clicked.connect(self._save_schedule)
         btn_cancel = QPushButton("Cancel")
         btn_cancel.setFixedHeight(24)
-        btn_cancel.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:3px; padding:0 8px; font-size:11px; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btn_cancel, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:0 8px; font-size:11px; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btn_cancel.clicked.connect(self._cancel_schedule_edit)
         edit_lay.addWidget(_every_lbl)
         edit_lay.addWidget(self._sched_spin)
@@ -776,12 +742,12 @@ tr:nth-child(even){{background:{BG_ALT_ROW}}}
 
         self._sched_btn = QPushButton()
         self._sched_btn.setFixedHeight(24)
-        self._sched_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {alpha(ACCENT, 0x44)};"
+        _s.themed_ss(self._sched_btn, lambda: (
+            f"QPushButton {{ background:transparent; color:{_s.ACCENT}; border:1px solid {_s.alpha(_s.ACCENT, 0x44)};"
             f" border-radius:3px; padding:0 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x18)}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+            f"QPushButton:hover {{ background:{_s.alpha(_s.ACCENT, 0x18)}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
+        ))
         self._sched_btn.clicked.connect(self._toggle_schedule_edit)
         lay.addWidget(self._sched_btn)
 
