@@ -23,17 +23,13 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_DARK, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, IP_CALC_ALT_ROW, IP_CALC_HOST_BIT_BG,
-    IP_CALC_HOST_FG, IP_CALC_NET_FG, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, WHITE,
+    IP_CALC_HOST_BIT_BG,
+    IP_CALC_HOST_FG, IP_CALC_NET_FG,
 )
 from ui.widgets.context_menu import install_copy_menu
+from ui import styles as _s
 
 # ── palette shortcuts ─────────────────────────────────────────────────────────
-_NET_BIT_BG  = TH_BG   # blue tint for network bits
-_HOST_BIT_BG = IP_CALC_HOST_BIT_BG   # green tint for host bits
 _MONO = "Consolas, Courier New, monospace"
 
 
@@ -87,25 +83,19 @@ class IpCalculatorPage(QWidget):
         """Return (card QFrame, content QVBoxLayout)."""
         card = QFrame()
         card.setObjectName("card")
-        card.setStyleSheet(
-            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-            f"border-radius:{CARD_RADIUS};}}"
-        )
+        _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            "border-radius:{CARD_RADIUS};}}")
         cl = QVBoxLayout(card)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
 
         tb = QFrame()
         tb.setFixedHeight(32)
-        tb.setStyleSheet(
-            f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};"
-        )
+        _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
         tbl = QHBoxLayout(tb)
         tbl.setContentsMargins(12, 0, 12, 0)
         lbl = QLabel(title)
-        lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;"
-        )
+        _s.themed_ss(lbl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
         tbl.addWidget(lbl)
         tbl.addStretch()
         cl.addWidget(tb)
@@ -120,18 +110,16 @@ class IpCalculatorPage(QWidget):
         tbl.setShowGrid(False)
         tbl.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         tbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        tbl.setStyleSheet(
-            f"QTableWidget{{background:{BG_CARD};border:none;font-size:11px;}}"
-            f"QTableWidget::item{{padding:4px 8px;color:{TEXT_PRIMARY};}}"
-        )
+        _s.themed_ss(tbl, "QTableWidget{{background:{BG_CARD};border:none;font-size:11px;}}"
+            "QTableWidget::item{{padding:4px 8px;color:{TEXT_PRIMARY};}}")
         tbl.horizontalHeader().setStretchLastSection(True)
         tbl.setColumnWidth(0, col0_width)
         tbl.verticalHeader().setDefaultSectionSize(24)
         for i, (key, val) in enumerate(rows):
-            bg = BG_ALT_ROW if i % 2 else BG_CARD
+            bg = _s.BG_ALT_ROW if i % 2 else _s.BG_CARD
             k = QTableWidgetItem(key)
             k.setFont(QFont("Consolas", 10))
-            k.setForeground(QColor(ACCENT_DARK))
+            k.setForeground(QColor(_s.ACCENT_DARK))
             k.setBackground(QColor(bg))
             v = QTableWidgetItem(val)
             v.setBackground(QColor(bg))
@@ -146,47 +134,45 @@ class IpCalculatorPage(QWidget):
         card, cl = self._card("IPv4 Subnet Calculator")
 
         input_row = QWidget()
-        input_row.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(input_row, "background:{BG_CARD};")
         ir = QHBoxLayout(input_row)
         ir.setContentsMargins(12, 10, 12, 10)
         ir.setSpacing(8)
 
         lbl = QLabel("IP / CIDR:")
-        lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(lbl, "color:{TEXT_SECONDARY};font-size:11px;")
         ir.addWidget(lbl)
 
         self._ip_input = QLineEdit("192.168.1.0/24")
         self._ip_input.setFixedWidth(200)
-        self._ip_input.setStyleSheet(
-            f"QLineEdit{{background:{BG_DARK};color:{TEXT_PRIMARY};"
-            f"border:1px solid {BORDER};border-radius:3px;"
+        _s.themed_ss(self._ip_input, lambda: (
+            f"QLineEdit{{background:{_s.BG_DARK};color:{_s.TEXT_PRIMARY};"
+            f"border:1px solid {_s.BORDER};border-radius:3px;"
             f"padding:4px 8px;font-family:{_MONO};font-size:12px;}}"
-            f"QLineEdit:focus{{border:1px solid {ACCENT};}}"
-        )
+            f"QLineEdit:focus{{border:1px solid {_s.ACCENT};}}"
+        ))
         self._ip_input.returnPressed.connect(self._calculate)
         ir.addWidget(self._ip_input)
 
         hint = QLabel("e.g.  192.168.1.50/24  or  10.0.0.0/8  or  172.16.5.1/255.255.0.0")
-        hint.setStyleSheet(f"color:{TEXT_MUTED};font-size:10px;")
+        _s.themed_ss(hint, "color:{TEXT_MUTED};font-size:10px;")
         ir.addWidget(hint)
         ir.addStretch()
 
         btn = QPushButton("Calculate")
         btn.setFixedWidth(100)
-        btn.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};"
-            f"border:none;border-radius:3px;padding:5px 12px;"
-            f"font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(btn, "QPushButton{{background:{ACCENT};color:{WHITE};"
+            "border:none;border-radius:3px;padding:5px 12px;"
+            "font-size:11px;font-weight:bold;}}"
+            "QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         btn.clicked.connect(self._calculate)
         ir.addWidget(btn)
         cl.addWidget(input_row)
 
         # results grid
         self._results_widget = QWidget()
-        self._results_widget.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(self._results_widget, "background:{BG_CARD};")
         self._results_layout = QGridLayout(self._results_widget)
         self._results_layout.setContentsMargins(12, 4, 12, 12)
         self._results_layout.setSpacing(4)
@@ -194,9 +180,7 @@ class IpCalculatorPage(QWidget):
         cl.addWidget(self._results_widget)
 
         self._error_lbl = QLabel("")
-        self._error_lbl.setStyleSheet(
-            f"color:{RED};font-size:11px;padding:6px 12px;"
-        )
+        _s.themed_ss(self._error_lbl, "color:{RED};font-size:11px;padding:6px 12px;")
         self._error_lbl.setVisible(False)
         cl.addWidget(self._error_lbl)
 
@@ -255,20 +239,20 @@ class IpCalculatorPage(QWidget):
         for idx, (k, v) in enumerate(rows):
             row, col = divmod(idx, cols)
             cell = QWidget()
-            cell.setStyleSheet(
-                f"background:{IP_CALC_ALT_ROW if (idx // cols) % 2 == 0 else BG_CARD};"
+            _s.themed_ss(cell, lambda alt=(idx // cols) % 2 == 0: (
+                f"background:{_s.IP_CALC_ALT_ROW if alt else _s.BG_CARD};"
                 f"border-radius:2px;"
-            )
+            ))
             cl2 = QVBoxLayout(cell)
             cl2.setContentsMargins(8, 4, 8, 4)
             cl2.setSpacing(1)
             kl = QLabel(k)
-            kl.setStyleSheet(f"color:{TEXT_MUTED};font-size:9px;font-weight:bold;")
+            _s.themed_ss(kl, "color:{TEXT_MUTED};font-size:9px;font-weight:bold;")
             vl = QLabel(v)
-            vl.setStyleSheet(
-                f"color:{TEXT_PRIMARY};font-size:12px;"
+            _s.themed_ss(vl, lambda: (
+                f"color:{_s.TEXT_PRIMARY};font-size:12px;"
                 f"font-family:{_MONO};"
-            )
+            ))
             cl2.addWidget(kl)
             cl2.addWidget(vl)
             self._results_layout.addWidget(cell, row, col)
@@ -294,7 +278,7 @@ class IpCalculatorPage(QWidget):
         card, cl = self._card("Binary Address Visualiser  —  network bits (blue) · host bits (green)")
 
         self._bin_widget = QWidget()
-        self._bin_widget.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(self._bin_widget, "background:{BG_CARD};")
         bv = QVBoxLayout(self._bin_widget)
         bv.setContentsMargins(12, 8, 12, 12)
         bv.setSpacing(6)
@@ -318,14 +302,14 @@ class IpCalculatorPage(QWidget):
 
     def _make_bit_row(self, label: str) -> tuple[QWidget, list[QLabel]]:
         row_w = QWidget()
-        row_w.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(row_w, "background:{BG_CARD};")
         rl = QHBoxLayout(row_w)
         rl.setContentsMargins(0, 0, 0, 0)
         rl.setSpacing(2)
 
         lbl = QLabel(label)
         lbl.setFixedWidth(90)
-        lbl.setStyleSheet(f"color:{TEXT_MUTED};font-size:10px;font-family:{_MONO};")
+        _s.themed_ss(lbl, lambda: f"color:{_s.TEXT_MUTED};font-size:10px;font-family:{_MONO};")
         rl.addWidget(lbl)
 
         bits: list[QLabel] = []
@@ -334,16 +318,16 @@ class IpCalculatorPage(QWidget):
                 sep = QLabel("·")
                 sep.setFixedWidth(6)
                 sep.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                sep.setStyleSheet(f"color:{TEXT_MUTED};font-size:10px;")
+                _s.themed_ss(sep, "color:{TEXT_MUTED};font-size:10px;")
                 rl.addWidget(sep)
             b = QLabel("0")
             b.setFixedWidth(14)
             b.setFixedHeight(18)
             b.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            b.setStyleSheet(
-                f"color:{TEXT_PRIMARY};font-size:10px;font-family:{_MONO};"
-                f"background:{BG_DARK};border-radius:1px;"
-            )
+            _s.themed_ss(b, lambda: (
+                f"color:{_s.TEXT_PRIMARY};font-size:10px;font-family:{_MONO};"
+                f"background:{_s.BG_DARK};border-radius:1px;"
+            ))
             rl.addWidget(b)
             bits.append(b)
 
@@ -362,16 +346,11 @@ class IpCalculatorPage(QWidget):
                 bit = (value >> (31 - i)) & 1
                 lbl.setText(str(bit))
                 is_net_bit = i < prefix
-                if is_net_bit:
-                    bg = _NET_BIT_BG
-                    fg = IP_CALC_NET_FG
-                else:
-                    bg = _HOST_BIT_BG
-                    fg = IP_CALC_HOST_FG
-                lbl.setStyleSheet(
-                    f"color:{fg};font-size:10px;font-family:{_MONO};"
-                    f"background:{bg};border-radius:1px;"
-                )
+                _s.themed_ss(lbl, lambda net=is_net_bit: (
+                    f"color:{IP_CALC_NET_FG if net else IP_CALC_HOST_FG};"
+                    f"font-size:10px;font-family:{_MONO};"
+                    f"background:{_s.TH_BG if net else IP_CALC_HOST_BIT_BG};border-radius:1px;"
+                ))
 
         _fill(self._bin_ip_row[1],   ip_int,   is_ip=True)
         _fill(self._bin_mask_row[1], mask_int)
@@ -383,7 +362,7 @@ class IpCalculatorPage(QWidget):
         card, cl = self._card("CIDR Quick Reference  —  all prefix lengths /1 to /32")
 
         container = QWidget()
-        container.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(container, "background:{BG_CARD};")
         hbox = QHBoxLayout(container)
         hbox.setContentsMargins(12, 8, 12, 12)
         hbox.setSpacing(16)
@@ -406,10 +385,8 @@ class IpCalculatorPage(QWidget):
             tbl.setShowGrid(False)
             tbl.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
             tbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            tbl.setStyleSheet(
-                f"QTableWidget{{background:{BG_CARD};border:none;font-size:10px;}}"
-                f"QTableWidget::item{{padding:2px 6px;color:{TEXT_PRIMARY};}}"
-            )
+            _s.themed_ss(tbl, "QTableWidget{{background:{BG_CARD};border:none;font-size:10px;}}"
+                "QTableWidget::item{{padding:2px 6px;color:{TEXT_PRIMARY};}}")
             tbl.setColumnWidth(0, 32)
             tbl.setColumnWidth(1, 110)
             tbl.setColumnWidth(2, 110)
@@ -417,17 +394,17 @@ class IpCalculatorPage(QWidget):
             tbl.setFixedHeight(len(chunk_entries) * 24 + 2)
 
             for i, (cidr, mask, hosts) in enumerate(chunk_entries):
-                bg = BG_ALT_ROW if i % 2 else BG_CARD
+                bg = _s.BG_ALT_ROW if i % 2 else _s.BG_CARD
                 prefix_num = int(cidr[1:])
                 # colour by typical use
                 if prefix_num <= 8:
-                    fg = RED
+                    fg = _s.RED
                 elif prefix_num <= 16:
-                    fg = AMBER
+                    fg = _s.AMBER
                 elif prefix_num <= 24:
-                    fg = ACCENT_DARK
+                    fg = _s.ACCENT_DARK
                 else:
-                    fg = GREEN
+                    fg = _s.GREEN
 
                 c = QTableWidgetItem(cidr)
                 c.setFont(QFont("Consolas", 10))
@@ -437,7 +414,7 @@ class IpCalculatorPage(QWidget):
                 m.setBackground(QColor(bg))
                 h = QTableWidgetItem(hosts)
                 h.setBackground(QColor(bg))
-                h.setForeground(QColor(TEXT_MUTED))
+                h.setForeground(QColor(_s.TEXT_MUTED))
                 tbl.setItem(i, 0, c)
                 tbl.setItem(i, 1, m)
                 tbl.setItem(i, 2, h)
@@ -465,21 +442,19 @@ class IpCalculatorPage(QWidget):
         card, cl = self._card("IP Address Classes & Private Ranges")
 
         content = QWidget()
-        content.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(content, "background:{BG_CARD};")
         cv = QHBoxLayout(content)
         cv.setContentsMargins(12, 8, 12, 12)
         cv.setSpacing(24)
 
         # classes table
         left = QWidget()
-        left.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(left, "background:{BG_CARD};")
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
         lv.setSpacing(4)
         lh = QLabel("Address Classes")
-        lh.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-weight:bold;font-size:11px;"
-        )
+        _s.themed_ss(lh, "color:{TEXT_PRIMARY};font-weight:bold;font-size:11px;")
         lv.addWidget(lh)
         lv.addWidget(self._section_table([
             ("Class A  /8",   "1.0.0.0 – 126.255.255.255   (16 million hosts per network)"),
@@ -494,14 +469,12 @@ class IpCalculatorPage(QWidget):
 
         # private ranges
         right = QWidget()
-        right.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(right, "background:{BG_CARD};")
         rv = QVBoxLayout(right)
         rv.setContentsMargins(0, 0, 0, 0)
         rv.setSpacing(4)
         rh = QLabel("Private (RFC 1918) & Special Ranges")
-        rh.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-weight:bold;font-size:11px;"
-        )
+        _s.themed_ss(rh, "color:{TEXT_PRIMARY};font-weight:bold;font-size:11px;")
         rv.addWidget(rh)
         rv.addWidget(self._section_table([
             ("10.0.0.0/8",        "Private Class A — 16,777,214 hosts (enterprises, VPNs)"),
@@ -524,15 +497,15 @@ class IpCalculatorPage(QWidget):
 
         txt = QLabel(
             f"<div style='margin:10px 16px 12px 16px;font-size:11px;"
-            f"color:{TEXT_PRIMARY};line-height:1.75;'>"
+            f"color:{_s.TEXT_PRIMARY};line-height:1.75;'>"
 
             f"<table width='100%' cellspacing='0' cellpadding='0'>"
             f"<tr>"
-            f"<td width='30%' style='color:{TEXT_MUTED};font-size:9px;"
+            f"<td width='30%' style='color:{_s.TEXT_MUTED};font-size:9px;"
             f"font-weight:bold;padding-bottom:6px;'>PROPERTY</td>"
-            f"<td width='35%' style='color:{ACCENT_DARK};font-size:9px;"
+            f"<td width='35%' style='color:{_s.ACCENT_DARK};font-size:9px;"
             f"font-weight:bold;padding-bottom:6px;'>IPv4</td>"
-            f"<td width='35%' style='color:{GREEN};font-size:9px;"
+            f"<td width='35%' style='color:{_s.GREEN};font-size:9px;"
             f"font-weight:bold;padding-bottom:6px;'>IPv6</td>"
             f"</tr>"
 
@@ -567,7 +540,7 @@ class IpCalculatorPage(QWidget):
 
             f"<b>IPv6 address breakdown:</b><br>"
             f"<code style='font-size:12px;'>2001:0db8:85a3:0000:0000:8a2e:0370:7334</code><br>"
-            f"<span style='color:{TEXT_MUTED};font-size:10px;'>"
+            f"<span style='color:{_s.TEXT_MUTED};font-size:10px;'>"
             f"└─ Global routing prefix (48 bits) ─┘└─ Subnet (16 bits) ─┘└─── Interface ID (64 bits) ───┘"
             f"</span>"
             f"</div>"
@@ -579,13 +552,13 @@ class IpCalculatorPage(QWidget):
 
     @staticmethod
     def _ipv6_row(prop: str, v4: str, v6: str, alt: bool) -> str:
-        bg = IP_CALC_ALT_ROW if alt else BG_CARD
+        bg = _s.IP_CALC_ALT_ROW if alt else _s.BG_CARD
         return (
             f"<tr style='background:{bg};'>"
-            f"<td style='padding:4px 8px 4px 0;color:{TEXT_MUTED};"
+            f"<td style='padding:4px 8px 4px 0;color:{_s.TEXT_MUTED};"
             f"font-size:10px;font-weight:bold;'>{prop}</td>"
             f"<td style='padding:4px 8px;font-size:10px;font-family:Consolas,monospace;'>{v4}</td>"
             f"<td style='padding:4px 8px;font-size:10px;font-family:Consolas,monospace;"
-            f"color:{GREEN};'>{v6}</td>"
+            f"color:{_s.GREEN};'>{v6}</td>"
             f"</tr>"
         )

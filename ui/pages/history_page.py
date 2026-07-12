@@ -31,10 +31,7 @@ from PyQt6.QtWidgets import (
 
 from ui import styles as _s
 from ui.styles import (
-    ACCENT, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, BTN_DISABLED_BORDER, CHART_PURPLE,
-    GREEN, RED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
+    CHART_PURPLE,
 )
 
 if TYPE_CHECKING:
@@ -66,35 +63,44 @@ def _style_ax(ax, title: str) -> None:
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=8))
 
 
+def _zoom_btn_style(active: bool) -> str:
+    if active:
+        return (
+            f"QPushButton {{ font-size:11px; background:{_s.ACCENT}; color:{_s.WHITE};"
+            f" border:1px solid {_s.ACCENT}; border-radius:3px; }}"
+        )
+    return (
+        f"QPushButton {{ font-size:11px; background:{_s.BG_CARD}; color:{_s.ACCENT};"
+        f" border:1px solid {_s.BTN_DISABLED_BORDER}; border-radius:3px; }}"
+        f"QPushButton:hover {{ background:{_s.BG_HOVER}; }}"
+    )
+
+
 # ── KPI tile ─────────────────────────────────────────────────────────────────
 
 class _KpiTile(QFrame):
     """Small stat card: coloured left border, micro-label + large number."""
 
-    def __init__(self, label: str, value: str = "—", accent: str = ACCENT, parent=None):
+    def __init__(self, label: str, value: str = "—", accent_name: str = "ACCENT", parent=None):
         super().__init__(parent)
         self.setObjectName("kpiTile")
         self.setFixedHeight(56)
-        self.setStyleSheet(
+        _s.themed_ss(self, lambda an=accent_name: (
             f"QFrame#kpiTile {{"
-            f"  background:{BG_CARD}; border:1px solid {BORDER};"
-            f"  border-left:3px solid {accent}; border-radius:0;"
+            f"  background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
+            f"  border-left:3px solid {getattr(_s, an)}; border-radius:0;"
             f"}}"
-        )
+        ))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
         layout.setSpacing(2)
 
         self._lbl = QLabel(label.upper())
-        self._lbl.setStyleSheet(
-            f"font-size:9px; font-weight:600; color:{TEXT_SECONDARY};"
-            f" letter-spacing:0.5px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._lbl, "font-size:9px; font-weight:600; color:{TEXT_SECONDARY};"
+            " letter-spacing:0.5px; background:transparent; border:none;")
         self._val = QLabel(value)
-        self._val.setStyleSheet(
-            f"font-size:22px; font-weight:700; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._val, "font-size:22px; font-weight:700; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         layout.addWidget(self._lbl)
         layout.addWidget(self._val)
 
@@ -443,7 +449,7 @@ class HistoryPage(QWidget):
             btn = QPushButton(label)
             btn.setFixedSize(40, 26)
             btn.setCheckable(True)
-            btn.setStyleSheet(self._zoom_btn_style(False))
+            _s.themed_ss(btn, lambda: _zoom_btn_style(False))
             btn.clicked.connect(lambda checked, l=label: self._set_window(l))
             self._zoom_btns[label] = btn
             title_row.addWidget(btn)
@@ -451,10 +457,8 @@ class HistoryPage(QWidget):
         # Host selector
         self._host_combo = QComboBox()
         self._host_combo.setFixedWidth(160)
-        self._host_combo.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
-            f"border:1px solid {BORDER}; padding:2px 6px;"
-        )
+        _s.themed_ss(self._host_combo, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            "border:1px solid {BORDER}; padding:2px 6px;")
         self._host_combo.currentTextChanged.connect(self._on_host_changed)
         title_row.addWidget(QLabel("Host:"))
         title_row.addWidget(self._host_combo)
@@ -462,12 +466,10 @@ class HistoryPage(QWidget):
         # Refresh button
         refresh_btn = QPushButton("↻ Refresh")
         refresh_btn.setFixedHeight(26)
-        refresh_btn.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{ACCENT};"
-            f" background:{BG_CARD}; border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(refresh_btn, "QPushButton {{ font-size:11px; color:{ACCENT};"
+            " background:{BG_CARD}; border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         refresh_btn.clicked.connect(self._refresh)
         title_row.addWidget(refresh_btn)
         root.addLayout(title_row)
@@ -475,9 +477,7 @@ class HistoryPage(QWidget):
         # Loading label — shown while worker runs
         self._loading_lbl = QLabel("Loading…")
         self._loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._loading_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._loading_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._loading_lbl.hide()
         root.addWidget(self._loading_lbl)
 
@@ -493,18 +493,14 @@ class HistoryPage(QWidget):
 
         _icon_lbl = QLabel("◌")
         _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _icon_lbl.setStyleSheet(
-            f"font-size:40px; color:{BORDER}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_icon_lbl, "font-size:40px; color:{BORDER}; background:transparent; border:none;")
         _desc_lbl = QLabel(
             "No monitoring data yet. Run a scan to discover devices —\n"
             "availability monitoring begins automatically after the first scan."
         )
         _desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _desc_lbl.setWordWrap(True)
-        _desc_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(_desc_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         _btn_cta = QPushButton("Start Monitoring")
         _btn_cta.setObjectName("btnScan")
         _btn_cta.setFixedHeight(34)
@@ -525,11 +521,11 @@ class HistoryPage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_uptime  = _KpiTile("Uptime",    "—", GREEN)
-        self._kpi_avg_rtt = _KpiTile("Avg RTT",   "—", ACCENT)
-        self._kpi_min_rtt = _KpiTile("Min RTT",   "—", GREEN)
-        self._kpi_max_rtt = _KpiTile("Max RTT",   "—", RED)
-        self._kpi_hosts   = _KpiTile("Hosts Monitored", "—", ACCENT)
+        self._kpi_uptime  = _KpiTile("Uptime",    "—", "GREEN")
+        self._kpi_avg_rtt = _KpiTile("Avg RTT",   "—", "ACCENT")
+        self._kpi_min_rtt = _KpiTile("Min RTT",   "—", "GREEN")
+        self._kpi_max_rtt = _KpiTile("Max RTT",   "—", "RED")
+        self._kpi_hosts   = _KpiTile("Hosts Monitored", "—", "ACCENT")
         for tile in (self._kpi_uptime, self._kpi_avg_rtt, self._kpi_min_rtt,
                      self._kpi_max_rtt, self._kpi_hosts):
             kpi_row.addWidget(tile)
@@ -540,9 +536,9 @@ class HistoryPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(f"background:{BG_DARK}; border:none;")
+        _s.themed_ss(scroll, "background:{BG_DARK}; border:none;")
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         self._charts_layout = QVBoxLayout(inner)
         self._charts_layout.setContentsMargins(0, 0, 0, 0)
         self._charts_layout.setSpacing(10)
@@ -569,7 +565,7 @@ class HistoryPage(QWidget):
         for lbl, btn in self._zoom_btns.items():
             active = lbl == label
             btn.setChecked(active)
-            btn.setStyleSheet(self._zoom_btn_style(active))
+            _s.themed_ss(btn, lambda a=active: _zoom_btn_style(a))
         self._refresh()
 
     def set_global_hours(self, hours: float) -> None:
@@ -581,19 +577,6 @@ class HistoryPage(QWidget):
                 best = label
                 break
         self._set_window(best)
-
-    @staticmethod
-    def _zoom_btn_style(active: bool) -> str:
-        if active:
-            return (
-                f"QPushButton {{ font-size:11px; background:{ACCENT}; color:{WHITE};"
-                f" border:1px solid {ACCENT}; border-radius:3px; }}"
-            )
-        return (
-            f"QPushButton {{ font-size:11px; background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {BTN_DISABLED_BORDER}; border-radius:3px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-        )
 
     def _on_host_changed(self, host: str) -> None:
         self._refresh()

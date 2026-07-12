@@ -30,12 +30,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, RED_BG,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-    BG_HOVER,
-)
+from ui import styles as _s
 from ui.table_utils import kpi_tile as _shared_kpi_tile
 from modules.trend_analyser import TrendReport, run_full_trend_report
 from ui.widgets.context_menu import install_copy_menu
@@ -46,11 +41,11 @@ from ui.widgets.context_menu import install_copy_menu
 class _MiniSparkline(QWidget):
     """80×18 QPainter sparkline for use in the trend table Trend column."""
 
-    def __init__(self, points: list, color: str, parent=None):
+    def __init__(self, points: list, color_name: str, parent=None):
         super().__init__(parent)
         self.setFixedSize(80, 18)
         self._points = list(points)
-        self._color  = color
+        self._color_name = color_name
 
     def paintEvent(self, event) -> None:
         pts = self._points
@@ -74,7 +69,7 @@ class _MiniSparkline(QWidget):
         path.moveTo(QPointF(_x(0), _y(pts[0])))
         for i, v in enumerate(pts[1:], 1):
             path.lineTo(QPointF(_x(i), _y(v)))
-        pen = QPen(QColor(self._color), 1.5)
+        pen = QPen(QColor(getattr(_s, self._color_name)), 1.5)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
@@ -106,25 +101,19 @@ class _TrendWorker(QThread):
 def _page_header(title: str, subtitle: str = "") -> QFrame:
     container = QFrame()
     container.setObjectName("pageHeader")
-    container.setStyleSheet(
-        f"QFrame#pageHeader {{ background: transparent; border: none;"
-        f" border-bottom: 1px solid {BORDER}; }}"
-    )
+    _s.themed_ss(container, "QFrame#pageHeader {{ background: transparent; border: none;"
+        " border-bottom: 1px solid {BORDER}; }}")
     vbox = QVBoxLayout(container)
     vbox.setContentsMargins(20, 16, 20, 12)
     vbox.setSpacing(2)
     t = QLabel(title)
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-        "padding:0; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;")
     vbox.addWidget(t)
     if subtitle:
         s = QLabel(subtitle)
-        s.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            "padding:0; background:transparent; border:none;"
-        )
+        _s.themed_ss(s, "color:{TEXT_SECONDARY}; font-size:11px;"
+            "padding:0; background:transparent; border:none;")
         vbox.addWidget(s)
     return container
 
@@ -132,24 +121,22 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     card = QFrame()
     card.setObjectName("card")
-    card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}")
     cl = QVBoxLayout(card)
     cl.setContentsMargins(0, 0, 0, 0)
     cl.setSpacing(0)
     tb = QFrame()
     tb.setFixedHeight(32)
-    tb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     tbl = QHBoxLayout(tb)
     tbl.setContentsMargins(12, 0, 12, 0)
     lbl = QLabel(title)
-    lbl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(lbl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     tbl.addWidget(lbl)
     tbl.addStretch()
     cl.addWidget(tb)
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(body, "background:{BG_CARD};")
     bl = QVBoxLayout(body)
     bl.setContentsMargins(16, 12, 16, 14)
     bl.setSpacing(8)
@@ -159,9 +146,12 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
 
 
 
-_SEV_COLOR = {"CRITICAL": RED, "WARNING": AMBER, "INFO": ACCENT, "CLEAN": GREEN}
-_SEV_BG    = {"CRITICAL": RED_BG, "WARNING": AMBER_BG, "INFO": BG_CARD, "CLEAN": BG_CARD}
+_SEV_COLOR_NAMES = {"CRITICAL": "RED", "WARNING": "AMBER", "INFO": "ACCENT", "CLEAN": "GREEN"}
 _METRIC_LABEL = {"rtt_ms": "RTT (ms)", "loss_pct": "Loss (%)", "jitter_ms": "Jitter (ms)"}
+
+
+def _sev_color(severity: str) -> str:
+    return getattr(_s, _SEV_COLOR_NAMES.get(severity, "TEXT_PRIMARY"))
 
 
 class TrendPage(QWidget):
@@ -196,9 +186,9 @@ class TrendPage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         _kh, self._kpi_hosts_lbl    = _shared_kpi_tile("Hosts Analysed", "—")
-        _kc, self._kpi_critical_lbl = _shared_kpi_tile("Critical",        "—", RED)
-        _kw, self._kpi_warnings_lbl = _shared_kpi_tile("Warnings",        "—", AMBER)
-        _kl, self._kpi_clean_lbl    = _shared_kpi_tile("Clean",           "—", GREEN)
+        _kc, self._kpi_critical_lbl = _shared_kpi_tile("Critical",        "—", _s.RED)
+        _kw, self._kpi_warnings_lbl = _shared_kpi_tile("Warnings",        "—", _s.AMBER)
+        _kl, self._kpi_clean_lbl    = _shared_kpi_tile("Clean",           "—", _s.GREEN)
         for w in (_kh, _kc, _kw, _kl):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
@@ -207,11 +197,9 @@ class TrendPage(QWidget):
         # RECUR-4: this-week vs last-week RTT headline
         self._headline_lbl = QLabel("")
         self._headline_lbl.setVisible(False)
-        self._headline_lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:8px 14px;"
-        )
+        _s.themed_ss(self._headline_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:8px 14px;")
         outer.addWidget(self._headline_lbl)
 
         # ── Content stack: page 0 = empty state, page 1 = analysis controls ─────
@@ -239,7 +227,7 @@ class TrendPage(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet("background:transparent;")
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         il = QVBoxLayout(inner)
         il.setContentsMargins(16, 8, 16, 16)
         il.setSpacing(12)
@@ -255,13 +243,13 @@ class TrendPage(QWidget):
 
     def _build_controls(self) -> QWidget:
         row = QWidget()
-        row.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(row, "background:{BG_DARK};")
         hl = QHBoxLayout(row)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setSpacing(10)
 
         lbl = QLabel("Analysis window:")
-        lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(lbl, "color:{TEXT_SECONDARY};font-size:11px;")
         hl.addWidget(lbl)
 
         self._window_combo = QComboBox()
@@ -270,42 +258,36 @@ class TrendPage(QWidget):
             self._window_combo.addItem(label, hours)
         self._window_combo.setCurrentIndex(2)  # default 24 h
         self._window_combo.setFixedHeight(26)
-        self._window_combo.setStyleSheet(
-            f"QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
-            f"QComboBox::drop-down{{border:none;}}"
-            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
-            f"border:1px solid {BORDER};selection-background-color:{ACCENT};}}"
-        )
+        _s.themed_ss(self._window_combo, "QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 6px;font-size:11px;}}"
+            "QComboBox::drop-down{{border:none;}}"
+            "QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            "border:1px solid {BORDER};selection-background-color:{ACCENT};}}")
         hl.addWidget(self._window_combo)
 
         self._btn_run = QPushButton("▶  Run Analysis")
         self._btn_run.setFixedHeight(26)
-        self._btn_run.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
-            f"border-radius:2px;padding:0 16px;font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
-            f"QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._btn_run, "QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
+            "border-radius:2px;padding:0 16px;font-size:11px;font-weight:bold;}}"
+            "QPushButton:hover{{background:{ACCENT_DARK};}}"
+            "QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._btn_run.clicked.connect(self._run_analysis)
         hl.addWidget(self._btn_run)
 
         self._status_lbl = QLabel(
             "Enable Network RTT logging in Network Logger to build forecast data."
         )
-        self._status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY};font-size:10px;")
         hl.addWidget(self._status_lbl)
 
         self._btn_log_hub = QPushButton("Open Network Logger →")
         self._btn_log_hub.setFlat(True)
         self._btn_log_hub.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_log_hub.setStyleSheet(
-            f"QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
-            f"border:none;padding:0 0 0 4px;}}"
-            f"QPushButton:hover{{color:{ACCENT_DARK};}}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._btn_log_hub, "QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
+            "border:none;padding:0 0 0 4px;}}"
+            "QPushButton:hover{{color:{ACCENT_DARK};}}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._btn_log_hub.clicked.connect(lambda: self.navigate_to.emit("Network Logger"))
         hl.addWidget(self._btn_log_hub)
         hl.addStretch()
@@ -345,13 +327,11 @@ class TrendPage(QWidget):
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.setMinimumHeight(300)
-        self._table.setStyleSheet(
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
-        )
+        _s.themed_ss(self._table, "QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            "gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            "QTableWidget::item{{padding:2px 5px;}}")
         for w, col in zip((130, 80, 70, 70, 80, 80), range(6)):
             self._table.setColumnWidth(col, w)
 
@@ -391,7 +371,7 @@ class TrendPage(QWidget):
             "R² < 0.5 = noisy data / no clear trend.  "
             "ETA shown only when the trend is rising toward the threshold within 30 days."
         )
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(note)
         return card
 
@@ -456,24 +436,24 @@ class TrendPage(QWidget):
         if last_avg is not None:
             delta = this_avg - last_avg
             if delta > 5:
-                arrow, color = "↑", AMBER if delta < 20 else RED
+                arrow, color_name = "↑", "AMBER" if delta < 20 else "RED"
             elif delta < -5:
-                arrow, color = "↓", GREEN
+                arrow, color_name = "↓", "GREEN"
             else:
-                arrow, color = "→", GREEN
+                arrow, color_name = "→", "GREEN"
             diff_str = f" ({arrow} {abs(delta):.0f}ms vs. last week)"
         else:
-            color = GREEN if this_avg < 50 else AMBER if this_avg < 150 else RED
+            color_name = "GREEN" if this_avg < 50 else "AMBER" if this_avg < 150 else "RED"
             diff_str = " (no prior week data)"
 
         self._headline_lbl.setText(
             f"RTT this week: {this_avg:.0f}ms avg{diff_str}"
         )
-        self._headline_lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{color};"
-            f" background:{BG_CARD}; border:1px solid {BORDER};"
+        _s.themed_ss(self._headline_lbl, lambda cn=color_name: (
+            f"font-size:13px; font-weight:bold; color:{getattr(_s, cn)};"
+            f" background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
             f" border-radius:4px; padding:8px 14px;"
-        )
+        ))
         self._headline_lbl.setVisible(True)
 
     @pyqtSlot(str)
@@ -490,7 +470,7 @@ class TrendPage(QWidget):
         for r in report.results:
             row = self._table.rowCount()
             self._table.insertRow(row)
-            sev_color = _SEV_COLOR.get(r.severity, TEXT_PRIMARY)
+            sev_color = _sev_color(r.severity)
 
             unit = {"rtt_ms": "ms", "loss_pct": "%", "jitter_ms": "ms"}.get(r.metric, "")
             trend_str = f"+{r.slope_per_hour:.3f}" if r.slope_per_hour >= 0 else f"{r.slope_per_hour:.3f}"
@@ -530,8 +510,8 @@ class TrendPage(QWidget):
 
             # VIZ-3: sparkline widget in col 7
             if r.points:
-                spark_color = GREEN if r.direction in ("STABLE", "FALLING") else RED
-                sparkline = _MiniSparkline(r.points, spark_color)
+                spark_color_name = "GREEN" if r.direction in ("STABLE", "FALLING") else "RED"
+                sparkline = _MiniSparkline(r.points, spark_color_name)
                 self._table.setCellWidget(row, 7, sparkline)
             else:
                 self._table.setItem(row, 7, QTableWidgetItem("—"))
@@ -545,13 +525,11 @@ class TrendPage(QWidget):
         self._kpi_critical_lbl.set_value(crit)
         self._kpi_warnings_lbl.set_value(warn)
         self._kpi_clean_lbl.set_value(clean)
-        crit_color = RED if crit else TEXT_SECONDARY
-        warn_color = AMBER if warn else TEXT_SECONDARY
-        self._kpi_critical_lbl.setStyleSheet(
-            f"font-size:22px; font-weight:700; color:{crit_color};"
+        _s.themed_ss(self._kpi_critical_lbl, lambda has=bool(crit): (
+            f"font-size:22px; font-weight:700; color:{_s.RED if has else _s.TEXT_SECONDARY};"
             " border:none; background:transparent;"
-        )
-        self._kpi_warnings_lbl.setStyleSheet(
-            f"font-size:22px; font-weight:700; color:{warn_color};"
+        ))
+        _s.themed_ss(self._kpi_warnings_lbl, lambda has=bool(warn): (
+            f"font-size:22px; font-weight:700; color:{_s.AMBER if has else _s.TEXT_SECONDARY};"
             " border:none; background:transparent;"
-        )
+        ))

@@ -25,10 +25,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, BG_CARD, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 
 # ── Background generation worker ─────────────────────────────────────────────
@@ -65,24 +62,18 @@ class _GenWorker(QThread):
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setObjectName("card")
-    frame.setStyleSheet(
-        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(frame, "QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
     hdr = QFrame()
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0px;"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0px;")
     hdr_lay = QHBoxLayout(hdr)
     hdr_lay.setContentsMargins(12, 0, 10, 0)
     t = QLabel(title.upper())
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-        f" letter-spacing:0.5px; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+        " letter-spacing:0.5px; background:transparent; border:none;")
     hdr_lay.addWidget(t)
     hdr_lay.addStretch()
     outer.addWidget(hdr)
@@ -93,19 +84,17 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     return frame, body
 
 
-def _kpi(label: str, value: str, color: str = TEXT_PRIMARY) -> QWidget:
+def _kpi(label: str, value: str) -> QWidget:
     w = QFrame()
-    w.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {ACCENT}; border-radius:0px; }}"
-    )
+    _s.themed_ss(w, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-left:3px solid {ACCENT}; border-radius:0px; }}")
     lay = QVBoxLayout(w)
     lay.setContentsMargins(10, 6, 10, 6)
     lay.setSpacing(0)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold; border:none; background:transparent;")
+    _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold; border:none; background:transparent;")
     val = QLabel(value)
-    val.setStyleSheet(f"color:{color}; font-size:18px; font-weight:bold; border:none; background:transparent;")
+    _s.themed_ss(val, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; border:none; background:transparent;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return w
@@ -142,18 +131,14 @@ class NetworkDocPage(QWidget):
 
         # Page header
         title = QLabel("Network Documentation")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            " background:transparent; border:none;")
         sub = QLabel(
             "Generate a self-contained HTML report — topology diagram, "
             "device inventory, open ports, and certificate expiry"
         )
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none; padding:0 0 4px 0;"
-        )
+        _s.themed_ss(sub, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none; padding:0 0 4px 0;")
         root.addWidget(title)
         root.addWidget(sub)
 
@@ -169,18 +154,14 @@ class NetworkDocPage(QWidget):
 
         _icon_lbl = QLabel("⊟")
         _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _icon_lbl.setStyleSheet(
-            f"font-size:40px; color:{BORDER}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_icon_lbl, "font-size:40px; color:{BORDER}; background:transparent; border:none;")
         _desc_lbl = QLabel(
             "Run a scan to discover devices, open ports, and certificates —\n"
             "then generate a full network inventory document."
         )
         _desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _desc_lbl.setWordWrap(True)
-        _desc_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(_desc_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         _btn_cta = QPushButton("Scan & Document")
         _btn_cta.setObjectName("btnScan")
         _btn_cta.setFixedHeight(34)
@@ -211,10 +192,10 @@ class NetworkDocPage(QWidget):
         # Options card
         opt_frame, opt_body = _card("Report Contents")
         _chk_qss = (
-            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
-            f"QCheckBox::indicator {{ width:13px; height:13px; border:1px solid {BORDER};"
-            f" border-radius:2px; background:{BG_CARD}; }}"
-            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
+            "QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
+            "QCheckBox::indicator {{ width:13px; height:13px; border:1px solid {BORDER};"
+            " border-radius:2px; background:{BG_CARD}; }}"
+            "QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
         )
         self._chk_topo  = QCheckBox("Network topology diagram (PNG snapshot)")
         self._chk_inv   = QCheckBox("Device inventory table")
@@ -222,7 +203,7 @@ class NetworkDocPage(QWidget):
         self._chk_certs = QCheckBox("TLS certificate inventory (requires cert scan)")
         for c in (self._chk_topo, self._chk_inv, self._chk_ports, self._chk_certs):
             c.setChecked(True)
-            c.setStyleSheet(_chk_qss)
+            _s.themed_ss(c, _chk_qss)
             opt_body.addWidget(c)
         _cl.addWidget(opt_frame)
 
@@ -238,22 +219,21 @@ class NetworkDocPage(QWidget):
         self._btn_open.setFixedHeight(34)
         self._btn_open.setEnabled(False)
         self._btn_open.clicked.connect(self._open_in_browser)
-        self._btn_open.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:2px; padding:0 16px; font-size:12px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        _secondary_btn_ss = (
+            "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:2px; padding:0 16px; font-size:12px; }}"
+            "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT}; }}"
+            "QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
+        _s.themed_ss(self._btn_open, _secondary_btn_ss)
         self._btn_save_as = QPushButton("Save As…")
         self._btn_save_as.setFixedHeight(34)
         self._btn_save_as.setEnabled(False)
         self._btn_save_as.clicked.connect(self._save_as)
-        self._btn_save_as.setStyleSheet(self._btn_open.styleSheet())
+        _s.themed_ss(self._btn_save_as, _secondary_btn_ss)
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         action_row.addWidget(self._btn_generate)
         action_row.addWidget(self._btn_open)
         action_row.addWidget(self._btn_save_as)
@@ -264,10 +244,8 @@ class NetworkDocPage(QWidget):
         log_frame, log_body = _card("Generation Log")
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
-        self._log.setStyleSheet(
-            f"QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" font-size:11px; border:none; padding:4px 8px; }}"
-        )
+        _s.themed_ss(self._log, "QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " font-size:11px; border:none; padding:4px 8px; }}")
         self._log.setMaximumBlockCount(500)
         log_body.addWidget(self._log)
         _cl.addWidget(log_frame, 1)

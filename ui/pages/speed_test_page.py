@@ -44,12 +44,7 @@ from PyQt6.QtWidgets import (
 
 from ui import styles as _s
 from ui.styles import (
-    ACCENT, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD,
-    BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN,
-    RED, RED_BG, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
-    TH_BORDER, TH_TEXT,
+    CARD_RADIUS,
 )
 
 from ui.pages.ookla_cli_banner import OoklaCliBanner
@@ -179,16 +174,16 @@ def _is_slow_speed_result(download_mbps: float) -> bool:
 
 def _rsrp_color(rsrp) -> str:
     if rsrp is None:
-        return TEXT_MUTED
+        return _s.TEXT_MUTED
     try:
         v = float(rsrp)
     except (TypeError, ValueError):
-        return TEXT_MUTED
+        return _s.TEXT_MUTED
     if v >= -80:
-        return GREEN
+        return _s.GREEN
     if v >= -100:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED
 
 
 def _sinr_label(v: float) -> str:
@@ -200,20 +195,20 @@ def _sinr_label(v: float) -> str:
 
 
 def _sinr_color(v: float) -> str:
-    if v < 5:   return RED
-    if v < 13:  return AMBER
-    return GREEN
+    if v < 5:   return _s.RED
+    if v < 13:  return _s.AMBER
+    return _s.GREEN
 
 
 def _fmt_sinr(v) -> tuple:
     """Return (display_string, color) for a SINR/SNR value in dB."""
     if v is None:
-        return "—", TEXT_MUTED
+        return "—", _s.TEXT_MUTED
     try:
         fv = float(v)
         return f"{fv:.1f} dB ({_sinr_label(fv)})", _sinr_color(fv)
     except (TypeError, ValueError):
-        return "—", TEXT_MUTED
+        return "—", _s.TEXT_MUTED
 
 
 def _color_idle() -> str:
@@ -411,21 +406,19 @@ class _ServerList(QListWidget):
         super().__init__(parent)
         self.setObjectName("serverList")
         self.setAlternatingRowColors(True)
-        self.setStyleSheet(
-            f"QListWidget#serverList {{"
-            f"  background:{BG_CARD}; border:1px solid {BORDER};"
-            f"  font-size:11px; color:{TEXT_PRIMARY}; outline:none;"
-            f"}}"
-            f"QListWidget#serverList::item {{"
-            f"  padding:5px 8px; border-bottom:1px solid {BORDER};"
-            f"}}"
-            f"QListWidget#serverList::item:selected {{"
-            f"  background:{TABLE_SEL}; color:{TEXT_PRIMARY};"
-            f"}}"
-            f"QListWidget#serverList::item:hover:!selected {{"
-            f"  background:{BG_HOVER};"
-            f"}}"
-        )
+        _s.themed_ss(self, "QListWidget#serverList {{"
+            "  background:{BG_CARD}; border:1px solid {BORDER};"
+            "  font-size:11px; color:{TEXT_PRIMARY}; outline:none;"
+            "}}"
+            "QListWidget#serverList::item {{"
+            "  padding:5px 8px; border-bottom:1px solid {BORDER};"
+            "}}"
+            "QListWidget#serverList::item:selected {{"
+            "  background:{TABLE_SEL}; color:{TEXT_PRIMARY};"
+            "}}"
+            "QListWidget#serverList::item:hover:!selected {{"
+            "  background:{BG_HOVER};"
+            "}}")
 
 
 # ── Card helper ───────────────────────────────────────────────────────────────
@@ -434,28 +427,22 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     """Return (card_frame, body_layout). Title bar with bold heading."""
     frame = QFrame()
     frame.setObjectName("card")
-    frame.setStyleSheet(
-        f"QFrame#card {{"
-        f"  background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
-        f"}}"
-    )
+    _s.themed_ss(frame, "QFrame#card {{"
+        "  background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+        "}}")
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
 
     hdr = QFrame()
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
-        f" border-radius:0px;"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
+        " border-radius:0px;")
     hdr_lay = QHBoxLayout(hdr)
     hdr_lay.setContentsMargins(12, 0, 10, 0)
     t = QLabel(title.upper())
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-        f" letter-spacing:0.5px; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+        " letter-spacing:0.5px; background:transparent; border:none;")
     hdr_lay.addWidget(t)
     hdr_lay.addStretch()
     outer.addWidget(hdr)
@@ -473,31 +460,23 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
 def _stat_tile(label: str) -> tuple[QFrame, QLabel, QLabel]:
     """Return (tile, value_label, unit_label)."""
     tile = QFrame()
-    tile.setStyleSheet(
-        f"background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {ACCENT}; border-radius:0px;"
-    )
+    _s.themed_ss(tile, "background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-left:3px solid {ACCENT}; border-radius:0px;")
     lay = QVBoxLayout(tile)
     lay.setContentsMargins(12, 8, 12, 8)
     lay.setSpacing(2)
 
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(
-        f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-        f" letter-spacing:0.5px; border:none; background:transparent;"
-    )
+    _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+        " letter-spacing:0.5px; border:none; background:transparent;")
 
     val = QLabel("—")
-    val.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:20px; font-weight:bold;"
-        f" border:none; background:transparent;"
-    )
+    _s.themed_ss(val, "color:{TEXT_PRIMARY}; font-size:20px; font-weight:bold;"
+        " border:none; background:transparent;")
 
     unit = QLabel("")
-    unit.setStyleSheet(
-        f"color:{TEXT_SECONDARY}; font-size:10px;"
-        f" border:none; background:transparent;"
-    )
+    _s.themed_ss(unit, "color:{TEXT_SECONDARY}; font-size:10px;"
+        " border:none; background:transparent;")
 
     lay.addWidget(lbl)
     lay.addWidget(val)
@@ -564,7 +543,7 @@ class SpeedTestPage(QWidget):
         row = QHBoxLayout()
         row.setSpacing(10)
         self._chk_auto_speedtest = QCheckBox("Run speed tests automatically in the background")
-        self._chk_auto_speedtest.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_auto_speedtest, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_auto_speedtest.stateChanged.connect(self._on_auto_speedtest_setting_changed)
         row.addWidget(self._chk_auto_speedtest)
         row.addStretch()
@@ -583,7 +562,7 @@ class SpeedTestPage(QWidget):
             "Speed Drop” is enabled under Notifications."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY}; font-size:10px;")
         body.addWidget(note)
 
         return card
@@ -672,12 +651,10 @@ class SpeedTestPage(QWidget):
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Search servers…")
         self._search_box.setClearButtonEnabled(True)
-        self._search_box.setStyleSheet(
-            f"QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:3px; padding:4px 8px; font-size:11px;"
-            f" color:{TEXT_PRIMARY}; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._search_box, "QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:4px 8px; font-size:11px;"
+            " color:{TEXT_PRIMARY}; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._search_box.textChanged.connect(self._filter_servers)
         search_row.addWidget(self._search_box)
         srv_body.addLayout(search_row)
@@ -690,17 +667,13 @@ class SpeedTestPage(QWidget):
         # "Closest server" label + Refresh
         footer_row = QHBoxLayout()
         self._server_hint = QLabel("Loading servers…")
-        self._server_hint.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._server_hint, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         footer_row.addWidget(self._server_hint, 1)
         btn_refresh = QPushButton("↻  Refresh")
-        btn_refresh.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT};"
-            f" border:none; font-size:11px; padding:2px 4px; }}"
-            f"QPushButton:hover {{ text-decoration:underline; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(btn_refresh, "QPushButton {{ background:transparent; color:{ACCENT};"
+            " border:none; font-size:11px; padding:2px 4px; }}"
+            "QPushButton:hover {{ text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         btn_refresh.clicked.connect(self._fetch_servers)
         footer_row.addWidget(btn_refresh)
         srv_body.addLayout(footer_row)
@@ -738,10 +711,8 @@ class SpeedTestPage(QWidget):
             "< 10 Mbps — slow for streaming  ·  25–100 Mbps — typical home  ·  100+ Mbps — fast"
         )
         _ctx.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _ctx.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; background:{BG_ALT_ROW};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
-        )
+        _s.themed_ss(_ctx, "color:{TEXT_SECONDARY}; font-size:10px; background:{BG_ALT_ROW};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;")
         gauge_body.addWidget(_ctx)
 
         top_row.addWidget(gauge_card, 6)
@@ -760,10 +731,8 @@ class SpeedTestPage(QWidget):
         self._btn_run.clicked.connect(lambda: self.scan_requested.emit())
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none;")
 
         # Engine badge — shows which backend will be used
         self._engine_lbl = QLabel()
@@ -786,9 +755,7 @@ class SpeedTestPage(QWidget):
         # ── S8-5: comparative context — "this is your Xth fastest test…" ──────
         self._comparison_lbl = QLabel("")
         self._comparison_lbl.setWordWrap(True)
-        self._comparison_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._comparison_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         self._comparison_lbl.setVisible(False)
         cbox.addWidget(self._comparison_lbl)
 
@@ -826,17 +793,15 @@ class SpeedTestPage(QWidget):
         self._hist_table.setColumnWidth(8, 140)
         self._hist_table.setColumnWidth(9, 140)
         self._hist_table.setColumnWidth(10, 80)
-        self._hist_table.setStyleSheet(
-            f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QHeaderView::section {{"
-            f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-            f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid {TH_BORDER};"
-            f"}}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-            f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-        )
+        _s.themed_ss(self._hist_table, "QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QHeaderView::section {{"
+            "  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            "  font-weight:bold; padding:4px 5px; border:none;"
+            "  border-right:1px solid {TH_BORDER};"
+            "}}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+            "QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+            "QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}")
 
         self._hist_table.itemSelectionChanged.connect(self._on_history_row_selected)
         self._hist_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -870,9 +835,7 @@ class SpeedTestPage(QWidget):
         self._date_filter_combo.addItems(["Last 7 days", "Last 30 days", "Last 90 days", "All"])
         self._date_filter_combo.setCurrentIndex(1)  # default: Last 30 days
         self._date_filter_combo.setFixedWidth(140)
-        self._date_filter_combo.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _s.themed_ss(self._date_filter_combo, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         _date_hours = [168.0, 720.0, 2160.0, 999_999.0]
         self._date_filter_combo.currentIndexChanged.connect(
             lambda i: self.set_global_hours(_date_hours[i])
@@ -894,9 +857,7 @@ class SpeedTestPage(QWidget):
         # ── S8-4: time-of-day pattern insight (hidden until there's enough data) ──
         self._time_of_day_lbl = QLabel("")
         self._time_of_day_lbl.setWordWrap(True)
-        self._time_of_day_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._time_of_day_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._time_of_day_lbl.setVisible(False)
         hist_body.addWidget(self._time_of_day_lbl)
 
@@ -928,35 +889,31 @@ class SpeedTestPage(QWidget):
     def _build_signal_panel(self) -> QFrame:
         panel = QFrame()
         panel.setObjectName("sigPanel")
-        panel.setStyleSheet(
-            f"QFrame#sigPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-left:3px solid {ACCENT}; }}"
-        )
+        _s.themed_ss(panel, "QFrame#sigPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-left:3px solid {ACCENT}; }}")
         root = QVBoxLayout(panel)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        _lbl_style   = f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;"
-        _val_style   = f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold; border:none; background:transparent;"
-        _hdr_style   = f"border:none; border-bottom:1px solid {BORDER}; background:{BG_CARD};"
+        _lbl_style   = "color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;"
+        _val_style   = "color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold; border:none; background:transparent;"
+        _hdr_style   = "border:none; border-bottom:1px solid {BORDER}; background:{BG_CARD};"
 
         # ── header strip ─────────────────────────────────────────────────────
         hdr = QFrame()
-        hdr.setStyleSheet(f"QFrame {{ {_hdr_style} }}")
+        _s.themed_ss(hdr, f"QFrame {{{{ {_hdr_style} }}}}")
         hdr_lay = QHBoxLayout(hdr)
         hdr_lay.setContentsMargins(12, 6, 12, 6)
         hdr_lay.setSpacing(8)
 
         title = QLabel("📡  Modem signal at test time")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold; border:none; background:transparent;"
-        )
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold; border:none; background:transparent;")
         self._sig_ts = QLabel("")
-        self._sig_ts.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;")
+        _s.themed_ss(self._sig_ts, "color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;")
         self._sig_network_type = QLabel("")
-        self._sig_network_type.setStyleSheet(f"color:{ACCENT}; font-size:11px; font-weight:bold; border:none; background:transparent;")
+        _s.themed_ss(self._sig_network_type, "color:{ACCENT}; font-size:11px; font-weight:bold; border:none; background:transparent;")
         self._sig_bars = QLabel("")
-        self._sig_bars.setStyleSheet(f"color:{GREEN}; font-size:11px; border:none; background:transparent;")
+        _s.themed_ss(self._sig_bars, "color:{GREEN}; font-size:11px; border:none; background:transparent;")
 
         hdr_lay.addWidget(title)
         hdr_lay.addWidget(self._sig_ts)
@@ -967,22 +924,22 @@ class SpeedTestPage(QWidget):
 
         # ── connection strip (operator / cell / IP) ───────────────────────────
         conn = QFrame()
-        conn.setStyleSheet(f"QFrame {{ {_hdr_style} }}")
+        _s.themed_ss(conn, f"QFrame {{{{ {_hdr_style} }}}}")
         conn_lay = QHBoxLayout(conn)
         conn_lay.setContentsMargins(12, 5, 12, 5)
         conn_lay.setSpacing(0)
 
         def _conn_pair(label: str, attr: str) -> None:
             lbl = QLabel(f"{label}: ")
-            lbl.setStyleSheet(_lbl_style)
+            _s.themed_ss(lbl, _lbl_style)
             val = QLabel("—")
-            val.setStyleSheet(_val_style)
+            _s.themed_ss(val, _val_style)
             setattr(self, attr, val)
             conn_lay.addWidget(lbl)
             conn_lay.addWidget(val)
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.VLine)
-            sep.setStyleSheet(f"border:none; border-left:1px solid {BORDER}; margin:0 16px;")
+            _s.themed_ss(sep, "border:none; border-left:1px solid {BORDER}; margin:0 16px;")
             conn_lay.addWidget(sep)
 
         _conn_pair("Operator", "_sig_operator")
@@ -993,7 +950,7 @@ class SpeedTestPage(QWidget):
 
         # ── two-column signal body ─────────────────────────────────────────────
         body = QFrame()
-        body.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; }}")
+        _s.themed_ss(body, "QFrame {{ background:{BG_CARD}; border:none; }}")
         body_lay = QHBoxLayout(body)
         body_lay.setContentsMargins(0, 0, 0, 0)
         body_lay.setSpacing(0)
@@ -1004,33 +961,35 @@ class SpeedTestPage(QWidget):
             h.setContentsMargins(0, 1, 0, 1)
             lbl_w = QLabel(f"{label}:")
             lbl_w.setFixedWidth(58)
-            lbl_w.setStyleSheet(_lbl_style)
+            _s.themed_ss(lbl_w, _lbl_style)
             val_w = QLabel("—")
-            val_w.setStyleSheet(_val_style)
+            _s.themed_ss(val_w, _val_style)
             setattr(self, attr, val_w)
             h.addWidget(lbl_w)
             h.addWidget(val_w, 1)
             parent_lay.addLayout(h)
 
-        def _signal_col(title: str, title_color: str, border_right: bool) -> QVBoxLayout:
+        def _signal_col(title: str, title_color_name: str, border_right: bool) -> QVBoxLayout:
             col = QFrame()
-            border = f"border-right:1px solid {BORDER};" if border_right else ""
-            col.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; {border} }}")
+            _s.themed_ss(col, lambda br=border_right: (
+                f"QFrame {{ background:{_s.BG_CARD}; border:none;"
+                f" {('border-right:1px solid ' + _s.BORDER + ';') if br else ''} }}"
+            ))
             lay = QVBoxLayout(col)
             lay.setContentsMargins(12, 8, 12, 8)
             lay.setSpacing(2)
             t = QLabel(title)
-            t.setStyleSheet(
-                f"color:{title_color}; font-size:11px; font-weight:bold;"
-                f" border:none; border-bottom:1px solid {BORDER}; background:transparent;"
+            _s.themed_ss(t, lambda cn=title_color_name: (
+                f"color:{getattr(_s, cn)}; font-size:11px; font-weight:bold;"
+                f" border:none; border-bottom:1px solid {_s.BORDER}; background:transparent;"
                 f" padding-bottom:4px; margin-bottom:2px;"
-            )
+            ))
             lay.addWidget(t)
             body_lay.addWidget(col, 1)
             return lay
 
-        nr_lay  = _signal_col("5G NR",        ACCENT, border_right=True)
-        lte_lay = _signal_col("LTE Primary",   AMBER,  border_right=False)
+        nr_lay  = _signal_col("5G NR",        "ACCENT", border_right=True)
+        lte_lay = _signal_col("LTE Primary",   "AMBER",  border_right=False)
 
         _col_row("Band",  "_sig_5g_band",  nr_lay)
         _col_row("RSRP",  "_sig_5g_rsrp",  nr_lay)
@@ -1054,7 +1013,7 @@ class SpeedTestPage(QWidget):
     def _update_signal_panel(self, sig: dict) -> None:
         import datetime as _dt
 
-        def _s(v) -> str:
+        def _disp(v) -> str:
             return str(v) if v is not None else "—"
 
         def _fmt_dbm(v) -> str:
@@ -1090,35 +1049,35 @@ class SpeedTestPage(QWidget):
         cell = sig.get("cell_id")
         enb  = sig.get("enb_id")
         self._sig_cell.setText(
-            f"{cell}  (eNB: {enb})" if cell and enb else _s(cell)
+            f"{cell}  (eNB: {enb})" if cell and enb else _disp(cell)
         )
-        self._sig_ip.setText(_s(sig.get("wan_ip")))
+        self._sig_ip.setText(_disp(sig.get("wan_ip")))
 
         # 5G NR
         nr_rsrp = sig.get("nr5g_rsrp_dbm")
-        self._sig_5g_band.setText(_s(sig.get("nr5g_band")))
+        self._sig_5g_band.setText(_disp(sig.get("nr5g_band")))
         self._sig_5g_rsrp.setText(_fmt_dbm(nr_rsrp) + _quality(nr_rsrp))
-        self._sig_5g_rsrp.setStyleSheet(
-            f"color:{_rsrp_color(nr_rsrp)}; font-size:11px; font-weight:bold;"
+        _s.themed_ss(self._sig_5g_rsrp, lambda v=nr_rsrp: (
+            f"color:{_rsrp_color(v)}; font-size:11px; font-weight:bold;"
             f" border:none; background:transparent;"
-        )
+        ))
         self._sig_5g_sinr.setText(_fmt_db(sig.get("nr5g_sinr_db")))
         self._sig_5g_rsrq.setText(_fmt_db(sig.get("nr5g_rsrq_db")))
-        self._sig_5g_pci.setText(_s(sig.get("nr5g_pci")))
-        self._sig_5g_arfcn.setText(_s(sig.get("nr5g_arfcn")))
+        self._sig_5g_pci.setText(_disp(sig.get("nr5g_pci")))
+        self._sig_5g_arfcn.setText(_disp(sig.get("nr5g_arfcn")))
 
         # LTE Primary
         lte_rsrp = sig.get("lte_rsrp_dbm")
-        self._sig_lte_band.setText(_s(sig.get("lte_band")))
+        self._sig_lte_band.setText(_disp(sig.get("lte_band")))
         self._sig_lte_rsrp.setText(_fmt_dbm(lte_rsrp) + _quality(lte_rsrp))
-        self._sig_lte_rsrp.setStyleSheet(
-            f"color:{_rsrp_color(lte_rsrp)}; font-size:11px; font-weight:bold;"
+        _s.themed_ss(self._sig_lte_rsrp, lambda v=lte_rsrp: (
+            f"color:{_rsrp_color(v)}; font-size:11px; font-weight:bold;"
             f" border:none; background:transparent;"
-        )
+        ))
         self._sig_lte_snr.setText(_fmt_db(sig.get("lte_snr_db")))
         self._sig_lte_rsrq.setText(_fmt_db(sig.get("lte_rsrq_db")))
-        self._sig_lte_pci.setText(_s(sig.get("lte_pci")))
-        self._sig_lte_earfcn.setText(_s(sig.get("lte_earfcn")))
+        self._sig_lte_pci.setText(_disp(sig.get("lte_pci")))
+        self._sig_lte_earfcn.setText(_disp(sig.get("lte_earfcn")))
 
         self._signal_panel.setVisible(True)
 
@@ -1133,7 +1092,7 @@ class SpeedTestPage(QWidget):
         self._server_hint.setText("Fetching servers…")
         self._server_list.clear()
         item = QListWidgetItem("Connecting to Speedtest network…")
-        item.setForeground(QColor(TEXT_MUTED))
+        item.setForeground(QColor(_s.TEXT_MUTED))
         self._server_list.addItem(item)
 
         self._fetch_worker = FetchServersWorker(limit=20, parent=self)
@@ -1195,7 +1154,7 @@ class SpeedTestPage(QWidget):
     def _on_fetch_error(self, msg: str) -> None:
         self._server_list.clear()
         err_item = QListWidgetItem(f"⚠  {msg}")
-        err_item.setForeground(QColor(RED))
+        err_item.setForeground(QColor(_s.RED))
         self._server_list.addItem(err_item)
         self._server_hint.setText("Could not fetch server list — auto-best will be used")
 
@@ -1237,10 +1196,8 @@ class SpeedTestPage(QWidget):
 
         if cli:
             self._engine_lbl.setText(f"Engine: Ookla CLI ✓")
-            self._engine_lbl.setStyleSheet(
-                f"font-size:10px; background:transparent; border:none;"
-                f" color:{GREEN}; padding:0 4px;"
-            )
+            _s.themed_ss(self._engine_lbl, "font-size:10px; background:transparent; border:none;"
+                " color:{GREEN}; padding:0 4px;")
         else:
             try:
                 import speedtest  # noqa: F401
@@ -1248,10 +1205,8 @@ class SpeedTestPage(QWidget):
             except ImportError:
                 label = "Engine: Pure-Python"
             self._engine_lbl.setText(label)
-            self._engine_lbl.setStyleSheet(
-                f"font-size:10px; background:transparent; border:none;"
-                f" color:{AMBER}; padding:0 4px;"
-            )
+            _s.themed_ss(self._engine_lbl, "font-size:10px; background:transparent; border:none;"
+                " color:{AMBER}; padding:0 4px;")
 
     # ── Ookla CLI banner callback ─────────────────────────────────────────────
 
@@ -1431,16 +1386,16 @@ class SpeedTestPage(QWidget):
             prior_downloads = [p.download_mbps for p in history_60d[1:]]
             verdict = evaluate_speed_drop(result.download_mbps, prior_downloads)
             if verdict.is_drop:
-                bg = RED_BG if verdict.severity == "High" else AMBER_BG
-                border = RED if verdict.severity == "High" else AMBER
                 steps_html = "".join(f"<li>{s}</li>" for s in verdict.steps)
                 self._drop_banner.setText(
                     f"<b>{verdict.headline}</b><ul style='margin:4px 0 0 16px'>{steps_html}</ul>"
                 )
-                self._drop_banner.setStyleSheet(
-                    f"background:{bg}; border:1px solid {border}; border-radius:{CARD_RADIUS};"
-                    f"color:{TEXT_PRIMARY}; padding:8px 12px; font-size:11px;"
-                )
+                _s.themed_ss(self._drop_banner, lambda sev=verdict.severity: (
+                    f"background:{_s.RED_BG if sev == 'High' else _s.AMBER_BG};"
+                    f" border:1px solid {_s.RED if sev == 'High' else _s.AMBER};"
+                    f" border-radius:{CARD_RADIUS};"
+                    f"color:{_s.TEXT_PRIMARY}; padding:8px 12px; font-size:11px;"
+                ))
                 self._drop_banner.setVisible(True)
                 self.speed_drop_detected.emit({
                     "headline": verdict.headline,
@@ -1531,7 +1486,7 @@ class SpeedTestPage(QWidget):
 
         if result:
             backend = getattr(result, "backend", "") or "OK"
-            backend_color = GREEN if backend == "Ookla CLI" else AMBER
+            backend_color = _s.GREEN if backend == "Ookla CLI" else _s.AMBER
             sig = getattr(result, "modem_signal", None)
             band = (sig.get("nr5g_band") or sig.get("lte_band") or "—") if sig else "—"
             rsrp = (sig.get("nr5g_rsrp_dbm") if sig and sig.get("nr5g_rsrp_dbm") is not None
@@ -1554,12 +1509,12 @@ class SpeedTestPage(QWidget):
                 backend,
             ]
             colors = [None, None, None, None,
-                      GREEN if result.download_mbps >= 25 else AMBER,
-                      GREEN if result.upload_mbps >= 5  else AMBER,
+                      _s.GREEN if result.download_mbps >= 25 else _s.AMBER,
+                      _s.GREEN if result.upload_mbps >= 5  else _s.AMBER,
                       None, rsrp_color, lte_sinr_color, nr5_sinr_color, backend_color]
         else:
             cells = ["—", "—", "—", "—", "—", "—", "—", "—", "—", "—", "Error"]
-            colors = [None]*10 + [RED]
+            colors = [None]*10 + [_s.RED]
 
         for col, (val, col_color) in enumerate(zip(cells, colors)):
             item = QTableWidgetItem(str(val))
@@ -1648,9 +1603,9 @@ class SpeedTestPage(QWidget):
                     "OK",
                 ]
                 clrs = [None, None, None, None,
-                        GREEN if p.download_mbps >= 25 else AMBER,
-                        GREEN if p.upload_mbps >= 5  else AMBER,
-                        None, _rsrp_color(rsrp), lte_sinr_color, nr5_sinr_color, GREEN]
+                        _s.GREEN if p.download_mbps >= 25 else _s.AMBER,
+                        _s.GREEN if p.upload_mbps >= 5  else _s.AMBER,
+                        None, _rsrp_color(rsrp), lte_sinr_color, nr5_sinr_color, _s.GREEN]
                 for col, (val, col_color) in enumerate(zip(cells, clrs)):
                     item = QTableWidgetItem(str(val))
                     if col_color:
@@ -1828,11 +1783,9 @@ class SpeedTestPage(QWidget):
             return
         row_ts = it0.text().lstrip("★ ").strip()
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
-            f" border:1px solid {BORDER}; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
+            " border:1px solid {BORDER}; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         if row_ts == baseline_ts:
             act = menu.addAction("✕  Clear baseline")
             act.triggered.connect(self._clear_baseline)
@@ -1886,10 +1839,10 @@ class SpeedTestPage(QWidget):
             raw_ts = it0.text().lstrip("★ ").strip()
             if r == baseline_row:
                 it0.setText(f"★  {raw_ts}")
-                it0.setForeground(QColor(ACCENT))
+                it0.setForeground(QColor(_s.ACCENT))
             else:
                 it0.setText(raw_ts)
-                it0.setForeground(QColor(TEXT_PRIMARY))
+                it0.setForeground(QColor(_s.TEXT_PRIMARY))
 
             dl_it = self._hist_table.item(r, 4)
             if dl_it is None:
@@ -1905,9 +1858,9 @@ class SpeedTestPage(QWidget):
             if baseline_dl > 0 and r != baseline_row:
                 delta = dl - baseline_dl
                 sign = "↑" if delta >= 0 else "↓"
-                c = GREEN if delta >= 0 else RED
+                c = _s.GREEN if delta >= 0 else _s.RED
                 dl_it.setText(f"{dl:.1f}  {delta:+.0f} {sign}")
                 dl_it.setForeground(QColor(c))
             else:
                 dl_it.setText(f"{dl:.1f} Mbps")
-                dl_it.setForeground(QColor(GREEN if dl >= 25 else AMBER))
+                dl_it.setForeground(QColor(_s.GREEN if dl >= 25 else _s.AMBER))

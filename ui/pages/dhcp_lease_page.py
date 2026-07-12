@@ -30,22 +30,7 @@ from PyQt6.QtWidgets import (
 from modules.dhcp_lease_scanner import DhcpLease
 from workers.dhcp_lease_worker import DhcpLeaseWorker
 from ui.tabs_helpers import _table as _make_table
-from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    AMBER,
-    BG_CARD,
-    BG_HOVER,
-    BORDER,
-    BTN_DISABLED_BORDER,
-    CARD_HDR_BORDER,
-    GREEN,
-    INPUT_PLACEHOLDER,
-    RED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    WHITE,
-)
+from ui import styles as _s
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 from ui.widgets.empty_state_card import EmptyStateCard
 
@@ -121,9 +106,9 @@ class DhcpLeasePage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         t1, self._kpi_total_lbl   = _shared_kpi_tile("Total Leases", "—")
-        t2, self._kpi_active_lbl  = _shared_kpi_tile("Active",       "—", GREEN)
-        t3, self._kpi_expired_lbl = _shared_kpi_tile("Expired",      "—", AMBER)
-        t4, self._kpi_sources_lbl = _shared_kpi_tile("Sources",      "—", ACCENT)
+        t2, self._kpi_active_lbl  = _shared_kpi_tile("Active",       "—", _s.GREEN)
+        t3, self._kpi_expired_lbl = _shared_kpi_tile("Expired",      "—", _s.AMBER)
+        t4, self._kpi_sources_lbl = _shared_kpi_tile("Sources",      "—", _s.ACCENT)
         for w in (t1, t2, t3, t4):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
@@ -134,24 +119,20 @@ class DhcpLeasePage(QWidget):
         tb.setSpacing(6)
         self._refresh_btn = QPushButton("Refresh")
         self._refresh_btn.setFixedHeight(30)
-        self._refresh_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
-            f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._refresh_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
+            " font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._refresh_btn.clicked.connect(self._run_scan)
 
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Filter by IP, MAC, or hostname…")
         self._search_box.setFixedWidth(240)
         self._search_box.setFixedHeight(30)
-        self._search_box.setStyleSheet(
-            f"QLineEdit {{ font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-            f" border-radius:3px; padding:0 8px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._search_box, "QLineEdit {{ font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:0 8px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(200)
@@ -159,7 +140,7 @@ class DhcpLeasePage(QWidget):
         self._search_timer.timeout.connect(self._apply_filter)
 
         self._status_lbl = QLabel("Click Refresh to load leases.")
-        self._status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY};")
         tb.addWidget(self._refresh_btn)
         tb.addWidget(self._search_box)
         tb.addWidget(self._status_lbl)
@@ -168,19 +149,15 @@ class DhcpLeasePage(QWidget):
 
         # Table card
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}")
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
 
         card_title = QLabel("  DHCP Leases")
         card_title.setFixedHeight(32)
-        card_title.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" border-bottom:1px solid {CARD_HDR_BORDER}; background:{BG_CARD};"
-        )
+        _s.themed_ss(card_title, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " border-bottom:1px solid {CARD_HDR_BORDER}; background:{BG_CARD};")
         card_lay.addWidget(card_title)
 
         self._table = _make_table(
@@ -306,11 +283,11 @@ class DhcpLeasePage(QWidget):
             exp_item  = _cell(exp_label, Qt.AlignmentFlag.AlignCenter)
             if exp_label == "Expired":
                 exp_item.setForeground(
-                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(RED)
+                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(_s.RED)
                 )
             elif exp_label == "Permanent":
                 exp_item.setForeground(
-                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(TEXT_SECONDARY)
+                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(_s.TEXT_SECONDARY)
                 )
             self._table.setItem(row, 3, exp_item)
 
@@ -336,12 +313,10 @@ class DhcpLeasePage(QWidget):
         ip = ip_item.text()
 
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-            f" font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            f"QMenu::separator {{ height:1px; background:{BORDER}; margin:2px 0; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " font-size:11px; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            "QMenu::separator {{ height:1px; background:{BORDER}; margin:2px 0; }}")
 
         act_inv = menu.addAction("▶  Find in Inventory →")
         act_inv.triggered.connect(lambda: self._find_in_inventory(ip))

@@ -361,10 +361,16 @@ BASELINE_UNUSED_GLOBALS: frozenset[tuple[str, str]] = frozenset({
     ("modules/syslog_receiver.py", "_MONTHS"),
     ("modules/wifi_scanner.py", "CHANNELS_24GHZ"),
     ("modules/wifi_scanner.py", "CHANNELS_5GHZ"),
-    ("ui/pages/trend_page.py", "_SEV_BG"),
     ("ui/pages/trigger_builder_page.py", "_BUILDER_METRICS"),
     ("ui/pages/trigger_builder_page.py", "_BUILDER_OPS"),
     ("ui/styles.py", "IP_CALC_NET_BIT_BG"),
+    # RED_HOVER/RED_DARK: only consumer is a themed_ss() string template in
+    # app_traffic_page.py -- ui.styles._LiveTokens resolves {RED_HOVER} via
+    # globals()[key] on ui/styles.py's own namespace at render time, so the
+    # consuming file no longer needs (or, per ruff F401, may keep) a bare
+    # import. The AST-based checker can't see a string-literal reference.
+    ("ui/styles.py", "RED_HOVER"),
+    ("ui/styles.py", "RED_DARK"),
     ("ui/styles.py", "HTML_GREEN"),
     ("ui/styles.py", "HTML_RED"),
     ("ui/styles.py", "HTML_AMBER"),

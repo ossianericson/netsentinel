@@ -31,13 +31,6 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store      import MetricStore
 from ui import styles as _s
-from ui.styles                 import (
-    ACCENT, BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    INPUT_PLACEHOLDER,
-    TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -45,23 +38,19 @@ from ui.styles                 import (
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     """Return a card container + its body layout."""
     outer = QWidget()
-    outer.setStyleSheet(
-        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(outer, "QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer_lay = QVBoxLayout(outer)
     outer_lay.setContentsMargins(0, 0, 0, 0)
     outer_lay.setSpacing(0)
 
     # Title bar
     title_bar = QLabel(title)
-    title_bar.setStyleSheet(
-        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
-        f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(title_bar, "QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
+        " padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}")
     outer_lay.addWidget(title_bar)
 
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD}; border:none;")
+    _s.themed_ss(body, "background:{BG_CARD}; border:none;")
     body_lay = QVBoxLayout(body)
     body_lay.setContentsMargins(12, 10, 12, 10)
     body_lay.setSpacing(8)
@@ -72,19 +61,17 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
 
 def _kpi_tile(label: str, value: str = "—") -> tuple[QWidget, QLabel]:
     tile = QWidget()
-    tile.setStyleSheet(
-        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {ACCENT}; padding:4px 8px; }}"
-    )
+    _s.themed_ss(tile, "QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-left:3px solid {ACCENT}; padding:4px 8px; }}")
     tile.setMinimumWidth(120)
     tile.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     lay = QVBoxLayout(tile)
     lay.setContentsMargins(6, 4, 6, 4)
     lay.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
+    _s.themed_ss(lbl, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
     val = QLabel(value)
-    val.setStyleSheet(f"font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
+    _s.themed_ss(val, "font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return tile, val
@@ -113,7 +100,7 @@ class ReportsPage(QWidget):
     # ── UI ────────────────────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
-        self.setStyleSheet(f"QWidget#ReportsPage {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget#ReportsPage {{ background:{BG_DARK}; }}")
         self.setObjectName("ReportsPage")
 
         root = QVBoxLayout(self)
@@ -153,9 +140,7 @@ class ReportsPage(QWidget):
         self._preview_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         preview_lay.addWidget(self._preview_canvas)
         self._preview_status = QLabel("Loading…")
-        self._preview_status.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent;"
-        )
+        _s.themed_ss(self._preview_status, "font-size:10px; color:{TEXT_MUTED}; background:transparent;")
         self._preview_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         preview_lay.addWidget(self._preview_status)
         root.addWidget(preview_card)
@@ -167,21 +152,19 @@ class ReportsPage(QWidget):
         # Enable checkbox
         self._chk_enabled = QCheckBox("Enable automatic report generation")
         self._chk_enabled.setChecked(True)
-        self._chk_enabled.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        _s.themed_ss(self._chk_enabled, "font-size:11px; color:{TEXT_PRIMARY};")
         cfg_lay.addWidget(self._chk_enabled)
 
         # Interval row
         int_row = QHBoxLayout()
         int_row.setSpacing(8)
         int_lbl = QLabel("Generate every")
-        int_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        _s.themed_ss(int_lbl, "font-size:11px; color:{TEXT_PRIMARY};")
         self._spin_hours = QSpinBox()
         self._spin_hours.setRange(1, 8760)
         self._spin_hours.setValue(24)
         self._spin_hours.setFixedWidth(70)
-        self._spin_hours.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _s.themed_ss(self._spin_hours, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         int_row.addWidget(int_lbl)
         int_row.addWidget(self._spin_hours)
         int_row.addWidget(QLabel("hours"))
@@ -192,17 +175,13 @@ class ReportsPage(QWidget):
         dir_row = QHBoxLayout()
         dir_row.setSpacing(8)
         dir_lbl = QLabel("Output directory")
-        dir_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        _s.themed_ss(dir_lbl, "font-size:11px; color:{TEXT_PRIMARY};")
         self._txt_dir = QLineEdit(str(Path.home() / "NetSentinel-Reports"))
-        self._txt_dir.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;"
-        )
+        _s.themed_ss(self._txt_dir, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;")
         self._btn_browse = QPushButton("Browse…")
         self._btn_browse.setFixedHeight(26)
-        self._btn_browse.setStyleSheet(
-            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" background:{BG_CARD}; padding:0 10px;"
-        )
+        _s.themed_ss(self._btn_browse, "font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            " background:{BG_CARD}; padding:0 10px;")
         self._btn_browse.clicked.connect(self._browse_dir)
         dir_row.addWidget(dir_lbl)
         dir_row.addWidget(self._txt_dir, 1)
@@ -214,38 +193,28 @@ class ReportsPage(QWidget):
         btn_row.setSpacing(8)
         self._btn_apply = QPushButton("Apply Settings")
         self._btn_apply.setFixedHeight(34)
-        self._btn_apply.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{WHITE}; background:{ACCENT};"
-            f" border:none; padding:0 18px; border-radius:4px;"
-        )
+        _s.themed_ss(self._btn_apply, "font-size:12px; font-weight:bold; color:{WHITE}; background:{ACCENT};"
+            " border:none; padding:0 18px; border-radius:4px;")
         self._btn_apply.clicked.connect(self._apply_settings)
         self._btn_now = QPushButton("Generate Now")
         self._btn_now.setFixedHeight(34)
-        self._btn_now.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{ACCENT}; background:{BG_CARD};"
-            f" border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;"
-        )
+        _s.themed_ss(self._btn_now, "font-size:12px; font-weight:bold; color:{ACCENT}; background:{BG_CARD};"
+            " border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;")
         self._btn_now.clicked.connect(self._generate_now)
         self._btn_pdf = QPushButton("Export PDF")
         self._btn_pdf.setFixedHeight(34)
-        self._btn_pdf.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{ACCENT}; background:{BG_CARD};"
-            f" border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;"
-        )
+        _s.themed_ss(self._btn_pdf, "font-size:12px; font-weight:bold; color:{ACCENT}; background:{BG_CARD};"
+            " border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;")
         self._btn_pdf.clicked.connect(self._export_pdf)
         self._btn_copy = QPushButton("Copy Summary")
         self._btn_copy.setFixedHeight(34)
-        self._btn_copy.setStyleSheet(
-            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
-            f" border:1px solid {BORDER}; padding:0 14px; border-radius:4px;"
-        )
+        _s.themed_ss(self._btn_copy, "font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:1px solid {BORDER}; padding:0 14px; border-radius:4px;")
         self._btn_copy.clicked.connect(self._copy_summary)
         self._btn_open_folder = QPushButton("Open Folder ›")
         self._btn_open_folder.setFixedHeight(34)
-        self._btn_open_folder.setStyleSheet(
-            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
-            f" border:1px solid {BORDER}; padding:0 14px; border-radius:4px;"
-        )
+        _s.themed_ss(self._btn_open_folder, "font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:1px solid {BORDER}; padding:0 14px; border-radius:4px;")
         self._btn_open_folder.clicked.connect(self._open_output_folder)
         btn_row.addWidget(self._btn_apply)
         btn_row.addWidget(self._btn_now)
@@ -260,18 +229,16 @@ class ReportsPage(QWidget):
         # Recent reports card
         hist_card, hist_lay = _card("Recent Reports")
         self._report_list = QListWidget()
-        self._report_list.setStyleSheet(
-            f"QListWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
-            f" background:{BG_CARD}; }}"
-            f"QListWidget::item {{ padding:4px 8px; border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-            f"QListWidget::item:hover {{ background:{BG_HOVER}; }}"
-            f"QListWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._report_list, "QListWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
+            " background:{BG_CARD}; }}"
+            "QListWidget::item {{ padding:4px 8px; border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
+            "QListWidget::item:hover {{ background:{BG_HOVER}; }}"
+            "QListWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}")
         self._report_list.setFixedHeight(220)
         self._report_list.itemDoubleClicked.connect(self._open_report)
         hist_lay.addWidget(self._report_list)
         self._lbl_empty = QLabel("No reports generated yet. Click \"Generate Now\" to create one.")
-        self._lbl_empty.setStyleSheet(f"font-size:11px; color:{INPUT_PLACEHOLDER}; padding:8px;")
+        _s.themed_ss(self._lbl_empty, "font-size:11px; color:{INPUT_PLACEHOLDER}; padding:8px;")
         self._lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hist_lay.addWidget(self._lbl_empty)
         root.addWidget(hist_card)
