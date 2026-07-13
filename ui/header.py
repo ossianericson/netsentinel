@@ -413,9 +413,10 @@ class AppHeaderMixin:
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not getattr(self, "_snap_subclass_installed", False):
-            self._snap_subclass_installed = True
-            self._install_window_chrome()
+        # Idempotent — native chrome is normally already installed from
+        # Dashboard.__init__ (it MUST be, see _install_window_chrome). This call is
+        # the legacy path's install point, and a safety net if __init__ skipped it.
+        self._install_window_chrome()
         # Attach toast manager once window is visible
         from ui.widgets.toast import ToastManager
         ToastManager.instance().attach(self)
@@ -450,7 +451,7 @@ class AppHeaderMixin:
                 _QTlazy.singleShot(400, self._start_lazy_page_builder)
 
     def _install_window_chrome(self):
-        """Install whichever window chrome the experimental flags select.
+        """Install whichever window chrome the experimental flags select. Idempotent.
 
         Both paths live in ui/native_chrome.py — the Win32 message hooks are kept
         out of this file so the callback that Windows invokes reentrantly can be
@@ -463,12 +464,29 @@ class AppHeaderMixin:
         snap_layout_hover — LEGACY. Returns HTMAXBUTTON on the captionless WS_POPUP
                          that FramelessWindowHint produces, which is the RULE-WIN9
                          fault itself (0x8001010d). Off by default; superseded.
+
+        MUST run before any geometry is applied — Dashboard.__init__ calls it ahead
+        of _restore_settings(). Qt derives its frame margins from the window STYLE,
+        so until the chrome is installed Qt still believes in the caption it is
+        about to lose and restores the window a caption-height (~32px) too low,
+        leaving a strip of bare desktop above the header. Guarded by
+        tests/test_native_chrome.py::test_chrome_is_installed_before_geometry_is_restored.
         """
         from PyQt6.QtCore import QSettings as _QSettings
+
+        if getattr(self, "_snap_subclass_installed", False):
+            return
+        self._snap_subclass_installed = True
 
         if getattr(self, "_native_chrome", False):
             from ui.native_chrome import install_native_chrome
             if install_native_chrome(self):
+                # The frame just changed shape under Qt: _restore_settings() placed
+                # this window against a caption that WM_NCCALCSIZE has now deleted,
+                # so it is sitting a caption-height (~32px) out. Put it back on the
+                # rect the user actually left it on.
+                from ui.app_settings import reapply_geometry_after_chrome
+                reapply_geometry_after_chrome(self)
                 return
             # Install failed — fall through to the legacy window, which is still
             # frameless-shaped and usable. Better a missing Snap flyout than a

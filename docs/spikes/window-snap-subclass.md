@@ -222,6 +222,56 @@ the flag is read once in `Dashboard.__init__` — **the app must be restarted af
 setting it**, and a window that "does nothing" on Win+arrow is the signature of the
 flag being off, not of a broken hook.
 
+### The 32px gap above the header — and the two fixes that did NOT work
+
+Reported after the first live session: on every launch a strip of bare desktop sat
+above the header, "like the hidden std windows bar". Measured on the running app:
+window at `(-7, 32)`, `IsZoomed()=False`, `TOPMOST=False`. Not always-on-top — a
+32px vertical offset, and 32px is a caption height.
+
+**Root cause (isolated to a plain `QMainWindow`, no Dashboard, no chrome):**
+`QWidget::restoreGeometry()` clamps the restored top to
+`availableGeometry.top() + PM_TitleBarHeight` (32px on Windows), then clips the
+height to keep the window inside the work area. It is a deliberate safety feature —
+it assumes a native title bar sits *above* the client and must never land
+off-screen. Our client **is** the top edge, so a window saved flush at `y=0` returns
+at `y=32`, one caption lower and 31px shorter:
+
+```
+saved frame geometry : (1, 0, 1718, 1390)
+restoreGeometry()    -> (1, 32, 1718, 1359)
+```
+
+And because `save_settings()` writes that pushed-down rect back on exit, it sticks —
+on every launch, forever. This bug is **pre-existing and not caused by native
+chrome**: it was latent on the frameless window, which could never be snapped flush
+to `y=0` in the first place. Making Aero Snap work is what exposed it.
+
+Fixed by persisting the exact rect (`window/geo_*`) alongside Qt's blob and
+re-applying it after `restoreGeometry()` — `apply_exact_geometry()` in
+`ui/app_settings.py`.
+
+**Dead end 1 — "Qt's frame margins are stale, so install the chrome earlier."**
+Plausible (Qt derives frame margins from the window *style*, which still says
+`WS_CAPTION`), and the arithmetic even matched: saved frame `(-7, 0)` + margins
+`(8, 32)` = client `(1, 32)`. But installing the chrome before `_restore_settings()`
+forces the HWND to exist during construction (`winId()`), and Qt then **re-pushes its
+stale creation-time geometry over the restored one** — measured: the window collapsed
+to its 900x600 minimum, centred. Reverted. The chrome installs in `showEvent` and
+re-applies the saved rect itself (`reapply_geometry_after_chrome()`).
+
+**Dead end 2 — "`WS_POPUP` is blocking snap."** See above: Qt sets it on every
+top-level window. It is present in the *working* configuration too.
+
+Both dead ends share a lesson worth keeping: on this window, *measure the running
+app* (`GetWindowRect` / `GetWindowPlacement` / `GetWindowLongW`, and
+`SendMessage(WM_NCHITTEST)` to prove the hook is even alive) before changing code. A
+probe that constructs a `Dashboard` directly is **not** enough — it skips `app.py`'s
+startup path (splash, `_restore_settings`, the `SetWindowPlacement` fixup), which is
+exactly where this bug lived. And the probe scripts reset the flag to `False` on
+exit: a run that looks "unfixed" may simply be the legacy window. Check
+`GWL_STYLE` — `0x96000000` is legacy, `0x96CF0000` is native chrome.
+
 ### Known limitation (accepted, flag-gated)
 
 An **auto-hide taskbar** may not reveal when the window is maximized: the work area

@@ -66,7 +66,6 @@ WM_APP_MAX_HOVER = 0x8000 + 0x21   # WM_APP + 0x21 — our own posted message
 SC_MAXIMIZE = 0xF030
 SC_RESTORE  = 0xF120
 
-HTNOWHERE     = 0
 HTCLIENT      = 1
 HTCAPTION     = 2
 HTMAXBUTTON   = 9
@@ -117,9 +116,6 @@ _SUBCLASS_ID_SNAP   = 1
 # ══════════════════════════════════════════════════════════════════════════════
 # Pure functions — plain ints in, plain ints out.  No Qt, no ctypes, no globals.
 # ══════════════════════════════════════════════════════════════════════════════
-
-Rect = "tuple[int, int, int, int]"   # (left, top, right, bottom)
-
 
 def client_rect_for_nccalcsize(
     rect: tuple[int, int, int, int],

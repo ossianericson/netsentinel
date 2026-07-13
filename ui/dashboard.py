@@ -428,7 +428,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._refresh_network_info()
         # Silent background update check
         self._start_update_check()
-        # Restore full settings (mode, scan hosts, etc.) after UI is built
+        # Restore full settings (mode, scan hosts, etc.) after UI is built.
+        # NOTE: do NOT install the window chrome before this. Doing so forces the
+        # HWND to exist early (winId()), and Qt then re-pushes its stale
+        # creation-time geometry over the restored one — the window snaps back to
+        # its minimum size. The chrome installs in showEvent instead, and re-applies
+        # the saved rect itself once the frame is real (see _install_window_chrome).
         self._restore_settings()
         # Install resize grips for all 8 edges/corners (frameless window only —
         # native chrome keeps the real WS_THICKFRAME, so Windows resizes for us).

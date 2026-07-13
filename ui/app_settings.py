@@ -46,6 +46,56 @@ def center_on_screen(window, w: int, h: int) -> None:
         window.resize(w, h)
 
 
+def apply_exact_geometry(window, s) -> bool:
+    """Re-apply the exact saved rect, undoing Qt's title-bar clamp. Returns True if applied.
+
+    QWidget::restoreGeometry() forces the restored top down to
+    ``availableGeometry.top() + PM_TitleBarHeight`` (32px on Windows) so that a
+    native title bar can never land off-screen — then clamps the height to keep the
+    window inside the work area. Our window has no native title bar: the client IS
+    the top edge. So a window left flush with the top of the screen comes back 32px
+    lower and 31px shorter, and because that pushed-down rect is what save_settings()
+    writes on exit, it sticks on every subsequent launch.
+
+    Latent on the old frameless window, which could never be snapped flush to y=0.
+    Immediately visible once native chrome made Aero Snap work.
+
+    Regression test: tests/test_window_chrome.py::
+    test_restore_geometry_does_not_push_the_window_down_by_a_title_bar
+    """
+    vals = [s.value(f"window/geo_{k}") for k in ("x", "y", "w", "h")]
+    if any(v is None for v in vals):
+        return False
+    try:
+        x, y, w, h = (int(v) for v in vals)
+    except (ValueError, TypeError):
+        return False  # corrupt entry — keep whatever restoreGeometry() produced
+    if w <= 0 or h <= 0:
+        return False
+    window.setGeometry(x, y, w, h)
+    return True
+
+
+def reapply_geometry_after_chrome(window) -> bool:
+    """Put the window back on its saved rect once the native chrome is installed.
+
+    Ordering problem this solves: the chrome can only be installed once the HWND
+    exists, i.e. in showEvent — by which time _restore_settings() has already placed
+    the window. It placed it against a frame that included a real caption, and
+    WM_NCCALCSIZE has just deleted that caption, so the window is now a caption-height
+    out. (Installing the chrome earlier is NOT the answer: forcing the HWND to exist
+    during construction makes Qt re-push its stale creation-time geometry over the
+    restored one, and the window collapses to its minimum size.)
+
+    Skips a maximized window — Windows owns that rect, not us.
+    """
+    from PyQt6.QtCore import QSettings
+    if window.isMaximized():
+        return False
+    s = QSettings(str(window._settings_path()), QSettings.Format.IniFormat)
+    return apply_exact_geometry(window, s)
+
+
 def save_settings(window) -> None:
     """Persist window geometry, nav state, and scan inputs to NetSentinel.ini."""
     from PyQt6.QtCore import QSettings
@@ -54,6 +104,15 @@ def save_settings(window) -> None:
     # is unreliable for frameless windows before show() is called)
     s.setValue("window/geometry", window.saveGeometry().toBase64().data().decode())
     s.setValue("window/maximized", str(window.isMaximized()))
+    # The exact rect, kept alongside Qt's blob because restoreGeometry() rewrites it
+    # (see apply_exact_geometry). Only meaningful when not maximized — geometry() is
+    # the maximized rect in that state, and the pre-maximize size is saved below.
+    if not window.isMaximized():
+        r = window.geometry()
+        s.setValue("window/geo_x", r.x())
+        s.setValue("window/geo_y", r.y())
+        s.setValue("window/geo_w", r.width())
+        s.setValue("window/geo_h", r.height())
     # Persist the pre-maximize size so the next startup restores correctly.
     if window.isMaximized() and window._pre_maximize_geo is not None:
         r = window._pre_maximize_geo
@@ -91,6 +150,7 @@ def restore_settings(window) -> None:
     # Window geometry
     geom_b64 = s.value("window/geometry", "")
     was_maximized = s.value("window/maximized", "False") == "True"
+
     # Fresh-install / no-saved-geometry fallback: 1440×900 centered on primary screen.
     center_on_screen(window, 1440, 900)
     if was_maximized:
@@ -124,6 +184,10 @@ def restore_settings(window) -> None:
             window.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
         except Exception:
             pass  # non-fatal
+        # restoreGeometry() shoves the window a title-bar's height down the screen
+        # and clips its height to match (it protects a native title bar we do not
+        # have). Put it back exactly where the user left it.
+        apply_exact_geometry(window, s)
     # Sidebar nav state
     if s.value("nav/collapsed", "False") == "True" and not window._nav_collapsed:
         window._toggle_sidebar()

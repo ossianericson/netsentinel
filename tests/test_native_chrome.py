@@ -291,6 +291,40 @@ def test_native_chrome_is_off_by_default():
     )
 
 
+def test_geometry_is_reapplied_after_the_chrome_is_installed():
+    """Regression: the window came up 32px low, a strip of desktop above the header.
+
+    Two constraints collide, and both are load-bearing:
+
+    1. The chrome can only be installed once the HWND exists — showEvent — and by
+       then `_restore_settings()` has already placed the window against a frame that
+       still had a real caption. WM_NCCALCSIZE then deletes that caption, leaving the
+       window a caption-height out of place. The wrong rect is saved back on exit, so
+       it sticks on every launch.
+    2. Installing the chrome EARLIER does not fix it. Forcing the HWND to exist during
+       construction (winId()) makes Qt re-push its stale creation-time geometry over
+       the restored one — measured: the window collapsed to its 900x600 minimum,
+       centred. That was tried and reverted; do not re-try it.
+
+    So the chrome install must be followed by re-applying the saved rect, which is
+    what reapply_geometry_after_chrome() does.
+    """
+    source = (REPO / "ui" / "header.py").read_text(encoding="utf-8")
+    installer = _find_function(source, "_install_window_chrome")
+
+    called = {
+        node.func.id if isinstance(node.func, ast.Name) else node.func.attr
+        for node in ast.walk(installer)
+        if isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute))
+    }
+    assert "reapply_geometry_after_chrome" in called, (
+        "_install_window_chrome() installs the native chrome but never re-applies the "
+        "saved geometry. WM_NCCALCSIZE changes the frame shape out from under a window "
+        "that has already been positioned, so it ends up a caption-height (~32px) out "
+        "and a strip of bare desktop shows above the header."
+    )
+
+
 def _find_function(source: str, name: str) -> ast.FunctionDef:
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.FunctionDef) and node.name == name:
