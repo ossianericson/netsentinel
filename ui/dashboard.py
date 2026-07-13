@@ -106,21 +106,26 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._global_hours = 24.0
         self.setWindowTitle("NetSentinel  —  Network Security Scanner & Monitor")
         self.setMinimumSize(900, 600)
-        # ── Window chrome (RULE-EXP1 / RULE-WIN9) ─────────────────────────────
-        # experimental/native_chrome: when True the window keeps its REAL Win32
-        # style (caption, sysmenu, thick frame, min/max box) and ui/native_chrome.py
-        # merely stops Windows painting the frame via WM_NCCALCSIZE — which is what
-        # makes Aero Snap, Snap Layouts, shake and native resize work at all.
-        # FramelessWindowHint produces a bare WS_POPUP that Windows does not
-        # consider maximizable or snappable (docs/spikes/window-snap-subclass.md).
-        # Default False ⇒ the previously-verified frameless path is untouched until
-        # a clean multi-hour chaos soak has run with the flag on.
+        # ── Window chrome (RULE-WIN9) ─────────────────────────────────────────
+        # On Windows the window keeps its REAL Win32 style (caption, sysmenu, thick
+        # frame, min/max box) and ui/native_chrome.py merely stops Windows painting
+        # the frame via WM_NCCALCSIZE — which is what makes Aero Snap, Snap Layouts,
+        # shake and native resize work at all. FramelessWindowHint produces a bare
+        # WS_POPUP that Windows does not consider maximizable or snappable
+        # (docs/spikes/window-snap-subclass.md).
+        #
+        # This shipped behind experimental/native_chrome (RULE-EXP1) and was promoted
+        # to the default in v2.1.30 after a clean chaos soak with the flag on. The
+        # flag is GONE rather than merely defaulted True: it was never written by the
+        # app, but dev machines and the Phase-3 probe scripts did write an explicit
+        # `false`, and a stale stored value would have silently kept those users on
+        # the old window forever.
+        #
+        # Non-Windows keeps the frameless path — it is the only implementation there
+        # (WM_NCCALCSIZE is a Win32 message), and it still owns the _Grip resize
+        # widgets and _DragHeader's manual drag in ui/header.py.
         import sys as _sys_plat
-        self._native_chrome = bool(
-            QSettings("NetSentinel", "NetSentinel").value(
-                "experimental/native_chrome", False, type=bool
-            )
-        ) and _sys_plat.platform == "win32"
+        self._native_chrome = _sys_plat.platform == "win32"
         if self._native_chrome:
             self.setWindowFlags(Qt.WindowType.Window)
         else:

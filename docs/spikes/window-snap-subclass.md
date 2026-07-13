@@ -138,7 +138,35 @@ to DWM about it.
   `IsHungAppWindow`.
 
 Tracked as Phase 3; gate behind `experimental/native_chrome` (RULE-EXP1) and
-promote only after a clean multi-hour chaos soak with the flag on.
+promote only after a clean chaos soak with the flag on.
+
+---
+
+## PROMOTED (v2.1.30) — native chrome is the default for every Windows user
+
+The flag is **gone**, not merely defaulted to True. `Dashboard.__init__` now gates on
+`sys.platform == "win32"` alone. Removing the key rather than flipping it was deliberate:
+the app never *wrote* `experimental/native_chrome`, but dev machines and the Phase-3 probe
+scripts did write an explicit `false` — and any user carrying a stale stored `false` would
+have kept the old unsnappable window on every future build, which is the exact opposite of
+what this work was for.
+
+**Non-Windows keeps the frameless path.** `WM_NCCALCSIZE` is a Win32 message, so the
+frameless window — and the `_Grip` resize widgets and `_DragHeader`'s manual drag in
+`ui/header.py` — remain the only implementation on macOS/Linux. They are not dead code and
+must not be deleted.
+
+Promotion evidence: live-verified (`IsZoomed()=True`, Win+Left → left half, Win+Up →
+maximized, snapped+Win+Up → quadrant) plus a clean 1-hour chaos soak (2026-07-13) run with
+the flag on — 1,230 UIA interactions and two full 62-page systematic sweeps, zero growth in
+`netsentinel_crash.log`. That soak was only possible once the UIA/COM startup fault was
+fixed (RULE-WIN10); before that, every soak aborted at launch, which is what stalled this
+promotion for so long.
+
+Still open: an auto-hide taskbar may not reveal when the window is maximized (needs a 1px
+inset). Cosmetic, pre-existing, tracked separately.
+
+Enforced by `tests/test_native_chrome.py::test_native_chrome_ships_to_every_windows_user`.
 
 ---
 

@@ -20,8 +20,6 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
-
 from ui.native_chrome import (
     HANDLED_NC_MESSAGES,
     HTCAPTION,
@@ -278,16 +276,27 @@ def test_subclass_proc_touches_no_qt_object():
     )
 
 
-def test_native_chrome_is_off_by_default():
-    """The flag gates a native path that has not yet survived a chaos soak
-    (RULE-EXP1).  The previously-verified frameless window stays the default until
-    it has."""
+def test_native_chrome_ships_to_every_windows_user():
+    """Promoted in v2.1.30 after a clean chaos soak with the flag on (RULE-EXP1).
+
+    The gate must be the PLATFORM, never a QSettings flag. Reintroducing a flag —
+    even one defaulting to True — puts working Aero Snap back at the mercy of a
+    stale stored value: the app never wrote the key, but dev machines and the
+    Phase-3 probe scripts wrote an explicit `false`, and those users would silently
+    keep the old unsnappable window on every future build.
+    """
     source = (REPO / "ui" / "dashboard.py").read_text(encoding="utf-8")
-    match = re.search(r'"experimental/native_chrome",\s*(\w+)', source)
-    assert match, "dashboard.py no longer reads the experimental/native_chrome flag"
-    assert match.group(1) == "False", (
-        "experimental/native_chrome defaults to True — it must stay opt-in until a "
-        "clean multi-hour chaos soak has run with it on."
+    # Matches a QSettings read of the key, not a mere mention — the code comment
+    # explaining why the flag was removed names it, and must stay allowed.
+    assert not re.search(r'value\(\s*["\']experimental/native_chrome', source), (
+        "dashboard.py reads an experimental/native_chrome flag again — the chrome was "
+        "promoted to the default in v2.1.30 and the gate must stay platform-only, or "
+        "anyone with a stale stored `false` never gets working snap."
+    )
+    assert re.search(r"_native_chrome\s*=\s*_sys_plat\.platform\s*==\s*[\"']win32[\"']", source), (
+        "dashboard.py no longer gates the native chrome on sys.platform == 'win32'. "
+        "Windows must always get it; non-Windows must always get the frameless path, "
+        "which is the only implementation there."
     )
 
 
@@ -329,4 +338,7 @@ def _find_function(source: str, name: str) -> ast.FunctionDef:
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.FunctionDef) and node.name == name:
             return node
-    pytest.fail(f"{name}() not found in ui/native_chrome.py")
+    # raise, not pytest.fail(): CodeQL does not know fail() is NoReturn, so it sees an
+    # implicit `return None` here mixed with the explicit return above (py/mixed-returns).
+    # pytest reports an AssertionError identically.
+    raise AssertionError(f"{name}() not found in ui/native_chrome.py")

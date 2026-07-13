@@ -74,15 +74,23 @@ if _IS_WINDOWS:
 else:  # pragma: no cover - non-Windows has no UIA and cannot hit the fault
     _user32 = None
 
-# Latches True only on a *successful* warmup, so a caller whose window was not
-# yet able to serve a provider can retry on a later one.
-_warmed = False
+class _State:
+    """One-shot latch, held on a class rather than in a module global.
+
+    `done` latches True only on a *successful* warmup, so a caller whose window
+    could not yet serve a provider is free to retry on a later one.
+
+    (A plain `global _warmed` reads identically but trips CodeQL
+    py/unused-global-variable — it does not follow the `global` rebind — and a
+    module global is the harder shape to reset cleanly between tests.)
+    """
+
+    done = False
 
 
 def _reset_for_tests() -> None:
     """Clear the one-shot latch. Test-only."""
-    global _warmed
-    _warmed = False
+    _State.done = False
 
 
 def warm_up_uia_provider(hwnd: int) -> bool:
@@ -96,9 +104,8 @@ def warm_up_uia_provider(hwnd: int) -> bool:
     fully functional without it; the only consequence is that the fault it
     prevents gets logged once.
     """
-    global _warmed
-    if _warmed or not _IS_WINDOWS:
-        return _warmed
+    if _State.done or not _IS_WINDOWS:
+        return _State.done
 
     try:
         # Same-thread SendMessage -> Qt's WndProc runs inline, on this thread, and
@@ -116,6 +123,6 @@ def warm_up_uia_provider(hwnd: int) -> bool:
         log.debug("UIA provider warmup: hwnd=%s returned no provider", hwnd)
         return False
 
-    _warmed = True
+    _State.done = True
     log.debug("UIA provider warmed up on hwnd=%s (lresult=%s)", hwnd, lresult)
     return True

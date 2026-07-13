@@ -96,6 +96,7 @@ One line per feature — full behavioural detail lives in the module's own docst
 - **Page help popover (?)** — floating panel anchored below the ? button
 - **Lucide SVG rail section icons** — clean scalable SVG at any size (RULE 25)
 - **Two colour themes, instant switching** — Arctic Clean (light, cool-slate chrome with deep-indigo table headers) and Midnight Pro (dark, bright royal-blue accent); clicking a theme swatch in Settings restyles the whole running app immediately, no restart (`ui/styles.py`)
+- **Native Windows window chrome** — the custom header is drawn into a REAL Win32 window (frame painting suppressed via `WM_NCCALCSIZE`), so Aero Snap, Snap Layouts, Win+arrow, drag-to-snap, shake and native resize all work. Default for every Windows user since v2.1.30; non-Windows keeps the frameless path (`ui/native_chrome.py`)
 - **Configurable Overview tile dashboard** — drag to reorder, layout persists
 - **Skeleton loading rows** — placeholder rows while scan workers run (`ui/widgets/skeleton.py`)
 - **Feature Guide** — filterable index of feature entries with Open buttons (`ui/pages/discover_page.py`)

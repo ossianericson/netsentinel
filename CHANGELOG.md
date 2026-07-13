@@ -10,7 +10,9 @@ Window and accessibility fixes. The headline is a long-standing UI Automation fa
 
 **Added**
 - `ui/uia_warmup.py` — forces UIAutomationCore's one-time lazy init during startup, from a context where the COM call it makes is legal
-- Native Windows window chrome behind the `experimental/native_chrome` flag (off by default) — preserves Snap Layouts, Win+arrow, drag-to-snap and Alt+Space by keeping a real window and suppressing only the frame *painting*
+
+**Changed**
+- **Aero Snap, Snap Layouts, Win+arrow, drag-to-snap, shake and native edge-resize now work** — the custom header is drawn into a REAL Win32 window with only the frame *painting* suppressed (`WM_NCCALCSIZE`), instead of the frameless `WS_POPUP` Windows never considered snappable. This is now the default for every Windows user; the `experimental/native_chrome` flag is gone rather than merely defaulted on, so a stale stored `false` cannot keep anyone on the old window (`ui/native_chrome.py`)
 
 **Fixed**
 - Screen readers and other UI Automation clients could not attach cleanly at startup — the first `WM_GETOBJECT` the process answered raised `0x8001010d` (`RPC_E_CANTCALLOUT_ININPUTSYNCCALL`), because UIAutomationCore's one-time init needs an outgoing COM call and Windows always delivers that message inside an input-synchronous `SendMessage`

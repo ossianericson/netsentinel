@@ -201,10 +201,10 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 ### v2.1.30 (current)
 
+- **Windows Snap now works** — Aero Snap, Snap Layouts, Win+arrow, drag-to-snap, shake and native edge-resize all behave like any other Windows app
 - Screen readers (Narrator, NVDA) and other accessibility tools can now attach cleanly at startup — a Windows UI Automation fault was preventing it
 - The maximize button now docks to the work area instead of covering the taskbar
 - The window no longer reopens a title-bar's height below where you left it
-- Native Windows window chrome (Snap Layouts, Win+arrow, drag-to-snap) is available behind an experimental flag, off by default
 
 ---
 
