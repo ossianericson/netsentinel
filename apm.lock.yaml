@@ -17,7 +17,7 @@ local_deployed_files:
 local_deployed_file_hashes:
   .claude/rules/architecture.md: sha256:5a33797c45cd57a371ce60a9bd650a93a248d78ef756e5fb387c420d787eb9f5
   .claude/rules/changelog.md: sha256:a3223ba6da72d0faa0a43b7cd898362b985776f534fac0a83ba96e30dc71c496
-  .claude/rules/development-rules.md: sha256:681e4bf2143b804142f080588dcf44cbae5854de51ceb906758e75921990808a
+  .claude/rules/development-rules.md: sha256:ef5ec480f18279f4a3998bd16ad3adfa5b6d664cc7832475506ab10642e98c39
   .claude/rules/project-vision.md: sha256:e208a270f46b2bf15a0e92016ff8768a50d8f5a947af93886c2ed838c3c2f061
   .claude/rules/session-workflow.md: sha256:b767fc662ac6ae516f8e0aae3b9a021fb1c2c8cf67531ca3256eabe7c76e1922
   .claude/rules/tests.md: sha256:25d829b1e177cbac92318634ea4e8ad91b66451e65a63f683a30b388044f9090

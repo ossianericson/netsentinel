@@ -89,6 +89,20 @@ _HEALTH_INTERVAL = 2.0      # seconds between background health checks
 _UNRESPONSIVE_SECS = 45     # seconds without a completed iteration before hang alarm
                             # (raised from 20 — "Update Feeds" on Threat Intel takes ~26 s)
 
+
+def _crash_log_path() -> Optional[Path]:
+    """Path of the crash log app.py's faulthandler writes to (see RULE 23).
+
+    Resolved via the app's own get_app_data_dir() so the harness and the app can
+    never disagree about the location.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from modules.utils import get_app_data_dir
+        return Path(get_app_data_dir()) / "netsentinel_crash.log"
+    except Exception:
+        return None  # non-fatal — crash-log watching is best-effort
+
 # ── Windows power management ───────────────────────────────────────────────────
 _ES_CONTINUOUS       = 0x80000000
 _ES_SYSTEM_REQUIRED  = 0x00000001
@@ -160,19 +174,23 @@ _BLACKLIST: List[str] = [
     "install speedtest",
     "install ookla",
     "install npcap",
-    # --- Window chrome (frameless titlebar close/min/max buttons) ---
-    # These are Segoe MDL2 glyphs used in NetSentinel's custom header.
-    # The actual text is a private-use Unicode code point, not a word.
-    "",   # Cancel / Close  (AppHeaderMixin close button)
-    "",   # Close (alternate)
-    "",   # Cancel (alternate)
-    "",   # Maximize
-    "",   # Restore Down
-    "",   # Minimize  -- safe to skip clicks here too
-    # Catch-all for any _ChromeButton by auto_id (close/min/max that
-    # slipped past the 38px spatial filter — confirmed crash cause from seed=99).
-    "_chromebutton",   # matches auto_id: QApplication.Dashboard.QWidget.appBar._ChromeButton
-    "close/x",         # accessible-name variant seen in seed=1 crash at iter 268
+    # --- Window chrome (frameless titlebar buttons) ---
+    # ONLY app-lifecycle controls belong here.  A control may be blacklisted
+    # because clicking it kills or hides the app under test -- NEVER because
+    # clicking it crashed the app.  A crash is the harness doing its job; the
+    # fix is to fix the app, not to stop clicking the button.
+    #
+    # History: maximize/restore used to be blacklisted here (and the whole top
+    # 60px of the window was spatially excluded in _enabled_controls()).  That
+    # made the entire header invisible to chaos testing, which is why a broken
+    # maximize button -- it called showFullScreen(), covering the taskbar --
+    # shipped to users unnoticed.  Maximize/restore are benign and reversible,
+    # so they are now exercised; see _act_window_chrome().
+    "",   # Close   -- terminates the app under test
+    "",   # Minimize -- hides the window, so UIA can no longer see any control
+    "close/x",     # accessible-name variant of the close button
+    # NOTE: "_chromebutton" (auto_id catch-all) deliberately NOT blacklisted --
+    # it also matched maximize/restore.  Close/minimize are caught by glyph above.
     # --- System power / OS lifecycle (initiates Windows restart or shutdown) ---
     # These are the primary source of the "Windows restart dialog" bug — any button
     # containing these words must never be clicked during automated testing.
@@ -892,9 +910,81 @@ def _nav_escape(win, chaos: str) -> str:
     return "esc"
 
 
-_NAV_MILD = [_nav_shortcut, _nav_escape]
-_NAV_MODERATE = [_nav_shortcut, _nav_command_palette, _nav_escape]
-_NAV_WILD = [_nav_shortcut, _nav_command_palette, _nav_escape, _nav_escape, _nav_command_palette]
+# ── Window-chrome actions ─────────────────────────────────────────────────────
+#
+# The window chrome was a total blind spot: every chrome button was blacklisted
+# AND the whole top 60px of the window was spatially excluded, so no chaos run
+# ever touched the header.  That is how a maximize button that actually called
+# showFullScreen() (covering the taskbar) reached users.
+#
+# These also reach what UIA cannot: maximize/restore/snap live in the NON-CLIENT
+# area, which is not a UIA control.  They are driven with keystrokes and Win32,
+# and they are the surface where the known Snap-Layout COM fault (0x8001010d)
+# lives -- so the crash-log watcher (_check_crash_log) is what makes them a net.
+
+def _chrome_maximize_toggle(win, chaos: str) -> str:
+    """Win+Up / Win+Down — the OS's own maximize/restore path."""
+    key = random.choice(["{VK_UP}", "{VK_DOWN}"])
+    win.type_keys(f"{{VK_LWIN down}}{key}{{VK_LWIN up}}")
+    time.sleep(0.45)   # let the DWM maximize/restore animation finish
+    return f"win+{'up' if 'UP' in key else 'down'}"
+
+
+def _chrome_snap_side(win, chaos: str) -> str:
+    """Win+Left / Win+Right — Aero Snap. Restores afterwards so the run continues
+    against a normally-sized window."""
+    key = random.choice(["{VK_LEFT}", "{VK_RIGHT}"])
+    win.type_keys(f"{{VK_LWIN down}}{key}{{VK_LWIN up}}")
+    time.sleep(0.5)
+    win.type_keys("{VK_LWIN down}{VK_DOWN}{VK_LWIN up}")  # un-snap
+    time.sleep(0.4)
+    return f"snap:{'left' if 'LEFT' in key else 'right'}"
+
+
+def _chrome_snap_layout_flyout(win, chaos: str) -> str:
+    """Win+Z — the Windows 11 Snap Layouts flyout.
+
+    This is the exact interaction the gated-off _install_snap_subclass() hook
+    exists to support, and the one that produced the 0x8001010d COM-reentrancy
+    fault.  ESC dismisses it so the run continues either way.
+    """
+    win.type_keys("{VK_LWIN down}z{VK_LWIN up}")
+    time.sleep(0.7)
+    win.type_keys("{ESC}")
+    time.sleep(0.3)
+    return "snap_layout_flyout"
+
+
+def _chrome_hover_maximize(win, chaos: str) -> str:
+    """Park the cursor over the maximize button.
+
+    Hovering is what triggers the Snap-Layout flyout on a window that reports
+    HTMAXBUTTON, so this exercises the WM_NCHITTEST path even with no click.
+    The three _ChromeButtons are 46px wide, flush right: close ~23px in from the
+    right edge, maximize ~69px, minimize ~115px.
+    """
+    try:
+        r = win.rectangle()
+        x, y = r.right - 69, r.top + 21
+        ctypes.windll.user32.SetCursorPos(int(x), int(y))
+        time.sleep(0.6)   # dwell long enough for the flyout to be offered
+        return "hover_maximize"
+    except Exception as exc:
+        return f"hover_err:{exc.__class__.__name__}"
+
+
+_CHROME_ACTIONS = [
+    _chrome_maximize_toggle,
+    _chrome_snap_side,
+    _chrome_hover_maximize,
+    _chrome_snap_layout_flyout,
+]
+
+_NAV_MILD = [_nav_shortcut, _nav_escape, _chrome_maximize_toggle]
+_NAV_MODERATE = [_nav_shortcut, _nav_command_palette, _nav_escape,
+                 _chrome_maximize_toggle, _chrome_hover_maximize, _chrome_snap_side]
+_NAV_WILD = [_nav_shortcut, _nav_command_palette, _nav_escape, _nav_escape,
+             _nav_command_palette] + _CHROME_ACTIONS
 
 
 def _nav_pool(chaos: str) -> List[Callable]:
@@ -918,6 +1008,18 @@ class MonkeyTester:
         self._win = None
         self._last_iter_time = time.time()
         self._stop = threading.Event()
+
+        # Baseline the append-only crash log so _check_crash_log() can tell a fault
+        # from THIS run apart from the weeks of history already in the file.
+        self._crash_log: Optional[Path] = _crash_log_path()
+        self._crash_log_size0 = 0
+        if self._crash_log is not None:
+            try:
+                self._crash_log_size0 = self._crash_log.stat().st_size
+            except OSError:
+                self._crash_log_size0 = 0  # not created yet
+            self.log.info("[setup] crash-log baseline: %s (%d bytes)",
+                          self._crash_log, self._crash_log_size0)
 
     # ── Focus heartbeat & power management ───────────────────────────────
 
@@ -1469,6 +1571,45 @@ class MonkeyTester:
                 self._stop.set()
                 return
 
+            # Native-fault detection — see _check_crash_log()
+            if self._check_crash_log():
+                self._stop.set()
+                return
+
+    def _check_crash_log(self) -> bool:
+        """True if the app wrote a NEW entry to netsentinel_crash.log during this run.
+
+        Windows fatal exceptions (e.g. 0x8001010d RPC_E_CANTCALLOUT_ININPUTSYNCCALL,
+        the Snap-Layout/COM reentrancy fault) are native SEH faults.  No Python
+        try/except can catch them and they never reach netsentinel_exceptions.log --
+        app.py's faulthandler.enable() writing to netsentinel_crash.log is the ONLY
+        thing that records them.  A fault does not necessarily kill the process, so
+        neither _alive() nor the hang check will notice: without this watcher the run
+        goes green while the app is faulting.
+
+        The log is append-only and never rotated, so a plain grep/line-count finds
+        weeks of unrelated history.  Compare against the size captured at run start.
+        """
+        if self._crash_log is None:
+            return False
+        try:
+            size = self._crash_log.stat().st_size
+        except OSError:
+            return False  # not created yet -> nothing has faulted
+        if size <= self._crash_log_size0:
+            return False
+        try:
+            with open(self._crash_log, "r", encoding="utf-8", errors="replace") as f:
+                f.seek(self._crash_log_size0)
+                new = f.read()
+        except OSError:
+            new = "(could not read new crash-log content)"
+        self.log.error("[health] NEW crash-log entry — app hit a native fault:\n%s",
+                       new.strip()[:2000])
+        self._crash_log_size0 = size
+        self._crash_report("native fault written to netsentinel_crash.log")
+        return True
+
     def _alive(self) -> bool:
         # When attached without a process handle, fall back to window check only
         if self._proc is None:
@@ -1600,10 +1741,8 @@ class MonkeyTester:
         # Get window rectangle for spatial filters
         try:
             win_rect = self._win.rectangle()
-            win_top = win_rect.top
         except Exception:
             win_rect = None
-            win_top = None
 
         result = []
         for ctrl in all_ctrl:
@@ -1643,14 +1782,30 @@ class MonkeyTester:
                             continue
                     except Exception:
                         self.log.debug("rectangle() failed; skipping bounds check")
-                # Spatial filter: skip controls inside the title-bar strip
-                # (~top 38px of the frameless window = close/min/max buttons)
-                if win_top is not None and ctype in ("Button", "SplitButton"):
+                # Spatial filter for the header strip.
+                #
+                # This used to exclude EVERY Button in the top 60px, which hid the
+                # whole header -- window chrome, the settings gear, and the Scan
+                # button -- from every chaos run.  That is why a broken maximize
+                # button (it called showFullScreen(), covering the taskbar) shipped
+                # unnoticed: not one iteration ever clicked it.
+                #
+                # Close and minimize are blacklisted by glyph above (close kills the
+                # app under test; minimize hides it from UIA).  Everything else in
+                # the header is safe and reversible, so it is now exercised.  The
+                # only remaining guard is positional, and only for a chrome button
+                # UIA failed to give a name to: the three _ChromeButtons are 46px
+                # wide and flush right, so measuring from the window's right edge,
+                #   close ~0px | maximize ~46px (ALLOWED) | minimize ~92px
+                if (win_rect is not None and ctype in ("Button", "SplitButton")
+                        and not name.strip()):
                     try:
-                        ctrl_top = ctrl.rectangle().top
-                        if ctrl_top - win_top < 60:   # AppHeaderMixin header is ~40px; 60 gives margin
-                            self.stats.blacklisted += 1
-                            continue
+                        cr = ctrl.rectangle()
+                        if cr.top - win_rect.top < 60:
+                            dist_from_right = win_rect.right - cr.right
+                            if dist_from_right < 23 or 70 <= dist_from_right < 115:
+                                self.stats.blacklisted += 1
+                                continue
                     except Exception:
                         self.log.debug("title-bar check failed")
                 # mild chaos: skip Edit boxes to avoid corrupting settings

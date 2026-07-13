@@ -1058,6 +1058,49 @@ Alternative: set `Qt.WidgetAttribute.WA_DeleteOnClose` so the widget self-destru
 repeatable action must have a defined destruction point. Regression coverage for the palette:
 `tests/test_command_palette_leak.py`.
 
+### RULE-WIN9 (blocking): Never claim a native window capability the window's Win32 style does not actually have
+
+**Mechanism / trap:** `Qt.FramelessWindowHint` does not produce "a normal window without
+decoration" — it produces a bare **`WS_POPUP`** with **no `WS_CAPTION`, no `WS_SYSMENU`, no
+`WS_THICKFRAME`, no `WS_MIN/MAXIMIZEBOX`** (measured on the live app,
+`docs/spikes/window-snap-subclass.md`). Windows then genuinely does not consider it a
+maximizable, snappable, caption-bearing window — even `showMaximized()` leaves
+`GetWindowPlacement().showCmd == SW_SHOWNORMAL` and `IsZoomed() == False`, because Qt fakes
+maximize by *resizing the popup to the work area*.
+
+Answering a native hit-test with a value that asserts a capability the style lacks — the
+canonical case is returning **`HTMAXBUTTON`** (i.e. "the cursor is over a *caption button*")
+from `WM_NCHITTEST` on a captionless `WS_POPUP` — drives Windows' caption-button / Snap-Layout
+machinery against a window that has no caption. That is an invalid state inside DWM/Shell, and
+it surfaces as a **native SEH fault** (`0x8001010d RPC_E_CANTCALLOUT_ININPUTSYNCCALL`) when it
+happens inside an input-synchronous `SendMessage`. No Python `try/except` can catch it; it is
+not a Python exception. Hardening the *callback* cannot fix it — the callback is not the bug,
+the **window** is malformed.
+
+```python
+# WRONG — HTMAXBUTTON on a window whose style has no WS_CAPTION/WS_SYSMENU
+self.setWindowFlags(Qt.WindowType.FramelessWindowHint)   # -> WS_POPUP
+...
+if msg == WM_NCHITTEST and over_max_button():
+    return HTMAXBUTTON          # lies to DWM; Snap Layouts faults
+
+# CORRECT — keep a REAL window, just stop Windows painting the frame
+# (what VS Code/Electron, Windows Terminal and Chrome all do)
+#   keep WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MIN/MAXIMIZEBOX
+#   handle WM_NCCALCSIZE (wParam=TRUE -> return 0) so the client area covers
+#   the whole window: the frame stops being DRAWN but every native behaviour
+#   it carries (snap, drag, resize, Alt+Space, shake) is preserved.
+```
+
+Corollary: the native callback must touch **zero Qt objects**. Cache any needed widget
+geometry on `resizeEvent`/`moveEvent` and use `GetCursorPos`, not `QCursor.pos()` — a ctypes
+callback that blocks acquiring the GIL inside a synchronous `SendMessage` is its own route to
+`IsHungAppWindow`.
+
+Before asserting any native capability, verify the style actually carries it:
+`GetWindowLongW(hwnd, GWL_STYLE)` and check the bit. Related: RULE-WIN2 (never ship a partial
+NC-message implementation).
+
 ---
 
 ## QSettings State Hygiene
@@ -1380,6 +1423,34 @@ results: `tools/run_all_monkey_tests.ps1`, or `python tools/monkey_test.py --sou
 with `bump_version.py`. Crashes/hangs in the pasted results → fix them first, then ask for a
 re-run before bumping.
 
+### RULE-CHAOS2 (blocking): A control may be excluded from the monkey test ONLY for an app-lifecycle reason — never because clicking it crashed
+
+`tools/monkey_test.py`'s `_BLACKLIST` and the spatial filters in `_enabled_controls()` are the
+only things standing between a UI regression and the user. Every exclusion is a permanent hole
+in that net, so the bar is: **the control ends the run by design** — it terminates the app
+(close, quit), hides it from UIA (minimize), or triggers an OS-modal/external flow the harness
+cannot dismiss (file pickers, winget, shutdown).
+
+"Clicking it crashed the app" is **never** a valid reason. A crash is the harness doing its job;
+the fix is to fix the app.
+
+This is not hypothetical. Every window-chrome button was blacklisted (with comments citing a
+"confirmed crash cause from seed=99") *and* `_enabled_controls()` spatially skipped every
+`Button` in the top 60px of the window — the whole header. Not one chaos iteration in the
+project's history ever clicked the maximize button, which is exactly how a maximize button that
+actually called `showFullScreen()` (covering the taskbar) shipped to users.
+
+Two further consequences worth knowing:
+- **An empty string in `_BLACKLIST` disables the entire run.** `_is_blacklisted()` does
+  `any(pat in combined for pat in _BLACKLIST)`, and `""` is a substring of every name — one
+  blank entry skips every control while the run still reports success.
+- **A native SEH fault (e.g. `0x8001010d`, RULE-WIN9) does not kill the process**, so neither
+  the liveness check nor the hang check sees it. `faulthandler` writing to
+  `netsentinel_crash.log` is the only record; the harness must fail a run on any *new* entry
+  (the log is append-only and never rotated — baseline its size at run start, never `grep -c`).
+
+Enforced by `tests/test_monkey_chrome_coverage.py`.
+
 ### RULE-PACE1 (required): No more than 8 commits in a single day without a stabilization pause
 
 High-velocity days correlate directly with increased fix density in the subsequent 2–3 days. When 8 commits are reached in a calendar day,
@@ -1554,6 +1625,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically
 - RULE-WIN7 → `test_widget_visibility_order.py`
 - RULE-WIN8 → `test_command_palette_leak.py` (palette case only — no general AST guard yet)
+- RULE-CHAOS2 → `test_monkey_chrome_coverage.py` (blacklist invariants + chrome-action coverage)
 - RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
 
 Rules that should be converted to tool enforcement (future work):

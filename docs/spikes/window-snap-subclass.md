@@ -69,3 +69,86 @@ and deferred — see "Follow-up" below.
   live Qt geometry (`mapToGlobal`) on every `WM_NCHITTEST`, which fires on every
   mouse move over the frame. This would remove the last remaining Qt-touching call
   from inside the native callback entirely.
+
+---
+
+## Root cause found (2026-07-13) — the window is not a real window
+
+The hardening above treated a symptom. A live probe of the running app
+(`Dashboard` built for real, maximize button clicked for real, then the **native**
+window state read back via `GetWindowLongW` / `GetWindowPlacement` / `IsZoomed`)
+shows what Windows actually believes about our window:
+
+```
+--- BEFORE maximize ---
+  GWL_STYLE      = 0x96000000
+  styles present = ['WS_POPUP']
+  styles MISSING = ['WS_CAPTION', 'WS_SYSMENU', 'WS_THICKFRAME',
+                    'WS_MINIMIZEBOX', 'WS_MAXIMIZEBOX', 'WS_MAXIMIZE']
+  showCmd        = 1 (SW_SHOWNORMAL)
+  IsZoomed()     = False
+
+[qt] isMaximized() = True          <-- Qt says maximized
+[qt] geometry      = (0, 0, 3440, 1392)
+
+--- AFTER maximize (Qt says isMaximized=True) ---
+  GWL_STYLE      = 0x96000000      <-- unchanged
+  styles present = ['WS_POPUP']
+  showCmd        = 1 (SW_SHOWNORMAL)   <-- NOT SW_SHOWMAXIMIZED
+  IsZoomed()     = False               <-- Windows: "not maximized"
+```
+
+`Qt.FramelessWindowHint` (`ui/dashboard.py:109`) produces a bare **`WS_POPUP`**
+window with **no `WS_CAPTION` and no `WS_SYSMENU`**. Qt then implements
+"maximized" for it by *resizing the popup to the work area* — it never calls
+`ShowWindow(SW_MAXIMIZE)`, so the native window is never in the zoomed state.
+
+**This is the real mechanism behind the 0x8001010d fault.**
+`_install_snap_subclass()` adds back only `WS_THICKFRAME | WS_MAXIMIZEBOX`
+(`ui/header.py`), and then returns **`HTMAXBUTTON`** from `WM_NCHITTEST` — i.e. it
+tells Windows *"the cursor is over a **caption button**"* on a window that **has no
+caption**. Snap Layouts is caption-button machinery; we invoke it against a
+captionless `WS_POPUP`. The COM/RPC reentrancy fault is that invalid state
+surfacing when it happens inside an input-synchronous `SendMessage`.
+
+No amount of hardening the callback can fix this — the callback is not the bug.
+The *window* is malformed. This also explains, structurally, why Aero Snap,
+drag-to-edge, `Win`+arrow, and shake have never worked: none of them exist for a
+`WS_POPUP` with no caption and no maximize box.
+
+### Consequence for the fix
+
+The correct fix is the standard custom-chrome architecture used by VS Code /
+Electron, Windows Terminal and Chrome: **keep a real Windows window and merely
+stop Windows from painting the frame**, rather than deleting the frame and lying
+to DWM about it.
+
+- Drop `FramelessWindowHint`; keep `WS_CAPTION | WS_SYSMENU | WS_THICKFRAME |
+  WS_MINIMIZEBOX | WS_MAXIMIZEBOX`.
+- Handle **`WM_NCCALCSIZE`** (wParam=TRUE → return 0) so the client area covers the
+  whole window: the title bar and frame stop being *drawn* while every native
+  behaviour they carry is preserved.
+- Then `HTMAXBUTTON` is legitimate (the window really does have a caption), and
+  `HTCAPTION` over the header gives native drag ⇒ Aero Snap, shake, drag-to-top,
+  Alt+Space, double-click — for free.
+- Handle the full NC message set, never a partial one (RULE-WIN2).
+- Keep the native callback free of *all* Qt calls: cache the button rect on
+  resize/move, use `GetCursorPos` rather than `QCursor.pos()`. A ctypes callback
+  that blocks on the GIL inside a synchronous `SendMessage` is its own route to
+  `IsHungAppWindow`.
+
+Tracked as Phase 3; gate behind `experimental/native_chrome` (RULE-EXP1) and
+promote only after a clean multi-hour chaos soak with the flag on.
+
+### Why this went unnoticed for so long
+
+`tools/monkey_test.py` could not have caught any of it: the window chrome was
+blacklisted (`_BLACKLIST`) *and* every `Button` in the top 60px of the window was
+spatially excluded in `_enabled_controls()`. Not one chaos iteration in the
+project's history ever clicked the maximize button. Both exclusions are now
+removed (close/minimize remain, for app-lifecycle reasons only), window-chrome
+chaos actions were added — including `Win+Z`, the Snap-Layouts flyout that
+triggers this fault — and a crash-log watcher now fails a run on any *new*
+`netsentinel_crash.log` entry, since `faulthandler` is the only thing that records
+a native SEH fault like `0x8001010d`. Locked in by
+`tests/test_monkey_chrome_coverage.py`.

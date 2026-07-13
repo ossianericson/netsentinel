@@ -306,8 +306,8 @@ class AppHeaderMixin:
         _btn_min.clicked.connect(self.showMinimized)
         lay.addWidget(_btn_min)
 
-        self._maximize_btn = _ChromeButton("\uE922")   # FullScreen (enter full screen)
-        self._maximize_btn.setToolTip("Full Screen")
+        self._maximize_btn = _ChromeButton("\uE922")   # ChromeMaximize
+        self._maximize_btn.setToolTip("Maximize")
         self._maximize_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._maximize_btn.setFont(_wc_font)
         _s.themed_ss(
@@ -338,27 +338,27 @@ class AppHeaderMixin:
 
     @pyqtSlot()
     def _toggle_maximize(self):
+        """Maximize (dock to the work area) — never full-screen: showFullScreen()
+        covers the taskbar and leaves isMaximized() False, silently breaking
+        save_settings(), _place_edge_grips() and _DragHeader, which all gate on it."""
         from PyQt6.QtCore import Qt
-        if self.windowState() & Qt.WindowState.WindowFullScreen:
-            pre_geo = self._pre_maximize_geo
-            self._pre_maximize_geo = None
-            self.showNormal()
-            if pre_geo is not None:
-                self.setGeometry(pre_geo)
+        if self.windowState() & Qt.WindowState.WindowMaximized:
+            self.showNormal()   # Qt restores normalGeometry() itself
         else:
-            self._pre_maximize_geo = self.geometry()
-            self.showFullScreen()
+            self._pre_maximize_geo = self.geometry()  # read by save_settings()
+            self.showMaximized()
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if getattr(self, "_maximize_btn", None) is not None:
             from PyQt6.QtCore import QEvent, Qt
             if event.type() == QEvent.Type.WindowStateChange:
-                is_fs = bool(self.windowState() & Qt.WindowState.WindowFullScreen)
-                # \uE923 = ChromeRestore (exit full screen), \uE922 = ChromeMaximize (enter)
-                self._maximize_btn.setText("\uE923" if is_fs else "\uE922")
-                self._maximize_btn.setToolTip("Exit Full Screen" if is_fs else "Full Screen")
-                if not is_fs:
+                # WindowMaximized also covers native maximize: double-click, Win+Up, Aero Snap.
+                is_max = bool(self.windowState() & Qt.WindowState.WindowMaximized)
+                # \uE923 = ChromeRestore, \uE922 = ChromeMaximize (Segoe MDL2 Assets)
+                self._maximize_btn.setText("\uE923" if is_max else "\uE922")
+                self._maximize_btn.setToolTip("Restore Down" if is_max else "Maximize")
+                if not is_max:
                     self._pre_maximize_geo = None
                 if hasattr(self, "_edge_grips"):
                     self._place_edge_grips()
