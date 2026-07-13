@@ -11,7 +11,7 @@ ruff>=0.15.20
 
 # Static type checking (GAP-2) — targets modules/ only (see mypy.ini)
 # run: mypy modules/ --config-file mypy.ini
-mypy>=2.1.0
+mypy>=2.2.0
 
 # Dependency CVE scanning (GAP-3) — also enforced in CI (ci.yml audit job)
 # run: pip-audit -r requirements.txt --desc on --severity critical
