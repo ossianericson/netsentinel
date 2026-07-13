@@ -413,9 +413,10 @@ class AppHeaderMixin:
 
     def showEvent(self, event):
         super().showEvent(event)
-        # Idempotent — native chrome is normally already installed from
-        # Dashboard.__init__ (it MUST be, see _install_window_chrome). This call is
-        # the legacy path's install point, and a safety net if __init__ skipped it.
+        # The ONLY install site for the window chrome. It cannot run earlier: the
+        # window needs a realised HWND. Because that puts it *after*
+        # _restore_settings() has applied the saved geometry, the install has to
+        # re-apply that geometry itself — see _install_window_chrome().
         self._install_window_chrome()
         # Attach toast manager once window is visible
         from ui.widgets.toast import ToastManager
@@ -465,12 +466,14 @@ class AppHeaderMixin:
                          that FramelessWindowHint produces, which is the RULE-WIN9
                          fault itself (0x8001010d). Off by default; superseded.
 
-        MUST run before any geometry is applied — Dashboard.__init__ calls it ahead
-        of _restore_settings(). Qt derives its frame margins from the window STYLE,
-        so until the chrome is installed Qt still believes in the caption it is
-        about to lose and restores the window a caption-height (~32px) too low,
-        leaving a strip of bare desktop above the header. Guarded by
-        tests/test_native_chrome.py::test_chrome_is_installed_before_geometry_is_restored.
+        Ordering vs. geometry: this runs from showEvent() — the earliest point at
+        which the window has a realised HWND — which is necessarily *after*
+        _restore_settings() has already applied the saved geometry. Qt derives its
+        frame margins from the window STYLE, so at restore time it still believes in
+        the caption that WM_NCCALCSIZE is about to take away, and places the window a
+        caption-height (~32px) out. install_native_chrome() therefore calls
+        reapply_geometry_after_chrome() immediately afterwards to put the window back
+        on the rect the user actually left it on.
         """
         from PyQt6.QtCore import QSettings as _QSettings
 

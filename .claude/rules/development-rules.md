@@ -1111,6 +1111,62 @@ Before asserting any native capability, verify the style actually carries it:
 `GetWindowLongW(hwnd, GWL_STYLE)` and check the bit. Related: RULE-WIN2 (never ship a partial
 NC-message implementation).
 
+### RULE-WIN10 (blocking): UIAutomationCore must be warmed up at startup — and `0x8001010d` is not always a malformed window
+
+**Mechanism.** The *first* `WM_GETOBJECT` a process ever answers makes Qt's windows plugin call
+`UiaReturnRawElementProvider`. On that first call — and only the first — UIAutomationCore
+lazily initialises itself, and that init needs an **outgoing COM call**:
+
+```
+UiaReturnRawElementProvider -> CheckInit -> DoInit -> CUIAutomation7::FinalConstruct
+  -> BlockingCoreDispatcher::CreateAndRegisterBlockingCore -> combase!CoCreateInstance
+```
+
+`WM_GETOBJECT` is *always* delivered as an input-synchronous, cross-process `SendMessage`, and
+COM refuses outgoing calls from a thread dispatching one → `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`
+(`0x8001010d`), raised as SEH. `faulthandler` installs a **vectored (first-chance)** handler, so
+it logs the exception to `netsentinel_crash.log` and returns `EXCEPTION_CONTINUE_SEARCH`; UIA
+then handles the HRESULT and **the process carries on normally**. Nothing crashes — but the
+chaos harness fails any run that appends a new crash-log entry (RULE-CHAOS2, correctly), so
+every launch aborted its phase.
+
+**The trap that burned three fix attempts.** The fault fires exactly once per process, whenever
+the first UIA client happens to connect — and the harness connects during startup, so the Python
+traceback always pointed at `_splash_msg`/`processEvents`. That is *where the stack happened to
+be*, not the cause. Measured: with no UIA client the app starts perfectly clean; attach a client
+15 s **after** `app.exec()` is pumping and the fault fires just the same. The splash, the nested
+`processEvents()` pump, the tray icon's `Shell_NotifyIcon`, and native chrome are all innocent —
+each was blamed and "fixed" in turn, and the fault survived every time. Reproduced in a bare
+40-line PyQt app with none of them present.
+
+**Correct fix:** do the one-time init yourself, from a context where the COM call-out is legal.
+A **same-thread** `SendMessage` is a direct WndProc call — the thread is not inside an
+input-synchronous call — so the `CoCreateInstance` succeeds:
+
+```python
+from ui.uia_warmup import warm_up_uia_provider
+warm_up_uia_provider(int(_splash.winId()))   # ~3 ms, once, during startup
+```
+
+Warm on the **splash** (two accessible nodes), never the Dashboard (~60 pages of accessible
+tree). Only that throwaway window ever receives the synthetic message; the main window's
+provider is still built solely from real client requests.
+
+**Corollaries.**
+- Do **not** suppress `0x8001010d` in the crash log or the harness. RULE-WIN9 produces the same
+  code from a genuinely malformed window — the two are distinguishable only by their native
+  stack, so blanket-filtering the code blinds the crash net to a real bug class.
+- Never validate an accessibility fix on "the fault stopped" alone. A warmup that registers a
+  broken provider silences the fault **and** leaves the app undriveable by UIA. Always assert
+  the client can still read the tree, or you will ship a worse regression than the bug.
+- A Python traceback for an SEH fault names the thread's current frame, not the culprit. Get the
+  native stack (`procdump -e 1 -f <code>` + `cdb -z <dump> -c ".ecxr; kb"`, RULE-DBG2) before
+  believing any theory about who raised it.
+
+Enforced by `tests/test_uia_warmup.py` (constants, provider-failure handling, idempotency, an
+AST guard that `app.py` still calls the warmup, and a `monkey`-marked end-to-end that launches
+the real `app.py` under a redirected `LOCALAPPDATA` and asserts the crash log stays clean).
+
 ---
 
 ## QSettings State Hygiene
@@ -1638,6 +1694,7 @@ Currently tool-enforced (high reliability):
 - RULE-CHAOS2 → `test_monkey_chrome_coverage.py` (blacklist invariants + chrome-action coverage)
 - RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
 - RULE-WIN2 → `test_native_chrome.py` (NC-message-set completeness + no-Qt-in-callback AST guard)
+- RULE-WIN10 → `test_uia_warmup.py` (AST guard that app.py calls the warmup + `monkey`-marked e2e)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry

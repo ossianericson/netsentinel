@@ -1009,6 +1009,7 @@ def main():
         SPLASH_BG, SPLASH_TITLE_FG, SPLASH_SUBTITLE_FG,
         SPLASH_VERSION_FG, SPLASH_MSG_FG,
     )
+    from ui.uia_warmup import warm_up_uia_provider  # noqa: E402
     _SPLASH_W, _SPLASH_H = 480, 280          # logical size of the centred card
     _CANVAS_W, _CANVAS_H = 800, 500         # outer canvas (covers extra area)
     _SOX = (_CANVAS_W - _SPLASH_W) // 2     # card x-offset on the canvas
@@ -1037,6 +1038,13 @@ def main():
     if not _start_minimised:
         _splash.show()
         app.processEvents()
+        # RULE-WIN10: initialise UIAutomationCore here, on this thread, while no
+        # UIA client is connected yet. The first WM_GETOBJECT the process ever
+        # answers would otherwise trigger that one-time init from inside an
+        # input-synchronous SendMessage, where COM refuses the CoCreateInstance it
+        # needs (0x8001010d). The splash is the cheapest window to warm on — its
+        # accessible tree is two nodes, where the Dashboard's spans ~60 pages.
+        warm_up_uia_provider(int(_splash.winId()))
 
     def _splash_msg(msg: str, process_events: bool = True) -> None:
         """Overlay a progress message on the splash without redrawing the base."""
@@ -1493,6 +1501,12 @@ def main():
             _QTimer.singleShot(0, _fix_geo)
     else:
         _splash.close()
+
+    # RULE-WIN10 fallback. Idempotent — a no-op once the splash warmup succeeded.
+    # Covers the two cases where it did not: --minimised (no splash was ever shown)
+    # and a splash that could not serve an accessibility provider. Leaving the
+    # process cold here means the first UIA client to connect logs 0x8001010d.
+    warm_up_uia_provider(int(window.winId()))
 
     # Windows logoff/shutdown — save state before the session ends.
     # commitDataRequest fires before WM_ENDSESSION; no unsafe MSG casting needed.
