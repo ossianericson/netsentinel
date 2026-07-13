@@ -199,7 +199,14 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.29 (current)
+### v2.1.30 (current)
+
+- Screen readers (Narrator, NVDA) and other accessibility tools can now attach cleanly at startup — a Windows UI Automation fault was preventing it
+- The maximize button now docks to the work area instead of covering the taskbar
+- The window no longer reopens a title-bar's height below where you left it
+- Native Windows window chrome (Snap Layouts, Win+arrow, drag-to-snap) is available behind an experimental flag, off by default
+
+### v2.1.29
 
 - Instant Theme Switching — clicking a theme swatch in Settings now restyles the whole app immediately, no restart needed
 - Every `ui/` page, dialog, and chart was converted to read colours live, including freshly-run scans and pages you haven't opened yet

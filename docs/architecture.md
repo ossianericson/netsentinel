@@ -133,7 +133,7 @@ The installed binary lives in `C:\Program Files\NetSentinel\` — a read-only di
 
 ## Test architecture
 
-The test suite has 5,071 tests across 366 files. Key categories:
+The test suite has 5,109 tests across 370 files. Key categories:
 
 | Category | Files | What it catches |
 |---|---|---|

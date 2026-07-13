@@ -348,9 +348,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Instant theme switching", "Clicking a theme swatch in Settings now restyles the whole app immediately — no restart needed."),
-        ("Live everywhere", "Every page, dialog, and chart was converted to read colours live, including freshly-run scans and pages you haven't opened yet."),
-        ("Accent + theme together", "The accent colour picker and theme switcher now work together seamlessly, in either order."),
+        ("Screen reader support", "Narrator, NVDA and other accessibility tools can now attach cleanly at startup — a Windows UI Automation fault was preventing it."),
+        ("Maximize behaves", "The maximize button docks to the work area instead of covering the taskbar."),
+        ("Window position sticks", "The window no longer reopens a title-bar's height below where you left it."),
+        ("Native window chrome", "Snap Layouts, Win+arrow and drag-to-snap are available behind an experimental flag (off by default)."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

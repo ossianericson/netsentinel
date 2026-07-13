@@ -25,6 +25,16 @@ Current version: **v2.1.29**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
+**Chaos run log** — each entry is a full `tools/run_all_monkey_tests.ps1` result. A run is clean
+only if `netsentinel_crash.log` gained **zero bytes** (baseline its size at run start; the log is
+append-only and never rotated, so a count means nothing — RULE-CHAOS2). A native SEH fault does
+not kill the process, so "no crash" alone is not evidence of a clean run.
+
+| Date | Duration | Result |
+|---|---|---|
+| June 2026 | 9 h overnight | 10,001 interactions, seeds 1/42/99 — clean; the Store-readiness baseline |
+| 2026-07-13 | 1 h, 7 phases | 1,230 interactions + 2 full 62-page systematic sweeps — clean, **zero crash-log growth**. First run to survive the UIA warmup fix (RULE-WIN10); every prior run aborted its phase on a new `0x8001010d` entry. Peak RSS 509–574 MB, no upward trend. |
+
 The full version history lives in `CHANGELOG.md` (and the highlights in
 `README.md`). It is not duplicated here — a per-version chain in this file only
 rots out of date. The app reached feature-complete at v2.1.0; everything since is

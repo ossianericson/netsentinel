@@ -4,6 +4,21 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.30
+
+Window and accessibility fixes. The headline is a long-standing UI Automation fault at startup: NetSentinel is now correctly readable by screen readers (Narrator, NVDA) from the moment it launches.
+
+**Added**
+- `ui/uia_warmup.py` — forces UIAutomationCore's one-time lazy init during startup, from a context where the COM call it makes is legal
+- Native Windows window chrome behind the `experimental/native_chrome` flag (off by default) — preserves Snap Layouts, Win+arrow, drag-to-snap and Alt+Space by keeping a real window and suppressing only the frame *painting*
+
+**Fixed**
+- Screen readers and other UI Automation clients could not attach cleanly at startup — the first `WM_GETOBJECT` the process answered raised `0x8001010d` (`RPC_E_CANTCALLOUT_ININPUTSYNCCALL`), because UIAutomationCore's one-time init needs an outgoing COM call and Windows always delivers that message inside an input-synchronous `SendMessage`
+- The maximize button covered the taskbar instead of docking to the work area
+- The window no longer starts a title-bar's height (~32px) below where it was left, leaving a strip of bare desktop above the header
+
+---
+
 ### v2.1.29
 
 Ships Instant Theme Switching — clicking a theme swatch in Settings now restyles the whole running app immediately, no restart required. Closes out the multi-phase live-theme-conversion project (all `ui/` files now read theme tokens live).
