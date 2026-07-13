@@ -4,6 +4,20 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.29
+
+Ships Instant Theme Switching — clicking a theme swatch in Settings now restyles the whole running app immediately, no restart required. Closes out the multi-phase live-theme-conversion project (all `ui/` files now read theme tokens live).
+
+**Changed**
+- `_on_theme` (`ui/pages/settings_cards.py`) now always applies the theme live via `apply_theme()` — removed the `experimental/live_theme_switch` QSettings flag and the legacy restart-required path
+- Theme picker description now reads "Takes effect immediately" instead of "restart the app to apply"
+
+**Fixed**
+- 802.11 Monitor page (`ui/pages/wifi_monitor_page.py`) crashed on both "Start Monitoring" and "Stop Monitoring" — `_set_status()` was passed a resolved colour value instead of the expected theme-token name, raising `AttributeError`
+- Resolved a CodeQL `py/unused-global-variable` alert in `ui/pages/log_source_panel.py` — added an explicit `__all__` so its cross-module constants/helpers (consumed only via `log_hub_page.py`'s import) are recognised as public
+
+---
+
 ### v2.1.28
 
 Stability and architecture-hygiene release — a batch of resource-leak, thread-safety, and data-correctness fixes, plus enforcement of the three-layer UI/data/module separation (ARCH RULE 1). No new features.

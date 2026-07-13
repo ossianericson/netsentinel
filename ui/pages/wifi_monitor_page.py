@@ -181,7 +181,7 @@ class WiFiMonitorPage(QWidget):
         self._worker.start()
         self._btn_start.setEnabled(False)
         self._btn_stop.setEnabled(True)
-        self._set_status(f"Starting monitor mode on {iface}…", _s.GREEN)
+        self._set_status(f"Starting monitor mode on {iface}…", "GREEN")
 
     @pyqtSlot()
     def _stop(self) -> None:
@@ -190,7 +190,7 @@ class WiFiMonitorPage(QWidget):
             self._worker.wait(2000)
         self._btn_start.setEnabled(True)
         self._btn_stop.setEnabled(False)
-        self._set_status("Capture stopped.", _s.TEXT_SECONDARY)
+        self._set_status("Capture stopped.", "TEXT_SECONDARY")
 
     @pyqtSlot()
     def _clear(self) -> None:

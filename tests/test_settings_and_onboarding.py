@@ -7,7 +7,7 @@ Covers:
     • Theme buttons are present (one per theme)
     • Active theme button has filled ACCENT style
     • Inactive theme buttons have outline style
-    • _on_theme saves via set_active_theme_name
+    • _on_theme applies live via apply_theme
     • _on_theme updates the status label
     • Compact-row checkbox persists to QSettings
     • Tooltip checkbox persists to QSettings
@@ -95,34 +95,19 @@ class TestSettingsPage:
                 assert "border" in sw.styleSheet()
                 break
 
-    def test_on_theme_calls_set_active(self):
+    def test_on_theme_calls_apply_theme(self):
+        """_on_theme routes through apply_theme(), never paired with
+        set_active_theme_name (apply_theme already persists)."""
         target = [n for n in _styles.THEMES][0]
-        with patch("PyQt6.QtCore.QSettings") as MockQS:
-            MockQS.return_value.value.return_value = False
-            with patch("ui.styles.set_active_theme_name") as mock_save:
-                self.page._on_theme(target)
-                mock_save.assert_called_once_with(target)
+        with patch("ui.styles.apply_theme") as mock_apply, \
+             patch("ui.styles.set_active_theme_name") as mock_save:
+            self.page._on_theme(target)
+            mock_apply.assert_called_once_with(target)
+            mock_save.assert_not_called()
 
     def test_on_theme_updates_status_label(self):
         target = [n for n in _styles.THEMES][0]
-        with patch("PyQt6.QtCore.QSettings") as MockQS:
-            MockQS.return_value.value.return_value = False
-            with patch("ui.styles.set_active_theme_name"):
-                self.page._on_theme(target)
-        assert target in self.page._theme_status_lbl.text()
-        assert "restart" in self.page._theme_status_lbl.text().lower()
-
-    def test_on_theme_live_flag_calls_apply_theme(self):
-        """experimental/live_theme_switch=True routes through apply_theme(), never
-        paired with set_active_theme_name (apply_theme already persists)."""
-        target = [n for n in _styles.THEMES][0]
-        with patch("PyQt6.QtCore.QSettings") as MockQS:
-            MockQS.return_value.value.return_value = True
-            with patch("ui.styles.apply_theme") as mock_apply, \
-                 patch("ui.styles.set_active_theme_name") as mock_save:
-                self.page._on_theme(target)
-                mock_apply.assert_called_once_with(target)
-                mock_save.assert_not_called()
+        self.page._on_theme(target)
         assert target in self.page._theme_status_lbl.text()
         assert "applied" in self.page._theme_status_lbl.text().lower()
 

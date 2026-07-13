@@ -41,6 +41,20 @@ from ui.styles import (
     LOG_SOURCE_PLUGIN,
 )
 
+# Explicit public API — these names are consumed only from log_hub_page.py's
+# import, so CodeQL's per-file unused-global-variable check needs __all__ to
+# recognise the cross-module usage (py/unused-global-variable).
+__all__ = [
+    "_LogSourcePanelMixin",
+    "_SOURCES",
+    "_MAX_ROWS",
+    "_LIVE_CHALLENGE_COOLDOWN",
+    "_fmt_ts",
+    "_status_color",
+    "_source_color",
+    "_build_live_scenario",
+]
+
 # ── Module-level constants (imported by log_hub_page.py too) ─────────────────
 
 _MAX_ROWS = 2000

@@ -348,9 +348,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Fewer leaks", "Plugged a batch of resource leaks — sockets and scan/speed-test helper processes are now always cleaned up, even when a scan errors or times out."),
-        ("Smoother firewall actions", "Blocking or unblocking a device in the firewall no longer briefly freezes the window — it now runs in the background."),
-        ("Safer device edits", "Fixed two cases where editing a device's saved vendor or notes could quietly drop other saved details."),
+        ("Instant theme switching", "Clicking a theme swatch in Settings now restyles the whole app immediately — no restart needed."),
+        ("Live everywhere", "Every page, dialog, and chart was converted to read colours live, including freshly-run scans and pages you haven't opened yet."),
+        ("Accent + theme together", "The accent colour picker and theme switcher now work together seamlessly, in either order."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

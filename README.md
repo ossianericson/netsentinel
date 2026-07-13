@@ -20,7 +20,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**4,890+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**5,071+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -199,7 +199,14 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.28 (current)
+### v2.1.29 (current)
+
+- Instant Theme Switching — clicking a theme swatch in Settings now restyles the whole app immediately, no restart needed
+- Every `ui/` page, dialog, and chart was converted to read colours live, including freshly-run scans and pages you haven't opened yet
+- The accent colour picker and theme switcher now work together seamlessly, in either order
+- Fixed a crash on the 802.11 Monitor page when starting or stopping a capture
+
+### v2.1.28
 
 - Plugged a batch of resource leaks — sockets and scan/speed-test helper processes are now always closed on error and timeout paths
 - Firewall block/unblock actions no longer briefly freeze the UI — they run off the GUI thread
