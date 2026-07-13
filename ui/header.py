@@ -40,9 +40,15 @@ class AppHeaderMixin:
     _time_range_combo       QComboBox    — global time-range picker
     _header_scan_btn        QToolButton  — "▶  Scan" button in header
     _update_bar_lbl         QLabel       — update-available message
-    _edge_grips             dict         — 8 _Grip widgets around the window
-    _snap_subclass_proc     ctypes cb    — Win32 subclass procedure (optional)
-    _snap_subclass_installed bool        — guards one-time subclassing
+    _app_header             QWidget      — the header bar itself (native hit-test)
+    _header_nc_client_widgets list       — header widgets that stay HTCLIENT
+    _edge_grips             dict         — 8 _Grip widgets (frameless path only)
+    _snap_subclass_installed bool        — guards one-time chrome installation
+
+    Window chrome comes in two flavours, selected by Dashboard._native_chrome and
+    installed by _install_window_chrome(); the Win32 hooks themselves live in
+    ui/native_chrome.py. Under native chrome the header is the caption and the 8
+    resize grips are not installed — Windows does both natively.
     """
 
     # ── Frameless window — drag support on header ────────────────────────────
@@ -306,14 +312,20 @@ class AppHeaderMixin:
         _btn_min.clicked.connect(self.showMinimized)
         lay.addWidget(_btn_min)
 
-        self._maximize_btn = _ChromeButton("\uE922")   # FullScreen (enter full screen)
-        self._maximize_btn.setToolTip("Full Screen")
+        self._maximize_btn = _ChromeButton("\uE922")   # ChromeMaximize
+        self._maximize_btn.setToolTip("Maximize")
         self._maximize_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._maximize_btn.setFont(_wc_font)
+        # [ncHover="true"] mirrors :hover for the native-chrome path. There, this
+        # button is the one HTMAXBUTTON — it lives in the NON-CLIENT area (which is
+        # exactly what makes the Snap Layouts flyout legitimate), so Qt never sees a
+        # mouse event for it and :hover can never fire. native_chrome.py posts the
+        # hover across and drives this rule instead. Inert on the frameless path.
         _s.themed_ss(
             self._maximize_btn,
             lambda: _wc_base()
             + f"QPushButton:hover {{ background:{_s.SIDEBAR_HOVER}; color:{_s.WHITE}; }}"
+            + f'QPushButton[ncHover="true"] {{ background:{_s.SIDEBAR_HOVER}; color:{_s.WHITE}; }}'
             + f"QPushButton:pressed {{ background:{_s.SIDEBAR_HOVER}; color:{_s.WHITE}; }}",
         )
         self._maximize_btn.clicked.connect(self._toggle_maximize)
@@ -332,36 +344,55 @@ class AppHeaderMixin:
         _btn_close.clicked.connect(self._quit_app)
         lay.addWidget(_btn_close)
 
+        # Read by ui/native_chrome.py's hit-test (via _refresh_chrome_rects).
+        # _header_nc_client_widgets are the strips that must stay HTCLIENT so Qt
+        # keeps handling their clicks — everything else in the header becomes
+        # HTCAPTION and is draggable. Omitting a widget here makes it unclickable
+        # under native chrome; the maximize button is deliberately absent (it is
+        # the one HTMAXBUTTON).
+        self._app_header = w
+        self._header_nc_client_widgets = [
+            _btn_settings, self._time_range_combo, self._header_scan_btn,
+            _btn_min, _btn_close,
+        ]
         return w
 
     # ── Frameless window — helpers ───────────────────────────────────────────
 
     @pyqtSlot()
     def _toggle_maximize(self):
+        """Maximize (dock to the work area) — never full-screen: showFullScreen()
+        covers the taskbar and leaves isMaximized() False, silently breaking
+        save_settings(), _place_edge_grips() and _DragHeader, which all gate on it."""
         from PyQt6.QtCore import Qt
-        if self.windowState() & Qt.WindowState.WindowFullScreen:
-            pre_geo = self._pre_maximize_geo
-            self._pre_maximize_geo = None
-            self.showNormal()
-            if pre_geo is not None:
-                self.setGeometry(pre_geo)
+        if self.windowState() & Qt.WindowState.WindowMaximized:
+            self.showNormal()   # Qt restores normalGeometry() itself
         else:
-            self._pre_maximize_geo = self.geometry()
-            self.showFullScreen()
+            self._pre_maximize_geo = self.geometry()  # read by save_settings()
+            self.showMaximized()
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if getattr(self, "_maximize_btn", None) is not None:
             from PyQt6.QtCore import QEvent, Qt
             if event.type() == QEvent.Type.WindowStateChange:
-                is_fs = bool(self.windowState() & Qt.WindowState.WindowFullScreen)
-                # \uE923 = ChromeRestore (exit full screen), \uE922 = ChromeMaximize (enter)
-                self._maximize_btn.setText("\uE923" if is_fs else "\uE922")
-                self._maximize_btn.setToolTip("Exit Full Screen" if is_fs else "Full Screen")
-                if not is_fs:
+                # WindowMaximized also covers native maximize: double-click, Win+Up, Aero Snap.
+                is_max = bool(self.windowState() & Qt.WindowState.WindowMaximized)
+                # \uE923 = ChromeRestore, \uE922 = ChromeMaximize (Segoe MDL2 Assets)
+                self._maximize_btn.setText("\uE923" if is_max else "\uE922")
+                self._maximize_btn.setToolTip("Restore Down" if is_max else "Maximize")
+                if is_max:
+                    # Windows can maximize us without going through _toggle_maximize()
+                    # once the window is real (double-click the caption, Win+Up, Aero
+                    # Snap, Snap Layouts). Seed the restore size from Qt's own
+                    # normalGeometry() so save_settings() still records one.
+                    if self._pre_maximize_geo is None:
+                        self._pre_maximize_geo = self.normalGeometry()
+                else:
                     self._pre_maximize_geo = None
                 if hasattr(self, "_edge_grips"):
                     self._place_edge_grips()
+                self._refresh_chrome_rects()
         # Minimize-to-tray opt-in — uses cached _minimize_to_tray to avoid QSettings I/O
         from PyQt6.QtCore import QEvent, Qt
         if (event.type() == QEvent.Type.WindowStateChange
@@ -376,29 +407,17 @@ class AppHeaderMixin:
         super().resizeEvent(event)
         if hasattr(self, "_edge_grips"):
             self._place_edge_grips()
+        self._refresh_chrome_rects()
 
     # ── Windows Snap Layouts ─────────────────────────────────────────────────
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not getattr(self, "_snap_subclass_installed", False):
-            # RULE-EXP1 / docs/spikes/window-snap-subclass.md: this native
-            # WM_NCHITTEST hook was verified (2026-07-03) to trigger a Windows
-            # COM/RPC reentrancy fault (0x8001010d, RPC_E_CANTCALLOUT_ININPUTSYNCCALL)
-            # when Windows' Snap Layout hover-preview fires on the main thread
-            # while a background QThread is doing network I/O (e.g. Threat
-            # Intel's "Update Feeds"). A Python-level try/except cannot catch
-            # this — the fault occurs inside native DefSubclassProc/Shell code,
-            # not in Python bytecode. Gated off by default until a COM-apartment
-            # fix is designed; the maximize button still works, it just won't
-            # show the Windows 11 Snap flyout on hover.
-            from PyQt6.QtCore import QSettings as _QSettings
-            _snap_enabled = _QSettings("NetSentinel", "NetSentinel").value(
-                "experimental/snap_layout_hover", False, type=bool
-            )
-            if _snap_enabled:
-                self._install_snap_subclass()
-            self._snap_subclass_installed = True
+        # The ONLY install site for the window chrome. It cannot run earlier: the
+        # window needs a realised HWND. Because that puts it *after*
+        # _restore_settings() has applied the saved geometry, the install has to
+        # re-apply that geometry itself — see _install_window_chrome().
+        self._install_window_chrome()
         # Attach toast manager once window is visible
         from ui.widgets.toast import ToastManager
         ToastManager.instance().attach(self)
@@ -432,114 +451,65 @@ class AppHeaderMixin:
                 from PyQt6.QtCore import QTimer as _QTlazy
                 _QTlazy.singleShot(400, self._start_lazy_page_builder)
 
-    def _install_snap_subclass(self):
-        """Subclass the Win32 HWND so WM_NCHITTEST returns HTMAXBUTTON over our
-        maximize button.  This is safer than nativeEvent because the message ID
-        arrives as a plain C argument — no MSG struct pointer parsing needed."""
-        try:
-            import ctypes, ctypes.wintypes as wt
+    def _install_window_chrome(self):
+        """Install whichever window chrome the experimental flags select. Idempotent.
 
-            WM_NCHITTEST = 0x0084
-            HTMAXBUTTON  = 9
+        Both paths live in ui/native_chrome.py — the Win32 message hooks are kept
+        out of this file so the callback that Windows invokes reentrantly can be
+        held to "touches zero Qt objects" (RULE-WIN9) and guarded by a test.
 
-            _DefSubclassProc = ctypes.windll.comctl32.DefSubclassProc
-            _DefSubclassProc.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
-            _DefSubclassProc.restype  = ctypes.c_ssize_t
+        native_chrome  — the real fix: keep a real Windows window (caption, thick
+                         frame, max box) and stop Windows *painting* the frame.
+                         Aero Snap, Snap Layouts, shake, Alt+Space and native
+                         resize all work because the window genuinely has them.
+        snap_layout_hover — LEGACY. Returns HTMAXBUTTON on the captionless WS_POPUP
+                         that FramelessWindowHint produces, which is the RULE-WIN9
+                         fault itself (0x8001010d). Off by default; superseded.
 
-            SUBCLASSPROC = ctypes.WINFUNCTYPE(
-                ctypes.c_ssize_t,
-                wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM,
-                ctypes.c_size_t,   # UINT_PTR  uIdSubclass
-                ctypes.c_size_t,   # DWORD_PTR dwRefData
-            )
+        Ordering vs. geometry: this runs from showEvent() — the earliest point at
+        which the window has a realised HWND — which is necessarily *after*
+        _restore_settings() has already applied the saved geometry. Qt derives its
+        frame margins from the window STYLE, so at restore time it still believes in
+        the caption that WM_NCCALCSIZE is about to take away, and places the window a
+        caption-height (~32px) out. install_native_chrome() therefore calls
+        reapply_geometry_after_chrome() immediately afterwards to put the window back
+        on the rect the user actually left it on.
+        """
+        from PyQt6.QtCore import QSettings as _QSettings
 
-            WM_NCLBUTTONDOWN = 0x00A1
-            WM_NCLBUTTONUP   = 0x00A2
+        if getattr(self, "_snap_subclass_installed", False):
+            return
+        self._snap_subclass_installed = True
 
-            win = self
+        if getattr(self, "_native_chrome", False):
+            from ui.native_chrome import install_native_chrome
+            if install_native_chrome(self):
+                # The frame just changed shape under Qt: _restore_settings() placed
+                # this window against a caption that WM_NCCALCSIZE has now deleted,
+                # so it is sitting a caption-height (~32px) out. Put it back on the
+                # rect the user actually left it on.
+                from ui.app_settings import reapply_geometry_after_chrome
+                reapply_geometry_after_chrome(self)
+                return
+            # Install failed — fall through to the legacy window, which is still
+            # frameless-shaped and usable. Better a missing Snap flyout than a
+            # window with no chrome behaviour at all.
+        if _QSettings("NetSentinel", "NetSentinel").value(
+            "experimental/snap_layout_hover", False, type=bool
+        ):
+            from ui.native_chrome import install_snap_subclass
+            install_snap_subclass(self)
 
-            def _over_maximize_btn():
-                # Never let an exception escape into the caller — this runs
-                # inside _proc's try/except, but keep a local guard too since
-                # Qt geometry calls (mapToGlobal walks the widget hierarchy)
-                # can raise if a widget is mid-teardown when this fires.
-                try:
-                    btn = win._maximize_btn
-                    if btn is None:
-                        return False
-                    from PyQt6.QtGui import QCursor
-                    p  = QCursor.pos()
-                    tl = btn.mapToGlobal(btn.rect().topLeft())
-                    return (tl.x() <= p.x() < tl.x() + btn.width() and
-                            tl.y() <= p.y() < tl.y() + btn.height())
-                except Exception:
-                    return False  # non-fatal — treat as "not over the button"
+    def _refresh_chrome_rects(self):
+        """Recache the header/maximize-button rects the native hit-test reads.
 
-            def _proc(hwnd, msg, wparam, lparam, uid, ref):
-                # RULE-WIN2: this callback is invoked directly by Windows as a C
-                # function pointer (ctypes WINFUNCTYPE), reentrantly, on every
-                # mouse move over the frame. An uncaught Python exception here
-                # does not propagate as a normal Python error — it corrupts the
-                # C-level return value ctypes hands back to DefSubclassProc's
-                # caller, which is how this previously surfaced as a Windows
-                # fatal exception (0x8001010d) under thread contention (e.g.
-                # while a background worker is busy and the main thread is
-                # simultaneously animating a page crossfade). Every path must
-                # return an int; never let anything raise past this point.
-                try:
-                    if msg == WM_NCHITTEST and _over_maximize_btn():
-                        return HTMAXBUTTON
-                    # Intercept non-client clicks on the maximize button so we drive
-                    # the toggle ourselves instead of letting DefWindowProc do it.
-                    if wparam == HTMAXBUTTON:
-                        if msg == WM_NCLBUTTONDOWN:
-                            return 0  # swallow — we act on release
-                        if msg == WM_NCLBUTTONUP:
-                            # Zero-delay parented QTimer queues _toggle_maximize() onto
-                            # the main-thread event loop. QMetaObject.invokeMethod fails
-                            # because mixin @pyqtSlot methods are not visible in Qt's C++
-                            # meta-object by string name (logs "No such method Dashboard::_toggle_maximize()").
-                            from PyQt6.QtCore import QTimer as _QTimer
-                            _t = _QTimer(win)
-                            _t.setSingleShot(True)
-                            _t.timeout.connect(win._toggle_maximize)
-                            _t.start(0)
-                            return 0
-                    return _DefSubclassProc(hwnd, msg, wparam, lparam)
-                except Exception:
-                    # Never let a Python exception escape a ctypes callback —
-                    # fall back to default handling for this message.
-                    try:
-                        return _DefSubclassProc(hwnd, msg, wparam, lparam)
-                    except Exception:
-                        return 0  # last-resort — must return an int, never raise
-
-            self._snap_subclass_proc = SUBCLASSPROC(_proc)
-            hwnd = int(self.winId())
-
-            # WS_THICKFRAME + WS_MAXIMIZEBOX are required for Windows to show the
-            # Snap Layout flyout — without them it ignores HTMAXBUTTON entirely.
-            GWL_STYLE      = -16
-            WS_THICKFRAME  = 0x00040000
-            WS_MAXIMIZEBOX = 0x00010000
-            _GetWindowLong = ctypes.windll.user32.GetWindowLongW
-            _SetWindowLong = ctypes.windll.user32.SetWindowLongW
-            _GetWindowLong.argtypes = [wt.HWND, ctypes.c_int]
-            _GetWindowLong.restype  = ctypes.c_long
-            _SetWindowLong.argtypes = [wt.HWND, ctypes.c_int, ctypes.c_long]
-            _SetWindowLong.restype  = ctypes.c_long
-            style = _GetWindowLong(hwnd, GWL_STYLE)
-            _SetWindowLong(hwnd, GWL_STYLE, style | WS_THICKFRAME | WS_MAXIMIZEBOX)
-            # Tell DWM to recalculate the non-client area after the style change.
-            SWP_FLAGS = 0x0027  # SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED
-            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_FLAGS)
-
-            _SetWindowSubclass = ctypes.windll.comctl32.SetWindowSubclass
-            _SetWindowSubclass.argtypes = [wt.HWND, SUBCLASSPROC, ctypes.c_size_t, ctypes.c_size_t]
-            _SetWindowSubclass.restype  = wt.BOOL
-            _SetWindowSubclass(hwnd, self._snap_subclass_proc, 1, 0)
-        except Exception:
-            pass  # non-fatal
+        No-op unless native chrome is live. Must run whenever the header's geometry
+        within the window changes — a stale cache makes Windows hit-test the wrong
+        strip, e.g. treating the Scan button as caption (unclickable).
+        """
+        if getattr(self, "_native_chrome", False):
+            from ui.native_chrome import refresh_chrome_rects
+            refresh_chrome_rects(self)
 
     def _install_edge_grips(self):
         """Create 8 transparent resize-grip strips around the window border."""

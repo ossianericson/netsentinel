@@ -21,9 +21,19 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.29**
+Current version: **v2.1.30**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
+
+**Chaos run log** — each entry is a full `tools/run_all_monkey_tests.ps1` result. A run is clean
+only if `netsentinel_crash.log` gained **zero bytes** (baseline its size at run start; the log is
+append-only and never rotated, so a count means nothing — RULE-CHAOS2). A native SEH fault does
+not kill the process, so "no crash" alone is not evidence of a clean run.
+
+| Date | Duration | Result |
+|---|---|---|
+| June 2026 | 9 h overnight | 10,001 interactions, seeds 1/42/99 — clean; the Store-readiness baseline |
+| 2026-07-13 | 1 h, 7 phases | 1,230 interactions + 2 full 62-page systematic sweeps — clean, **zero crash-log growth**. First run to survive the UIA warmup fix (RULE-WIN10); every prior run aborted its phase on a new `0x8001010d` entry. Peak RSS 509–574 MB, no upward trend. |
 
 The full version history lives in `CHANGELOG.md` (and the highlights in
 `README.md`). It is not duplicated here — a per-version chain in this file only
@@ -86,6 +96,7 @@ One line per feature — full behavioural detail lives in the module's own docst
 - **Page help popover (?)** — floating panel anchored below the ? button
 - **Lucide SVG rail section icons** — clean scalable SVG at any size (RULE 25)
 - **Two colour themes, instant switching** — Arctic Clean (light, cool-slate chrome with deep-indigo table headers) and Midnight Pro (dark, bright royal-blue accent); clicking a theme swatch in Settings restyles the whole running app immediately, no restart (`ui/styles.py`)
+- **Native Windows window chrome** — the custom header is drawn into a REAL Win32 window (frame painting suppressed via `WM_NCCALCSIZE`), so Aero Snap, Snap Layouts, Win+arrow, drag-to-snap, shake and native resize all work. Default for every Windows user since v2.1.30; non-Windows keeps the frameless path (`ui/native_chrome.py`)
 - **Configurable Overview tile dashboard** — drag to reorder, layout persists
 - **Skeleton loading rows** — placeholder rows while scan workers run (`ui/widgets/skeleton.py`)
 - **Feature Guide** — filterable index of feature entries with Open buttons (`ui/pages/discover_page.py`)

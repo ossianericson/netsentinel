@@ -875,8 +875,18 @@ Required alternatives:
 
 Never reintroduce subprocess PIPE in `get_network_info()`, `get_dhcp_info()`, or `get_interface_details()`.
 
-### RULE-WIN2 (blocking): nativeEvent HTMAXBUTTON requires full NC message interception on frameless windows
-Returning `HTMAXBUTTON` from `nativeEvent(WM_NCHITTEST)` on a frameless window crashes via `STATUS_ACCESS_VIOLATION`. Must also intercept `WM_NCMOUSEMOVE`, `WM_NCLBUTTONDOWN`, `WM_NCLBUTTONUP` with `wParam==HTMAXBUTTON`. Do not re-add a partial implementation covering only `WM_NCHITTEST`.
+### RULE-WIN2 (blocking): Claiming HTMAXBUTTON means owning the full NC message set
+Returning `HTMAXBUTTON` from `WM_NCHITTEST` while leaving Windows to handle the button's
+mouse messages leaves it half-driving a caption button we draw ourselves. Intercept
+`WM_NCMOUSEMOVE`, `WM_NCLBUTTONDOWN` and `WM_NCLBUTTONUP` (`wParam == HTMAXBUTTON`) and
+`WM_NCMOUSELEAVE` too — never a partial implementation covering only `WM_NCHITTEST`.
+
+The window must also actually *have* a caption before you claim one (RULE-WIN9): on the
+frameless `WS_POPUP` this crashed with `STATUS_ACCESS_VIOLATION` / `0x8001010d`. The correct
+window shape is `ui/native_chrome.py`.
+
+Enforced by `tests/test_native_chrome.py` (handled-message-set completeness + an AST guard
+that the native callback touches zero Qt objects).
 
 ### RULE-WIN3 (blocking): Qt test files must never create QApplication at module level
 Creating `QApplication` at module import time (collection phase) bypasses conftest.py's session fixture and can cause cumulative C-level heap/stack corruption (`STATUS_STACK_BUFFER_OVERRUN`) that surfaces hundreds of tests later.
@@ -1057,6 +1067,105 @@ Alternative: set `Qt.WidgetAttribute.WA_DeleteOnClose` so the widget self-destru
 (then clear the handle in a `destroyed` slot). Either way, a parented widget you recreate on a
 repeatable action must have a defined destruction point. Regression coverage for the palette:
 `tests/test_command_palette_leak.py`.
+
+### RULE-WIN9 (blocking): Never claim a native window capability the window's Win32 style does not actually have
+
+**Mechanism / trap:** `Qt.FramelessWindowHint` does not produce "a normal window without
+decoration" — it produces a bare **`WS_POPUP`** with **no `WS_CAPTION`, no `WS_SYSMENU`, no
+`WS_THICKFRAME`, no `WS_MIN/MAXIMIZEBOX`** (measured on the live app,
+`docs/spikes/window-snap-subclass.md`). Windows then genuinely does not consider it a
+maximizable, snappable, caption-bearing window — even `showMaximized()` leaves
+`GetWindowPlacement().showCmd == SW_SHOWNORMAL` and `IsZoomed() == False`, because Qt fakes
+maximize by *resizing the popup to the work area*.
+
+Answering a native hit-test with a value that asserts a capability the style lacks — the
+canonical case is returning **`HTMAXBUTTON`** (i.e. "the cursor is over a *caption button*")
+from `WM_NCHITTEST` on a captionless `WS_POPUP` — drives Windows' caption-button / Snap-Layout
+machinery against a window that has no caption. That is an invalid state inside DWM/Shell, and
+it surfaces as a **native SEH fault** (`0x8001010d RPC_E_CANTCALLOUT_ININPUTSYNCCALL`) when it
+happens inside an input-synchronous `SendMessage`. No Python `try/except` can catch it; it is
+not a Python exception. Hardening the *callback* cannot fix it — the callback is not the bug,
+the **window** is malformed.
+
+```python
+# WRONG — HTMAXBUTTON on a window whose style has no WS_CAPTION/WS_SYSMENU
+self.setWindowFlags(Qt.WindowType.FramelessWindowHint)   # -> WS_POPUP
+...
+if msg == WM_NCHITTEST and over_max_button():
+    return HTMAXBUTTON          # lies to DWM; Snap Layouts faults
+
+# CORRECT — keep a REAL window, just stop Windows painting the frame
+# (what VS Code/Electron, Windows Terminal and Chrome all do)
+#   keep WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MIN/MAXIMIZEBOX
+#   handle WM_NCCALCSIZE (wParam=TRUE -> return 0) so the client area covers
+#   the whole window: the frame stops being DRAWN but every native behaviour
+#   it carries (snap, drag, resize, Alt+Space, shake) is preserved.
+```
+
+Corollary: the native callback must touch **zero Qt objects**. Cache any needed widget
+geometry on `resizeEvent`/`moveEvent` and use `GetCursorPos`, not `QCursor.pos()` — a ctypes
+callback that blocks acquiring the GIL inside a synchronous `SendMessage` is its own route to
+`IsHungAppWindow`.
+
+Before asserting any native capability, verify the style actually carries it:
+`GetWindowLongW(hwnd, GWL_STYLE)` and check the bit. Related: RULE-WIN2 (never ship a partial
+NC-message implementation).
+
+### RULE-WIN10 (blocking): UIAutomationCore must be warmed up at startup — and `0x8001010d` is not always a malformed window
+
+**Mechanism.** The *first* `WM_GETOBJECT` a process ever answers makes Qt's windows plugin call
+`UiaReturnRawElementProvider`. On that first call — and only the first — UIAutomationCore
+lazily initialises itself, and that init needs an **outgoing COM call**:
+
+```
+UiaReturnRawElementProvider -> CheckInit -> DoInit -> CUIAutomation7::FinalConstruct
+  -> BlockingCoreDispatcher::CreateAndRegisterBlockingCore -> combase!CoCreateInstance
+```
+
+`WM_GETOBJECT` is *always* delivered as an input-synchronous, cross-process `SendMessage`, and
+COM refuses outgoing calls from a thread dispatching one → `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`
+(`0x8001010d`), raised as SEH. `faulthandler` installs a **vectored (first-chance)** handler, so
+it logs the exception to `netsentinel_crash.log` and returns `EXCEPTION_CONTINUE_SEARCH`; UIA
+then handles the HRESULT and **the process carries on normally**. Nothing crashes — but the
+chaos harness fails any run that appends a new crash-log entry (RULE-CHAOS2, correctly), so
+every launch aborted its phase.
+
+**The trap that burned three fix attempts.** The fault fires exactly once per process, whenever
+the first UIA client happens to connect — and the harness connects during startup, so the Python
+traceback always pointed at `_splash_msg`/`processEvents`. That is *where the stack happened to
+be*, not the cause. Measured: with no UIA client the app starts perfectly clean; attach a client
+15 s **after** `app.exec()` is pumping and the fault fires just the same. The splash, the nested
+`processEvents()` pump, the tray icon's `Shell_NotifyIcon`, and native chrome are all innocent —
+each was blamed and "fixed" in turn, and the fault survived every time. Reproduced in a bare
+40-line PyQt app with none of them present.
+
+**Correct fix:** do the one-time init yourself, from a context where the COM call-out is legal.
+A **same-thread** `SendMessage` is a direct WndProc call — the thread is not inside an
+input-synchronous call — so the `CoCreateInstance` succeeds:
+
+```python
+from ui.uia_warmup import warm_up_uia_provider
+warm_up_uia_provider(int(_splash.winId()))   # ~3 ms, once, during startup
+```
+
+Warm on the **splash** (two accessible nodes), never the Dashboard (~60 pages of accessible
+tree). Only that throwaway window ever receives the synthetic message; the main window's
+provider is still built solely from real client requests.
+
+**Corollaries.**
+- Do **not** suppress `0x8001010d` in the crash log or the harness. RULE-WIN9 produces the same
+  code from a genuinely malformed window — the two are distinguishable only by their native
+  stack, so blanket-filtering the code blinds the crash net to a real bug class.
+- Never validate an accessibility fix on "the fault stopped" alone. A warmup that registers a
+  broken provider silences the fault **and** leaves the app undriveable by UIA. Always assert
+  the client can still read the tree, or you will ship a worse regression than the bug.
+- A Python traceback for an SEH fault names the thread's current frame, not the culprit. Get the
+  native stack (`procdump -e 1 -f <code>` + `cdb -z <dump> -c ".ecxr; kb"`, RULE-DBG2) before
+  believing any theory about who raised it.
+
+Enforced by `tests/test_uia_warmup.py` (constants, provider-failure handling, idempotency, an
+AST guard that `app.py` still calls the warmup, and a `monkey`-marked end-to-end that launches
+the real `app.py` under a redirected `LOCALAPPDATA` and asserts the crash log stays clean).
 
 ---
 
@@ -1380,6 +1489,34 @@ results: `tools/run_all_monkey_tests.ps1`, or `python tools/monkey_test.py --sou
 with `bump_version.py`. Crashes/hangs in the pasted results → fix them first, then ask for a
 re-run before bumping.
 
+### RULE-CHAOS2 (blocking): A control may be excluded from the monkey test ONLY for an app-lifecycle reason — never because clicking it crashed
+
+`tools/monkey_test.py`'s `_BLACKLIST` and the spatial filters in `_enabled_controls()` are the
+only things standing between a UI regression and the user. Every exclusion is a permanent hole
+in that net, so the bar is: **the control ends the run by design** — it terminates the app
+(close, quit), hides it from UIA (minimize), or triggers an OS-modal/external flow the harness
+cannot dismiss (file pickers, winget, shutdown).
+
+"Clicking it crashed the app" is **never** a valid reason. A crash is the harness doing its job;
+the fix is to fix the app.
+
+This is not hypothetical. Every window-chrome button was blacklisted (with comments citing a
+"confirmed crash cause from seed=99") *and* `_enabled_controls()` spatially skipped every
+`Button` in the top 60px of the window — the whole header. Not one chaos iteration in the
+project's history ever clicked the maximize button, which is exactly how a maximize button that
+actually called `showFullScreen()` (covering the taskbar) shipped to users.
+
+Two further consequences worth knowing:
+- **An empty string in `_BLACKLIST` disables the entire run.** `_is_blacklisted()` does
+  `any(pat in combined for pat in _BLACKLIST)`, and `""` is a substring of every name — one
+  blank entry skips every control while the run still reports success.
+- **A native SEH fault (e.g. `0x8001010d`, RULE-WIN9) does not kill the process**, so neither
+  the liveness check nor the hang check sees it. `faulthandler` writing to
+  `netsentinel_crash.log` is the only record; the harness must fail a run on any *new* entry
+  (the log is append-only and never rotated — baseline its size at run start, never `grep -c`).
+
+Enforced by `tests/test_monkey_chrome_coverage.py`.
+
 ### RULE-PACE1 (required): No more than 8 commits in a single day without a stabilization pause
 
 High-velocity days correlate directly with increased fix density in the subsequent 2–3 days. When 8 commits are reached in a calendar day,
@@ -1554,7 +1691,10 @@ Currently tool-enforced (high reliability):
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically
 - RULE-WIN7 → `test_widget_visibility_order.py`
 - RULE-WIN8 → `test_command_palette_leak.py` (palette case only — no general AST guard yet)
+- RULE-CHAOS2 → `test_monkey_chrome_coverage.py` (blacklist invariants + chrome-action coverage)
 - RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
+- RULE-WIN2 → `test_native_chrome.py` (NC-message-set completeness + no-Qt-in-callback AST guard)
+- RULE-WIN10 → `test_uia_warmup.py` (AST guard that app.py calls the warmup + `monkey`-marked e2e)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry
