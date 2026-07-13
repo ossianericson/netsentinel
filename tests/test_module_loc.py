@@ -161,7 +161,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15).
     # Natural split if needed: split update vs. scan result methods.
-    "pages/home_data_mixin.py": 1367,  # Sprint 9: +S9-6 _apply_last_visit_style(); actual 1,167 + 200 margin
+    "pages/home_data_mixin.py": 1573,  # Sprint 9: +S9-6 _apply_last_visit_style(); bugfix: Network Logger Scan Center row now reads live registry state instead of a hardcoded "never"; actual 1,373 + 200 margin
 
     # home_widgets.py — core animated widgets + grade helpers + _MiniCard/_AlertRow.
     # Sprint 17: FreshnessStrip/GettingStartedCard/_GradeBreakdownDialog/Welcome pages

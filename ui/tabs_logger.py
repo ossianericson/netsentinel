@@ -365,6 +365,7 @@ class _LoggerTabMixin:
 
     @pyqtSlot()
     def _toggle_logger(self):
+        import time as _time
         if self._logger_worker and self._logger_worker.isRunning():
             # Stop
             self._logger_worker.stop_logger()
@@ -374,11 +375,11 @@ class _LoggerTabMixin:
             self._home_page.set_monitoring_status(False)
             if hasattr(self, "_monitor_overview_page"):
                 self._monitor_overview_page.set_logger_running(False)
+            self._nav_set_scan_state(L.NETWORK_LOGGER, "fresh", ts=_time.time())
             from ui.widgets.toast import ToastManager
             ToastManager.show("Network Logger stopped", "info")
         else:
             # Start
-            import time as _time
             from workers.scan_worker import LoggerWorker
             interval = self._log_interval.value()
             rotation_h = self._log_rotation_vals[self._log_rotation.currentIndex()]
@@ -409,6 +410,7 @@ class _LoggerTabMixin:
             self._home_page.set_monitoring_status(True, "", 0)
             if hasattr(self, "_monitor_overview_page"):
                 self._monitor_overview_page.set_logger_running(True)
+            self._nav_set_scan_state(L.NETWORK_LOGGER, "running", ts=_time.time())
             # Mark logger as ever-started (used by Getting Started checklist and Diagnosis page)
             _qs2 = QSettings("NetSentinel", "NetSentinel")
             _qs2.setValue("logger_started_once", True)

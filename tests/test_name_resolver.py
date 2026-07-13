@@ -27,6 +27,47 @@ def test_resolve_batch_returns_iterable():
     assert results is not None
 
 
+def _encode_dns_labels(name: str) -> bytes:
+    out = b""
+    for label in name.split("."):
+        enc = label.encode()
+        out += bytes([len(enc)]) + enc
+    return out
+
+
+def test_mdns_name_ignores_echoed_question_section(monkeypatch):
+    """Regression: a real mDNS response can echo the outgoing PTR question
+    (".in-addr.arpa" labels) back in the payload. The naive label-sequence
+    regex in _mdns_name() previously picked up "in-addr" itself as if it
+    were the resolved hostname — seen live against a real Chromecast that
+    replied without an answer section, e.g. hostname showed as "in-addr"
+    on the DHCP Leases page instead of being left blank.
+    """
+    from modules import name_resolver
+
+    ip = "192.168.68.60"
+    arpa = "60.68.168.192.in-addr.arpa"
+    header = b"\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+    question = _encode_dns_labels(arpa) + b"\x00\x00\x0c\x00\x01"
+    fake_response = header + question  # echoed question only, no real answer
+
+    class _FakeSocket:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def settimeout(self, t): pass
+        def sendto(self, data, addr): pass
+        def recvfrom(self, n): return (fake_response, ("224.0.0.251", 5353))
+
+    monkeypatch.setattr(name_resolver.socket, "socket", _FakeSocket)
+
+    result = name_resolver._mdns_name(ip)
+    assert result != "in-addr", (
+        "the echoed .in-addr.arpa question label must not be returned as a hostname"
+    )
+    assert result == ""
+
+
 def test_rdns_helper_returns_string():
     from modules.name_resolver import _rdns
     result = _rdns("127.0.0.1", timeout=0.5)

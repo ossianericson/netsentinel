@@ -74,6 +74,7 @@ class _NavBuilderMixin:
         L.EXPOSED_TO_INTERNET:     2 * 3600,
         L.FULL_DEVICE_DISCOVERY:   2 * 3600,
         L.SERVICE_DIAGNOSTICS:    30 * 60,
+        L.NETWORK_LOGGER:          6 * 3600,
     }
     _DEFAULT_FRESH_SECONDS: int = 3600
 

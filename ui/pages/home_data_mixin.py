@@ -1349,8 +1349,13 @@ class _HomeDataMixin:
                 state = _sec_state
                 ts    = _sec_ts
             elif reg_key == "_logger":
-                state = "never"
-                ts    = 0.0
+                # Network Logger is a continuous monitor, not a one-shot scan —
+                # "running" is a genuine live state here, not an interrupted
+                # scan, so (unlike the generic branch below) it must not be
+                # downgraded to "never".
+                entry = registry.get("Network Logger", {})
+                state = entry.get("state", "never")
+                ts    = entry.get("ts", 0.0) or 0.0
             else:
                 entry = registry.get(reg_key, {})
                 state = entry.get("state", "never")
@@ -1362,4 +1367,7 @@ class _HomeDataMixin:
             dot.setStyleSheet(
                 f"font-size:10px; color:{color}; background:transparent; border:none;"
             )
-            age_lbl.setText(_scan_age_str(ts) if ts else "Never")
+            if state == "running":
+                age_lbl.setText("Running")
+            else:
+                age_lbl.setText(_scan_age_str(ts) if ts else "Never")
