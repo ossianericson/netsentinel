@@ -15,8 +15,8 @@ from typing import Optional
 
 from PyQt6.QtCore import QSettings
 
-from ui.styles import AMBER, GREEN, RED, TEXT_MUTED
 from ui.widgets.hub_plugin_template import _TEMPLATE
+from ui import styles as _s
 
 # _TEMPLATE is re-exported here for hub_card.py / plugin_guide.py / plugin_wizard_mixin.py
 # and the plugin tests. Declaring it in __all__ marks the re-export as intentional so
@@ -444,30 +444,30 @@ def _age_str(ts: float) -> str:
 
 def _rsrp_color(v) -> str:
     if v is None:
-        return TEXT_MUTED
+        return _s.TEXT_MUTED
     try:
         f = float(v)
     except (TypeError, ValueError):
-        return TEXT_MUTED
+        return _s.TEXT_MUTED
     if f >= -80:
-        return GREEN
+        return _s.GREEN
     if f >= -100:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED
 
 
 def _sinr_color(v) -> str:
     if v is None:
-        return TEXT_MUTED
+        return _s.TEXT_MUTED
     try:
         f = float(v)
     except (TypeError, ValueError):
-        return TEXT_MUTED
+        return _s.TEXT_MUTED
     if f >= 13:
-        return GREEN
+        return _s.GREEN
     if f >= 5:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED
 
 
 def _classify_error(msg: str) -> str:

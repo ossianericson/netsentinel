@@ -33,7 +33,8 @@ from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER, WHITE, alpha, themed_ss
+from ui import styles as _s
+from ui.styles import alpha, themed_ss
 
 
 class PageHeaderBar(QWidget):
@@ -43,10 +44,10 @@ class PageHeaderBar(QWidget):
     """
 
     _CHIP_STYLE = (
-        f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
+        f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
         " padding: 0 0 0 0;"
     )
-    _SEP_STYLE = f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
+    _SEP_STYLE = f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
 
     _BANNER_HEIGHT = 30
 
@@ -57,9 +58,7 @@ class PageHeaderBar(QWidget):
         self._banner_key = ""
         self.setFixedHeight(self._base_height)
         self.setObjectName("PageHeaderBar")
-        self.setStyleSheet(
-            f"#PageHeaderBar {{ background: transparent; border-bottom: 1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self, "#PageHeaderBar {{ background: transparent; border-bottom: 1px solid {BORDER}; }}")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -80,17 +79,13 @@ class PageHeaderBar(QWidget):
             left = None
 
         self._title_lbl = QLabel(title)
-        self._title_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:14px; font-weight:600;"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._title_lbl, "color:{TEXT_PRIMARY}; font-size:14px; font-weight:600;"
+            " background:transparent; border:none;")
 
         if left is not None:
             left.addWidget(self._title_lbl)
             self._subtitle_lbl = QLabel(subtitle)
-            self._subtitle_lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-            )
+            _s.themed_ss(self._subtitle_lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
             left.addWidget(self._subtitle_lbl)
             outer.addLayout(left)
         else:
@@ -120,21 +115,17 @@ class PageHeaderBar(QWidget):
 
         self._banner_lbl = QLabel("")
         self._banner_lbl.setWordWrap(True)
-        self._banner_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._banner_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         banner_lay.addWidget(self._banner_lbl, 1)
 
         self._banner_dismiss_btn = QPushButton("×")
         self._banner_dismiss_btn.setFixedSize(18, 18)
         self._banner_dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._banner_dismiss_btn.setToolTip("Dismiss — won't show again")
-        self._banner_dismiss_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:13px;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(self._banner_dismiss_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:13px;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}")
         self._banner_dismiss_btn.clicked.connect(self._dismiss_banner)
         banner_lay.addWidget(self._banner_dismiss_btn)
 
@@ -206,11 +197,11 @@ class PageHeaderBar(QWidget):
         self._help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._help_btn.setToolTip("Page help")
         self._help_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-            f" font-weight:bold; border:1px solid {alpha(WHITE, 0x22)}; border-radius:11px; padding:0; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; background:transparent; }}"
-            f"QPushButton:checked {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; font-size:11px;"
+            f" font-weight:bold; border:1px solid {alpha(_s.WHITE, 0x22)}; border-radius:11px; padding:0; }}"
+            f"QPushButton:hover {{ border-color:{_s.ACCENT}; color:{_s.ACCENT}; background:transparent; }}"
+            f"QPushButton:checked {{ background:{_s.ACCENT}; color:{_s.WHITE}; border-color:{_s.ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
         )
         self._help_btn.setCheckable(True)
         self._help_btn.toggled.connect(self._toggle_help)
@@ -240,7 +231,6 @@ class PageHeaderBar(QWidget):
         super().hideEvent(event)
 
     def refresh_theme(self) -> None:
-        from ui import styles as _s
         PageHeaderBar._CHIP_STYLE = (
             f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
             " padding: 0 0 0 0;"

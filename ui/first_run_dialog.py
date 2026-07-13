@@ -40,12 +40,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_CARD, BORDER,
-    GREEN, OVERLAY_BG, OVERLAY_BG2, OVERLAY_BG3,
-    OVERLAY_BLUE2, OVERLAY_FG2, OVERLAY_FG3, OVERLAY_ORANGE,
-    TEXT_PRIMARY, WHITE,
-)
+from ui import styles as _s
 
 _FIRST_RUN_KEY = "ui/first_run_done"
 _COACH_KEY     = "onboarding_v6_done"
@@ -71,7 +66,7 @@ def mark_first_run_done() -> None:
 _SLIDES = [
     {
         "icon":  "◆",
-        "color": ACCENT,
+        "color": "ACCENT",
         "title": "Welcome to NetSentinel",
         "body":  (
             "A professional-grade network scanner for your home or office. "
@@ -81,7 +76,7 @@ _SLIDES = [
     },
     {
         "icon":  "◉",
-        "color": GREEN,
+        "color": "GREEN",
         "title": "Discover & protect",
         "body":  (
             "Every phone, TV, smart speaker and printer appears on your map in "
@@ -92,7 +87,7 @@ _SLIDES = [
     },
     {
         "icon":  "▶",
-        "color": OVERLAY_ORANGE,
+        "color": "OVERLAY_ORANGE",
         "title": "Monitor over time",
         "body":  (
             "Track internet speed, latency, 5G signal and uptime continuously. "
@@ -143,9 +138,9 @@ class WelcomeOverlay(QWidget):
         card = QFrame(self)
         card.setObjectName("welcomeCard")
         card.setFixedSize(self._CARD_W, self._CARD_H)
-        card.setStyleSheet(
-            "QFrame#welcomeCard { background:OVERLAY_BG; border:1px solid OVERLAY_BG3;"
-            " border-radius:16px; }"
+        _s.themed_ss(card,
+            "QFrame#welcomeCard {{ background:{OVERLAY_BG}; border:1px solid {OVERLAY_BG3};"
+            " border-radius:16px; }}"
         )
 
         root = QVBoxLayout(card)
@@ -174,13 +169,11 @@ class WelcomeOverlay(QWidget):
         except Exception:
             logo_lbl.setText("◆")
             logo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            logo_lbl.setStyleSheet(
-                f"color:{ACCENT}; font-size:18px; background:transparent; border:none;"
-            )
+            _s.themed_ss(logo_lbl, "color:{ACCENT}; font-size:18px; background:transparent; border:none;")
 
         app_name_lbl = QLabel("NetSentinel")
-        app_name_lbl.setStyleSheet(
-            "color:OVERLAY_FG3; font-size:12px; font-weight:600;"
+        _s.themed_ss(app_name_lbl,
+            "color:{OVERLAY_FG3}; font-size:12px; font-weight:600;"
             " background:transparent; border:none;"
         )
         brand_row.addWidget(logo_lbl)
@@ -190,11 +183,11 @@ class WelcomeOverlay(QWidget):
         # Skip link (top-right)
         self._skip_btn = QPushButton("Skip")
         self._skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._skip_btn.setStyleSheet(
-            "QPushButton { background:transparent; color:STATUS_OFFLINE; border:none;"
-            " font-size:12px; }"
-            "QPushButton:hover { color:OVERLAY_FG3; }"
-            "QPushButton:pressed { color:STATUS_OFFLINE; }"
+        _s.themed_ss(self._skip_btn,
+            "QPushButton {{ background:transparent; color:{STATUS_OFFLINE}; border:none;"
+            " font-size:12px; }}"
+            "QPushButton:hover {{ color:{OVERLAY_FG3}; }}"
+            "QPushButton:pressed {{ color:{STATUS_OFFLINE}; }}"
         )
         self._skip_btn.clicked.connect(self._on_skip)
         brand_row.addWidget(self._skip_btn)
@@ -218,11 +211,11 @@ class WelcomeOverlay(QWidget):
         self._dots: list[QLabel] = []
         for i in range(_TOTAL_SLIDES):
             dot = QLabel("●")
-            dot.setStyleSheet(
-                f"color:{ACCENT}; font-size:10px; background:transparent; border:none;"
-                if i == 0 else
-                "color:OVERLAY_BG3; font-size:10px; background:transparent; border:none;"
-            )
+            _s.themed_ss(dot, lambda active=(i == 0): (
+                f"color:{_s.ACCENT}; font-size:10px; background:transparent; border:none;"
+                if active else
+                f"color:{_s.OVERLAY_BG3}; font-size:10px; background:transparent; border:none;"
+            ))
             self._dots.append(dot)
             dots_row.addWidget(dot)
         dots_row.addStretch()
@@ -236,24 +229,20 @@ class WelcomeOverlay(QWidget):
         self._back_btn = QPushButton("← Back")
         self._back_btn.setFixedHeight(38)
         self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._back_btn.setStyleSheet(
-            f"QPushButton {{ background:{OVERLAY_BG2}; color:{OVERLAY_FG3}; border:none;"
-            f" border-radius:8px; font-size:13px; }}"
-            f"QPushButton:hover {{ background:{OVERLAY_BG3}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{OVERLAY_BG}; color:{OVERLAY_FG3}; }}"
-        )
+        _s.themed_ss(self._back_btn, "QPushButton {{ background:{OVERLAY_BG2}; color:{OVERLAY_FG3}; border:none;"
+            " border-radius:8px; font-size:13px; }}"
+            "QPushButton:hover {{ background:{OVERLAY_BG3}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{OVERLAY_BG}; color:{OVERLAY_FG3}; }}")
         self._back_btn.clicked.connect(self._go_back)
         self._back_btn.setVisible(False)
 
         self._next_btn = QPushButton("Next  →")
         self._next_btn.setFixedHeight(38)
         self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._next_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:8px; font-size:13px; font-weight:600; }}"
-            f"QPushButton:hover {{ background:{OVERLAY_BLUE2}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._next_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:8px; font-size:13px; font-weight:600; }}"
+            "QPushButton:hover {{ background:{OVERLAY_BLUE2}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._next_btn.clicked.connect(self._go_next)
 
         btn_row.addWidget(self._back_btn)
@@ -272,17 +261,17 @@ class WelcomeOverlay(QWidget):
 
         icon_lbl = QLabel(slide["icon"])
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_lbl.setStyleSheet(
-            f"color:{slide['color']}; font-size:48px;"
+        _s.themed_ss(icon_lbl, lambda cn=slide["color"]: (
+            f"color:{getattr(_s, cn)}; font-size:48px;"
             " background:transparent; border:none;"
-        )
+        ))
         lay.addWidget(icon_lbl)
         lay.addSpacing(18)
 
         title_lbl = QLabel(slide["title"])
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_lbl.setStyleSheet(
-            "color:WHITE; font-size:20px; font-weight:700;"
+        _s.themed_ss(title_lbl,
+            "color:{WHITE}; font-size:20px; font-weight:700;"
             " background:transparent; border:none;"
         )
         lay.addWidget(title_lbl)
@@ -292,7 +281,7 @@ class WelcomeOverlay(QWidget):
         body_lbl.setWordWrap(True)
         body_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         body_lbl.setStyleSheet(
-            "color:OVERLAY_FG2; font-size:13px; line-height:1.5;"
+            f"color:{_s.OVERLAY_FG2}; font-size:13px; line-height:1.5;"
             " background:transparent; border:none;"
         )
         lay.addWidget(body_lbl)
@@ -325,11 +314,11 @@ class WelcomeOverlay(QWidget):
             "Scan my network  →" if self._slide_idx == last else "Next  →"
         )
         for i, dot in enumerate(self._dots):
-            dot.setStyleSheet(
-                f"color:{ACCENT}; font-size:10px; background:transparent; border:none;"
-                if i == self._slide_idx else
-                "color:OVERLAY_BG3; font-size:10px; background:transparent; border:none;"
-            )
+            _s.themed_ss(dot, lambda active=(i == self._slide_idx): (
+                f"color:{_s.ACCENT}; font-size:10px; background:transparent; border:none;"
+                if active else
+                f"color:{_s.OVERLAY_BG3}; font-size:10px; background:transparent; border:none;"
+            ))
 
     def _build_notif_slide(self) -> QWidget:
         """Fourth slide: notification preferences (desktop / email / skip)."""
@@ -341,17 +330,15 @@ class WelcomeOverlay(QWidget):
 
         icon_lbl = QLabel("◆")
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_lbl.setStyleSheet(
-            f"color:{ACCENT}; font-size:48px; background:transparent; border:none;"
-        )
+        _s.themed_ss(icon_lbl, "color:{ACCENT}; font-size:48px; background:transparent; border:none;")
         lay.addWidget(icon_lbl)
         lay.addSpacing(14)
 
         title_lbl = QLabel("Get notified when something changes")
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_lbl.setWordWrap(True)
-        title_lbl.setStyleSheet(
-            "color:WHITE; font-size:18px; font-weight:700;"
+        _s.themed_ss(title_lbl,
+            "color:{WHITE}; font-size:18px; font-weight:700;"
             " background:transparent; border:none;"
         )
         lay.addWidget(title_lbl)
@@ -360,7 +347,7 @@ class WelcomeOverlay(QWidget):
         self._notif_desktop_chk = QCheckBox("Desktop notifications (recommended)")
         self._notif_desktop_chk.setChecked(True)
         self._notif_desktop_chk.setStyleSheet(
-            f"color:{OVERLAY_FG2}; font-size:12px; background:transparent; border:none;"
+            f"color:{_s.OVERLAY_FG2}; font-size:12px; background:transparent; border:none;"
         )
         lay.addWidget(self._notif_desktop_chk)
         lay.addSpacing(10)
@@ -368,15 +355,13 @@ class WelcomeOverlay(QWidget):
         email_row = QHBoxLayout()
         self._notif_email_chk = QCheckBox("Email alerts — send to:")
         self._notif_email_chk.setStyleSheet(
-            f"color:{OVERLAY_FG2}; font-size:12px; background:transparent; border:none;"
+            f"color:{_s.OVERLAY_FG2}; font-size:12px; background:transparent; border:none;"
         )
         self._notif_email_edit = QLineEdit()
         self._notif_email_edit.setPlaceholderText("you@example.com")
         self._notif_email_edit.setFixedWidth(170)
-        self._notif_email_edit.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:4px; padding:3px 6px;"
-        )
+        _s.themed_ss(self._notif_email_edit, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:4px; padding:3px 6px;")
         self._notif_email_chk.stateChanged.connect(
             lambda s: self._notif_email_edit.setEnabled(
                 s == 2  # Qt.CheckState.Checked == 2
@@ -392,7 +377,7 @@ class WelcomeOverlay(QWidget):
         skip_lbl.setWordWrap(True)
         skip_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         skip_lbl.setStyleSheet(
-            f"color:{OVERLAY_FG2}; font-size:10px; background:transparent; border:none;"
+            f"color:{_s.OVERLAY_FG2}; font-size:10px; background:transparent; border:none;"
         )
         lay.addSpacing(12)
         lay.addWidget(skip_lbl)

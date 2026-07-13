@@ -138,10 +138,10 @@ class ConnectionsPage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        _kt, self._lbl_total    = _shared_kpi_tile("Total",       "—", _s.ACCENT)
-        _ke, self._lbl_estab    = _shared_kpi_tile("Established", "—", _s.GREEN)
-        _kx, self._lbl_external = _shared_kpi_tile("External",    "—", _s.AMBER)
-        _kb, self._lbl_blocked  = _shared_kpi_tile("FW Blocked",  "—", _s.RED)
+        _kt, self._lbl_total    = _shared_kpi_tile("Total",       "—", "ACCENT")
+        _ke, self._lbl_estab    = _shared_kpi_tile("Established", "—", "GREEN")
+        _kx, self._lbl_external = _shared_kpi_tile("External",    "—", "AMBER")
+        _kb, self._lbl_blocked  = _shared_kpi_tile("FW Blocked",  "—", "RED")
         for t in (_kt, _ke, _kx, _kb):
             kpi_row.addWidget(t, 1)
         root.addLayout(kpi_row)

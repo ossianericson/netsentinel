@@ -21,7 +21,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import QApplication, QMenu, QTableWidget
 
-from ui.styles import BG_CARD, BORDER, TABLE_SEL, TEXT_PRIMARY
+from ui import styles as _s
 
 
 def install_copy_menu(
@@ -49,11 +49,9 @@ def _show(
     col = item.column()
 
     menu = QMenu(table)
-    menu.setStyleSheet(
-        f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
-        f"QMenu::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        f"QMenu::separator {{ background:{BORDER}; height:1px; margin:3px 6px; }}"
-    )
+    _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
+        "QMenu::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+        "QMenu::separator {{ background:{BORDER}; height:1px; margin:3px 6px; }}")
 
     copy_cell_act = menu.addAction("Copy cell")
     copy_row_act  = menu.addAction("Copy row")

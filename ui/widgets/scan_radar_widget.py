@@ -12,7 +12,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
 
-from ui.styles import RADAR_BG, RADAR_GREEN, RADAR_GRID, RADAR_TRAIL
+from ui import styles as _s
 
 
 class ScanRadarWidget(QWidget):
@@ -69,15 +69,15 @@ class ScanRadarWidget(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # ── Background circle ─────────────────────────────────────────────────
-        p.setBrush(QColor(RADAR_BG))
-        p.setPen(QPen(QColor(RADAR_GRID), 1))
+        p.setBrush(QColor(_s.RADAR_BG))
+        p.setPen(QPen(QColor(_s.RADAR_GRID), 1))
         p.drawEllipse(
             int(cx - radius), int(cy - radius),
             int(radius * 2),  int(radius * 2),
         )
 
         # ── Concentric rings + spoke grid ─────────────────────────────────────
-        p.setPen(QPen(QColor(RADAR_GRID), 1))
+        p.setPen(QPen(QColor(_s.RADAR_GRID), 1))
         for i in range(1, 5):
             r = radius * i / 4
             p.drawEllipse(
@@ -96,7 +96,7 @@ class ScanRadarWidget(QWidget):
         for i in range(self._TRAIL_STEPS):
             trail_angle = (self._sweep_angle - i * self._DEGREES_TICK) % 360
             alpha = int(180 * (1 - i / self._TRAIL_STEPS))
-            colour = QColor(RADAR_TRAIL)
+            colour = QColor(_s.RADAR_TRAIL)
             colour.setAlpha(alpha)
             p.setPen(QPen(colour, 2))
             rad = math.radians(trail_angle)
@@ -107,7 +107,7 @@ class ScanRadarWidget(QWidget):
             )
 
         # ── Sweep arm ─────────────────────────────────────────────────────────
-        p.setPen(QPen(QColor(RADAR_GREEN), 2))
+        p.setPen(QPen(QColor(_s.RADAR_GREEN), 2))
         sweep_rad = math.radians(self._sweep_angle)
         p.drawLine(
             int(cx), int(cy),

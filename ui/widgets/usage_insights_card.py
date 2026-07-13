@@ -34,10 +34,7 @@ from modules.traffic_insights import (
     compute_plan_utilization,
     format_insight_summary,
 )
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, BG_CARD, BORDER,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 _QOS_CATEGORY_PAIR = ("Gaming", "VoIP")
 
@@ -61,10 +58,8 @@ class UsageInsightsCard(QWidget):
 
         self._frame = QFrame()
         self._frame.setObjectName("usageInsightsFrame")
-        self._frame.setStyleSheet(
-            f"QFrame#usageInsightsFrame {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:6px; }}"
-        )
+        _s.themed_ss(self._frame, "QFrame#usageInsightsFrame {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:6px; }}")
         frame_lay = QVBoxLayout(self._frame)
         frame_lay.setContentsMargins(14, 10, 14, 10)
         frame_lay.setSpacing(6)
@@ -75,28 +70,22 @@ class UsageInsightsCard(QWidget):
         self._icon_lbl = QLabel("◆")
         self._icon_lbl.setFixedWidth(28)
         self._icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icon_lbl.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_MUTED};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._icon_lbl, "font-size:18px; font-weight:bold; color:{TEXT_MUTED};"
+            " background:transparent; border:none;")
 
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
 
         self._headline_lbl = QLabel("Usage insights")
-        self._headline_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._headline_lbl, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         self._headline_lbl.setWordWrap(True)
 
         self._sub_lbl = QLabel(
             "Start App Traffic monitoring to see what your household used your "
             "bandwidth for this week."
         )
-        self._sub_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._sub_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._sub_lbl.setWordWrap(True)
 
         text_col.addWidget(self._headline_lbl)
@@ -106,12 +95,10 @@ class UsageInsightsCard(QWidget):
         self._cta_btn.setFixedHeight(28)
         self._cta_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cta_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self._cta_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; padding:0 12px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._cta_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; padding:0 12px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._cta_btn.clicked.connect(lambda: self.navigate_to.emit("App Traffic"))
 
         top_row.addWidget(self._icon_lbl)
@@ -121,9 +108,7 @@ class UsageInsightsCard(QWidget):
 
         # ISP plan utilization line (S6-4) — hidden unless a cap is configured
         self._plan_lbl = QLabel("")
-        self._plan_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._plan_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
         self._plan_lbl.setVisible(False)
         frame_lay.addWidget(self._plan_lbl)
 
@@ -131,18 +116,14 @@ class UsageInsightsCard(QWidget):
         qos_row = QHBoxLayout()
         self._qos_lbl = QLabel("")
         self._qos_lbl.setWordWrap(True)
-        self._qos_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._qos_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._qos_dismiss_btn = QPushButton("✕")
         self._qos_dismiss_btn.setFixedSize(18, 18)
         self._qos_dismiss_btn.setFlat(True)
         self._qos_dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._qos_dismiss_btn.setStyleSheet(
-            f"QPushButton {{ color:{TEXT_SECONDARY}; background:transparent; border:none; font-size:9px; }}"
-            f"QPushButton:hover   {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _s.themed_ss(self._qos_dismiss_btn, "QPushButton {{ color:{TEXT_SECONDARY}; background:transparent; border:none; font-size:9px; }}"
+            "QPushButton:hover   {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
         self._qos_dismiss_btn.setToolTip("Dismiss this suggestion")
         self._qos_dismiss_btn.clicked.connect(self._dismiss_qos_suggestion)
         qos_row.addWidget(self._qos_lbl, 1)
@@ -187,10 +168,8 @@ class UsageInsightsCard(QWidget):
         if not insight.has_data:
             return
         self._has_data = True
-        self._icon_lbl.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{ACCENT};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._icon_lbl, "font-size:18px; font-weight:bold; color:{ACCENT};"
+            " background:transparent; border:none;")
         self._headline_lbl.setText("Usage insights")
         self._sub_lbl.setText(format_insight_summary(insight))
         self._cta_btn.setText("View Details →")

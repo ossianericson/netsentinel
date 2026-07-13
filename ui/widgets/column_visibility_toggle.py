@@ -12,17 +12,17 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QTableWidget
 
-from ui.styles import ACCENT, ACCENT_DARK, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, WHITE
+from ui import styles as _s
 
 _SS_ACTIVE = (
-    f"QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
-    f"border-radius:3px;padding:0 8px;font-size:10px;}}"
-    f"QPushButton:hover{{background:{ACCENT};}}"
+    "QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
+    "border-radius:3px;padding:0 8px;font-size:10px;}}"
+    "QPushButton:hover{{background:{ACCENT};}}"
 )
 _SS_INACTIVE = (
-    f"QPushButton{{background:transparent;color:{TEXT_MUTED};border:none;"
-    f"border-radius:3px;padding:0 8px;font-size:10px;}}"
-    f"QPushButton:hover{{background:{BG_DARK};color:{TEXT_PRIMARY};}}"
+    "QPushButton{{background:transparent;color:{TEXT_MUTED};border:none;"
+    "border-radius:3px;padding:0 8px;font-size:10px;}}"
+    "QPushButton:hover{{background:{BG_DARK};color:{TEXT_PRIMARY};}}"
 )
 
 
@@ -41,9 +41,7 @@ class ColumnVisibilityToggle(QFrame):
         self._table = table
         self._quick_columns = set(quick_columns)
         self.setFixedHeight(24)
-        self.setStyleSheet(
-            f"QFrame{{background:{BG_DARK};border:1px solid {BORDER};border-radius:4px;}}"
-        )
+        _s.themed_ss(self, "QFrame{{background:{BG_DARK};border:1px solid {BORDER};border-radius:4px;}}")
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(1, 1, 1, 1)
@@ -77,8 +75,8 @@ class ColumnVisibilityToggle(QFrame):
         self._set_columns(mode)
 
     def _refresh_styles(self, mode: str) -> None:
-        self._btn_quick.setStyleSheet(_SS_ACTIVE if mode == "quick" else _SS_INACTIVE)
-        self._btn_full.setStyleSheet(_SS_ACTIVE if mode == "full" else _SS_INACTIVE)
+        _s.themed_ss(self._btn_quick, _SS_ACTIVE if mode == "quick" else _SS_INACTIVE)
+        _s.themed_ss(self._btn_full, _SS_ACTIVE if mode == "full" else _SS_INACTIVE)
 
     def _set_columns(self, mode: str) -> None:
         full = mode == "full"

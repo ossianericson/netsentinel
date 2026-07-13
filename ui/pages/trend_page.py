@@ -186,9 +186,9 @@ class TrendPage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         _kh, self._kpi_hosts_lbl    = _shared_kpi_tile("Hosts Analysed", "—")
-        _kc, self._kpi_critical_lbl = _shared_kpi_tile("Critical",        "—", _s.RED)
-        _kw, self._kpi_warnings_lbl = _shared_kpi_tile("Warnings",        "—", _s.AMBER)
-        _kl, self._kpi_clean_lbl    = _shared_kpi_tile("Clean",           "—", _s.GREEN)
+        _kc, self._kpi_critical_lbl = _shared_kpi_tile("Critical",        "—", "RED")
+        _kw, self._kpi_warnings_lbl = _shared_kpi_tile("Warnings",        "—", "AMBER")
+        _kl, self._kpi_clean_lbl    = _shared_kpi_tile("Clean",           "—", "GREEN")
         for w in (_kh, _kc, _kw, _kl):
             kpi_row.addWidget(w)
         kpi_row.addStretch()

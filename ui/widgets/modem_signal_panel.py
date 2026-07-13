@@ -10,11 +10,8 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QVBoxLayout,
 )
 
-from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BORDER,
-    GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
-)
 from ui.widgets.hub_helpers import _rsrp_color
+from ui import styles as _s
 
 
 class _ModemSignalPanelMixin:
@@ -27,35 +24,31 @@ class _ModemSignalPanelMixin:
     def _build_signal_panel(self) -> QFrame:
         panel = QFrame()
         panel.setObjectName("sigPanel")
-        panel.setStyleSheet(
-            f"QFrame#sigPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-left:3px solid {ACCENT}; }}"
-        )
+        _s.themed_ss(panel, "QFrame#sigPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-left:3px solid {ACCENT}; }}")
         root = QVBoxLayout(panel)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        _lbl_style   = f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;"
-        _val_style   = f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold; border:none; background:transparent;"
-        _hdr_style   = f"border:none; border-bottom:1px solid {BORDER}; background:{BG_CARD};"
+        _lbl_style   = "color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;"
+        _val_style   = "color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold; border:none; background:transparent;"
+        _hdr_style   = "QFrame {{ border:none; border-bottom:1px solid {BORDER}; background:{BG_CARD}; }}"
 
         # ── header strip ─────────────────────────────────────────────────────
         hdr = QFrame()
-        hdr.setStyleSheet(f"QFrame {{ {_hdr_style} }}")
+        _s.themed_ss(hdr, _hdr_style)
         hdr_lay = QHBoxLayout(hdr)
         hdr_lay.setContentsMargins(12, 6, 12, 6)
         hdr_lay.setSpacing(8)
 
         title = QLabel("📡  Modem signal at test time")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold; border:none; background:transparent;"
-        )
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold; border:none; background:transparent;")
         self._sig_ts = QLabel("")
-        self._sig_ts.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;")
+        _s.themed_ss(self._sig_ts, "color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;")
         self._sig_network_type = QLabel("")
-        self._sig_network_type.setStyleSheet(f"color:{ACCENT}; font-size:11px; font-weight:bold; border:none; background:transparent;")
+        _s.themed_ss(self._sig_network_type, "color:{ACCENT}; font-size:11px; font-weight:bold; border:none; background:transparent;")
         self._sig_bars = QLabel("")
-        self._sig_bars.setStyleSheet(f"color:{GREEN}; font-size:11px; border:none; background:transparent;")
+        _s.themed_ss(self._sig_bars, "color:{GREEN}; font-size:11px; border:none; background:transparent;")
 
         hdr_lay.addWidget(title)
         hdr_lay.addWidget(self._sig_ts)
@@ -66,22 +59,22 @@ class _ModemSignalPanelMixin:
 
         # ── connection strip (operator / cell / IP) ───────────────────────────
         conn = QFrame()
-        conn.setStyleSheet(f"QFrame {{ {_hdr_style} }}")
+        _s.themed_ss(conn, _hdr_style)
         conn_lay = QHBoxLayout(conn)
         conn_lay.setContentsMargins(12, 5, 12, 5)
         conn_lay.setSpacing(0)
 
         def _conn_pair(label: str, attr: str) -> None:
             lbl = QLabel(f"{label}: ")
-            lbl.setStyleSheet(_lbl_style)
+            _s.themed_ss(lbl, _lbl_style)
             val = QLabel("—")
-            val.setStyleSheet(_val_style)
+            _s.themed_ss(val, _val_style)
             setattr(self, attr, val)
             conn_lay.addWidget(lbl)
             conn_lay.addWidget(val)
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.VLine)
-            sep.setStyleSheet(f"border:none; border-left:1px solid {BORDER}; margin:0 16px;")
+            _s.themed_ss(sep, "border:none; border-left:1px solid {BORDER}; margin:0 16px;")
             conn_lay.addWidget(sep)
 
         _conn_pair("Operator", "_sig_operator")
@@ -92,7 +85,7 @@ class _ModemSignalPanelMixin:
 
         # ── two-column signal body ─────────────────────────────────────────────
         body = QFrame()
-        body.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; }}")
+        _s.themed_ss(body, "QFrame {{ background:{BG_CARD}; border:none; }}")
         body_lay = QHBoxLayout(body)
         body_lay.setContentsMargins(0, 0, 0, 0)
         body_lay.setSpacing(0)
@@ -103,33 +96,35 @@ class _ModemSignalPanelMixin:
             h.setContentsMargins(0, 1, 0, 1)
             lbl_w = QLabel(f"{label}:")
             lbl_w.setFixedWidth(58)
-            lbl_w.setStyleSheet(_lbl_style)
+            _s.themed_ss(lbl_w, _lbl_style)
             val_w = QLabel("—")
-            val_w.setStyleSheet(_val_style)
+            _s.themed_ss(val_w, _val_style)
             setattr(self, attr, val_w)
             h.addWidget(lbl_w)
             h.addWidget(val_w, 1)
             parent_lay.addLayout(h)
 
-        def _signal_col(title: str, title_color: str, border_right: bool) -> QVBoxLayout:
+        def _signal_col(title: str, title_color_name: str, border_right: bool) -> QVBoxLayout:
             col = QFrame()
-            border = f"border-right:1px solid {BORDER};" if border_right else ""
-            col.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; {border} }}")
+            _s.themed_ss(col, lambda br=border_right: (
+                f"QFrame {{ background:{_s.BG_CARD}; border:none;"
+                f" {f'border-right:1px solid {_s.BORDER};' if br else ''} }}"
+            ))
             lay = QVBoxLayout(col)
             lay.setContentsMargins(12, 8, 12, 8)
             lay.setSpacing(2)
             t = QLabel(title)
-            t.setStyleSheet(
-                f"color:{title_color}; font-size:11px; font-weight:bold;"
-                f" border:none; border-bottom:1px solid {BORDER}; background:transparent;"
-                f" padding-bottom:4px; margin-bottom:2px;"
-            )
+            _s.themed_ss(t, lambda cn=title_color_name: (
+                f"color:{getattr(_s, cn)}; font-size:11px; font-weight:bold;"
+                f" border:none; border-bottom:1px solid {_s.BORDER}; background:transparent;"
+                " padding-bottom:4px; margin-bottom:2px;"
+            ))
             lay.addWidget(t)
             body_lay.addWidget(col, 1)
             return lay
 
-        nr_lay  = _signal_col("5G NR",        ACCENT, border_right=True)
-        lte_lay = _signal_col("LTE Primary",   AMBER,  border_right=False)
+        nr_lay  = _signal_col("5G NR",        "ACCENT", border_right=True)
+        lte_lay = _signal_col("LTE Primary",  "AMBER",  border_right=False)
 
         _col_row("Band",  "_sig_5g_band",  nr_lay)
         _col_row("RSRP",  "_sig_5g_rsrp",  nr_lay)
@@ -153,7 +148,7 @@ class _ModemSignalPanelMixin:
     def _update_signal_panel(self, sig: dict) -> None:
         import datetime as _dt
 
-        def _s(v) -> str:
+        def _disp(v) -> str:
             return str(v) if v is not None else "—"
 
         def _fmt_dbm(v) -> str:
@@ -189,34 +184,34 @@ class _ModemSignalPanelMixin:
         cell = sig.get("cell_id")
         enb  = sig.get("enb_id")
         self._sig_cell.setText(
-            f"{cell}  (eNB: {enb})" if cell and enb else _s(cell)
+            f"{cell}  (eNB: {enb})" if cell and enb else _disp(cell)
         )
-        self._sig_ip.setText(_s(sig.get("wan_ip")))
+        self._sig_ip.setText(_disp(sig.get("wan_ip")))
 
         # 5G NR
         nr_rsrp = sig.get("nr5g_rsrp_dbm")
-        self._sig_5g_band.setText(_s(sig.get("nr5g_band")))
+        self._sig_5g_band.setText(_disp(sig.get("nr5g_band")))
         self._sig_5g_rsrp.setText(_fmt_dbm(nr_rsrp) + _quality(nr_rsrp))
-        self._sig_5g_rsrp.setStyleSheet(
-            f"color:{_rsrp_color(nr_rsrp)}; font-size:11px; font-weight:bold;"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(self._sig_5g_rsrp, lambda rc=_rsrp_color, v=nr_rsrp: (
+            f"color:{rc(v)}; font-size:11px; font-weight:bold;"
+            " border:none; background:transparent;"
+        ))
         self._sig_5g_sinr.setText(_fmt_db(sig.get("nr5g_sinr_db")))
         self._sig_5g_rsrq.setText(_fmt_db(sig.get("nr5g_rsrq_db")))
-        self._sig_5g_pci.setText(_s(sig.get("nr5g_pci")))
-        self._sig_5g_arfcn.setText(_s(sig.get("nr5g_arfcn")))
+        self._sig_5g_pci.setText(_disp(sig.get("nr5g_pci")))
+        self._sig_5g_arfcn.setText(_disp(sig.get("nr5g_arfcn")))
 
         # LTE Primary
         lte_rsrp = sig.get("lte_rsrp_dbm")
-        self._sig_lte_band.setText(_s(sig.get("lte_band")))
+        self._sig_lte_band.setText(_disp(sig.get("lte_band")))
         self._sig_lte_rsrp.setText(_fmt_dbm(lte_rsrp) + _quality(lte_rsrp))
-        self._sig_lte_rsrp.setStyleSheet(
-            f"color:{_rsrp_color(lte_rsrp)}; font-size:11px; font-weight:bold;"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(self._sig_lte_rsrp, lambda rc=_rsrp_color, v=lte_rsrp: (
+            f"color:{rc(v)}; font-size:11px; font-weight:bold;"
+            " border:none; background:transparent;"
+        ))
         self._sig_lte_snr.setText(_fmt_db(sig.get("lte_snr_db")))
         self._sig_lte_rsrq.setText(_fmt_db(sig.get("lte_rsrq_db")))
-        self._sig_lte_pci.setText(_s(sig.get("lte_pci")))
-        self._sig_lte_earfcn.setText(_s(sig.get("lte_earfcn")))
+        self._sig_lte_pci.setText(_disp(sig.get("lte_pci")))
+        self._sig_lte_earfcn.setText(_disp(sig.get("lte_earfcn")))
 
         self._signal_panel.setVisible(True)

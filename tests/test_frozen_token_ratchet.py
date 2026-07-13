@@ -110,41 +110,7 @@ def _ui_files() -> list[Path]:
 # be born live: _s.TOKEN reads and themed_ss() templates only).
 #
 # Regenerate with: python tests/test_frozen_token_ratchet.py
-_BASELINE: dict[str, int] = {
-    "ui/first_run_dialog.py": 15,
-    "ui/nav/rail.py": 19,
-    "ui/npcap_banner.py": 8,
-    "ui/pages/hardware_browse_mixin.py": 27,
-    "ui/pages/hardware_integration_page.py": 21,
-    "ui/pages/ookla_cli_banner.py": 13,
-    "ui/pages/plugin_guide.py": 4,
-    "ui/pages/plugin_wizard_mixin.py": 21,
-    "ui/pages/wifi_monitor_page.py": 13,
-    "ui/table_utils.py": 5,
-    "ui/widgets/alert_drawer.py": 83,
-    "ui/widgets/bandwidth_hog_card.py": 12,
-    "ui/widgets/coach_mark.py": 7,
-    "ui/widgets/column_visibility_toggle.py": 8,
-    "ui/widgets/context_menu.py": 6,
-    "ui/widgets/credential_dialog.py": 40,
-    "ui/widgets/density_toggle.py": 8,
-    "ui/widgets/diagnostic_card_widget.py": 16,
-    "ui/widgets/empty_state_card.py": 14,
-    "ui/widgets/explainer_panel.py": 18,
-    "ui/widgets/feedback_dialog.py": 24,
-    "ui/widgets/health_status_card.py": 36,
-    "ui/widgets/hub_helpers.py": 10,
-    "ui/widgets/jargon_tooltip.py": 9,
-    "ui/widgets/kpi_bar.py": 23,
-    "ui/widgets/modem_signal_panel.py": 18,
-    "ui/widgets/objective_badge.py": 5,
-    "ui/widgets/page_header.py": 18,
-    "ui/widgets/quick_check_window.py": 15,
-    "ui/widgets/scan_radar_widget.py": 5,
-    "ui/widgets/signal_bar.py": 5,
-    "ui/widgets/usage_insights_card.py": 17,
-    "ui/widgets/weekly_report_card.py": 11,
-}
+_BASELINE: dict[str, int] = {}
 
 
 def test_frozen_token_count_matches_baseline():

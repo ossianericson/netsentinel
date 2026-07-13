@@ -283,12 +283,12 @@ class CvePage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
-        t1, self._kpi_total = _shared_kpi_tile("Total CVEs",    "0", _s.ACCENT)
-        t2, self._kpi_open  = _shared_kpi_tile("Open",          "0", _s.RED)
-        t3, self._kpi_ack   = _shared_kpi_tile("Acknowledged",  "0", _s.AMBER)
-        t4, self._kpi_risk  = _shared_kpi_tile("Accepted Risk", "0", _s.TEXT_SECONDARY)
-        t5, self._kpi_fixed = _shared_kpi_tile("Remediated",    "0", _s.GREEN)
-        t6, self._kpi_crit  = _shared_kpi_tile("Critical/High", "0", _s.CVE_CRITICAL_FG)
+        t1, self._kpi_total = _shared_kpi_tile("Total CVEs",    "0", "ACCENT")
+        t2, self._kpi_open  = _shared_kpi_tile("Open",          "0", "RED")
+        t3, self._kpi_ack   = _shared_kpi_tile("Acknowledged",  "0", "AMBER")
+        t4, self._kpi_risk  = _shared_kpi_tile("Accepted Risk", "0", "TEXT_SECONDARY")
+        t5, self._kpi_fixed = _shared_kpi_tile("Remediated",    "0", "GREEN")
+        t6, self._kpi_crit  = _shared_kpi_tile("Critical/High", "0", "CVE_CRITICAL_FG")
         for t in (t1, t2, t3, t4, t5, t6):
             kpi_row.addWidget(t)
         kpi_row.addStretch()

@@ -43,17 +43,6 @@ from PyQt6.QtWidgets import (
 )
 
 from workers.plugin_polling_worker import PluginPollingWorker
-from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_CARD,
-    BG_DARK,
-    BORDER,
-    GREEN,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-)
 
 from ui.widgets.hub_card import (
     HubCard, PipInstallDialog,
@@ -76,6 +65,7 @@ from ui.pages.plugin_guide import PluginGuide
 from ui.widgets.credential_dialog import show_credential_dialog, show_unsigned_warning
 from ui.pages.plugin_wizard_mixin import _PluginWizardMixin
 from ui.pages.hardware_browse_mixin import _HardwareBrowseMixin
+from ui import styles as _s
 
 
 class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin):
@@ -121,7 +111,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         hdr_row = QHBoxLayout()
         title = QLabel("Hardware")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY};")
         hdr_row.addWidget(title)
         hdr_row.addStretch()
         self._btn_new_plugin = _btn("⬡  New Plugin")
@@ -143,23 +133,21 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         root.addLayout(hdr_row)
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _s.themed_ss(self._status_lbl, "font-size:10px; color:{TEXT_MUTED};")
         root.addWidget(self._status_lbl)
 
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet(
-            f"QTabWidget::pane {{ border:1px solid {BORDER}; border-radius:4px; }}"
-            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED};"
-            f" padding:5px 14px; border:none; border-bottom:2px solid transparent; }}"
-            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY};"
-            f" border-bottom:2px solid {ACCENT}; }}"
-            f"QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._tabs, "QTabWidget::pane {{ border:1px solid {BORDER}; border-radius:4px; }}"
+            "QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED};"
+            " padding:5px 14px; border:none; border-bottom:2px solid transparent; }}"
+            "QTabBar::tab:selected {{ color:{TEXT_PRIMARY};"
+            " border-bottom:2px solid {ACCENT}; }}"
+            "QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}")
         root.addWidget(self._tabs, 1)
 
         # ── Tab 0: Hardware (HubCards) ────────────────────────────────────────
         hub_tab = QWidget()
-        hub_tab.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(hub_tab, "background:{BG_DARK};")
         hub_tab_lay = QVBoxLayout(hub_tab)
         hub_tab_lay.setContentsMargins(0, 6, 0, 0)
         hub_tab_lay.setSpacing(6)
@@ -170,14 +158,14 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
             "Click ● to expand the signal / topology detail panel."
         )
         sub.setWordWrap(True)
-        sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; padding:0 8px;")
+        _s.themed_ss(sub, "color:{TEXT_SECONDARY}; font-size:10px; padding:0 8px;")
         hub_tab_lay.addWidget(sub)
 
         self._hub_scroll = QScrollArea()
         self._hub_scroll.setWidgetResizable(True)
         self._hub_scroll.setStyleSheet("QScrollArea { border: none; }")
         self._hub_body = QWidget()
-        self._hub_body.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(self._hub_body, "background:{BG_DARK};")
         self._hub_lay = QVBoxLayout(self._hub_body)
         self._hub_lay.setContentsMargins(0, 4, 0, 4)
         self._hub_lay.setSpacing(8)
@@ -189,22 +177,20 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
 
         # ── Tab 1: Suggested — hidden until hw_detect finds matches ───────────
         suggested_tab = QWidget()
-        suggested_tab.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(suggested_tab, "background:{BG_DARK};")
         suggested_outer = QVBoxLayout(suggested_tab)
         suggested_outer.setContentsMargins(0, 0, 0, 0)
         suggested_outer.setSpacing(0)
 
         sug_hdr = QFrame()
         sug_hdr.setObjectName("hubSugHdr")
-        sug_hdr.setStyleSheet(
-            f"QFrame#hubSugHdr {{ background:{BG_CARD}; border:none;"
-            f" border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(sug_hdr, "QFrame#hubSugHdr {{ background:{BG_CARD}; border:none;"
+            " border-bottom:1px solid {BORDER}; }}")
         sug_hdr_lay = QHBoxLayout(sug_hdr)
         sug_hdr_lay.setContentsMargins(12, 7, 10, 7)
         sug_title = QLabel("Suggested for your network")
         sug_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        sug_title.setStyleSheet(f"color:{AMBER}; border:none; background:transparent;")
+        _s.themed_ss(sug_title, "color:{AMBER}; border:none; background:transparent;")
         sug_hdr_lay.addWidget(sug_title)
         sug_hdr_lay.addStretch()
         suggested_outer.addWidget(sug_hdr)
@@ -213,7 +199,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         sug_scroll.setWidgetResizable(True)
         sug_scroll.setStyleSheet("QScrollArea { border: none; }")
         sug_inner = QWidget()
-        sug_inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(sug_inner, "background:{BG_DARK};")
         self._suggested_lay = QVBoxLayout(sug_inner)
         self._suggested_lay.setContentsMargins(0, 2, 0, 6)
         self._suggested_lay.setSpacing(0)
@@ -252,9 +238,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
                 "Click  ＋ Add Integration  to import a script."
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:11px; padding:24px 0;"
-            )
+            _s.themed_ss(empty, "color:{TEXT_MUTED}; font-size:11px; padding:24px 0;")
             self._hub_lay.addWidget(empty)
         else:
             for inst in instances:
@@ -652,7 +636,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         if card:
             card._btn_install.setVisible(False)
             card._btn_reenable.setVisible(False)
-            card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
+            _s.themed_ss(card._dot, "color:{TEXT_MUTED}; font-size:13px; border:none;")
             card._metrics_lbl.setText("Library installed — reconnecting…")
         _t = QTimer(self)
         _t.setSingleShot(True)
@@ -692,7 +676,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         if card:
             card._btn_update_cred.setVisible(False)
             card._btn_reenable.setVisible(False)
-            card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
+            _s.themed_ss(card._dot, "color:{TEXT_MUTED}; font-size:13px; border:none;")
             card._metrics_lbl.setText("Credentials updated — reconnecting…")
         _t = QTimer(self)
         _t.setSingleShot(True)
@@ -789,9 +773,9 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
     # ── Status helper ─────────────────────────────────────────────────────────
 
     def _set_status(self, text: str, error: bool = False) -> None:
-        color = AMBER if error else GREEN
+        color_name = "AMBER" if error else "GREEN"
         self._status_lbl.setText(text)
-        self._status_lbl.setStyleSheet(f"font-size:10px; color:{color};")
+        _s.themed_ss(self._status_lbl, lambda cn=color_name: f"font-size:10px; color:{getattr(_s, cn)};")
         _t = QTimer(self)
         _t.setSingleShot(True)
         _t.timeout.connect(lambda: self._status_lbl.setText(""))

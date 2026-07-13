@@ -106,9 +106,9 @@ class DhcpLeasePage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         t1, self._kpi_total_lbl   = _shared_kpi_tile("Total Leases", "—")
-        t2, self._kpi_active_lbl  = _shared_kpi_tile("Active",       "—", _s.GREEN)
-        t3, self._kpi_expired_lbl = _shared_kpi_tile("Expired",      "—", _s.AMBER)
-        t4, self._kpi_sources_lbl = _shared_kpi_tile("Sources",      "—", _s.ACCENT)
+        t2, self._kpi_active_lbl  = _shared_kpi_tile("Active",       "—", "GREEN")
+        t3, self._kpi_expired_lbl = _shared_kpi_tile("Expired",      "—", "AMBER")
+        t4, self._kpi_sources_lbl = _shared_kpi_tile("Sources",      "—", "ACCENT")
         for w in (t1, t2, t3, t4):
             kpi_row.addWidget(w)
         kpi_row.addStretch()

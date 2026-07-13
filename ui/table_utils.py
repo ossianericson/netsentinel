@@ -10,7 +10,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import QFrame, QLabel, QTableWidget, QVBoxLayout
 
-from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_PRIMARY, TEXT_SECONDARY
+from ui import styles as _s
 from ui.widgets.animated_kpi import AnimatedKpi
 
 
@@ -33,33 +33,34 @@ def restore_column_widths(table: QTableWidget, key: str) -> None:
 
 # ── Standardized KPI tile ─────────────────────────────────────────────────────
 
-def kpi_tile(label: str, value: str = "0", accent: str = ACCENT) -> tuple[QFrame, AnimatedKpi]:
+def kpi_tile(label: str, value: str = "0", accent_name: str = "ACCENT") -> tuple[QFrame, AnimatedKpi]:
     """Return (tile_widget, value_label).
 
     value_label is an AnimatedKpi (QLabel subclass) — call set_value(int) for animation
-    or setText(str) for a plain update.
+    or setText(str) for a plain update. accent_name is a ui.styles token NAME (e.g. "RED"),
+    not a resolved colour value.
     """
     tile = QFrame()
     tile.setFixedHeight(56)
-    tile.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {accent}; border-radius:0; }}"
-    )
+    _s.themed_ss(tile, lambda an=accent_name: (
+        f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
+        f" border-left:3px solid {getattr(_s, an)}; border-radius:0; }}"
+    ))
     lay = QVBoxLayout(tile)
     lay.setContentsMargins(12, 6, 12, 6)
     lay.setSpacing(2)
 
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(
-        f"font-size:9px; font-weight:600; color:{TEXT_SECONDARY};"
-        f" letter-spacing:0.5px; border:none; background:transparent;"
-    )
+    _s.themed_ss(lbl, (
+        "font-size:9px; font-weight:600; color:{TEXT_SECONDARY};"
+        " letter-spacing:0.5px; border:none; background:transparent;"
+    ))
 
     val = AnimatedKpi(value)
-    val.setStyleSheet(
-        f"font-size:22px; font-weight:700; color:{TEXT_PRIMARY};"
-        f" border:none; background:transparent;"
-    )
+    _s.themed_ss(val, (
+        "font-size:22px; font-weight:700; color:{TEXT_PRIMARY};"
+        " border:none; background:transparent;"
+    ))
     val.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
     lay.addWidget(lbl)

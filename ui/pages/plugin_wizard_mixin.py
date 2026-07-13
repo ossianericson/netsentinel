@@ -21,19 +21,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    ACCENT_LITE,
-    BG_CARD,
-    BORDER,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    WHITE,
-)
 from ui.widgets.hub_card import _TEMPLATE
+from ui import styles as _s
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +35,7 @@ class _PluginWizardMixin:
         from modules.utils import get_app_data_dir as _gad
 
         _field_ss = (
-            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f"background:{_s.BG_CARD}; color:{_s.TEXT_PRIMARY}; border:1px solid {_s.BORDER};"
             " border-radius:3px; padding:3px 6px; font-size:11px;"
         )
 
@@ -63,7 +52,7 @@ class _PluginWizardMixin:
             "template ready for you to complete with your hardware's API calls."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(intro, "color:{TEXT_SECONDARY}; font-size:10px;")
         lay.addWidget(intro)
 
         form = QFormLayout()
@@ -77,11 +66,9 @@ class _PluginWizardMixin:
 
         type_combo = QComboBox()
         type_combo.addItems(["router", "modem", "ap", "switch", "other"])
-        type_combo.setStyleSheet(
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 6px; font-size:11px; }}"
-            f"QComboBox:drop-down {{ border:none; }}"
-        )
+        _s.themed_ss(type_combo, "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:3px 6px; font-size:11px; }}"
+            "QComboBox:drop-down {{ border:none; }}")
         form.addRow("Hardware type *", type_combo)
 
         ip_edit = QLineEdit()
@@ -111,9 +98,7 @@ class _PluginWizardMixin:
         except Exception:
             dest_dir = Path.home() / ".netsentinel" / "plugins"
         path_lbl = QLabel("")
-        path_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; font-family:Consolas;"
-        )
+        _s.themed_ss(path_lbl, "color:{TEXT_MUTED}; font-size:9px; font-family:Consolas;")
         path_lbl.setWordWrap(True)
         lay.addWidget(path_lbl)
 
@@ -134,31 +119,27 @@ class _PluginWizardMixin:
         _update_path_preview()
 
         status_lbl = QLabel("")
-        status_lbl.setStyleSheet(f"color:{RED}; font-size:10px;")
+        _s.themed_ss(status_lbl, "color:{RED}; font-size:10px;")
         status_lbl.setVisible(False)
         lay.addWidget(status_lbl)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         cancel_btn = QPushButton("Cancel")
-        cancel_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:5px 14px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(cancel_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:5px 14px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         cancel_btn.clicked.connect(dlg.reject)
         btn_row.addWidget(cancel_btn)
 
         create_btn = QPushButton("Create Plugin")
         create_btn.setDefault(True)
-        create_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; padding:5px 18px; font-size:12px; font-weight:600; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(create_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; padding:5px 18px; font-size:12px; font-weight:600; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}")
         btn_row.addWidget(create_btn)
         lay.addLayout(btn_row)
 

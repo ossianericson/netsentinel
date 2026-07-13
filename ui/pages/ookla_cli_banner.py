@@ -22,20 +22,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QWidget,
 )
-from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_HOVER, BTN_DISABLED_BORDER, INFO_BOX_BG,
-    INFO_BOX_BORDER, INFO_BOX_FG, RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
-
-# Self-contained colours (no ui.styles import needed — banner is standalone)
-_BLUE_BG   = INFO_BOX_BG
-_BLUE_BDR  = INFO_BOX_BORDER
-_BLUE_TEXT = INFO_BOX_FG
-_LINK_CLR  = ACCENT
-_BTN_BG    = ACCENT
-_BTN_TEXT  = WHITE
-_BTN_HOVER = ACCENT_DARK
-_DIM_TEXT  = TEXT_SECONDARY
+from ui import styles as _s
 
 
 class _OoklaInstallWorker(QThread):
@@ -103,12 +90,12 @@ class OoklaCliBanner(QFrame):
 
     def _build_ui(self) -> None:
         self.setFixedHeight(40)
-        self.setStyleSheet(
-            f"QFrame#ooklaBanner {{"
-            f"  background:{_BLUE_BG};"
-            f"  border:1px solid {_BLUE_BDR};"
-            f"  border-radius:3px;"
-            f"}}"
+        _s.themed_ss(self,
+            "QFrame#ooklaBanner {{"
+            "  background:{INFO_BOX_BG};"
+            "  border:1px solid {INFO_BOX_BORDER};"
+            "  border-radius:3px;"
+            "}}"
         )
 
         lay = QHBoxLayout(self)
@@ -117,48 +104,47 @@ class OoklaCliBanner(QFrame):
 
         # Info icon + message
         icon = QLabel("\u2139")   # ℹ
-        icon.setStyleSheet(f"color:{_LINK_CLR}; font-size:14px; background:transparent; border:none;")
+        _s.themed_ss(icon, "color:{ACCENT}; font-size:14px; background:transparent; border:none;")
         icon.setFixedWidth(16)
 
         self._msg = QLabel(
             "Install the <b>Ookla Speedtest CLI</b> to unlock 1 Gbps+ multi-connection tests."
         )
-        self._msg.setStyleSheet(
-            f"color:{_BLUE_TEXT}; font-size:11px; background:transparent; border:none;"
+        _s.themed_ss(self._msg,
+            "color:{INFO_BOX_FG}; font-size:11px; background:transparent; border:none;"
         )
         self._msg.setTextFormat(Qt.TextFormat.RichText)
 
         # "Install via winget" button
         self._btn_install = QPushButton("Install via winget")
-        self._btn_install.setStyleSheet(
-            f"QPushButton {{"
-            f"  background:{_BTN_BG}; color:{_BTN_TEXT};"
-            f"  border:none; border-radius:3px; padding:4px 12px; font-size:11px;"
-            f"}}"
-            f"QPushButton:hover {{ background:{_BTN_HOVER}; }}"
-            f"QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        _s.themed_ss(self._btn_install,
+            "QPushButton {{"
+            "  background:{ACCENT}; color:{WHITE};"
+            "  border:none; border-radius:3px; padding:4px 12px; font-size:11px;"
+            "}}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_install.setFixedHeight(28)
         self._btn_install.clicked.connect(self._on_install_clicked)
 
         # "Manual install" link
-        self._btn_manual = QLabel(
-            '<a href="https://www.speedtest.net/apps/cli" style="color:ACCENT;">Manual install</a>'
-        )
-        self._btn_manual.setStyleSheet("background:transparent; border:none; font-size:11px;")
+        self._btn_manual = QLabel()
+        self._set_manual_link_text()
+        _s.themed_ss(self._btn_manual, "background:transparent; border:none; font-size:11px;")
         self._btn_manual.setOpenExternalLinks(True)
         self._btn_manual.setTextFormat(Qt.TextFormat.RichText)
 
         # Dismiss button
         self._btn_dismiss = QPushButton("\u00d7")   # ×
-        self._btn_dismiss.setStyleSheet(
-            f"QPushButton {{"
-            f"  background:transparent; color:{_DIM_TEXT};"
-            f"  border:none; font-size:16px; padding:0 4px;"
-            f"}}"
-            f"QPushButton:hover {{ color:{_BLUE_TEXT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{_DIM_TEXT}; }}"
+        _s.themed_ss(self._btn_dismiss,
+            "QPushButton {{"
+            "  background:transparent; color:{TEXT_SECONDARY};"
+            "  border:none; font-size:16px; padding:0 4px;"
+            "}}"
+            "QPushButton:hover {{ color:{INFO_BOX_FG}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         self._btn_dismiss.setFixedSize(24, 24)
         self._btn_dismiss.setToolTip("Dismiss")
@@ -169,6 +155,17 @@ class OoklaCliBanner(QFrame):
         lay.addWidget(self._btn_install)
         lay.addWidget(self._btn_manual)
         lay.addWidget(self._btn_dismiss)
+
+    def _set_manual_link_text(self) -> None:
+        self._btn_manual.setText(
+            f'<a href="https://www.speedtest.net/apps/cli" style="color:{_s.ACCENT};">'
+            "Manual install</a>"
+        )
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: the manual-install link colour is baked into HTML
+        text, outside the themed_ss registry, so it needs an explicit rebuild."""
+        self._set_manual_link_text()
 
     # ── Visibility logic ──────────────────────────────────────────────────────
 
@@ -214,7 +211,7 @@ class OoklaCliBanner(QFrame):
             _t.start(6000)
         else:
             self._msg.setText(
-                f"<span style='color:{RED};'>\u26a0 Installation failed:</span> {message}"
+                f"<span style='color:{_s.RED};'>\u26a0 Installation failed:</span> {message}"
             )
             self._btn_install.setEnabled(True)
             self._btn_install.setText("Retry")

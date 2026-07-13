@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QWidget
 
-from ui.styles import AMBER, CHART_SPINE, GREEN, RED, TEXT_MUTED
+from ui import styles as _s
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 # List of (min_value_or_None, bars). First match from the top wins.
@@ -35,10 +35,10 @@ def bars_for_metric(metric: str, value: float) -> int:
 
 def color_for_bars(bars: int) -> str:
     if bars >= 4:
-        return GREEN
+        return _s.GREEN
     if bars >= 3:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED
 
 
 class SignalBar(QWidget):
@@ -74,8 +74,8 @@ class SignalBar(QWidget):
         total_w = n * bar_w + (n - 1) * gap
         x0 = (w - total_w) // 2
 
-        active = QColor(color_for_bars(self._bars) if self._bars > 0 else TEXT_MUTED)
-        inactive = QColor(CHART_SPINE)
+        active = QColor(color_for_bars(self._bars) if self._bars > 0 else _s.TEXT_MUTED)
+        inactive = QColor(_s.CHART_SPINE)
 
         for i in range(n):
             bar_h = max(2, int(h * (i + 1) / n))

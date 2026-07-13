@@ -48,7 +48,7 @@ GLOBAL_BTN_NAMES = {
 # This number may only DECREASE. If your change adds a bare stylesheet to a
 # container, scope it with an objectName selector instead (see module
 # docstring). When you fix existing sites, lower the baseline accordingly.
-BARE_CONTAINER_BASELINE = 60
+BARE_CONTAINER_BASELINE = 45
 
 
 def _key(node: ast.expr) -> "str | None":
