@@ -30,23 +30,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
     alpha,
-    ACCENT,
-    ACCENT_DARK,
-    ACCENT_LITE,
-    AMBER,
-    BG_CARD,
-    BG_DARK,
-    BORDER,
     CARD_RADIUS,
-    GREEN,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    BG_HOVER,
-    WHITE,
 )
 from ui.widgets.animated_kpi import AnimatedKpi
 
@@ -84,7 +71,7 @@ class _EventSparkline(QWidget):
             bh = max(2, int((v / mx) * (h - 2)))
             x = i * (bar_w + gap)
             alpha = "CC" if i == n - 1 else "66"
-            color_hex = ACCENT + alpha
+            color_hex = _s.ACCENT + alpha
             p.setBrush(QColor(color_hex))
             p.setPen(Qt.PenStyle.NoPen)
             p.drawRect(x, h - bh, bar_w, bh)
@@ -119,13 +106,13 @@ def _age_string(ts: float) -> str:
 def _health_color(ts: Optional[float]) -> str:
     """Green < 5 min, amber < 1 h, grey = no data or > 1 h."""
     if ts is None:
-        return TEXT_MUTED
+        return _s.TEXT_MUTED
     delta = time.time() - ts
     if delta < 300:
-        return GREEN
+        return _s.GREEN
     if delta < 3600:
-        return AMBER
-    return TEXT_MUTED
+        return _s.AMBER
+    return _s.TEXT_MUTED
 
 
 class _StatusTile(QFrame):
@@ -149,12 +136,12 @@ class _StatusTile(QFrame):
         self.setMinimumHeight(100)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._base_style = (
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-            f"QFrame:hover {{ border-color:{ACCENT}; }}"
+        self._base_style = (   # themed_ss template — resolved live via format_map
+            "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}"
+            "QFrame:hover {{ border-color:{ACCENT}; }}"
         )
-        self.setStyleSheet(self._base_style)
+        _s.themed_ss(self, self._base_style)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 10)
@@ -164,42 +151,30 @@ class _StatusTile(QFrame):
         title_row.setSpacing(6)
         title_row.setContentsMargins(0, 0, 0, 0)
         self._icon_lbl = QLabel(icon)
-        self._icon_lbl.setStyleSheet(
-            f"font-size:13px; color:{color}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._icon_lbl, lambda color=color: f"font-size:13px; color:{color}; background:transparent; border:none;")
         self._icon_lbl.setFixedWidth(18)
         self._title_lbl = QLabel(title)
-        self._title_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
-            " background:transparent; border:none; letter-spacing:0.5px;"
-        )
+        _s.themed_ss(self._title_lbl, "font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; letter-spacing:0.5px;")
         self._dot_lbl = QLabel("●")
         self._dot_lbl.setFixedWidth(12)
-        self._dot_lbl.setStyleSheet(
-            f"font-size:8px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._dot_lbl, "font-size:8px; color:{TEXT_MUTED}; background:transparent; border:none;")
         title_row.addWidget(self._icon_lbl)
         title_row.addWidget(self._title_lbl, 1)
         title_row.addWidget(self._dot_lbl)
         lay.addLayout(title_row)
 
         self._value_lbl = AnimatedKpi(value)
-        self._value_lbl.setStyleSheet(
-            f"font-size:22px; font-weight:bold; color:{color};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._value_lbl, lambda color=color: f"font-size:22px; font-weight:bold; color:{color};"
+            " background:transparent; border:none;")
         lay.addWidget(self._value_lbl)
 
         self._sub_lbl = QLabel(sub)
-        self._sub_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._sub_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
         lay.addWidget(self._sub_lbl)
 
         self._age_lbl = QLabel("")
-        self._age_lbl.setStyleSheet(
-            f"font-size:9px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._age_lbl, "font-size:9px; color:{TEXT_MUTED}; background:transparent; border:none;")
         lay.addWidget(self._age_lbl)
 
         # VIZ-6: hourly event sparkline
@@ -207,9 +182,7 @@ class _StatusTile(QFrame):
         lay.addWidget(self._evtsparkline)
 
         self._open_hint = QLabel("→ open")
-        self._open_hint.setStyleSheet(
-            f"font-size:9px; color:{ACCENT}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._open_hint, "font-size:9px; color:{ACCENT}; background:transparent; border:none;")
         lay.addWidget(self._open_hint)
 
     def set_hourly_counts(self, counts: list) -> None:
@@ -218,28 +191,22 @@ class _StatusTile(QFrame):
 
     def set_active(self, active: bool) -> None:
         if active:
-            self.setStyleSheet(
-                f"QFrame {{ background:{alpha(ACCENT, 0x1A)}; border:1px solid {alpha(ACCENT, 0x44)};"
-                f" border-left:3px solid {ACCENT}; border-radius:{CARD_RADIUS}; }}"
-                f"QFrame:hover {{ border-color:{ACCENT}; border-left:3px solid {ACCENT}; }}"
-            )
+            _s.themed_ss(self, lambda CARD_RADIUS=CARD_RADIUS, alpha=alpha: f"QFrame {{ background:{alpha(_s.ACCENT, 0x1A)}; border:1px solid {alpha(_s.ACCENT, 0x44)};"
+                f" border-left:3px solid {_s.ACCENT}; border-radius:{CARD_RADIUS}; }}"
+                f"QFrame:hover {{ border-color:{_s.ACCENT}; border-left:3px solid {_s.ACCENT}; }}")
             self._open_hint.setVisible(False)
         else:
-            self.setStyleSheet(self._base_style)
+            _s.themed_ss(self, self._base_style)
             self._open_hint.setVisible(True)
 
     def update(self, value: str, sub: str, color: str) -> None:
-        self._value_lbl.setStyleSheet(
-            f"font-size:22px; font-weight:bold; color:{color};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._value_lbl, lambda color=color: f"font-size:22px; font-weight:bold; color:{color};"
+            " background:transparent; border:none;")
         try:
             self._value_lbl.set_value(int(value))
         except (ValueError, TypeError):
             self._value_lbl.setText(value)
-        self._icon_lbl.setStyleSheet(
-            f"font-size:13px; color:{color}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._icon_lbl, lambda color=color: f"font-size:13px; color:{color}; background:transparent; border:none;")
         self._sub_lbl.setText(sub)
 
     def set_last_event_ts(self, ts: Optional[float]) -> None:
@@ -249,9 +216,7 @@ class _StatusTile(QFrame):
     def refresh_age(self) -> None:
         """Refresh the 'last event X ago' label and health dot."""
         dot_color = _health_color(self._last_event_ts)
-        self._dot_lbl.setStyleSheet(
-            f"font-size:8px; color:{dot_color}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._dot_lbl, lambda dot_color=dot_color: f"font-size:8px; color:{dot_color}; background:transparent; border:none;")
         if self._last_event_ts is not None:
             self._age_lbl.setText(f"Last event: {_age_string(self._last_event_ts)}")
         else:
@@ -270,11 +235,9 @@ class _GradeTile(QFrame):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {alpha(ACCENT, 0x44)};"
+        _s.themed_ss(self, lambda CARD_RADIUS=CARD_RADIUS, alpha=alpha: f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {alpha(_s.ACCENT, 0x44)};"
             f" border-radius:{CARD_RADIUS}; }}"
-            f"QFrame:hover {{ border-color:{ACCENT}; }}"
-        )
+            f"QFrame:hover {{ border-color:{_s.ACCENT}; }}")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(18, 14, 18, 14)
         lay.setSpacing(16)
@@ -282,10 +245,8 @@ class _GradeTile(QFrame):
         self._grade_circle = QLabel("–")
         self._grade_circle.setFixedSize(56, 56)
         self._grade_circle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._grade_circle.setStyleSheet(
-            f"font-size:24px; font-weight:bold; color:{TEXT_SECONDARY};"
-            f" border:3px solid {BORDER}; border-radius:28px; background:{BG_CARD};"
-        )
+        _s.themed_ss(self._grade_circle, "font-size:24px; font-weight:bold; color:{TEXT_SECONDARY};"
+            " border:3px solid {BORDER}; border-radius:28px; background:{BG_CARD};")
         lay.addWidget(self._grade_circle)
 
         right = QVBoxLayout()
@@ -293,29 +254,23 @@ class _GradeTile(QFrame):
         title_row = QHBoxLayout()
         title_row.setSpacing(6)
         title = QLabel("Network Grade")
-        title.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(title, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         self._details_btn = QPushButton("?")
         self._details_btn.setFixedSize(18, 16)
         self._details_btn.setVisible(False)
         self._details_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._details_btn.setToolTip("Show grade breakdown")
-        self._details_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
-            f" font-size:9px; border-radius:3px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _s.themed_ss(self._details_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            " font-size:9px; border-radius:3px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         self._details_btn.clicked.connect(self._on_details_clicked)
         title_row.addWidget(title)
         title_row.addWidget(self._details_btn)
         title_row.addStretch()
         self._sub_lbl = QLabel("Run a network grade scan to see your security score →")
-        self._sub_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._sub_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         right.addLayout(title_row)
         right.addWidget(self._sub_lbl)
         lay.addLayout(right, 1)
@@ -323,10 +278,8 @@ class _GradeTile(QFrame):
 
     def update(self, grade: str, sub: str, color: str) -> None:
         self._grade_circle.setText(grade)
-        self._grade_circle.setStyleSheet(
-            f"font-size:24px; font-weight:bold; color:{color};"
-            f" border:3px solid {color}; border-radius:28px; background:{BG_CARD};"
-        )
+        _s.themed_ss(self._grade_circle, lambda color=color: f"font-size:24px; font-weight:bold; color:{color};"
+            f" border:3px solid {color}; border-radius:28px; background:{_s.BG_CARD};")
         self._sub_lbl.setText(sub)
 
     def set_dimensions(self, dimensions: list) -> None:
@@ -374,7 +327,7 @@ class MonitorOverviewPage(QWidget):
         self._refresh_event_sparklines()
 
     def _build_ui(self) -> None:
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -385,7 +338,7 @@ class MonitorOverviewPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
 
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
@@ -397,14 +350,10 @@ class MonitorOverviewPage(QWidget):
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(8)
         page_title = QLabel("Monitor Status")
-        page_title.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(page_title, "font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         self._last_scan_lbl = QLabel("")
-        self._last_scan_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._last_scan_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
         self._last_scan_lbl.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -414,13 +363,11 @@ class MonitorOverviewPage(QWidget):
         self._start_all_btn.setToolTip(
             "Start ARP Spoof Watch, DHCP Rogue Monitor, and Network Logger in one click"
         )
-        self._start_all_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:11px; font-weight:600; padding:0 12px; }}"
-            f"QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed  {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(self._start_all_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:11px; font-weight:600; padding:0 12px; }}"
+            "QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed  {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}")
         self._start_all_btn.clicked.connect(self.start_all_requested)
         hdr_row.addWidget(page_title)
         hdr_row.addStretch()
@@ -431,9 +378,7 @@ class MonitorOverviewPage(QWidget):
         sub = QLabel(
             "Status of every active detection monitor — click any tile to go to that page."
         )
-        sub.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(sub, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         lay.addWidget(sub)
 
         # ── Grade tile (full width) ───────────────────────────────────────────
@@ -443,10 +388,8 @@ class MonitorOverviewPage(QWidget):
 
         # ── Section label ─────────────────────────────────────────────────────
         sec_lbl = QLabel("DETECTION MONITORS")
-        sec_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-            " border:none; letter-spacing:1px; padding-top:2px;"
-        )
+        _s.themed_ss(sec_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; letter-spacing:1px; padding-top:2px;")
         lay.addWidget(sec_lbl)
 
         # ── 3×2 tile grid ─────────────────────────────────────────────────────
@@ -456,13 +399,13 @@ class MonitorOverviewPage(QWidget):
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(8)
 
-        self._tile_arp   = _StatusTile("◉", "ARP SPOOF WATCH",    "Off", "Not running", TEXT_MUTED,      "ARP Spoof Watch")
-        self._tile_dhcp  = _StatusTile("◉", "DHCP ROGUE MONITOR", "Off", "Not running", TEXT_MUTED,      "DHCP Rogue Monitor")
-        self._tile_storm = _StatusTile("◈", "BROADCAST STORM",    "–",   "Not measured",TEXT_MUTED,      "Broadcast Storm")
-        self._tile_iot   = _StatusTile("◎", "IOT ANOMALIES",      "–",   "Not measured",TEXT_MUTED,      "IoT Behaviour")
-        self._tile_ports = _StatusTile("⊙", "OPEN PORTS",         "–",   "No scan yet", TEXT_MUTED,      "Port Scan (TCP)")
-        self._tile_cve   = _StatusTile("⚠", "CVE MATCHES",        "–",   "No data yet", TEXT_MUTED,      "CVE Lookup")
-        self._tile_auto  = _StatusTile("⚡", "AUTOMATION",         "–",   "No rules",    TEXT_MUTED,      "Automation Hooks")
+        self._tile_arp   = _StatusTile("◉", "ARP SPOOF WATCH",    "Off", "Not running", _s.TEXT_MUTED,      "ARP Spoof Watch")
+        self._tile_dhcp  = _StatusTile("◉", "DHCP ROGUE MONITOR", "Off", "Not running", _s.TEXT_MUTED,      "DHCP Rogue Monitor")
+        self._tile_storm = _StatusTile("◈", "BROADCAST STORM",    "–",   "Not measured",_s.TEXT_MUTED,      "Broadcast Storm")
+        self._tile_iot   = _StatusTile("◎", "IOT ANOMALIES",      "–",   "Not measured",_s.TEXT_MUTED,      "IoT Behaviour")
+        self._tile_ports = _StatusTile("⊙", "OPEN PORTS",         "–",   "No scan yet", _s.TEXT_MUTED,      "Port Scan (TCP)")
+        self._tile_cve   = _StatusTile("⚠", "CVE MATCHES",        "–",   "No data yet", _s.TEXT_MUTED,      "CVE Lookup")
+        self._tile_auto  = _StatusTile("⚡", "AUTOMATION",         "–",   "No rules",    _s.TEXT_MUTED,      "Automation Hooks")
 
         for tile in (self._tile_arp, self._tile_dhcp, self._tile_storm,
                      self._tile_iot, self._tile_ports, self._tile_cve,
@@ -532,11 +475,11 @@ class MonitorOverviewPage(QWidget):
 
     def set_grade(self, grade: str, score: float) -> None:  # noqa: ARG002
         if grade in ("A", "B"):
-            color = GREEN
+            color = _s.GREEN
         elif grade == "C":
-            color = AMBER
+            color = _s.AMBER
         else:
-            color = RED
+            color = _s.RED
         sub = f"Score {score:.0f}/100 — click (?) for dimension breakdown"
         self._grade_tile.update(grade, sub, color)
 
@@ -547,20 +490,20 @@ class MonitorOverviewPage(QWidget):
     def set_arp_status(self, running: bool, alerted: bool) -> None:
         self._arp_running = running or alerted
         if alerted:
-            self._tile_arp.update("Alert", "Spoof detected", RED)
+            self._tile_arp.update("Alert", "Spoof detected", _s.RED)
         elif running:
-            self._tile_arp.update("On", "Monitoring",      GREEN)
+            self._tile_arp.update("On", "Monitoring",      _s.GREEN)
         else:
-            self._tile_arp.update("Off", "Not running",    TEXT_MUTED)
+            self._tile_arp.update("Off", "Not running",    _s.TEXT_MUTED)
         self._tile_arp.set_active(running or alerted)
         self._update_start_all_btn()
 
     def set_dhcp_status(self, running: bool) -> None:
         self._dhcp_running = running
         if running:
-            self._tile_dhcp.update("On",  "Monitoring",    GREEN)
+            self._tile_dhcp.update("On",  "Monitoring",    _s.GREEN)
         else:
-            self._tile_dhcp.update("Off", "Not running",   TEXT_MUTED)
+            self._tile_dhcp.update("Off", "Not running",   _s.TEXT_MUTED)
         self._tile_dhcp.set_active(running)
         self._update_start_all_btn()
 
@@ -577,48 +520,48 @@ class MonitorOverviewPage(QWidget):
 
     def set_storm_status(self, level: str) -> None:
         if level == "STORM":
-            self._tile_storm.update("Storm", "Flooding detected",  RED)
+            self._tile_storm.update("Storm", "Flooding detected",  _s.RED)
         elif level == "WARNING":
-            self._tile_storm.update("Warn",  "Elevated broadcast", AMBER)
+            self._tile_storm.update("Warn",  "Elevated broadcast", _s.AMBER)
         else:
-            self._tile_storm.update("Clean", "No storm",           GREEN)
+            self._tile_storm.update("Clean", "No storm",           _s.GREEN)
         self._tile_storm.set_active(level in ("STORM", "WARNING"))
 
     def set_iot_anomaly_count(self, count: int) -> None:
         if count > 0:
-            self._tile_iot.update(str(count), f"anomal{'y' if count == 1 else 'ies'}", AMBER)
+            self._tile_iot.update(str(count), f"anomal{'y' if count == 1 else 'ies'}", _s.AMBER)
         else:
-            self._tile_iot.update("0", "No anomalies", GREEN)
+            self._tile_iot.update("0", "No anomalies", _s.GREEN)
         self._tile_iot.set_active(count > 0)
 
     def set_open_port_count(self, count: int) -> None:
         if count > 0:
-            color = AMBER if count < 5 else RED
+            color = _s.AMBER if count < 5 else _s.RED
             self._tile_ports.update(str(count), f"open port{'s' if count != 1 else ''}", color)
         elif count == 0:
-            self._tile_ports.update("0", "No open ports", GREEN)
+            self._tile_ports.update("0", "No open ports", _s.GREEN)
         else:
-            self._tile_ports.update("–", "No scan yet", TEXT_MUTED)
+            self._tile_ports.update("–", "No scan yet", _s.TEXT_MUTED)
         self._tile_ports.set_active(count >= 0)
 
     def set_cve_count(self, count: int) -> None:
         if count > 0:
-            self._tile_cve.update(str(count), f"match{'es' if count != 1 else ''} found", RED)
+            self._tile_cve.update(str(count), f"match{'es' if count != 1 else ''} found", _s.RED)
         elif count == 0:
-            self._tile_cve.update("0", "No matches", GREEN)
+            self._tile_cve.update("0", "No matches", _s.GREEN)
         else:
-            self._tile_cve.update("–", "No data yet", TEXT_MUTED)
+            self._tile_cve.update("–", "No data yet", _s.TEXT_MUTED)
         self._tile_cve.set_active(count >= 0)
 
     def set_automation_status(self, rule_count: int, last_triggered_ts: float) -> None:
         import time as _time
         if rule_count == 0:
-            self._tile_auto.update("–", "No rules", TEXT_MUTED)
+            self._tile_auto.update("–", "No rules", _s.TEXT_MUTED)
         elif last_triggered_ts > 0 and (_time.time() - last_triggered_ts) < 86400:
-            self._tile_auto.update(str(rule_count), "Fired in last 24h", GREEN)
+            self._tile_auto.update(str(rule_count), "Fired in last 24h", _s.GREEN)
             self._tile_auto.set_last_event_ts(last_triggered_ts)
         else:
-            self._tile_auto.update(str(rule_count), f"rule{'s' if rule_count != 1 else ''} enabled", ACCENT)
+            self._tile_auto.update(str(rule_count), f"rule{'s' if rule_count != 1 else ''} enabled", _s.ACCENT)
         self._tile_auto.set_active(rule_count > 0)
 
     def set_last_scan_time(self, ts: Optional[datetime.datetime]) -> None:

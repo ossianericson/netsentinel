@@ -60,13 +60,7 @@ from modules.wifi_heatmap import (
     surveys_dir,
 )
 from modules.wifi_scanner import scan as wifi_scan
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER,
-    BG_CARD, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_PLOT_BG, CHART_SPINE, GREEN, INPUT_PLACEHOLDER, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
+from ui import styles as _s
 from ui.tabs_helpers import _table
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
@@ -93,29 +87,25 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     """Return (card_widget, inner_layout) following RULE 5."""
     card = QWidget()
     card.setObjectName("heatmapCard")
-    card.setStyleSheet(
-        f"QWidget#heatmapCard {{"
-        f"  background:{BG_CARD};"
-        f"  border:1px solid {BORDER};"
-        f"  border-radius:{CARD_RADIUS};"
-        f"}}"
-    )
+    _s.themed_ss(card, "QWidget#heatmapCard {{"
+        "  background:{BG_CARD};"
+        "  border:1px solid {BORDER};"
+        "  border-radius:{CARD_RADIUS};"
+        "}}")
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
 
     header = QLabel(title)
     header.setFixedHeight(32)
-    header.setStyleSheet(
-        f"background:{BG_CARD}; color:{TEXT_PRIMARY};"
-        f"font-weight:600; font-size:11px;"
-        f"padding:0 12px;"
-        f"border-bottom:1px solid {CARD_HDR_BORDER};"
-    )
+    _s.themed_ss(header, "background:{BG_CARD}; color:{TEXT_PRIMARY};"
+        "font-weight:600; font-size:11px;"
+        "padding:0 12px;"
+        "border-bottom:1px solid {CARD_HDR_BORDER};")
     outer.addWidget(header)
 
     inner_w = QWidget()
-    inner_w.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(inner_w, "background:{BG_CARD};")
     inner = QVBoxLayout(inner_w)
     inner.setContentsMargins(8, 8, 8, 8)
     inner.setSpacing(6)
@@ -128,21 +118,17 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
     b.setFixedHeight(26)
     b.setFont(QFont("Segoe UI", 9))
     if accent:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f"  border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            "  border-radius:3px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     else:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f"  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            "  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     return b
 
 
@@ -158,6 +144,7 @@ class WifiHeatmapPage(QWidget):
         self._pending_pos: Optional[tuple[float, float]] = None
         self._sampling_mode: bool = False   # True = next canvas click records a sample
         self._floor_plan_img: Optional[np.ndarray] = None
+        self._overlay_active: bool = False   # True once a heatmap layer is rendered
         self._cid: Optional[int] = None     # matplotlib button_press connection id
 
         self._build_ui()
@@ -172,12 +159,12 @@ class WifiHeatmapPage(QWidget):
         # Page title
         title = QLabel("WiFi Signal Heatmap")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY};")
         sub = QLabel(
             "Import a floor plan, walk around clicking your position after each scan "
             "to build a coverage map, then render the heatmap."
         )
-        sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(sub, "color:{TEXT_SECONDARY}; font-size:10px;")
         sub.setWordWrap(True)
         root.addWidget(title)
         root.addWidget(sub)
@@ -205,9 +192,7 @@ class WifiHeatmapPage(QWidget):
         content_lay.setSpacing(4)
 
         self._status_label = QLabel("No survey active.  Import a floor plan to begin.")
-        self._status_label.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; padding:2px 0;"
-        )
+        _s.themed_ss(self._status_label, "color:{TEXT_SECONDARY}; font-size:10px; padding:2px 0;")
         content_lay.addWidget(self._status_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -222,8 +207,8 @@ class WifiHeatmapPage(QWidget):
 
     def _build_toolbar(self) -> QWidget:
         bar = QWidget()
-        bar.setStyleSheet(f"background:{BG_CARD}; border:1px solid {BORDER};"
-                          f"border-radius:{CARD_RADIUS};")
+        _s.themed_ss(bar, "background:{BG_CARD}; border:1px solid {BORDER};"
+                          "border-radius:{CARD_RADIUS};")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(6)
@@ -240,10 +225,8 @@ class WifiHeatmapPage(QWidget):
         self._ap_combo = QComboBox()
         self._ap_combo.setFixedWidth(220)
         self._ap_combo.setFixedHeight(26)
-        self._ap_combo.setStyleSheet(
-            f"QComboBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f"  border-radius:3px; padding:0 6px; font-size:10px; }}"
-        )
+        _s.themed_ss(self._ap_combo, "QComboBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            "  border-radius:3px; padding:0 6px; font-size:10px; }}")
         self._ap_combo.addItem("All APs (average)", userData=None)
 
         self._btn_import.clicked.connect(self._on_import_floor_plan)
@@ -282,12 +265,12 @@ class WifiHeatmapPage(QWidget):
         # Survey info card
         info_card, info_layout = _card("Survey")
         self._survey_name_lbl = QLabel("—")
-        self._survey_name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-weight:600;")
+        _s.themed_ss(self._survey_name_lbl, "color:{TEXT_PRIMARY}; font-weight:600;")
         self._fp_lbl = QLabel("No floor plan imported.")
-        self._fp_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(self._fp_lbl, "color:{TEXT_SECONDARY}; font-size:10px;")
         self._fp_lbl.setWordWrap(True)
         self._sample_count_lbl = QLabel("0 samples")
-        self._sample_count_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px;")
+        _s.themed_ss(self._sample_count_lbl, "color:{TEXT_MUTED}; font-size:10px;")
         info_layout.addWidget(self._survey_name_lbl)
         info_layout.addWidget(self._fp_lbl)
         info_layout.addWidget(self._sample_count_lbl)
@@ -339,11 +322,12 @@ class WifiHeatmapPage(QWidget):
         lay.setContentsMargins(4, 0, 0, 0)
         lay.setSpacing(0)
 
-        self._fig = Figure(facecolor=BG_CARD, dpi=96)
+        self._fig = Figure(facecolor=_s.BG_CARD, dpi=96)
         self._ax  = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        _s.themed_ss(self._canvas, "background:{BG_CARD}; border:none;")
         lay.addWidget(self._canvas)
 
         self._cid = self._canvas.mpl_connect(
@@ -353,21 +337,30 @@ class WifiHeatmapPage(QWidget):
 
     # ── Canvas helpers ────────────────────────────────────────────────────────
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and redraw the floor
+        plan (canvas background re-applies via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.BG_CARD)
+        if self._floor_plan_img is None:
+            self._reset_canvas()
+        else:
+            self._redraw_floor_plan(overlay=self._overlay_active)
+
     def _reset_canvas(self) -> None:
         self._ax.cla()
-        self._ax.set_facecolor(CHART_PLOT_BG)
+        self._ax.set_facecolor(_s.CHART_PLOT_BG)
         self._ax.set_xticks([])
         self._ax.set_yticks([])
         self._ax.spines["top"].set_visible(False)
         self._ax.spines["right"].set_visible(False)
-        self._ax.spines["bottom"].set_color(CHART_SPINE)
-        self._ax.spines["left"].set_color(CHART_SPINE)
+        self._ax.spines["bottom"].set_color(_s.CHART_SPINE)
+        self._ax.spines["left"].set_color(_s.CHART_SPINE)
         self._ax.text(0.5, 0.5,
                       "Import a floor plan to begin.\n"
                       "Then walk around and click your position\n"
                       "after each scan.",
                       ha="center", va="center",
-                      color=TEXT_MUTED, fontsize=11,
+                      color=_s.TEXT_MUTED, fontsize=11,
                       transform=self._ax.transAxes)
         self._fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
         self._canvas.draw()
@@ -427,7 +420,7 @@ class WifiHeatmapPage(QWidget):
             avg_dbm = float(np.mean(list(r.readings.values())))
             color = _dbm_color(avg_dbm)
             size = 120 if idx in selected_rows else 70
-            edgecolor = TEXT_PRIMARY if idx in selected_rows else "none"
+            edgecolor = _s.TEXT_PRIMARY if idx in selected_rows else "none"
             self._ax.scatter(
                 r.x_frac, r.y_frac,
                 s=size, c=color, zorder=3,
@@ -436,7 +429,7 @@ class WifiHeatmapPage(QWidget):
             self._ax.text(
                 r.x_frac + 0.012, r.y_frac - 0.012,
                 f"{avg_dbm:.0f}",
-                fontsize=7, color=TEXT_PRIMARY, zorder=4,
+                fontsize=7, color=_s.TEXT_PRIMARY, zorder=4,
             )
 
     # ── Button handlers ───────────────────────────────────────────────────────
@@ -627,6 +620,7 @@ class WifiHeatmapPage(QWidget):
         if not self._survey or len(self._survey.readings) < 3:
             self._set_status("Need at least 3 samples to render a heatmap.", error=True)
             return
+        self._overlay_active = True
         self._redraw_floor_plan(overlay=True)
         self._set_status(
             f"Heatmap rendered ({len(self._survey.readings)} samples, "
@@ -637,6 +631,7 @@ class WifiHeatmapPage(QWidget):
         if not self._survey:
             return
         self._survey.readings.clear()
+        self._overlay_active = False
         self._refresh_sample_table()
         self._refresh_ap_combo()
         self._sample_count_lbl.setText("0 samples")
@@ -755,9 +750,9 @@ class WifiHeatmapPage(QWidget):
     # ── Utility ───────────────────────────────────────────────────────────────
 
     def _set_status(self, text: str, error: bool = False) -> None:
-        color = RED if error else TEXT_SECONDARY
-        self._status_label.setStyleSheet(
-            f"color:{color}; font-size:10px; padding:2px 0;")
+        _s.themed_ss(self._status_label, lambda err=error: (
+            f"color:{_s.RED if err else _s.TEXT_SECONDARY}; font-size:10px; padding:2px 0;"
+        ))
         self._status_label.setText(text)
 
     def _set_buttons_enabled(self, enabled: bool) -> None:
@@ -770,7 +765,7 @@ class WifiHeatmapPage(QWidget):
 
 def _dbm_color(dbm: float) -> str:
     if dbm >= -60:
-        return GREEN
+        return _s.GREEN
     if dbm >= -75:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED

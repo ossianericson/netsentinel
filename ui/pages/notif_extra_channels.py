@@ -20,15 +20,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER,
-    BORDER, GREEN, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
 from ui.pages.notif_channel_panels import (
     _KR_PUSHOVER_TOKEN_KEY, _KR_PUSHOVER_USER_KEY,
     _KR_NTFY_TOKEN_KEY, _KR_TELEGRAM_TOKEN_KEY, _card, _field_row, _lineedit, _severity_combo,
 )
+from ui import styles as _s
 
 
 class _NotifExtraChannelsMixin:
@@ -40,7 +36,7 @@ class _NotifExtraChannelsMixin:
     def _build_pushover_card(self) -> QWidget:
         card, bl = _card("Pushover Mobile Push")
         self._chk_pushover = QCheckBox("Enable Pushover notifications")
-        self._chk_pushover.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_pushover, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_pushover.stateChanged.connect(self._save)
         bl.addWidget(self._chk_pushover)
         self._pushover_token = _lineedit("App API Token", password=True)
@@ -60,16 +56,14 @@ class _NotifExtraChannelsMixin:
             "Both the API Token and User Key are stored in the OS keychain."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(note)
         btn_test = QPushButton("Send Test Push")
         btn_test.setFixedHeight(26)
-        btn_test.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
-            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
-            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(btn_test, "QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            "border-radius:2px;padding:0 14px;font-size:11px;}}"
+            "QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         btn_test.clicked.connect(self._test_pushover)
         self._test_btns["pushover"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -84,7 +78,7 @@ class _NotifExtraChannelsMixin:
     def _build_ntfy_card(self) -> QWidget:
         card, bl = _card("ntfy Push Notification (ntfy.sh / self-hosted)")
         self._chk_ntfy = QCheckBox("Enable ntfy notifications")
-        self._chk_ntfy.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_ntfy, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_ntfy.stateChanged.connect(self._save)
         bl.addWidget(self._chk_ntfy)
         self._ntfy_url = _lineedit("https://ntfy.sh/my-netsentinel-topic")
@@ -103,16 +97,14 @@ class _NotifExtraChannelsMixin:
             "The access token (required only for protected topics) is stored in the OS keychain."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(note)
         btn_test = QPushButton("Send Test Notification")
         btn_test.setFixedHeight(26)
-        btn_test.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
-            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
-            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(btn_test, "QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            "border-radius:2px;padding:0 14px;font-size:11px;}}"
+            "QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         btn_test.clicked.connect(self._test_ntfy)
         self._test_btns["ntfy"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -127,7 +119,7 @@ class _NotifExtraChannelsMixin:
     def _build_telegram_card(self) -> QWidget:
         card, bl = _card("Telegram Bot Notification")
         self._chk_telegram = QCheckBox("Enable Telegram notifications")
-        self._chk_telegram.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_telegram, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_telegram.stateChanged.connect(self._save)
         bl.addWidget(self._chk_telegram)
         self._telegram_token = _lineedit("Bot token from @BotFather", password=True)
@@ -146,16 +138,14 @@ class _NotifExtraChannelsMixin:
             "The bot token is stored in the OS keychain; the chat ID is stored in settings."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY};font-size:10px;")
         bl.addWidget(note)
         btn_test = QPushButton("Send Test Message")
         btn_test.setFixedHeight(26)
-        btn_test.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
-            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
-            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(btn_test, "QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            "border-radius:2px;padding:0 14px;font-size:11px;}}"
+            "QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         btn_test.clicked.connect(self._test_telegram)
         self._test_btns["telegram"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -174,12 +164,10 @@ class _NotifExtraChannelsMixin:
         self._escalation_expand_btn = QPushButton("▶  Advanced: Escalation")
         self._escalation_expand_btn.setFlat(True)
         self._escalation_expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._escalation_expand_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; font-weight:bold;"
-            f" background:transparent; border:none; padding:2px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._escalation_expand_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; font-weight:bold;"
+            " background:transparent; border:none; padding:2px 0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         bl.addWidget(self._escalation_expand_btn)
 
         self._escalation_body = QWidget()
@@ -191,33 +179,29 @@ class _NotifExtraChannelsMixin:
         explainer = QLabel(
             "If this channel fails to deliver, NetSentinel will try the escalation channel instead."
         )
-        explainer.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+        _s.themed_ss(explainer, "font-size:11px; color:{TEXT_SECONDARY}; border:none;")
         explainer.setWordWrap(True)
         body_lay.addWidget(explainer)
 
         flow_lbl = QLabel("[Primary]  →  fails  →  [Escalation]")
-        flow_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_MUTED}; font-style:italic; border:none; padding:2px 0;"
-        )
+        _s.themed_ss(flow_lbl, "font-size:11px; color:{TEXT_MUTED}; font-style:italic; border:none; padding:2px 0;")
         body_lay.addWidget(flow_lbl)
 
         self._chk_escalation = QCheckBox("Enable escalation")
-        self._chk_escalation.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        _s.themed_ss(self._chk_escalation, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_escalation.stateChanged.connect(self._save)
         body_lay.addWidget(self._chk_escalation)
 
         wait_row = QHBoxLayout()
         wait_row.setSpacing(8)
         wait_lbl = QLabel("Escalate if unacknowledged for")
-        wait_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        _s.themed_ss(wait_lbl, "font-size:11px; color:{TEXT_PRIMARY}; border:none;")
         self._spin_escalation_wait = QSpinBox()
         self._spin_escalation_wait.setRange(1, 1440)
         self._spin_escalation_wait.setValue(15)
         self._spin_escalation_wait.setSuffix(" min")
         self._spin_escalation_wait.setFixedWidth(90)
-        self._spin_escalation_wait.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _s.themed_ss(self._spin_escalation_wait, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         self._spin_escalation_wait.valueChanged.connect(self._save)
         wait_row.addWidget(wait_lbl)
         wait_row.addWidget(self._spin_escalation_wait)
@@ -227,13 +211,11 @@ class _NotifExtraChannelsMixin:
         ch_row = QHBoxLayout()
         ch_row.setSpacing(8)
         ch_lbl = QLabel("Escalate via channel")
-        ch_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        _s.themed_ss(ch_lbl, "font-size:11px; color:{TEXT_PRIMARY}; border:none;")
         self._combo_escalation_channel = QComboBox()
         self._combo_escalation_channel.addItems(["Email", "Webhook", "Pushover", "ntfy", "Telegram"])
         self._combo_escalation_channel.setFixedWidth(140)
-        self._combo_escalation_channel.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _s.themed_ss(self._combo_escalation_channel, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         self._combo_escalation_channel.currentTextChanged.connect(self._save)
         ch_row.addWidget(ch_lbl)
         ch_row.addWidget(self._combo_escalation_channel)
@@ -243,14 +225,12 @@ class _NotifExtraChannelsMixin:
         rules_row = QHBoxLayout()
         rules_row.setSpacing(8)
         rules_lbl = QLabel("Watch rules (blank = all):")
-        rules_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        _s.themed_ss(rules_lbl, "font-size:11px; color:{TEXT_PRIMARY}; border:none;")
         self._txt_escalation_rules = QLineEdit()
         self._txt_escalation_rules.setPlaceholderText(
             "Host Down, High RTT  (comma-separated, blank = all)"
         )
-        self._txt_escalation_rules.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;"
-        )
+        _s.themed_ss(self._txt_escalation_rules, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;")
         self._txt_escalation_rules.editingFinished.connect(self._save)
         rules_row.addWidget(rules_lbl)
         rules_row.addWidget(self._txt_escalation_rules, 1)
@@ -273,25 +253,21 @@ class _NotifExtraChannelsMixin:
         row1 = QHBoxLayout()
         row1.setSpacing(10)
         self._chk_weekly_digest = QCheckBox("Send weekly summary every Sunday at")
-        self._chk_weekly_digest.setStyleSheet(
-            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
-            f"QCheckBox::indicator {{ width:12px; height:12px;"
-            f" border:1px solid {BORDER}; border-radius:2px; background:{BG_CARD}; }}"
-            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._chk_weekly_digest, "QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
+            "QCheckBox::indicator {{ width:12px; height:12px;"
+            " border:1px solid {BORDER}; border-radius:2px; background:{BG_CARD}; }}"
+            "QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}")
         self._chk_weekly_digest.toggled.connect(self._save_digest_settings)
         self._combo_digest_time = QComboBox()
         for h in range(6, 23):
             self._combo_digest_time.addItem(f"{h:02d}:00")
         self._combo_digest_time.setCurrentText("09:00")
         self._combo_digest_time.setFixedWidth(80)
-        self._combo_digest_time.setStyleSheet(
-            f"QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
-            f"QComboBox::drop-down{{border:none;}}"
-            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
-            f"border:1px solid {BORDER};selection-background-color:{ACCENT};}}"
-        )
+        _s.themed_ss(self._combo_digest_time, "QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 6px;font-size:11px;}}"
+            "QComboBox::drop-down{{border:none;}}"
+            "QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            "border:1px solid {BORDER};selection-background-color:{ACCENT};}}")
         self._combo_digest_time.currentTextChanged.connect(self._save_digest_settings)
         row1.addWidget(self._chk_weekly_digest)
         row1.addWidget(self._combo_digest_time)
@@ -302,25 +278,21 @@ class _NotifExtraChannelsMixin:
             "Includes: network grade, top alerts, new devices, new open ports, "
             "CVE matches, certificates expiring soon, and device uptime."
         )
-        hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
+        _s.themed_ss(hint, "color:{TEXT_MUTED}; font-size:10px; border:none;")
         bl.addWidget(hint)
 
         btn_gen = QPushButton("Generate now — copy to clipboard")
         btn_gen.setFixedHeight(26)
         btn_gen.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_gen.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{border-color:{ACCENT};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(btn_gen, "QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 12px;font-size:11px;}}"
+            "QPushButton:hover{{border-color:{ACCENT};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         btn_gen.clicked.connect(self._on_generate_digest)
         bl.addWidget(btn_gen)
 
         self._digest_status_lbl = QLabel("")
-        self._digest_status_lbl.setStyleSheet(
-            f"color:{GREEN}; font-size:10px; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._digest_status_lbl, "color:{GREEN}; font-size:10px; border:none; background:transparent;")
         self._digest_status_lbl.setVisible(False)
         bl.addWidget(self._digest_status_lbl)
 
@@ -359,21 +331,17 @@ class _NotifExtraChannelsMixin:
         row1 = QHBoxLayout()
         row1.setSpacing(10)
         self._chk_morning_briefing = QCheckBox("Send a daily briefing notification at")
-        self._chk_morning_briefing.setStyleSheet(
-            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
-            f"QCheckBox::indicator {{ width:12px; height:12px;"
-            f" border:1px solid {BORDER}; border-radius:2px; background:{BG_CARD}; }}"
-            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._chk_morning_briefing, "QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
+            "QCheckBox::indicator {{ width:12px; height:12px;"
+            " border:1px solid {BORDER}; border-radius:2px; background:{BG_CARD}; }}"
+            "QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}")
         self._chk_morning_briefing.toggled.connect(self._save_morning_briefing_settings)
         self._spin_briefing_hour = QSpinBox()
         self._spin_briefing_hour.setRange(0, 23)
         self._spin_briefing_hour.setValue(8)
         self._spin_briefing_hour.setSuffix(":00")
         self._spin_briefing_hour.setFixedWidth(70)
-        self._spin_briefing_hour.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _s.themed_ss(self._spin_briefing_hour, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         self._spin_briefing_hour.valueChanged.connect(self._save_morning_briefing_settings)
         row1.addWidget(self._chk_morning_briefing)
         row1.addWidget(self._spin_briefing_hour)
@@ -385,7 +353,7 @@ class _NotifExtraChannelsMixin:
             "and your last speed test result. Disabled by default."
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
+        _s.themed_ss(hint, "color:{TEXT_MUTED}; font-size:10px; border:none;")
         bl.addWidget(hint)
 
         extra_hint = QLabel(
@@ -393,7 +361,7 @@ class _NotifExtraChannelsMixin:
             "briefing also summarizes overnight service outages and speed drops."
         )
         extra_hint.setWordWrap(True)
-        extra_hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
+        _s.themed_ss(extra_hint, "color:{TEXT_MUTED}; font-size:10px; border:none;")
         bl.addWidget(extra_hint)
 
         qs = QSettings("NetSentinel", "NetSentinel")

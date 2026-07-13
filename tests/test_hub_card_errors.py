@@ -172,22 +172,19 @@ def device_page():
 
 
 def test_plugin_device_page_banner_pip_shows_button(device_page):
-    from ui.styles import RED
     device_page._show_banner(
-        "DEPS: tplinkrouterc6u not installed. Run: pip install tplinkrouterc6u", RED
+        "DEPS: tplinkrouterc6u not installed. Run: pip install tplinkrouterc6u", "RED"
     )
     assert _vis(device_page._banner_install_btn)
     assert "tplinkrouterc6u" in device_page._banner_install_btn.text()
 
 
 def test_plugin_device_page_banner_generic_hides_button(device_page):
-    from ui.styles import AMBER
-    device_page._show_banner("Cannot reach the device — is it online?", AMBER)
+    device_page._show_banner("Cannot reach the device — is it online?", "AMBER")
     assert _hid(device_page._banner_install_btn)
 
 
 def test_plugin_device_page_banner_visible_on_call(device_page):
-    from ui.styles import RED
     assert _hid(device_page._banner_frame)
-    device_page._show_banner("Some error", RED)
+    device_page._show_banner("Some error", "RED")
     assert _vis(device_page._banner_frame)

@@ -43,10 +43,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QDateTime
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 from modules.maintenance_window import (
     MaintenanceWindow, MaintenanceWindowManager,
 )
@@ -59,25 +56,19 @@ from ui.widgets.empty_state_card import EmptyStateCard
 def _page_header(title: str, subtitle: str = "") -> QFrame:
     container = QFrame()
     container.setObjectName("pageHeader")
-    container.setStyleSheet(
-        f"QFrame#pageHeader {{ background: transparent; border: none;"
-        f" border-bottom: 1px solid {BORDER}; }}"
-    )
+    _s.themed_ss(container, "QFrame#pageHeader {{ background: transparent; border: none;"
+        " border-bottom: 1px solid {BORDER}; }}")
     vbox = QVBoxLayout(container)
     vbox.setContentsMargins(20, 16, 20, 12)
     vbox.setSpacing(2)
     t = QLabel(title)
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-        "padding:0; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;")
     vbox.addWidget(t)
     if subtitle:
         s = QLabel(subtitle)
-        s.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            "padding:0; background:transparent; border:none;"
-        )
+        _s.themed_ss(s, "color:{TEXT_SECONDARY}; font-size:11px;"
+            "padding:0; background:transparent; border:none;")
         vbox.addWidget(s)
     return container
 
@@ -85,24 +76,22 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     card = QFrame()
     card.setObjectName("card")
-    card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}"
-    )
+    _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}")
     cl = QVBoxLayout(card)
     cl.setContentsMargins(0, 0, 0, 0)
     cl.setSpacing(0)
     tb = QFrame()
     tb.setFixedHeight(32)
-    tb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     tbl = QHBoxLayout(tb)
     tbl.setContentsMargins(12, 0, 12, 0)
     lbl = QLabel(title)
-    lbl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _s.themed_ss(lbl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     tbl.addWidget(lbl)
     tbl.addStretch()
     cl.addWidget(tb)
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(body, "background:{BG_CARD};")
     bl = QVBoxLayout(body)
     bl.setContentsMargins(16, 12, 16, 14)
     bl.setSpacing(8)
@@ -110,19 +99,19 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     return card, bl
 
 
-def _kpi_tile(label: str, value: str, accent: str = ACCENT) -> QWidget:
+def _kpi_tile(label: str, value: str, accent_name: str = "ACCENT") -> QWidget:
     w = QFrame()
-    w.setStyleSheet(
-        f"QFrame{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-left:3px solid {accent};min-width:110px;}}"
-    )
+    _s.themed_ss(w, lambda an=accent_name: (
+        f"QFrame{{background:{_s.BG_CARD};border:1px solid {_s.BORDER};"
+        f"border-left:3px solid {getattr(_s, an)};min-width:110px;}}"
+    ))
     vl = QVBoxLayout(w)
     vl.setContentsMargins(10, 8, 10, 8)
     vl.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:9px;font-weight:bold;")
+    _s.themed_ss(lbl, "color:{TEXT_SECONDARY};font-size:9px;font-weight:bold;")
     val = QLabel(value)
-    val.setStyleSheet(f"color:{TEXT_PRIMARY};font-size:22px;font-weight:bold;")
+    _s.themed_ss(val, "color:{TEXT_PRIMARY};font-size:22px;font-weight:bold;")
     val.setObjectName("kpi_val")
     vl.addWidget(lbl)
     vl.addWidget(val)
@@ -133,28 +122,22 @@ def _btn(text: str, primary: bool = False, danger: bool = False) -> QPushButton:
     b = QPushButton(text)
     b.setFixedHeight(26)
     if primary:
-        b.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
-            f"border-radius:2px;padding:0 14px;font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-            f"QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
-        )
+        _s.themed_ss(b, "QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
+            "border-radius:2px;padding:0 14px;font-size:11px;font-weight:bold;}}"
+            "QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
+            "QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}")
     elif danger:
-        b.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{RED};border:1px solid {RED};"
-            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{background:{RED};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{RED};color:{WHITE};}}"
-        )
+        _s.themed_ss(b, "QPushButton{{background:{BG_CARD};color:{RED};border:1px solid {RED};"
+            "border-radius:2px;padding:0 12px;font-size:11px;}}"
+            "QPushButton:hover{{background:{RED};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{RED};color:{WHITE};}}")
     else:
-        b.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};background:{BG_CARD};}}"
-            f"QPushButton:pressed{{color:{ACCENT};border-color:{ACCENT};background:{BG_CARD};}}"
-            f"QPushButton:disabled{{color:{BORDER};}}"
-        )
+        _s.themed_ss(b, "QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 12px;font-size:11px;}}"
+            "QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};background:{BG_CARD};}}"
+            "QPushButton:pressed{{color:{ACCENT};border-color:{ACCENT};background:{BG_CARD};}}"
+            "QPushButton:disabled{{color:{BORDER};}}")
     return b
 
 
@@ -162,12 +145,12 @@ def _window_status(w: MaintenanceWindow) -> tuple[str, str]:
     """Return (status_text, color)."""
     now = int(time.time())
     if not w.active:
-        return "Disabled", TEXT_SECONDARY
+        return "Disabled", _s.TEXT_SECONDARY
     if w.end_ts < now:
-        return "Expired", TEXT_SECONDARY
+        return "Expired", _s.TEXT_SECONDARY
     if w.start_ts > now:
-        return "Scheduled", AMBER
-    return "Active", GREEN
+        return "Scheduled", _s.AMBER
+    return "Active", _s.GREEN
 
 
 # ── Add/Edit dialog ───────────────────────────────────────────────────────────
@@ -179,23 +162,25 @@ class _WindowDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Add Maintenance Window" if window is None else "Edit Maintenance Window")
         self.setFixedWidth(460)
-        self.setStyleSheet(f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;")
+        _s.themed_ss(self, "background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;")
 
         form = QFormLayout(self)
         form.setSpacing(10)
         form.setContentsMargins(16, 16, 16, 16)
 
+        _lineedit_ss = (
+            "QLineEdit{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 6px;font-size:11px;}}"
+        )
+
         self._label = QLineEdit(window.label if window else "")
         self._label.setPlaceholderText("e.g. Router firmware upgrade")
-        self._label.setStyleSheet(
-            f"QLineEdit{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
-        )
+        _s.themed_ss(self._label, _lineedit_ss)
         form.addRow("Label:", self._label)
 
         self._hosts = QLineEdit(", ".join(window.hosts) if window else "")
         self._hosts.setPlaceholderText("192.168.1.1, 10.0.0.1  (blank = all hosts)")
-        self._hosts.setStyleSheet(self._label.styleSheet())
+        _s.themed_ss(self._hosts, _lineedit_ss)
         form.addRow("Hosts:", self._hosts)
 
         now_qt = QDateTime.currentDateTime()
@@ -273,9 +258,9 @@ class MaintenancePage(QWidget):
             "Suppress alerts for selected hosts during planned maintenance",
         ))
 
-        self._kpi_active    = _kpi_tile("Active",     "—", GREEN)
-        self._kpi_scheduled = _kpi_tile("Scheduled",  "—", AMBER)
-        self._kpi_suppressed = _kpi_tile("Suppressed", "—", RED)
+        self._kpi_active    = _kpi_tile("Active",     "—", "GREEN")
+        self._kpi_scheduled = _kpi_tile("Scheduled",  "—", "AMBER")
+        self._kpi_suppressed = _kpi_tile("Suppressed", "—", "RED")
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         for w in (self._kpi_active, self._kpi_scheduled, self._kpi_suppressed):
@@ -288,7 +273,7 @@ class MaintenancePage(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet("background:transparent;")
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         il = QVBoxLayout(inner)
         il.setContentsMargins(16, 8, 16, 16)
         il.setSpacing(12)
@@ -337,13 +322,11 @@ class MaintenancePage(QWidget):
         self._win_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._win_table.setAlternatingRowColors(True)
         self._win_table.setFixedHeight(200)
-        self._win_table.setStyleSheet(
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
-        )
+        _s.themed_ss(self._win_table, "QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            "gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            "QTableWidget::item{{padding:2px 5px;}}")
         for w, col in zip((0, 140, 130, 130, 70), range(1, 6)):
             self._win_table.setColumnWidth(col, w)
 
@@ -401,13 +384,11 @@ class MaintenancePage(QWidget):
         self._log_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._log_table.setAlternatingRowColors(True)
         self._log_table.setFixedHeight(180)
-        self._log_table.setStyleSheet(
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
-        )
+        _s.themed_ss(self._log_table, "QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            "gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            "QTableWidget::item{{padding:2px 5px;}}")
         for w, col in zip((110, 140, 120, 70), range(4)):
             self._log_table.setColumnWidth(col, w)
 
@@ -497,15 +478,17 @@ class MaintenancePage(QWidget):
         active    = sum(1 for w in windows if w.is_currently_active)
         scheduled = sum(1 for w in windows if w.active and w.start_ts > now)
         suppressed = len(self._manager.get_suppression_log())
-        for tile, val, col in [
-            (self._kpi_active,     str(active),    GREEN if active else TEXT_SECONDARY),
-            (self._kpi_scheduled,  str(scheduled), AMBER if scheduled else TEXT_SECONDARY),
-            (self._kpi_suppressed, str(suppressed), RED if suppressed else TEXT_SECONDARY),
+        for tile, val, col_name in [
+            (self._kpi_active,     str(active),    "GREEN" if active else "TEXT_SECONDARY"),
+            (self._kpi_scheduled,  str(scheduled), "AMBER" if scheduled else "TEXT_SECONDARY"),
+            (self._kpi_suppressed, str(suppressed), "RED" if suppressed else "TEXT_SECONDARY"),
         ]:
             lbl = tile.findChild(QLabel, "kpi_val")
             if lbl:
                 lbl.setText(val)
-                lbl.setStyleSheet(f"color:{col};font-size:22px;font-weight:bold;")
+                _s.themed_ss(lbl, lambda cn=col_name: (
+                    f"color:{getattr(_s, cn)};font-size:22px;font-weight:bold;"
+                ))
 
     # ── CRUD actions ──────────────────────────────────────────────────────────
 
@@ -567,7 +550,7 @@ class MaintenancePage(QWidget):
         from PyQt6.QtGui import QColor
         entries = self._manager.get_suppression_log()
         self._log_table.setRowCount(0)
-        _sev_color = {"CRITICAL": RED, "WARNING": AMBER, "INFO": ACCENT}
+        _sev_color = {"CRITICAL": _s.RED, "WARNING": _s.AMBER, "INFO": _s.ACCENT}
         for e in reversed(entries):
             row = self._log_table.rowCount()
             self._log_table.insertRow(row)
@@ -576,7 +559,7 @@ class MaintenancePage(QWidget):
                 item = QTableWidgetItem(str(val))
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 if col == 3:
-                    item.setForeground(QColor(_sev_color.get(e.severity, TEXT_PRIMARY)))
+                    item.setForeground(QColor(_sev_color.get(e.severity, _s.TEXT_PRIMARY)))
                 self._log_table.setItem(row, col, item)
 
     @pyqtSlot()

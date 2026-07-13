@@ -37,23 +37,7 @@ from modules.dns_zone_scanner import DnsZoneResult
 from workers.dns_zone_worker import DnsZoneWorker
 from ui.widgets.context_menu import install_copy_menu
 from ui.tabs_helpers import _table as _make_table
-from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    AMBER,
-    BG_CARD,
-    BG_DARK,
-    BG_HOVER,
-    BORDER,
-    BTN_DISABLED_BORDER,
-    CARD_HDR_BORDER,
-    GREEN,
-    INPUT_PLACEHOLDER,
-    PROGRESS_TRACK,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    WHITE,
-)
+from ui import styles as _s
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -67,35 +51,33 @@ def _cell(text: str, align=Qt.AlignmentFlag.AlignLeft) -> QTableWidgetItem:
 
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
-    frame.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}")
+    _s.themed_ss(frame, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}")
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(0)
     hdr = QLabel(f"  {title}")
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-        f" border-bottom:1px solid {CARD_HDR_BORDER}; background:{BG_CARD};"
-    )
+    _s.themed_ss(hdr, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+        " border-bottom:1px solid {CARD_HDR_BORDER}; background:{BG_CARD};")
     lay.addWidget(hdr)
     return frame, lay
 
 
-def _make_kpi(label: str, value: str, color: str = ACCENT) -> QFrame:
+def _make_kpi(label: str, value: str, color_name: str = "ACCENT") -> QFrame:
     frame = QFrame()
     frame.setFixedHeight(60)
-    frame.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {color}; }}"
-    )
+    _s.themed_ss(frame, lambda cn=color_name: (
+        f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
+        f" border-left:3px solid {getattr(_s, cn)}; }}"
+    ))
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(10, 6, 10, 6)
     lay.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
+    _s.themed_ss(lbl, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
     val = QLabel(value)
     val.setObjectName("kpi_value")
-    val.setStyleSheet(f"font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
+    _s.themed_ss(val, "font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return frame
@@ -105,21 +87,17 @@ def _btn(text: str, primary: bool = True) -> QPushButton:
     b = QPushButton(text)
     b.setFixedHeight(30)
     if primary:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
-            f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
+            " font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     else:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{WHITE}; color:{ACCENT}; font-size:12px;"
-            f" border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ background:{BG_DARK}; color:{INPUT_PLACEHOLDER}; border-color:{BTN_DISABLED_BORDER}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{WHITE}; color:{ACCENT}; font-size:12px;"
+            " border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:disabled {{ background:{BG_DARK}; color:{INPUT_PLACEHOLDER}; border-color:{BTN_DISABLED_BORDER}; }}"
+            "QPushButton:pressed {{ color:{ACCENT}; }}")
     return b
 
 
@@ -128,11 +106,9 @@ def _field(placeholder: str, width: int = 180) -> QLineEdit:
     e.setPlaceholderText(placeholder)
     e.setFixedHeight(30)
     e.setFixedWidth(width)
-    e.setStyleSheet(
-        f"QLineEdit {{ border:1px solid {BORDER}; border-radius:4px; padding:0 8px;"
-        f" font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
-        f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-    )
+    _s.themed_ss(e, "QLineEdit {{ border:1px solid {BORDER}; border-radius:4px; padding:0 8px;"
+        " font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
+        "QLineEdit:focus {{ border-color:{ACCENT}; }}")
     return e
 
 
@@ -172,9 +148,9 @@ class DnsZonePage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         self._kpi_records  = _make_kpi("DNS Records",    "—")
-        self._kpi_axfr     = _make_kpi("Zone Transferred","—", GREEN)
-        self._kpi_mdns     = _make_kpi("mDNS Services",  "—", ACCENT)
-        self._kpi_types    = _make_kpi("Record Types",   "—", AMBER)
+        self._kpi_axfr     = _make_kpi("Zone Transferred","—", "GREEN")
+        self._kpi_mdns     = _make_kpi("mDNS Services",  "—", "ACCENT")
+        self._kpi_types    = _make_kpi("Record Types",   "—", "AMBER")
         for w in (self._kpi_records, self._kpi_axfr, self._kpi_mdns, self._kpi_types):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
@@ -228,7 +204,7 @@ class DnsZonePage(QWidget):
         tb.addWidget(self._mdns_btn)
 
         self._status_lbl = QLabel("Enter a DNS server and domain, or click 'Enumerate mDNS'.")
-        self._status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY};")
         tb.addWidget(self._status_lbl)
         tb.addStretch()
         content_lay.addLayout(tb)
@@ -236,7 +212,7 @@ class DnsZonePage(QWidget):
         # Content — horizontal splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(4)
-        splitter.setStyleSheet(f"QSplitter::handle {{ background:{PROGRESS_TRACK}; }}")
+        _s.themed_ss(splitter, "QSplitter::handle {{ background:{PROGRESS_TRACK}; }}")
 
         # Left: AXFR records
         left_card, left_lay = _card("DNS Zone Records (AXFR)")
@@ -323,7 +299,7 @@ class DnsZonePage(QWidget):
 
         self._rec_empty = QLabel("No records — run AXFR or server refused transfer.")
         self._rec_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._rec_empty.setStyleSheet(f"font-size:12px; color:{INPUT_PLACEHOLDER};")
+        _s.themed_ss(self._rec_empty, "font-size:12px; color:{INPUT_PLACEHOLDER};")
         left_lay.addWidget(self._rec_table)
         left_lay.addWidget(self._rec_empty)
         splitter.addWidget(left_card)
@@ -411,7 +387,7 @@ class DnsZonePage(QWidget):
 
         self._svc_empty = QLabel("No mDNS services discovered. Click 'Enumerate mDNS'.")
         self._svc_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._svc_empty.setStyleSheet(f"font-size:12px; color:{INPUT_PLACEHOLDER};")
+        _s.themed_ss(self._svc_empty, "font-size:12px; color:{INPUT_PLACEHOLDER};")
         right_lay.addWidget(self._svc_table)
         right_lay.addWidget(self._svc_empty)
         splitter.addWidget(right_card)
@@ -520,11 +496,11 @@ class DnsZonePage(QWidget):
                 # Colour-code record types
                 from PyQt6.QtGui import QColor
                 if rec.rtype == "A":
-                    type_item.setForeground(QColor(GREEN))
+                    type_item.setForeground(QColor(_s.GREEN))
                 elif rec.rtype in ("NS", "SOA"):
-                    type_item.setForeground(QColor(ACCENT))
+                    type_item.setForeground(QColor(_s.ACCENT))
                 elif rec.rtype == "MX":
-                    type_item.setForeground(QColor(AMBER))
+                    type_item.setForeground(QColor(_s.AMBER))
                 self._rec_table.setItem(row, 1, type_item)
                 self._rec_table.setItem(row, 2, _cell(rec.value))
                 self._rec_table.setItem(row, 3, _cell(str(rec.ttl), Qt.AlignmentFlag.AlignRight))

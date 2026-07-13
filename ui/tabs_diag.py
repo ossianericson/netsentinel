@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import TEXT_PRIMARY, TEXT_SECONDARY
+from ui import styles as _s
 from ui.tabs_helpers import _table
 from ui.tabs_diag_extra import _DiagExtraTabsMixin
 from ui.tabs_logger import _LoggerTabMixin
@@ -42,7 +42,7 @@ class _DiagTabsMixin(_DiagExtraTabsMixin, _LoggerTabMixin):
         top = QHBoxLayout()
         title = QLabel("⚡  Network Health & Diagnostics")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         self._btn_diag = QPushButton("⚡  Run Diagnostics")
@@ -53,7 +53,7 @@ class _DiagTabsMixin(_DiagExtraTabsMixin, _LoggerTabMixin):
         lay.addLayout(top)
 
         self._diag_status_lbl = QLabel("Click 'Run Diagnostics' to test connectivity and performance.")
-        self._diag_status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._diag_status_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(self._diag_status_lbl)
 
         # Summary row
@@ -95,12 +95,12 @@ class _DiagTabsMixin(_DiagExtraTabsMixin, _LoggerTabMixin):
         # HTTP connectivity
         http_row = QHBoxLayout()
         http_lbl = QLabel("  Internet Connectivity:")
-        http_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(http_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         http_row.addWidget(http_lbl)
         self._diag_http_labels: list = []
         for name, _ in [("Google 204", ""), ("Cloudflare", ""), ("Apple captive", "")]:
             lbl = QLabel(f"● {name}: —")
-            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding:0 10px;")
+            _s.themed_ss(lbl, "color:{TEXT_SECONDARY}; font-size:11px; padding:0 10px;")
             self._diag_http_labels.append(lbl)
             http_row.addWidget(lbl)
         http_row.addStretch()
@@ -109,10 +109,10 @@ class _DiagTabsMixin(_DiagExtraTabsMixin, _LoggerTabMixin):
         # DNS Leak
         leak_row = QHBoxLayout()
         leak_lbl_hdr = QLabel("  DNS Leak Test:")
-        leak_lbl_hdr.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(leak_lbl_hdr, "color:{TEXT_SECONDARY}; font-size:11px;")
         leak_row.addWidget(leak_lbl_hdr)
         self._diag_leak_lbl = QLabel("—")
-        self._diag_leak_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding-left:10px;")
+        _s.themed_ss(self._diag_leak_lbl, "color:{TEXT_SECONDARY}; font-size:11px; padding-left:10px;")
         self._diag_leak_lbl.setWordWrap(True)
         leak_row.addWidget(self._diag_leak_lbl, 1)
         lay.addLayout(leak_row)
@@ -124,7 +124,7 @@ class _DiagTabsMixin(_DiagExtraTabsMixin, _LoggerTabMixin):
 
         # Traceroute
         trace_lbl = QLabel("  Traceroute to 8.8.8.8:")
-        trace_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
+        _s.themed_ss(trace_lbl, "color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
         lay.addWidget(trace_lbl)
         self._diag_trace_table = _table(["Hop", "IP Address", "RTT (ms)"])
         self._diag_trace_table.setColumnWidth(0, 50)

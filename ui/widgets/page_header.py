@@ -33,7 +33,8 @@ from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER, WHITE, alpha
+from ui import styles as _s
+from ui.styles import alpha, themed_ss
 
 
 class PageHeaderBar(QWidget):
@@ -43,10 +44,10 @@ class PageHeaderBar(QWidget):
     """
 
     _CHIP_STYLE = (
-        f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
+        f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
         " padding: 0 0 0 0;"
     )
-    _SEP_STYLE = f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
+    _SEP_STYLE = f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
 
     _BANNER_HEIGHT = 30
 
@@ -57,9 +58,7 @@ class PageHeaderBar(QWidget):
         self._banner_key = ""
         self.setFixedHeight(self._base_height)
         self.setObjectName("PageHeaderBar")
-        self.setStyleSheet(
-            f"#PageHeaderBar {{ background: transparent; border-bottom: 1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self, "#PageHeaderBar {{ background: transparent; border-bottom: 1px solid {BORDER}; }}")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -80,17 +79,13 @@ class PageHeaderBar(QWidget):
             left = None
 
         self._title_lbl = QLabel(title)
-        self._title_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:14px; font-weight:600;"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._title_lbl, "color:{TEXT_PRIMARY}; font-size:14px; font-weight:600;"
+            " background:transparent; border:none;")
 
         if left is not None:
             left.addWidget(self._title_lbl)
             self._subtitle_lbl = QLabel(subtitle)
-            self._subtitle_lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-            )
+            _s.themed_ss(self._subtitle_lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
             left.addWidget(self._subtitle_lbl)
             outer.addLayout(left)
         else:
@@ -120,21 +115,17 @@ class PageHeaderBar(QWidget):
 
         self._banner_lbl = QLabel("")
         self._banner_lbl.setWordWrap(True)
-        self._banner_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._banner_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         banner_lay.addWidget(self._banner_lbl, 1)
 
         self._banner_dismiss_btn = QPushButton("×")
         self._banner_dismiss_btn.setFixedSize(18, 18)
         self._banner_dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._banner_dismiss_btn.setToolTip("Dismiss — won't show again")
-        self._banner_dismiss_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:13px;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(self._banner_dismiss_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:13px;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}")
         self._banner_dismiss_btn.clicked.connect(self._dismiss_banner)
         banner_lay.addWidget(self._banner_dismiss_btn)
 
@@ -206,11 +197,11 @@ class PageHeaderBar(QWidget):
         self._help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._help_btn.setToolTip("Page help")
         self._help_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-            f" font-weight:bold; border:1px solid {alpha(WHITE, 0x22)}; border-radius:11px; padding:0; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; background:transparent; }}"
-            f"QPushButton:checked {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; font-size:11px;"
+            f" font-weight:bold; border:1px solid {alpha(_s.WHITE, 0x22)}; border-radius:11px; padding:0; }}"
+            f"QPushButton:hover {{ border-color:{_s.ACCENT}; color:{_s.ACCENT}; background:transparent; }}"
+            f"QPushButton:checked {{ background:{_s.ACCENT}; color:{_s.WHITE}; border-color:{_s.ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
         )
         self._help_btn.setCheckable(True)
         self._help_btn.toggled.connect(self._toggle_help)
@@ -240,7 +231,6 @@ class PageHeaderBar(QWidget):
         super().hideEvent(event)
 
     def refresh_theme(self) -> None:
-        from ui import styles as _s
         PageHeaderBar._CHIP_STYLE = (
             f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
             " padding: 0 0 0 0;"
@@ -299,9 +289,10 @@ class _HelpPopover(QFrame):
     ) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setFixedWidth(300)
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
+        themed_ss(
+            self,
+            "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}",
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 12)
@@ -309,46 +300,50 @@ class _HelpPopover(QFrame):
 
         title_lbl = QLabel(title)
         title_lbl.setWordWrap(True)
-        title_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
+        themed_ss(
+            title_lbl,
+            "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;",
         )
         lay.addWidget(title_lbl)
 
         def _section_label(text: str) -> QLabel:
             lbl = QLabel(text)
-            lbl.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
-                f" background:transparent; border:none; letter-spacing:0.5px;"
+            themed_ss(
+                lbl,
+                "font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+                " background:transparent; border:none; letter-spacing:0.5px;",
             )
             return lbl
 
         lay.addWidget(_section_label("WHAT IT DOES"))
         body_lbl = QLabel(body)
         body_lbl.setWordWrap(True)
-        body_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        themed_ss(
+            body_lbl,
+            "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;",
         )
         lay.addWidget(body_lbl)
 
         if tips:
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.HLine)
-            sep.setStyleSheet(f"color:{BORDER}; background:{BORDER};")
+            themed_ss(sep, "color:{BORDER}; background:{BORDER};")
             sep.setFixedHeight(1)
             lay.addWidget(sep)
             lay.addWidget(_section_label("TIPS"))
             for tip in tips[:2]:
                 tip_lbl = QLabel(f"▸  {tip}")
                 tip_lbl.setWordWrap(True)
-                tip_lbl.setStyleSheet(
-                    f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+                themed_ss(
+                    tip_lbl,
+                    "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;",
                 )
                 lay.addWidget(tip_lbl)
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"color:{BORDER}; background:{BORDER};")
+        themed_ss(sep2, "color:{BORDER}; background:{BORDER};")
         sep2.setFixedHeight(1)
         lay.addWidget(sep2)
         lay.addWidget(_section_label("SHORTCUTS"))
@@ -358,13 +353,15 @@ class _HelpPopover(QFrame):
             row.setSpacing(6)
             key_lbl = QLabel(key)
             key_lbl.setFixedWidth(56)
-            key_lbl.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{ACCENT};"
-                f" background:transparent; border:none; font-family:Consolas,monospace;"
+            themed_ss(
+                key_lbl,
+                "font-size:10px; font-weight:bold; color:{ACCENT};"
+                " background:transparent; border:none; font-family:Consolas,monospace;",
             )
             desc_lbl = QLabel(desc)
-            desc_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            themed_ss(
+                desc_lbl,
+                "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;",
             )
             row.addWidget(key_lbl)
             row.addWidget(desc_lbl, 1)

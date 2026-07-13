@@ -19,17 +19,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    BG_CARD,
-    BG_HOVER,
-    BORDER,
-    CARD_RADIUS,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-)
+from ui import styles as _s
 
 _LAST_SHOWN_KEY = "weekly_report/last_shown_week"
 
@@ -58,52 +48,42 @@ class WeeklyReportCard(QWidget):
 
         self._frame = QFrame()
         self._frame.setObjectName("weeklyReportFrame")
-        self._frame.setStyleSheet(
-            f"QFrame#weeklyReportFrame {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(self._frame, "QFrame#weeklyReportFrame {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
         frame_lay = QVBoxLayout(self._frame)
         frame_lay.setContentsMargins(14, 10, 14, 10)
         frame_lay.setSpacing(6)
 
         top_row = QHBoxLayout()
         title = QLabel("YOUR NETWORK LAST WEEK")
-        title.setStyleSheet(
-            f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
-            " background:transparent; border:none; letter-spacing:1.5px;"
-        )
+        _s.themed_ss(title, "font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; letter-spacing:1.5px;")
         top_row.addWidget(title)
         top_row.addStretch()
         dismiss_btn = QPushButton("×")
         dismiss_btn.setFixedSize(20, 20)
         dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        dismiss_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _s.themed_ss(dismiss_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:14px; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
         dismiss_btn.clicked.connect(self.dismiss)
         top_row.addWidget(dismiss_btn)
         frame_lay.addLayout(top_row)
 
         self._bullets_lbl = QLabel("")
         self._bullets_lbl.setWordWrap(True)
-        self._bullets_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._bullets_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         frame_lay.addWidget(self._bullets_lbl)
 
         btn_row = QHBoxLayout()
         self._email_btn = QPushButton("Email me this report →")
         self._email_btn.setFlat(True)
         self._email_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._email_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._email_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._email_btn.clicked.connect(self.email_requested)
         btn_row.addWidget(self._email_btn)
         btn_row.addStretch()

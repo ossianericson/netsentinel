@@ -361,11 +361,37 @@ BASELINE_UNUSED_GLOBALS: frozenset[tuple[str, str]] = frozenset({
     ("modules/syslog_receiver.py", "_MONTHS"),
     ("modules/wifi_scanner.py", "CHANNELS_24GHZ"),
     ("modules/wifi_scanner.py", "CHANNELS_5GHZ"),
-    ("ui/pages/log_source_panel.py", "_SYSLOG_SEVERITY_COLOR"),
-    ("ui/pages/trend_page.py", "_SEV_BG"),
     ("ui/pages/trigger_builder_page.py", "_BUILDER_METRICS"),
     ("ui/pages/trigger_builder_page.py", "_BUILDER_OPS"),
     ("ui/styles.py", "IP_CALC_NET_BIT_BG"),
+    # RED_HOVER/RED_DARK: only consumer is a themed_ss() string template in
+    # app_traffic_page.py -- ui.styles._LiveTokens resolves {RED_HOVER} via
+    # globals()[key] on ui/styles.py's own namespace at render time, so the
+    # consuming file no longer needs (or, per ruff F401, may keep) a bare
+    # import. The AST-based checker can't see a string-literal reference.
+    ("ui/styles.py", "RED_HOVER"),
+    ("ui/styles.py", "RED_DARK"),
+    # OVERLAY_BG2/OVERLAY_FG3/OVERLAY_BLUE/OVERLAY_BLUE2: same mechanism as
+    # RED_HOVER/RED_DARK above -- their only remaining consumers
+    # (ui/first_run_dialog.py, ui/widgets/coach_mark.py) reference them purely
+    # as {TOKEN} placeholders inside themed_ss() string templates (Phase 6
+    # Batch 9), not as a bare Name or `_s.TOKEN` attribute access.
+    ("ui/styles.py", "OVERLAY_BG2"),
+    ("ui/styles.py", "OVERLAY_FG3"),
+    ("ui/styles.py", "OVERLAY_BLUE"),
+    ("ui/styles.py", "OVERLAY_BLUE2"),
+    # OVERLAY_ORANGE: only consumer (ui/first_run_dialog.py's _SLIDES list) now
+    # stores the token NAME as a plain string ("OVERLAY_ORANGE") resolved via
+    # getattr(_s, name) at render time (Phase 6 Batch 9) -- invisible to the
+    # AST bare-Name/attribute scan.
+    ("ui/styles.py", "OVERLAY_ORANGE"),
+    # CERT_NETPLUS_BG/CERT_CISCO_BG/CERT_SEC_BG: same getattr(_s, name)
+    # mechanism -- ui/widgets/objective_badge.py's _CERT_COLORS dict stores
+    # token NAMEs, resolved via getattr(_s, name) at render time (Phase 6
+    # Batch 9), not a literal `_s.TOKEN` attribute access.
+    ("ui/styles.py", "CERT_NETPLUS_BG"),
+    ("ui/styles.py", "CERT_CISCO_BG"),
+    ("ui/styles.py", "CERT_SEC_BG"),
     ("ui/styles.py", "HTML_GREEN"),
     ("ui/styles.py", "HTML_RED"),
     ("ui/styles.py", "HTML_AMBER"),

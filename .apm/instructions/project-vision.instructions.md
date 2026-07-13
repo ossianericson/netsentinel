@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.28**
+Current version: **v2.1.29**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -85,7 +85,7 @@ One line per feature — full behavioural detail lives in the module's own docst
 - **Sidebar search (Ctrl+F)** — focuses sidebar search from anywhere in the app
 - **Page help popover (?)** — floating panel anchored below the ? button
 - **Lucide SVG rail section icons** — clean scalable SVG at any size (RULE 25)
-- **Two colour themes** — Arctic Clean (light, cool-slate chrome with deep-indigo table headers) and Midnight Pro (dark, bright royal-blue accent) (`ui/styles.py`)
+- **Two colour themes, instant switching** — Arctic Clean (light, cool-slate chrome with deep-indigo table headers) and Midnight Pro (dark, bright royal-blue accent); clicking a theme swatch in Settings restyles the whole running app immediately, no restart (`ui/styles.py`)
 - **Configurable Overview tile dashboard** — drag to reorder, layout persists
 - **Skeleton loading rows** — placeholder rows while scan workers run (`ui/widgets/skeleton.py`)
 - **Feature Guide** — filterable index of feature entries with Open buttons (`ui/pages/discover_page.py`)

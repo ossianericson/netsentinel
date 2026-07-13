@@ -33,13 +33,10 @@ from ui.widgets.empty_state_card import EmptyStateCard
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, STATUS_ICON_CRIT, STATUS_ICON_OK, STATUS_ICON_UNKNOWN,
-    STATUS_ICON_WARN, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
-    TH_TEXT,
+    STATUS_ICON_CRIT, STATUS_ICON_OK, STATUS_ICON_UNKNOWN,
+    STATUS_ICON_WARN,
 )
+from ui import styles as _s
 
 # Uptime % thresholds for colouring
 _CRIT  = 95.0   # < 95% → red
@@ -49,10 +46,10 @@ _WARN  = 99.0   # < 99% → amber
 
 def _uptime_color(pct: float) -> str:
     if pct < _CRIT:
-        return RED
+        return _s.RED
     if pct < _WARN:
-        return AMBER
-    return GREEN
+        return _s.AMBER
+    return _s.GREEN
 
 
 class UptimePage(QWidget):
@@ -84,12 +81,12 @@ class UptimePage(QWidget):
         layout.setSpacing(8)
 
         title = QLabel("Uptime & SLA")
-        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(title, "font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
         layout.addWidget(title)
         subtitle = QLabel(
             "Per-device availability percentages derived from background monitoring samples."
         )
-        subtitle.setStyleSheet(f"font-size: 11px; color: {TEXT_SECONDARY};")
+        _s.themed_ss(subtitle, "font-size: 11px; color: {TEXT_SECONDARY};")
         layout.addWidget(subtitle)
 
         self._content_stack = QStackedWidget()
@@ -120,37 +117,35 @@ class UptimePage(QWidget):
 
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_devices = self._make_kpi("DEVICES MONITORED", "—", ACCENT)
-        self._kpi_fleet   = self._make_kpi("FLEET AVG (24H)",   "—", GREEN)
-        self._kpi_best    = self._make_kpi("BEST DEVICE (24H)", "—", GREEN)
-        self._kpi_worst   = self._make_kpi("WORST DEVICE",      "—", AMBER)
+        self._kpi_devices = self._make_kpi("DEVICES MONITORED", "—", "ACCENT")
+        self._kpi_fleet   = self._make_kpi("FLEET AVG (24H)",   "—", "GREEN")
+        self._kpi_best    = self._make_kpi("BEST DEVICE (24H)", "—", "GREEN")
+        self._kpi_worst   = self._make_kpi("WORST DEVICE",      "—", "AMBER")
         for w in (self._kpi_devices, self._kpi_fleet, self._kpi_best, self._kpi_worst):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
         cl.addLayout(kpi_row)
 
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
         title_bar = QFrame()
         title_bar.setFixedHeight(32)
-        title_bar.setStyleSheet(f"background: {BG_CARD}; border-bottom: 1px solid {CARD_HDR_BORDER};")
+        _s.themed_ss(title_bar, "background: {BG_CARD}; border-bottom: 1px solid {CARD_HDR_BORDER};")
         tb_layout = QHBoxLayout(title_bar)
         tb_layout.setContentsMargins(10, 0, 10, 0)
         lbl = QLabel("Device Uptime Summary")
-        lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(lbl, "font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
         tb_layout.addWidget(lbl)
         tb_layout.addStretch()
         hint = QLabel("Green ≥99% · Amber ≥95% · Red <95%")
-        hint.setStyleSheet(f"font-size: 11px; color: {TEXT_SECONDARY};")
+        _s.themed_ss(hint, "font-size: 11px; color: {TEXT_SECONDARY};")
         tb_layout.addWidget(hint)
         self._last_refresh_lbl = QLabel("")
-        self._last_refresh_lbl.setStyleSheet(f"font-size: 10px; color: {TEXT_MUTED}; padding-left: 12px;")
+        _s.themed_ss(self._last_refresh_lbl, "font-size: 10px; color: {TEXT_MUTED}; padding-left: 12px;")
         tb_layout.addWidget(self._last_refresh_lbl)
         card_layout.addWidget(title_bar)
 
@@ -174,8 +169,7 @@ class UptimePage(QWidget):
         self._table.setSelectionBehavior(ExpandingTable.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.setSortingEnabled(True)
-        self._table.setStyleSheet(
-            f"""
+        _s.themed_ss(self._table, """
             QTableWidget {{
                 border: none; gridline-color: {TABLE_ROW_BORDER};
                 font-size: 11px; color: {TEXT_PRIMARY};
@@ -191,8 +185,7 @@ class UptimePage(QWidget):
             QTableWidget::item:selected {{
                 background: {TABLE_SEL}; color: {TEXT_PRIMARY};
             }}
-            """
-        )
+            """)
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
@@ -273,24 +266,20 @@ class UptimePage(QWidget):
 
     # ── KPI helpers ───────────────────────────────────────────────────────────
 
-    def _make_kpi(self, label: str, value: str, accent: str) -> QFrame:
+    def _make_kpi(self, label: str, value: str, accent_name: str) -> QFrame:
         frame = QFrame()
-        frame.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; "
-            f"border-left: 3px solid {accent}; }}"
-        )
+        _s.themed_ss(frame, lambda a=accent_name: (
+            f"QFrame {{ background: {_s.BG_CARD}; border: 1px solid {_s.BORDER}; "
+            f"border-left: 3px solid {getattr(_s, a)}; }}"
+        ))
         frame.setMinimumWidth(110)
         lay = QVBoxLayout(frame)
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
         lbl = QLabel(label)
-        lbl.setStyleSheet(
-            f"font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};"
-        )
+        _s.themed_ss(lbl, "font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};")
         val = QLabel(value)
-        val.setStyleSheet(
-            f"font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};"
-        )
+        _s.themed_ss(val, "font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};")
         val.setObjectName(f"kpi_val_{label}")
         lay.addWidget(lbl)
         lay.addWidget(val)
@@ -352,16 +341,16 @@ class UptimePage(QWidget):
             # Status dot
             if worst_window is None:
                 status_text  = f"{STATUS_ICON_UNKNOWN}  NO DATA"
-                status_color = TEXT_SECONDARY
+                status_color = _s.TEXT_SECONDARY
             elif worst_window < _CRIT:
                 status_text  = f"{STATUS_ICON_CRIT}  DEGRADED"
-                status_color = RED
+                status_color = _s.RED
             elif worst_window < _WARN:
                 status_text  = f"{STATUS_ICON_WARN}  WARNING"
-                status_color = AMBER
+                status_color = _s.AMBER
             else:
                 status_text  = f"{STATUS_ICON_OK}  HEALTHY"
-                status_color = GREEN
+                status_color = _s.GREEN
 
             dot = QLabel(status_text)
             dot.setStyleSheet(
@@ -398,20 +387,20 @@ class UptimePage(QWidget):
 
         if worst is None:
             status_text  = f"{STATUS_ICON_UNKNOWN} NO DATA"
-            status_color = TEXT_SECONDARY
+            status_color = _s.TEXT_SECONDARY
         elif worst < _CRIT:
             status_text  = f"{STATUS_ICON_CRIT} DEGRADED"
-            status_color = RED
+            status_color = _s.RED
         elif worst < _WARN:
             status_text  = f"{STATUS_ICON_WARN} WARNING"
-            status_color = AMBER
+            status_color = _s.AMBER
         else:
             status_text  = f"{STATUS_ICON_OK} HEALTHY"
-            status_color = GREEN
+            status_color = _s.GREEN
 
         outer = QWidget()
         outer.setStyleSheet(
-            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f"QWidget {{ background:{_s.BG_HOVER}; border:none;"
             f" border-left:3px solid {status_color}; }}"
         )
         lay = QHBoxLayout(outer)
@@ -420,10 +409,10 @@ class UptimePage(QWidget):
 
         def _hdr(t):
             l = QLabel(t)
-            l.setStyleSheet(f"font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
+            _s.themed_ss(l, "font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
             return l
 
-        def _val(t, c=TEXT_PRIMARY):
+        def _val(t, c=_s.TEXT_PRIMARY):
             l = QLabel(str(t))
             l.setStyleSheet(f"font-size:11px; color:{c}; background:transparent; border:none;")
             return l
@@ -445,7 +434,7 @@ class UptimePage(QWidget):
         g2.setSpacing(3)
         g2.setHorizontalSpacing(12)
         def _pct_str(p): return f"{p:.1f}%" if p is not None else "—"
-        def _pct_col(p): return _uptime_color(p) if p is not None else TEXT_SECONDARY
+        def _pct_col(p): return _uptime_color(p) if p is not None else _s.TEXT_SECONDARY
         g2.addRow(_hdr("Uptime 24h"),  _val(_pct_str(pct_24),  _pct_col(pct_24)))
         g2.addRow(_hdr("Uptime 7d"),   _val(_pct_str(pct_7d),  _pct_col(pct_7d)))
         g2.addRow(_hdr("Uptime 30d"),  _val(_pct_str(pct_30d), _pct_col(pct_30d)))

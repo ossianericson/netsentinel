@@ -19,10 +19,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.perf_audit import profile_page_init
-from ui.styles import (
-    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, MAIN_STYLE, NAV_DIVIDER,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui.styles import MAIN_STYLE
+from ui import styles as _s
 from modules.utils import get_offenders_path, is_admin
 from modules.scan_persistence import persist_alert, record_modem_signal
 
@@ -355,14 +353,14 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
         # ── Network pulse widgets (permanent, right-aligned) ─────────────────
         _pulse_base = (
-            "QLabel { padding: 0 8px; font-size: 11px; background: transparent;"
-            f" border: none; color: {TEXT_MUTED}; }}"
-            f"QLabel:hover {{ color: {WHITE}; }}"
+            "QLabel {{ padding: 0 8px; font-size: 11px; background: transparent;"
+            " border: none; color: {TEXT_MUTED}; }}"
+            "QLabel:hover {{ color: {WHITE}; }}"
         )
         _pulse_sep = QFrame()
         _pulse_sep.setFrameShape(QFrame.Shape.VLine)
         _pulse_sep.setFixedWidth(1)
-        _pulse_sep.setStyleSheet(f"background: {NAV_DIVIDER}; border: none;")
+        _s.themed_ss(_pulse_sep, "background: {NAV_DIVIDER}; border: none;")
 
         self._pulse_online_lbl  = _ClickLabel("○  —")
         self._pulse_devices_lbl = _ClickLabel("■  —")
@@ -370,7 +368,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._pulse_logger_lbl  = _ClickLabel("○  Logger off")
         for _l in (self._pulse_online_lbl, self._pulse_devices_lbl,
                    self._pulse_scan_lbl, self._pulse_logger_lbl):
-            _l.setStyleSheet(_pulse_base)
+            _s.themed_ss(_l, _pulse_base)
             _l.setCursor(Qt.CursorShape.PointingHandCursor)
         self._pulse_online_lbl.setToolTip(
             "Connection status (last logger result)\nClick to open Connectivity Tests"
@@ -435,10 +433,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _PAD   = 4
         _GAP   = 6
 
-        def __init__(self, admin_rows: set, color: str, parent=None):
+        def __init__(self, admin_rows: set, parent=None):
             super().__init__(parent)
             self._admin_rows    = admin_rows
-            self._color         = color
             self._count_badges: dict = {}  # row → (count_str, bg_color)
 
         def set_count_badge(self, row: int, count: int, color: str) -> None:
@@ -463,7 +460,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             painter.setBrush(QColor(bg))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(rect, 3, 3)
-            painter.setPen(QColor(WHITE))
+            painter.setPen(QColor(_s.WHITE))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
             return bw + self._GAP
 
@@ -476,7 +473,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             painter.save()
             right_offset = 0
             if row in self._admin_rows:
-                right_offset += self._paint_pill(painter, option, self._BADGE, self._color, right_offset)
+                right_offset += self._paint_pill(painter, option, self._BADGE, _s.RED, right_offset)
             if row in self._count_badges:
                 text, bg = self._count_badges[row]
                 self._paint_pill(painter, option, text, bg, right_offset)
@@ -497,11 +494,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         dlg = QDialog(self)
         dlg.setWindowTitle(f"How to Fix — {title}")
         dlg.setMinimumWidth(500)
-        dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+        dlg.setStyleSheet(f"background:{_s.BG_DARK}; color:{_s.TEXT_PRIMARY};")
         lay = QVBoxLayout(dlg)
 
         heading = QLabel(f"<b>Remediation steps for: {title}</b>")
-        heading.setStyleSheet(f"color:{ACCENT_LITE}; font-size:13px; padding-bottom:4px;")
+        heading.setStyleSheet(f"color:{_s.ACCENT_LITE}; font-size:13px; padding-bottom:4px;")
         heading.setWordWrap(True)
         lay.addWidget(heading)
 
@@ -524,7 +521,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         txt = QLabel(f"<ol style='padding-left:18px;line-height:1.8'>{steps_html}</ol>")
         txt.setWordWrap(True)
         txt.setTextFormat(Qt.TextFormat.RichText)
-        txt.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px; padding:4px;")
+        txt.setStyleSheet(f"color:{_s.TEXT_PRIMARY}; font-size:12px; padding:4px;")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -533,7 +530,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         inner_lay.addWidget(txt)
         inner_lay.addStretch()
         scroll.setWidget(inner)
-        scroll.setStyleSheet(f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;")
+        scroll.setStyleSheet(f"background:{_s.BG_CARD}; border:1px solid {_s.BORDER}; border-radius:0px;")
         scroll.setMinimumHeight(160)
 
         lay.addWidget(scroll, 1)
@@ -726,34 +723,36 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     def _build_monitor_resume_bar(self) -> "QWidget":
         from PyQt6.QtWidgets import QWidget as _W, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
         from PyQt6.QtCore import Qt as _Qt
-        from ui.styles import BANNER_BG, GREEN, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
         container = _W()
         container.setObjectName("monitorResumeBar")
         container.setFixedHeight(28)
         # Neutral surface + crisp green left accent + green text (no saturated fill)
-        container.setStyleSheet(
-            f"QWidget#monitorResumeBar {{ background:{BANNER_BG};"
-            f" border-left: 3px solid {GREEN};"
-            f" border-bottom: 1px solid {BORDER}; }}"
+        _s.themed_ss(
+            container,
+            "QWidget#monitorResumeBar {{ background:{BANNER_BG};"
+            " border-left: 3px solid {GREEN};"
+            " border-bottom: 1px solid {BORDER}; }}",
         )
         row = _HL(container)
         row.setContentsMargins(12, 0, 8, 0)
         row.setSpacing(6)
         icon = _L("●")
-        icon.setStyleSheet(f"color:{GREEN}; font-size:8px; background:transparent; border:none;")
+        _s.themed_ss(icon, "color:{GREEN}; font-size:8px; background:transparent; border:none;")
         row.addWidget(icon)
         self._monitor_resume_lbl = _L("")
-        self._monitor_resume_lbl.setStyleSheet(
-            f"color:{GREEN}; font-size:11px; font-weight:bold; background:transparent; border:none;"
+        _s.themed_ss(
+            self._monitor_resume_lbl,
+            "color:{GREEN}; font-size:11px; font-weight:bold; background:transparent; border:none;",
         )
         row.addWidget(self._monitor_resume_lbl, 1)
         btn_stop = _B("Stop all")
         btn_stop.setFixedHeight(20)
-        btn_stop.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        _s.themed_ss(
+            btn_stop,
+            "QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; border-radius:3px; font-size:10px; padding:0 8px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}",
         )
         btn_stop.clicked.connect(self._stop_all_resumed_monitors)
         row.addWidget(btn_stop)
@@ -761,8 +760,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         lbl_dismiss.setFixedSize(24, 24)
         lbl_dismiss.setAlignment(_Qt.AlignmentFlag.AlignCenter)
         lbl_dismiss.setCursor(_Qt.CursorShape.PointingHandCursor)
-        lbl_dismiss.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:16px; font-weight:bold; background:transparent;"
+        _s.themed_ss(
+            lbl_dismiss,
+            "color:{TEXT_SECONDARY}; font-size:16px; font-weight:bold; background:transparent;",
         )
         lbl_dismiss.mousePressEvent = lambda _e: container.hide()
         row.addWidget(lbl_dismiss)
@@ -1035,10 +1035,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         if scanning:
             self._kpi_scan_val.setText("Scanning…")
             self._kpi_scan_dot.setStyleSheet(
-                f"color:{ACCENT}; font-size:9px; background:transparent; border:none;"
+                f"color:{_s.ACCENT}; font-size:9px; background:transparent; border:none;"
             )
             self._kpi_scan_val.setStyleSheet(
-                f"color:{ACCENT}; font-size:18px; font-weight:bold;"
+                f"color:{_s.ACCENT}; font-size:18px; font-weight:bold;"
                 "background:transparent; border:none;"
             )
         if not scanning:
@@ -1162,7 +1162,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             # Default 880×680 gives comfortable room; minimum prevents sidebar overlap on resize.
             dlg.setMinimumSize(780, 540)
             dlg.resize(880, 680)
-            dlg.setStyleSheet(f"QDialog{{background:{BG_DARK};}}")
+            _s.themed_ss(dlg, "QDialog{{background:{BG_DARK};}}")
             lay = QVBoxLayout(dlg)
             lay.setContentsMargins(0, 0, 0, 0)
             lay.addWidget(self._settings_page)
@@ -1712,7 +1712,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._diag_dns_table.setRowCount(0)
         self._diag_trace_table.setRowCount(0)
         for lbl in self._diag_http_labels:
-            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding:0 10px;")
+            lbl.setStyleSheet(f"color:{_s.TEXT_SECONDARY}; font-size:11px; padding:0 10px;")
             name = lbl.text().split(":")[0].lstrip("● ")
             lbl.setText(f"● {name}: testing…")
         self._update_stat(self._diag_speed_lbl, "…")
@@ -1756,6 +1756,16 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             w = self._stack.widget(i)
             if w and hasattr(w, "refresh_theme"):
                 w.refresh_theme()
+        # The DNS/ping LiveGraphWidget is embedded inside a QStackedWidget page
+        # that has no refresh_theme, so the fan-out above cannot reach it —
+        # forward the live theme switch to it explicitly.
+        _graph = getattr(self, "_graph", None)
+        if _graph is not None and hasattr(_graph, "refresh_theme"):
+            _graph.refresh_theme()
+        # The SNMP interface-errors chart lives on the Dashboard (tabs_monitors
+        # mixin), not on a stack page, so the fan-out cannot reach it either.
+        if hasattr(self, "refresh_snmp_if_theme"):
+            self.refresh_snmp_if_theme()
         for btn in getattr(self, "_nav_rail_buttons", {}).values():
             if hasattr(btn, "refresh_theme"):
                 btn.refresh_theme()

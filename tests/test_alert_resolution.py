@@ -153,6 +153,10 @@ def test_service_down_alert_has_action_step():
     """SERVICE_DOWN alerts should include action steps."""
     eng = _engine(rule_type="SERVICE_DOWN")
     result_down = [{"host": "192.168.1.1", "port": 443, "up": False, "label": "HTTPS"}]
+    # 3 consecutive failed checks are required before the first CRITICAL fires
+    # (grace period — see test_alert_engine_checks.py).
+    eng.evaluate_service_checks(result_down)
+    eng.evaluate_service_checks(result_down)
     fired = eng.evaluate_service_checks(result_down)
     critical = [a for a in fired if a.severity == "CRITICAL"]
     assert critical

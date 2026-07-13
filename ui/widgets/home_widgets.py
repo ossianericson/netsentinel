@@ -15,12 +15,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, AMBER,
-    BG_CARD, BG_HOVER, BORDER, CHART_SPINE,
-    CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY,
-)
+from ui import styles as _s
 
 
 class _GradeRing(QWidget):
@@ -39,7 +34,9 @@ class _GradeRing(QWidget):
         self._score  = 0.0
         self._arc_pct  = 0.0   # 0.0–1.0 animated value
         self._disp_score = 0.0  # animated score display
-        self._colour = TEXT_SECONDARY
+        # Store the colour *role*, not a frozen hex, so paintEvent resolves the
+        # live theme value on every repaint (self-heals on theme switch).
+        self._colour_role = "neutral"
 
         self._arc_anim: QVariantAnimation | None = None
         self._score_anim: QVariantAnimation | None = None
@@ -50,11 +47,11 @@ class _GradeRing(QWidget):
     def set_grade(self, grade: str, score: float) -> None:
         from ui.theme import _reduce_motion
         if grade in ("A", "B"):
-            self._colour = GREEN
+            self._colour_role = "good"
         elif grade == "C":
-            self._colour = AMBER
+            self._colour_role = "warn"
         else:
-            self._colour = RED
+            self._colour_role = "bad"
 
         self._grade = grade[:1].upper() if grade else "–"
 
@@ -96,6 +93,15 @@ class _GradeRing(QWidget):
         """Backwards-compat shim — returns the current grade letter."""
         return self._grade
 
+    def _role_colour(self) -> str:
+        """Resolve the current colour role to a live theme hex value."""
+        return {
+            "good":    _s.GREEN,
+            "warn":    _s.AMBER,
+            "bad":     _s.RED,
+            "neutral": _s.TEXT_SECONDARY,
+        }[self._colour_role]
+
     def _on_arc(self, v: float) -> None:
         self._arc_pct = v
         self.update()
@@ -114,14 +120,15 @@ class _GradeRing(QWidget):
         thickness = 4.0
 
         # Track circle (dim)
-        pen_track = QPen(QColor(CHART_SPINE), thickness)
+        pen_track = QPen(QColor(_s.CHART_SPINE), thickness)
         pen_track.setCapStyle(Qt.PenCapStyle.FlatCap)
         p.setPen(pen_track)
         p.drawEllipse(QRectF(cx - r, cy - r, 2 * r, 2 * r))
 
+        _role_hex = self._role_colour()
         # Filled arc
         if self._arc_pct > 0:
-            pen_arc = QPen(QColor(self._colour), thickness)
+            pen_arc = QPen(QColor(_role_hex), thickness)
             pen_arc.setCapStyle(Qt.PenCapStyle.RoundCap)
             p.setPen(pen_arc)
             span_angle = int(self._arc_pct * 360 * 16)
@@ -132,7 +139,7 @@ class _GradeRing(QWidget):
             )
 
         # Grade letter (centre)
-        p.setPen(QPen(QColor(self._colour), 1))
+        p.setPen(QPen(QColor(_role_hex), 1))
         font = p.font()
         font.setPointSize(18)
         font.setBold(True)
@@ -142,7 +149,7 @@ class _GradeRing(QWidget):
 
         # Score (small, below letter)
         if self._score > 0:
-            p.setPen(QPen(QColor(TEXT_MUTED), 1))
+            p.setPen(QPen(QColor(_s.TEXT_MUTED), 1))
             score_font = p.font()
             score_font.setPointSize(7)
             score_font.setBold(False)
@@ -161,11 +168,11 @@ class _MiniSparkline(QWidget):
         super().__init__(parent)
         self.setFixedSize(72, 16)
         self._points: list[float] = []
-        self._colour = ACCENT
+        self._colour = _s.ACCENT
 
-    def set_data(self, points: list[float], colour: str = ACCENT) -> None:
+    def set_data(self, points: list[float], colour: str | None = None) -> None:
         self._points = list(points)
-        self._colour = colour
+        self._colour = colour if colour is not None else _s.ACCENT
         self.update()
 
     def paintEvent(self, event) -> None:
@@ -173,7 +180,7 @@ class _MiniSparkline(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         if len(pts) < 2:
-            p.setPen(QColor(CHART_SPINE))
+            p.setPen(QColor(_s.CHART_SPINE))
             p.drawLine(0, self.height() // 2, self.width(), self.height() // 2)
             p.end()
             return
@@ -217,7 +224,7 @@ class _GradeSparkline(QWidget):
         if len(pts) < 2:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setPen(QColor(TEXT_MUTED))
+            painter.setPen(QColor(_s.TEXT_MUTED))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "—")
             painter.end()
             return
@@ -246,7 +253,7 @@ class _GradeSparkline(QWidget):
             path.lineTo(QPointF(_x(i), _y(v)))
 
         last_score = pts[-1]
-        color = GREEN if last_score >= 70 else (AMBER if last_score >= 50 else RED)
+        color = _s.GREEN if last_score >= 70 else (_s.AMBER if last_score >= 50 else _s.RED)
         pen = QPen(QColor(color), 2.0)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -277,10 +284,11 @@ class _EventsTicker(QFrame):
         self.setObjectName("statusTicker")
         self.setFixedHeight(28)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet(
-            f"QFrame#statusTicker {{ background:{BG_HOVER}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
-            f"QFrame#statusTicker:hover {{ border-color:{ACCENT}; }}"
+        _s.themed_ss(
+            self,
+            "QFrame#statusTicker {{ background:{BG_HOVER}; border:1px solid {BORDER};"
+            " border-radius:4px; }}"
+            "QFrame#statusTicker:hover {{ border-color:{ACCENT}; }}",
         )
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 0, 8, 0)
@@ -288,18 +296,19 @@ class _EventsTicker(QFrame):
 
         icon_lbl = QLabel("◷")
         icon_lbl.setFixedWidth(14)
-        icon_lbl.setStyleSheet(f"font-size:11px; color:{ACCENT}; border:none; background:transparent;")
+        _s.themed_ss(icon_lbl, "font-size:11px; color:{ACCENT}; border:none; background:transparent;")
         lay.addWidget(icon_lbl)
 
         self._content_lbl = QLabel("–")
-        self._content_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+        _s.themed_ss(
+            self._content_lbl,
+            "font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;",
         )
         lay.addWidget(self._content_lbl, 1)
 
         nav_lbl = QLabel("Timeline →")
-        nav_lbl.setStyleSheet(
-            f"font-size:10px; color:{ACCENT}; border:none; background:transparent;"
+        _s.themed_ss(
+            nav_lbl, "font-size:10px; color:{ACCENT}; border:none; background:transparent;"
         )
         lay.addWidget(nav_lbl)
 
@@ -391,44 +400,52 @@ class _MiniCard(QFrame):
             QSizePolicy.Policy.Preferred,
         )
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet(
-            f"QFrame#statCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+        _s.themed_ss(
+            self,
+            "QFrame#statCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}",
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(2)
 
         self._icon_lbl = QLabel(icon)
-        self._icon_lbl.setStyleSheet(
-            f"font-size:13px; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            self._icon_lbl,
+            "font-size:13px; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;",
         )
         self._title_lbl = QLabel(title)
-        self._title_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            self._title_lbl,
+            "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;",
         )
         self._val_lbl = QLabel(val)
-        self._val_lbl.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
+        # Placeholder colour; set_value re-registers with the live status colour.
+        _s.themed_ss(
+            self._val_lbl,
+            "font-size:20px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;",
         )
         self._sub_lbl = QLabel(sub)
-        self._sub_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            self._sub_lbl,
+            "font-size:10px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;",
         )
 
         self._dot_lbl = QLabel("●")
-        self._dot_lbl.setStyleSheet(
-            f"font-size:8px; color:{GREEN}; background:transparent; border:none;"
+        _s.themed_ss(
+            self._dot_lbl,
+            "font-size:8px; color:{GREEN}; background:transparent; border:none;",
         )
         self._dot_lbl.setFixedWidth(12)
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            self._status_lbl,
+            "font-size:10px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;",
         )
         status_row = QHBoxLayout()
         status_row.setContentsMargins(0, 0, 0, 0)
@@ -450,18 +467,23 @@ class _MiniCard(QFrame):
     def set_value(self, val: str, sub: str, status: str, colour: str) -> None:
         """Update the card's main value, subtitle, status dot and label."""
         self._val_lbl.setText(val)
-        self._val_lbl.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:{colour};"
-            " background:transparent; border:none;"
+        # Re-register so a theme switch keeps the status hue (HomePage.refresh_theme
+        # re-derives the exact live shade from cached data). Callable captures only
+        # the colour string — never self/the widget — to avoid a registry leak.
+        _s.themed_ss(
+            self._val_lbl,
+            lambda c=colour: f"font-size:20px; font-weight:bold; color:{c};"
+            " background:transparent; border:none;",
         )
         self._sub_lbl.setText(sub)
-        self._dot_lbl.setStyleSheet(
-            f"font-size:8px; color:{colour};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            self._dot_lbl,
+            lambda c=colour: f"font-size:8px; color:{c};"
+            " background:transparent; border:none;",
         )
         self._status_lbl.setText(status)
 
-    def set_sparkline_data(self, points: list, colour: str = ACCENT) -> None:
+    def set_sparkline_data(self, points: list, colour: str | None = None) -> None:
         """Show the mini sparkline with the given data points."""
         if len(points) >= 2:
             self._sparkline.set_data(points, colour)
@@ -490,22 +512,25 @@ class _AlertRow(QFrame):
 
         dot = QLabel("●")
         dot.setFixedWidth(12)
-        dot.setStyleSheet(
-            f"font-size:8px; color:{colour};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            dot,
+            lambda c=colour: f"font-size:8px; color:{c};"
+            " background:transparent; border:none;",
         )
         msg_lbl = QLabel(msg)
-        msg_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            msg_lbl,
+            "font-size:11px; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;",
         )
         msg_lbl.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
         time_lbl = QLabel(time_str)
-        time_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            time_lbl,
+            "font-size:10px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;",
         )
         time_lbl.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter

@@ -7,7 +7,7 @@ Covers:
     • Theme buttons are present (one per theme)
     • Active theme button has filled ACCENT style
     • Inactive theme buttons have outline style
-    • _on_theme saves via set_active_theme_name
+    • _on_theme applies live via apply_theme
     • _on_theme updates the status label
     • Compact-row checkbox persists to QSettings
     • Tooltip checkbox persists to QSettings
@@ -95,18 +95,21 @@ class TestSettingsPage:
                 assert "border" in sw.styleSheet()
                 break
 
-    def test_on_theme_calls_set_active(self):
+    def test_on_theme_calls_apply_theme(self):
+        """_on_theme routes through apply_theme(), never paired with
+        set_active_theme_name (apply_theme already persists)."""
         target = [n for n in _styles.THEMES][0]
-        with patch("ui.styles.set_active_theme_name") as mock_save:
+        with patch("ui.styles.apply_theme") as mock_apply, \
+             patch("ui.styles.set_active_theme_name") as mock_save:
             self.page._on_theme(target)
-            mock_save.assert_called_once_with(target)
+            mock_apply.assert_called_once_with(target)
+            mock_save.assert_not_called()
 
     def test_on_theme_updates_status_label(self):
         target = [n for n in _styles.THEMES][0]
-        with patch("ui.styles.set_active_theme_name"):
-            self.page._on_theme(target)
+        self.page._on_theme(target)
         assert target in self.page._theme_status_lbl.text()
-        assert "restart" in self.page._theme_status_lbl.text().lower()
+        assert "applied" in self.page._theme_status_lbl.text().lower()
 
     def test_compact_rows_checkbox_exists(self):
         assert self.page._chk_compact is not None
@@ -146,6 +149,13 @@ class TestSettingsPage:
             mock_qs_cls.return_value = mock_qs
             self.page._on_monthly_cap_changed(500.0)
         mock_qs.setValue.assert_called_once_with("traffic/monthly_cap_gb", 500.0)
+
+    def test_refresh_theme_does_not_raise(self):
+        """Regression: refresh_theme() called _refresh_theme_buttons(), a method
+        that does not exist — reachable today via the accent live-apply path
+        (accent swatch -> apply_accent_override -> theme_changed -> dashboard
+        fans refresh_theme() out to every stack page)."""
+        self.page.refresh_theme()
 
 
 # ===========================================================================

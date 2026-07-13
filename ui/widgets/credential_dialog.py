@@ -19,22 +19,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    ACCENT_LITE,
-    AMBER,
-    BG_CARD,
-    BG_DARK,
-    BORDER,
-    GREEN,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    WHITE,
-)
 from ui.widgets.hub_card import _PluginConnectionTester, _instance_id
+from ui import styles as _s
 
 
 def show_credential_dialog(
@@ -64,7 +50,7 @@ def show_credential_dialog(
     dlg.setMinimumWidth(400)
 
     _field_ss = (
-        f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+        f"background:{_s.BG_CARD}; color:{_s.TEXT_PRIMARY}; border:1px solid {_s.BORDER};"
         " border-radius:3px; padding:3px 6px; font-size:12px;"
     )
     lay = QVBoxLayout(dlg)
@@ -73,7 +59,7 @@ def show_credential_dialog(
 
     note = QLabel(f"Enter the connection details for <b>{name}</b>.")
     note.setTextFormat(Qt.TextFormat.RichText)
-    note.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px;")
+    _s.themed_ss(note, "color:{TEXT_PRIMARY}; font-size:12px;")
     note.setWordWrap(True)
     lay.addWidget(note)
 
@@ -93,13 +79,13 @@ def show_credential_dialog(
     lay.addLayout(form)
 
     keyring_note = QLabel("\U0001f512  Password saved to OS keychain — never written to disk")
-    keyring_note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+    _s.themed_ss(keyring_note, "color:{TEXT_SECONDARY}; font-size:9px;")
     lay.addWidget(keyring_note)
 
     status_lbl = QLabel("")
     status_lbl.setWordWrap(True)
     status_lbl.setVisible(False)
-    status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; padding:4px 0;")
+    _s.themed_ss(status_lbl, "font-size:11px; color:{TEXT_SECONDARY}; padding:4px 0;")
     lay.addWidget(status_lbl)
 
     btn_row = QHBoxLayout()
@@ -107,24 +93,20 @@ def show_credential_dialog(
     btn_row.addStretch()
 
     cancel_btn = QPushButton("Cancel")
-    cancel_btn.setStyleSheet(
-        f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
-        f" border-radius:3px; padding:5px 14px; font-size:12px; }}"
-        f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-        f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(cancel_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+        " border-radius:3px; padding:5px 14px; font-size:12px; }}"
+        "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     cancel_btn.clicked.connect(dlg.reject)
     btn_row.addWidget(cancel_btn)
 
     test_btn = QPushButton("Test & Add")
     test_btn.setDefault(True)
-    test_btn.setStyleSheet(
-        f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-        f" border-radius:3px; padding:5px 18px; font-size:12px; font-weight:600; }}"
-        f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-        f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
-    )
+    _s.themed_ss(test_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+        " border-radius:3px; padding:5px 18px; font-size:12px; font-weight:600; }}"
+        "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+        "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        "QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}")
     btn_row.addWidget(test_btn)
     lay.addLayout(btn_row)
 
@@ -134,12 +116,10 @@ def show_credential_dialog(
         "Device unreachable — save credentials now and add.\n"
         "The card will show an error until the device comes online."
     )
-    skip_btn.setStyleSheet(
-        f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
-        f" font-size:10px; padding:2px 0; text-decoration:underline; }}"
-        f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-        f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(skip_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+        " font-size:10px; padding:2px 0; text-decoration:underline; }}"
+        "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     lay.addWidget(skip_btn, alignment=Qt.AlignmentFlag.AlignRight)
 
     _tester: list[_PluginConnectionTester] = []
@@ -168,10 +148,10 @@ def show_credential_dialog(
         ip = ip_edit.text().strip()
         pw = pw_edit.text().strip()
         if not ip:
-            _set_status("Enter the device IP address.", RED)
+            _set_status("Enter the device IP address.", _s.RED)
             return
         if not pw:
-            _set_status(f"Enter the device {cred_label.lower()} to continue.", RED)
+            _set_status(f"Enter the device {cred_label.lower()} to continue.", _s.RED)
             pw_edit.setFocus()
             return
 
@@ -180,13 +160,13 @@ def show_credential_dialog(
         ip_edit.setEnabled(False)
         pw_edit.setEnabled(False)
         skip_btn.setVisible(False)
-        _set_status("Testing connection…  ⏳", TEXT_SECONDARY)
+        _set_status("Testing connection…  ⏳", _s.TEXT_SECONDARY)
 
         tester = _PluginConnectionTester(plugin_path or "", ip, pw, parent=dlg)
         _tester.append(tester)
 
         def _on_success(result: dict) -> None:
-            _set_status("✓  Connected successfully — adding integration.", GREEN)
+            _set_status("✓  Connected successfully — adding integration.", _s.GREEN)
             try:
                 import keyring as _kr
                 iid = _instance_id(plugin_path or ip, ip)
@@ -215,7 +195,7 @@ def show_credential_dialog(
                 _kr.delete_password("NetSentinel/hardware", ip)
             except Exception:
                 pass  # non-fatal
-            _set_status(f"✗  {msg}", RED)
+            _set_status(f"✗  {msg}", _s.RED)
             test_btn.setEnabled(True)
             cancel_btn.setEnabled(True)
             ip_edit.setEnabled(True)
@@ -269,38 +249,32 @@ def show_unsigned_warning(parent: QWidget, path: str) -> bool:
     )
     warn_lbl.setTextFormat(Qt.TextFormat.RichText)
     warn_lbl.setWordWrap(True)
-    warn_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+    _s.themed_ss(warn_lbl, "color:{TEXT_PRIMARY}; font-size:11px;")
     lay.addWidget(warn_lbl)
 
     path_lbl = QLabel(f"<b>Path:</b> {path}<br><b>Size:</b> {sz_str}")
     path_lbl.setTextFormat(Qt.TextFormat.RichText)
     path_lbl.setWordWrap(True)
-    path_lbl.setStyleSheet(
-        f"background:{BG_DARK}; color:{TEXT_SECONDARY}; font-size:10px; font-family:Consolas;"
-        f" border:1px solid {BORDER}; border-radius:3px; padding:6px;"
-    )
+    _s.themed_ss(path_lbl, "background:{BG_DARK}; color:{TEXT_SECONDARY}; font-size:10px; font-family:Consolas;"
+        " border:1px solid {BORDER}; border-radius:3px; padding:6px;")
     lay.addWidget(path_lbl)
 
     btn_row = QHBoxLayout()
     btn_row.addStretch()
 
     cancel_btn = QPushButton("Cancel")
-    cancel_btn.setStyleSheet(
-        f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
-        f" border:1px solid {BORDER}; border-radius:3px; padding:5px 14px; }}"
-        f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-        f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(cancel_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+        " border:1px solid {BORDER}; border-radius:3px; padding:5px 14px; }}"
+        "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     cancel_btn.clicked.connect(dlg.reject)
     btn_row.addWidget(cancel_btn)
 
     proceed_btn = QPushButton("I understand — Add anyway")
-    proceed_btn.setStyleSheet(
-        f"QPushButton {{ background:{AMBER}; color:{TEXT_PRIMARY}; border:none;"
-        f" border-radius:3px; padding:5px 16px; font-weight:600; }}"
-        f"QPushButton:hover {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}"
-        f"QPushButton:pressed {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}"
-    )
+    _s.themed_ss(proceed_btn, "QPushButton {{ background:{AMBER}; color:{TEXT_PRIMARY}; border:none;"
+        " border-radius:3px; padding:5px 16px; font-weight:600; }}"
+        "QPushButton:hover {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}"
+        "QPushButton:pressed {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}")
     proceed_btn.clicked.connect(dlg.accept)
     btn_row.addWidget(proceed_btn)
     lay.addLayout(btn_row)

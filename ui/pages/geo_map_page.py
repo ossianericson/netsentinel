@@ -110,14 +110,9 @@ from modules.geo_locator import (
     get_locator,
 )
 from ui.tabs_helpers import _table
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER,
-    BG_CARD, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_GRID,
-    CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER,
-    MAP_LAND_BG, MAP_LAND_BORDER, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
-    WHITE,
+    MAP_LAND_BG, MAP_LAND_BORDER,
 )
 
 
@@ -167,42 +162,34 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
     b.setFixedHeight(26)
     b.setFont(QFont("Segoe UI", 9))
     if accent:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f"  border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            "  border-radius:3px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     else:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f"  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            "  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     return b
 
 
 def _card(title: str) -> Tuple[QWidget, QVBoxLayout]:
     card = QWidget()
     card.setObjectName("geoCard")
-    card.setStyleSheet(
-        f"QWidget#geoCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(card, "QWidget#geoCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
     hdr = QLabel(title)
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; color:{TEXT_PRIMARY}; font-weight:600; font-size:11px;"
-        f"padding:0 12px; border-bottom:1px solid {CARD_HDR_BORDER};"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; color:{TEXT_PRIMARY}; font-weight:600; font-size:11px;"
+        "padding:0 12px; border-bottom:1px solid {CARD_HDR_BORDER};")
     outer.addWidget(hdr)
     inner_w = QWidget()
-    inner_w.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(inner_w, "background:{BG_CARD};")
     inner = QVBoxLayout(inner_w)
     inner.setContentsMargins(10, 8, 10, 8)
     inner.setSpacing(5)
@@ -210,9 +197,9 @@ def _card(title: str) -> Tuple[QWidget, QVBoxLayout]:
     return card, inner
 
 
-def _dot(color: str) -> QLabel:
+def _dot(color_name: str) -> QLabel:
     lbl = QLabel("●")
-    lbl.setStyleSheet(f"color:{color}; font-size:12px;")
+    _s.themed_ss(lbl, lambda cn=color_name: f"color:{getattr(_s, cn)}; font-size:12px;")
     lbl.setFixedWidth(18)
     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
     return lbl
@@ -224,11 +211,15 @@ _CAT_THREAT  = "Threat Intel"
 _CAT_EXPOSED = "Exposed Service"
 _CAT_MANUAL  = "Manual Entry"
 
-_MARKER_COLOR = {
-    _CAT_THREAT:  RED,
-    _CAT_EXPOSED: AMBER,
-    _CAT_MANUAL:  ACCENT,
+_MARKER_COLOR_NAMES = {
+    _CAT_THREAT:  "RED",
+    _CAT_EXPOSED: "AMBER",
+    _CAT_MANUAL:  "ACCENT",
 }
+
+def _marker_color() -> dict:
+    """Category → dot colour, read live so a theme switch recolours the map."""
+    return {cat: getattr(_s, name) for cat, name in _MARKER_COLOR_NAMES.items()}
 
 
 # ── Main page ─────────────────────────────────────────────────────────────────
@@ -307,13 +298,13 @@ class GeoMapPage(QWidget):
         # Title
         title = QLabel("Geolocation Map")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY};")
         sub = QLabel(
             "Plot public IPs from threat intel, exposure scans, or manual entry on a world map. "
             "The IP Lookup Database (GeoLite2) resolves IPs to coordinates — "
             "download it once to enable dot placement. The map outline is always available."
         )
-        sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(sub, "color:{TEXT_SECONDARY}; font-size:10px;")
         sub.setWordWrap(True)
         root.addWidget(title)
         root.addWidget(sub)
@@ -369,11 +360,11 @@ class GeoMapPage(QWidget):
     def _build_db_card(self) -> None:
         row = QHBoxLayout()
         row.setSpacing(8)
-        self._db_status_dot = _dot(TEXT_MUTED)
+        self._db_status_dot = _dot("TEXT_MUTED")
         self._db_status_lbl = QLabel("Checking…")
-        self._db_status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._db_status_lbl, "font-size:10px; color:{TEXT_SECONDARY};")
         self._db_path_lbl = QLabel("")
-        self._db_path_lbl.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED};")
+        _s.themed_ss(self._db_path_lbl, "font-size:9px; color:{TEXT_MUTED};")
         self._db_path_lbl.setWordWrap(True)
 
         row.addWidget(self._db_status_dot)
@@ -393,7 +384,7 @@ class GeoMapPage(QWidget):
         quick_row.setContentsMargins(0, 0, 0, 0)
         quick_row.setSpacing(6)
         quick_lbl = QLabel("No database?")
-        quick_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(quick_lbl, "font-size:10px; color:{TEXT_SECONDARY};")
         self._btn_quick_dl = _btn("↓  Quick Download  (no account needed)", accent=True)
         self._btn_quick_dl.setToolTip(
             "Downloads GeoLite2-City.mmdb from the P3TERX mirror on GitHub.\n"
@@ -412,13 +403,12 @@ class GeoMapPage(QWidget):
         self._permalink_edit.setPlaceholderText(
             "Or paste a custom MaxMind permalink URL…")
         self._permalink_edit.setFixedHeight(24)
-        self._permalink_edit.setStyleSheet(
-            f"border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            f"font-size:10px; background:{BG_CARD};")
+        _s.themed_ss(self._permalink_edit, "border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
+            "font-size:10px; background:{BG_CARD};")
         self._btn_dl = _btn("↓  Download")
         self._btn_dl.clicked.connect(self._on_download_db)
         self._dl_status = QLabel("")
-        self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._dl_status, "font-size:9px; color:{TEXT_SECONDARY};")
         dl_row.addWidget(self._permalink_edit, 1)
         dl_row.addWidget(self._btn_dl)
         self._db_layout.addLayout(dl_row)
@@ -431,9 +421,8 @@ class GeoMapPage(QWidget):
         self._manual_edit = QLineEdit()
         self._manual_edit.setPlaceholderText("Enter IP(s) — comma or space separated")
         self._manual_edit.setFixedHeight(24)
-        self._manual_edit.setStyleSheet(
-            f"border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            f"font-size:10px; background:{BG_CARD};")
+        _s.themed_ss(self._manual_edit, "border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
+            "font-size:10px; background:{BG_CARD};")
         self._manual_edit.returnPressed.connect(self._on_add_manual)
 
         btn_add    = _btn("✚  Add", accent=True)
@@ -452,14 +441,14 @@ class GeoMapPage(QWidget):
         self._import_layout.addLayout(row)
 
         legend_row = QHBoxLayout()
-        for cat, color in _MARKER_COLOR.items():
-            legend_row.addWidget(_dot(color))
+        for cat, color_name in _MARKER_COLOR_NAMES.items():
+            legend_row.addWidget(_dot(color_name))
             lbl = QLabel(cat)
-            lbl.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
+            _s.themed_ss(lbl, "font-size:9px; color:{TEXT_SECONDARY};")
             legend_row.addWidget(lbl)
             legend_row.addSpacing(8)
         self._chk_arcs = QCheckBox("Show lines from home to threat IPs")
-        self._chk_arcs.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+        _s.themed_ss(self._chk_arcs, "color:{TEXT_SECONDARY}; font-size:9px;")
         self._chk_arcs.setToolTip(
             "Draws arcs from your network's public IP to each Threat Intel dot.\n"
             "Set home location via right-click 'Show on Geolocation Map' on a local device."
@@ -467,7 +456,7 @@ class GeoMapPage(QWidget):
         self._chk_arcs.stateChanged.connect(self._redraw_map)
         legend_row.addWidget(self._chk_arcs)
         self._chk_heatmap = QCheckBox("Show risk heatmap")
-        self._chk_heatmap.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+        _s.themed_ss(self._chk_heatmap, "color:{TEXT_SECONDARY}; font-size:9px;")
         self._chk_heatmap.setToolTip(
             "Draws radial colour glow behind Threat Intel and Exposed Service dots\n"
             "to highlight geographic risk concentrations."
@@ -483,9 +472,10 @@ class GeoMapPage(QWidget):
         lay.setContentsMargins(0, 0, 4, 0)
         lay.setSpacing(0)
 
-        self._fig = Figure(facecolor=CHART_PLOT_BG, dpi=96)
+        self._fig = Figure(facecolor=_s.CHART_PLOT_BG, dpi=96)
         self._ax  = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
+        _s.themed_ss(self._canvas, "background:{CHART_PLOT_BG}; border:none;")
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         lay.addWidget(self._canvas)
@@ -502,21 +492,21 @@ class GeoMapPage(QWidget):
 
         self._detail_ip = QLabel("—")
         self._detail_ip.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self._detail_ip.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(self._detail_ip, "color:{TEXT_PRIMARY};")
 
         # Placeholder — shown when no dot is selected (or while resolving)
         self._detail_body = QLabel("Click a dot on the map to see details.")
-        self._detail_body.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(self._detail_body, "color:{TEXT_SECONDARY}; font-size:10px;")
         self._detail_body.setWordWrap(True)
 
         # Enriched widgets — hidden until an IP is selected
         self._detail_location = QLabel("")
-        self._detail_location.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:10px;")
+        _s.themed_ss(self._detail_location, "color:{TEXT_PRIMARY}; font-size:10px;")
         self._detail_location.setWordWrap(True)
         self._detail_location.setVisible(False)
 
         self._detail_org = QLabel("")
-        self._detail_org.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(self._detail_org, "color:{TEXT_SECONDARY}; font-size:10px;")
         self._detail_org.setWordWrap(True)
         self._detail_org.setVisible(False)
 
@@ -530,38 +520,35 @@ class GeoMapPage(QWidget):
 
         self._detail_sep = QFrame()
         self._detail_sep.setFrameShape(QFrame.Shape.HLine)
-        self._detail_sep.setStyleSheet(f"color:{BORDER}; margin:2px 0;")
+        _s.themed_ss(self._detail_sep, "color:{BORDER}; margin:2px 0;")
         self._detail_sep.setVisible(False)
 
         self._detail_ti_hdr = QLabel("Related threat intel:")
-        self._detail_ti_hdr.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:9px; font-weight:600;")
+        _s.themed_ss(self._detail_ti_hdr, "color:{TEXT_SECONDARY}; font-size:9px; font-weight:600;")
         self._detail_ti_hdr.setVisible(False)
 
         self._detail_ti_text = QLabel("")
-        self._detail_ti_text.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+        _s.themed_ss(self._detail_ti_text, "color:{TEXT_SECONDARY}; font-size:9px;")
         self._detail_ti_text.setWordWrap(True)
         self._detail_ti_text.setVisible(False)
 
         self._detail_view_ti = QPushButton("View in Threat Intel →")
         self._detail_view_ti.setFlat(True)
-        self._detail_view_ti.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:9px; border:none;"
-            f"  padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{TH_BG}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._detail_view_ti, "QPushButton {{ color:{ACCENT}; font-size:9px; border:none;"
+            "  padding:0; text-align:left; }}"
+            "QPushButton:hover {{ color:{TH_BG}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._detail_view_ti.setCursor(Qt.CursorShape.PointingHandCursor)
         self._detail_view_ti.clicked.connect(
             lambda: self.navigate_requested.emit(L.THREAT_INTEL))
         self._detail_view_ti.setVisible(False)
 
         self._detail_alerts = QLabel("")
-        self._detail_alerts.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
+        _s.themed_ss(self._detail_alerts, "color:{TEXT_MUTED}; font-size:9px;")
         self._detail_alerts.setVisible(False)
 
         self._detail_links = QLabel("")
-        self._detail_links.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
+        _s.themed_ss(self._detail_links, "color:{TEXT_MUTED}; font-size:9px;")
         self._detail_links.setWordWrap(True)
 
         for w in (self._detail_ip, self._detail_body,
@@ -643,7 +630,7 @@ class GeoMapPage(QWidget):
         """Clear axes and redraw world outline using stored zoom limits."""
         ax = self._ax
         ax.cla()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         xlim, ylim = self._screen_limits()
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
@@ -651,27 +638,27 @@ class GeoMapPage(QWidget):
 
         # Grid lines
         for lon in range(-180, 181, 30):
-            ax.axvline(lon, color=CHART_GRID, linewidth=0.4, zorder=0)
+            ax.axvline(lon, color=_s.CHART_GRID, linewidth=0.4, zorder=0)
         for lat in range(-90, 91, 30):
-            ax.axhline(lat, color=CHART_GRID, linewidth=0.4, zorder=0)
+            ax.axhline(lat, color=_s.CHART_GRID, linewidth=0.4, zorder=0)
 
         try:
             self._draw_country_borders()
         except Exception:
             ax.text(0, 0,
                     "Install Cartopy or Natural Earth shapefiles for country borders.",
-                    ha="center", va="center", color=TEXT_MUTED,
+                    ha="center", va="center", color=_s.TEXT_MUTED,
                     fontsize=8, transform=ax.transData)
 
         self._fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
     def _draw_country_borders(self) -> None:
-        patches = _load_country_patches(CHART_GRID, alpha=1.0)
+        patches = _load_country_patches(_s.CHART_GRID, alpha=1.0)
         if not patches:
             self._ax.text(
                 0, 0,
                 "Map data not found. The file ui/assets/world_110m.geojson is missing.",
-                ha="center", va="center", color=TEXT_MUTED,
+                ha="center", va="center", color=_s.TEXT_MUTED,
                 fontsize=8, transform=self._ax.transData,
             )
             return
@@ -683,6 +670,12 @@ class GeoMapPage(QWidget):
             zorder=1,
         )
         self._ax.add_collection(col)
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and redraw the map
+        (canvas background re-applies via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.CHART_PLOT_BG)
+        self._redraw_map()
 
     def _redraw_map(self, *_args) -> None:
         """Redraw base map then overlay clustered data points and optional arcs."""
@@ -708,7 +701,7 @@ class GeoMapPage(QWidget):
                         (result.longitude, result.latitude),
                         connectionstyle="arc3,rad=0.15",
                         arrowstyle="-",
-                        color=RED,
+                        color=_s.RED,
                         linewidth=0.5,
                         alpha=0.18,
                         zorder=2,
@@ -721,8 +714,8 @@ class GeoMapPage(QWidget):
             if show_heatmap:
                 from matplotlib.patches import Circle
                 _glow_cfg = {
-                    _CAT_THREAT:  (RED,   0.09, 8.0),
-                    _CAT_EXPOSED: (AMBER, 0.06, 6.0),
+                    _CAT_THREAT:  (_s.RED,   0.09, 8.0),
+                    _CAT_EXPOSED: (_s.AMBER, 0.06, 6.0),
                 }
                 for _ip, result, cat in plottable:
                     if cat not in _glow_cfg:
@@ -741,13 +734,14 @@ class GeoMapPage(QWidget):
                         self._ax.add_patch(circle)
 
             # Screen-space clustered dots
+            marker_color = _marker_color()
             for cluster in self._cluster_points(plottable):
-                color = _MARKER_COLOR.get(cluster["cat"], ACCENT)
+                color = marker_color.get(cluster["cat"], _s.ACCENT)
                 lon, lat = cluster["lon"], cluster["lat"]
                 selected = cluster["selected"]
                 count = cluster["count"]
                 size = 90 if selected else (45 + min(count - 1, 15) * 4 if count > 1 else 40)
-                edge = TEXT_PRIMARY if selected else "none"
+                edge = _s.TEXT_PRIMARY if selected else "none"
                 self._ax.scatter(
                     lon, lat, s=size, c=color, zorder=3,
                     edgecolors=edge, linewidths=1.2, alpha=0.85,
@@ -756,7 +750,7 @@ class GeoMapPage(QWidget):
                     self._ax.text(
                         lon, lat, str(count),
                         ha="center", va="center",
-                        fontsize=6, color=WHITE, fontweight="bold", zorder=4,
+                        fontsize=6, color=_s.WHITE, fontweight="bold", zorder=4,
                     )
 
         self._canvas.draw()
@@ -814,9 +808,9 @@ class GeoMapPage(QWidget):
             self._detail_org.setVisible(False)
 
         # -- Category chip ---
-        cat_color = _MARKER_COLOR.get(category, ACCENT)
+        cat_color_name = _MARKER_COLOR_NAMES.get(category, "ACCENT")
         self._detail_cat.setText(f"Category:  ● {category}")
-        self._detail_cat.setStyleSheet(f"color:{cat_color}; font-size:10px;")
+        _s.themed_ss(self._detail_cat, lambda cn=cat_color_name: f"color:{getattr(_s, cn)}; font-size:10px;")
         self._detail_cat.setVisible(True)
 
         # -- Threat intel: risk chip + related entries ---
@@ -834,15 +828,15 @@ class GeoMapPage(QWidget):
             best = max(ti_entries, key=lambda e: e.confidence)
             conf = best.confidence
             if conf >= 90:
-                risk_color, risk_label = RED, "CRITICAL"
+                risk_color_name, risk_label = "RED", "CRITICAL"
             elif conf >= 70:
-                risk_color, risk_label = RED, "HIGH"
+                risk_color_name, risk_label = "RED", "HIGH"
             elif conf >= 50:
-                risk_color, risk_label = AMBER, "MEDIUM"
+                risk_color_name, risk_label = "AMBER", "MEDIUM"
             else:
-                risk_color, risk_label = TEXT_SECONDARY, "LOW"
+                risk_color_name, risk_label = "TEXT_SECONDARY", "LOW"
             self._detail_risk.setText(f"Risk:  ● {risk_label}  (confidence {conf}%)")
-            self._detail_risk.setStyleSheet(f"font-size:10px; color:{risk_color};")
+            _s.themed_ss(self._detail_risk, lambda cn=risk_color_name: f"font-size:10px; color:{getattr(_s, cn)};")
             self._detail_risk.setVisible(True)
 
             lines = []
@@ -867,10 +861,9 @@ class GeoMapPage(QWidget):
                 recent = self._store.get_recent_alerts(hours=24)
                 count = sum(1 for a in recent if a.get("host", "") == ip)
                 self._detail_alerts.setText(f"Alerts in last 24 h:  {count}")
-                self._detail_alerts.setStyleSheet(
-                    f"color:{RED}; font-size:9px;" if count > 0
-                    else f"color:{TEXT_MUTED}; font-size:9px;"
-                )
+                _s.themed_ss(self._detail_alerts, lambda has=count > 0: (
+                    f"color:{_s.RED if has else _s.TEXT_MUTED}; font-size:9px;"
+                ))
                 self._detail_alerts.setVisible(True)
                 has_extra = True
             except Exception:
@@ -1087,7 +1080,7 @@ class GeoMapPage(QWidget):
     def _on_quick_download(self) -> None:
         self._btn_quick_dl.setEnabled(False)
         self._dl_status.setText("Downloading from GitHub mirror (~67 MB)…")
-        self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._dl_status, "font-size:9px; color:{TEXT_SECONDARY};")
         self._dl_worker = _DownloadWorker(GEOLITE_MIRROR_URL)
         self._dl_worker.progress.connect(self._on_dl_progress)
         self._dl_worker.done.connect(self._on_quick_dl_done)
@@ -1108,11 +1101,11 @@ class GeoMapPage(QWidget):
         url = self._permalink_edit.text().strip()
         if not url:
             self._dl_status.setText("Paste a permalink URL first.")
-            self._dl_status.setStyleSheet(f"font-size:9px; color:{AMBER};")
+            _s.themed_ss(self._dl_status, "font-size:9px; color:{AMBER};")
             return
         self._btn_dl.setEnabled(False)
         self._dl_status.setText("Downloading…")
-        self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._dl_status, "font-size:9px; color:{TEXT_SECONDARY};")
 
         self._dl_worker = _DownloadWorker(url)
         self._dl_worker.progress.connect(self._on_dl_progress)
@@ -1133,7 +1126,7 @@ class GeoMapPage(QWidget):
     def _on_dl_done(self, path: str) -> None:
         self._btn_dl.setEnabled(True)
         self._dl_status.setText(f"Saved to {Path(path).name}")
-        self._dl_status.setStyleSheet(f"font-size:9px; color:{GREEN};")
+        _s.themed_ss(self._dl_status, "font-size:9px; color:{GREEN};")
         self._locator.reload()
         self._refresh_db_status()
         self._after_db_loaded()
@@ -1145,7 +1138,7 @@ class GeoMapPage(QWidget):
             f"GeoLite2 database download failed — {msg}. "
             "Check your internet connection and try again."
         )
-        self._dl_status.setStyleSheet(f"font-size:9px; color:{RED};")
+        _s.themed_ss(self._dl_status, "font-size:9px; color:{RED};")
 
     # ── Table ─────────────────────────────────────────────────────────────────
 
@@ -1164,7 +1157,7 @@ class GeoMapPage(QWidget):
                 QTableWidgetItem(", ".join(links) if links else ""),
             ]
             # Colour the category cell
-            cat_color = _MARKER_COLOR.get(category, ACCENT)
+            cat_color = _marker_color().get(category, _s.ACCENT)
             items[5].setForeground(QColor(cat_color))
 
             for col, item in enumerate(items):
@@ -1208,7 +1201,7 @@ class GeoMapPage(QWidget):
                 self._dl_status.setText(
                     f"Auto-loaded {len(entries)} threat intel IPs from local cache."
                 )
-                self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
+                _s.themed_ss(self._dl_status, "font-size:9px; color:{TEXT_SECONDARY};")
         except Exception:
             pass  # non-fatal
 
@@ -1225,17 +1218,17 @@ class GeoMapPage(QWidget):
     def _refresh_db_status(self) -> None:
         path = db_path()
         if self._locator.is_available:
-            self._db_status_dot.setStyleSheet(f"color:{GREEN}; font-size:12px;")
+            _s.themed_ss(self._db_status_dot, "color:{GREEN}; font-size:12px;")
             self._db_status_lbl.setText("GeoLite2-City.mmdb loaded")
-            self._db_status_lbl.setStyleSheet(f"font-size:10px; color:{GREEN};")
+            _s.themed_ss(self._db_status_lbl, "font-size:10px; color:{GREEN};")
         elif path.exists():
-            self._db_status_dot.setStyleSheet(f"color:{AMBER}; font-size:12px;")
+            _s.themed_ss(self._db_status_dot, "color:{AMBER}; font-size:12px;")
             self._db_status_lbl.setText("Database found but could not be opened")
-            self._db_status_lbl.setStyleSheet(f"font-size:10px; color:{AMBER};")
+            _s.themed_ss(self._db_status_lbl, "font-size:10px; color:{AMBER};")
         else:
-            self._db_status_dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:12px;")
+            _s.themed_ss(self._db_status_dot, "color:{TEXT_MUTED}; font-size:12px;")
             self._db_status_lbl.setText("No database — download below or copy .mmdb manually")
-            self._db_status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+            _s.themed_ss(self._db_status_lbl, "font-size:10px; color:{TEXT_MUTED};")
         self._db_path_lbl.setText(str(path))
 
         # The "no database?" quick-download CTA is only relevant before a DB

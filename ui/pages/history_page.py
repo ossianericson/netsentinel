@@ -29,12 +29,9 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, BTN_DISABLED_BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, CHART_PURPLE, CHART_SPINE,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, TH_BG, WHITE,
+    CHART_PURPLE,
 )
 
 if TYPE_CHECKING:
@@ -42,22 +39,41 @@ if TYPE_CHECKING:
 
 
 # ── Chart style helpers ───────────────────────────────────────────────────────
+# Colour lists are read live (via _s) so a theme switch recolours the series.
+# CHART_PURPLE is theme-independent (module constant), so it stays a bare import.
 
-_SERIES_COLORS = [ACCENT, GREEN, AMBER, TEXT_SECONDARY, RED, CHART_PURPLE]
-_STATE_COLORS  = {"UP": GREEN, "DEGRADED": AMBER, "DOWN": RED}
+def _series_colors() -> list:
+    return [_s.ACCENT, _s.GREEN, _s.AMBER, _s.TEXT_SECONDARY, _s.RED, CHART_PURPLE]
+
+
+def _state_colors() -> dict:
+    return {"UP": _s.GREEN, "DEGRADED": _s.AMBER, "DOWN": _s.RED}
 
 
 def _style_ax(ax, title: str) -> None:
-    ax.set_facecolor(CHART_PLOT_BG)
+    ax.set_facecolor(_s.CHART_PLOT_BG)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     for spine in ("bottom", "left"):
-        ax.spines[spine].set_color(CHART_SPINE)
-    ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-    ax.set_title(title, color=TH_BG, fontsize=10, fontweight="bold", pad=6)
-    ax.grid(True, color=CHART_GRID, linewidth=0.7, axis="y")
+        ax.spines[spine].set_color(_s.CHART_SPINE)
+    ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+    ax.set_title(title, color=_s.TH_BG, fontsize=10, fontweight="bold", pad=6)
+    ax.grid(True, color=_s.CHART_GRID, linewidth=0.7, axis="y")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=8))
+
+
+def _zoom_btn_style(active: bool) -> str:
+    if active:
+        return (
+            f"QPushButton {{ font-size:11px; background:{_s.ACCENT}; color:{_s.WHITE};"
+            f" border:1px solid {_s.ACCENT}; border-radius:3px; }}"
+        )
+    return (
+        f"QPushButton {{ font-size:11px; background:{_s.BG_CARD}; color:{_s.ACCENT};"
+        f" border:1px solid {_s.BTN_DISABLED_BORDER}; border-radius:3px; }}"
+        f"QPushButton:hover {{ background:{_s.BG_HOVER}; }}"
+    )
 
 
 # ── KPI tile ─────────────────────────────────────────────────────────────────
@@ -65,30 +81,26 @@ def _style_ax(ax, title: str) -> None:
 class _KpiTile(QFrame):
     """Small stat card: coloured left border, micro-label + large number."""
 
-    def __init__(self, label: str, value: str = "—", accent: str = ACCENT, parent=None):
+    def __init__(self, label: str, value: str = "—", accent_name: str = "ACCENT", parent=None):
         super().__init__(parent)
         self.setObjectName("kpiTile")
         self.setFixedHeight(56)
-        self.setStyleSheet(
+        _s.themed_ss(self, lambda an=accent_name: (
             f"QFrame#kpiTile {{"
-            f"  background:{BG_CARD}; border:1px solid {BORDER};"
-            f"  border-left:3px solid {accent}; border-radius:0;"
+            f"  background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
+            f"  border-left:3px solid {getattr(_s, an)}; border-radius:0;"
             f"}}"
-        )
+        ))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
         layout.setSpacing(2)
 
         self._lbl = QLabel(label.upper())
-        self._lbl.setStyleSheet(
-            f"font-size:9px; font-weight:600; color:{TEXT_SECONDARY};"
-            f" letter-spacing:0.5px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._lbl, "font-size:9px; font-weight:600; color:{TEXT_SECONDARY};"
+            " letter-spacing:0.5px; background:transparent; border:none;")
         self._val = QLabel(value)
-        self._val.setStyleSheet(
-            f"font-size:22px; font-weight:700; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._val, "font-size:22px; font-weight:700; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         layout.addWidget(self._lbl)
         layout.addWidget(self._val)
 
@@ -104,9 +116,10 @@ class _ChartCard(QFrame):
     def __init__(self, title: str, height: int = 220, parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+        _s.themed_ss(
+            self,
+            "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}",
         )
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -115,21 +128,23 @@ class _ChartCard(QFrame):
         # Card title bar
         hdr = QWidget()
         hdr.setFixedHeight(32)
-        hdr.setStyleSheet(
-            f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
+        _s.themed_ss(
+            hdr,
+            "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};",
         )
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(12, 0, 12, 0)
         lbl = QLabel(title)
-        lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f"background:transparent; border:none;"
+        _s.themed_ss(
+            lbl,
+            "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            "background:transparent; border:none;",
         )
         hl.addWidget(lbl)
         outer.addWidget(hdr)
 
         # Figure
-        self._fig = Figure(figsize=(8, height / 96), dpi=96, facecolor=BG_CARD)
+        self._fig = Figure(figsize=(8, height / 96), dpi=96, facecolor=_s.BG_CARD)
         self._ax  = self._fig.add_subplot(111)
         self._fig.set_tight_layout({"pad": 0.8})  # applied once; avoids per-redraw accumulation
         self._canvas = FigureCanvas(self._fig)
@@ -137,7 +152,14 @@ class _ChartCard(QFrame):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         self._canvas.setFixedHeight(height)
+        _s.themed_ss(self._canvas, "background:{BG_CARD}; border:none;")
         outer.addWidget(self._canvas)
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor (frame/header/canvas
+        backgrounds re-apply automatically via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.BG_CARD)
+        self._canvas.draw_idle()
 
     @property
     def ax(self):
@@ -374,9 +396,9 @@ class HistoryPage(QWidget):
         self._hover_annot = ax.annotate(
             "", xy=(0, 0), xytext=(10, 10),
             textcoords="offset points",
-            bbox=dict(boxstyle="round,pad=0.4", fc=BG_CARD, ec=CHART_SPINE, alpha=0.9),
+            bbox=dict(boxstyle="round,pad=0.4", fc=_s.BG_CARD, ec=_s.CHART_SPINE, alpha=0.9),
             fontsize=9,
-            color=TEXT_PRIMARY,
+            color=_s.TEXT_PRIMARY,
         )
         self._hover_annot.set_visible(False)
 
@@ -427,7 +449,7 @@ class HistoryPage(QWidget):
             btn = QPushButton(label)
             btn.setFixedSize(40, 26)
             btn.setCheckable(True)
-            btn.setStyleSheet(self._zoom_btn_style(False))
+            _s.themed_ss(btn, lambda: _zoom_btn_style(False))
             btn.clicked.connect(lambda checked, l=label: self._set_window(l))
             self._zoom_btns[label] = btn
             title_row.addWidget(btn)
@@ -435,10 +457,8 @@ class HistoryPage(QWidget):
         # Host selector
         self._host_combo = QComboBox()
         self._host_combo.setFixedWidth(160)
-        self._host_combo.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
-            f"border:1px solid {BORDER}; padding:2px 6px;"
-        )
+        _s.themed_ss(self._host_combo, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            "border:1px solid {BORDER}; padding:2px 6px;")
         self._host_combo.currentTextChanged.connect(self._on_host_changed)
         title_row.addWidget(QLabel("Host:"))
         title_row.addWidget(self._host_combo)
@@ -446,12 +466,10 @@ class HistoryPage(QWidget):
         # Refresh button
         refresh_btn = QPushButton("↻ Refresh")
         refresh_btn.setFixedHeight(26)
-        refresh_btn.setStyleSheet(
-            f"QPushButton {{ font-size:11px; color:{ACCENT};"
-            f" background:{BG_CARD}; border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(refresh_btn, "QPushButton {{ font-size:11px; color:{ACCENT};"
+            " background:{BG_CARD}; border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         refresh_btn.clicked.connect(self._refresh)
         title_row.addWidget(refresh_btn)
         root.addLayout(title_row)
@@ -459,9 +477,7 @@ class HistoryPage(QWidget):
         # Loading label — shown while worker runs
         self._loading_lbl = QLabel("Loading…")
         self._loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._loading_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(self._loading_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._loading_lbl.hide()
         root.addWidget(self._loading_lbl)
 
@@ -477,18 +493,14 @@ class HistoryPage(QWidget):
 
         _icon_lbl = QLabel("◌")
         _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _icon_lbl.setStyleSheet(
-            f"font-size:40px; color:{BORDER}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_icon_lbl, "font-size:40px; color:{BORDER}; background:transparent; border:none;")
         _desc_lbl = QLabel(
             "No monitoring data yet. Run a scan to discover devices —\n"
             "availability monitoring begins automatically after the first scan."
         )
         _desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _desc_lbl.setWordWrap(True)
-        _desc_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(_desc_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         _btn_cta = QPushButton("Start Monitoring")
         _btn_cta.setObjectName("btnScan")
         _btn_cta.setFixedHeight(34)
@@ -509,11 +521,11 @@ class HistoryPage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_uptime  = _KpiTile("Uptime",    "—", GREEN)
-        self._kpi_avg_rtt = _KpiTile("Avg RTT",   "—", ACCENT)
-        self._kpi_min_rtt = _KpiTile("Min RTT",   "—", GREEN)
-        self._kpi_max_rtt = _KpiTile("Max RTT",   "—", RED)
-        self._kpi_hosts   = _KpiTile("Hosts Monitored", "—", ACCENT)
+        self._kpi_uptime  = _KpiTile("Uptime",    "—", "GREEN")
+        self._kpi_avg_rtt = _KpiTile("Avg RTT",   "—", "ACCENT")
+        self._kpi_min_rtt = _KpiTile("Min RTT",   "—", "GREEN")
+        self._kpi_max_rtt = _KpiTile("Max RTT",   "—", "RED")
+        self._kpi_hosts   = _KpiTile("Hosts Monitored", "—", "ACCENT")
         for tile in (self._kpi_uptime, self._kpi_avg_rtt, self._kpi_min_rtt,
                      self._kpi_max_rtt, self._kpi_hosts):
             kpi_row.addWidget(tile)
@@ -524,9 +536,9 @@ class HistoryPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(f"background:{BG_DARK}; border:none;")
+        _s.themed_ss(scroll, "background:{BG_DARK}; border:none;")
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         self._charts_layout = QVBoxLayout(inner)
         self._charts_layout.setContentsMargins(0, 0, 0, 0)
         self._charts_layout.setSpacing(10)
@@ -553,7 +565,7 @@ class HistoryPage(QWidget):
         for lbl, btn in self._zoom_btns.items():
             active = lbl == label
             btn.setChecked(active)
-            btn.setStyleSheet(self._zoom_btn_style(active))
+            _s.themed_ss(btn, lambda a=active: _zoom_btn_style(a))
         self._refresh()
 
     def set_global_hours(self, hours: float) -> None:
@@ -565,19 +577,6 @@ class HistoryPage(QWidget):
                 best = label
                 break
         self._set_window(best)
-
-    @staticmethod
-    def _zoom_btn_style(active: bool) -> str:
-        if active:
-            return (
-                f"QPushButton {{ font-size:11px; background:{ACCENT}; color:{WHITE};"
-                f" border:1px solid {ACCENT}; border-radius:3px; }}"
-            )
-        return (
-            f"QPushButton {{ font-size:11px; background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {BTN_DISABLED_BORDER}; border-radius:3px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-        )
 
     def _on_host_changed(self, host: str) -> None:
         self._refresh()
@@ -640,9 +639,22 @@ class HistoryPage(QWidget):
         if not has_data:
             return
 
+        self._last_data = data   # cached so a live theme switch can re-render
         self._draw_rtt(data)
         self._draw_availability(data)
         self._update_kpis(data)
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: recolour both chart cards and re-render the last
+        fetched data so the matplotlib series adopt the new palette."""
+        for card in (getattr(self, "_rtt_card", None),
+                     getattr(self, "_avail_card", None)):
+            if card is not None and hasattr(card, "refresh_theme"):
+                card.refresh_theme()
+        data = getattr(self, "_last_data", None)
+        if data:
+            self._draw_rtt(data)
+            self._draw_availability(data)
 
     def _populate_host_combo_from_data(self, hosts: list, selected: str) -> None:
         self._host_combo.blockSignals(True)
@@ -669,12 +681,13 @@ class HistoryPage(QWidget):
         series_hosts = data.get("series_hosts", [])
         rtt_series   = data.get("rtt_series", {})
 
+        colors = _series_colors()
         plotted = False
         for i, host in enumerate(series_hosts):
             pts   = rtt_series.get(host, [])
             if not pts:
                 continue
-            color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+            color = colors[i % len(colors)]
             times_ok = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms >= 0]
             rtts_ok  = [p.rtt_ms for p in pts if p.rtt_ms >= 0]
             times_to = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms < 0]
@@ -686,18 +699,18 @@ class HistoryPage(QWidget):
                 plotted = True
             if times_to:
                 ax.scatter(times_to, [0] * len(times_to),
-                           color=RED, marker="x", s=30, zorder=5)
+                           color=_s.RED, marker="x", s=30, zorder=5)
 
         if not plotted:
             ax.text(0.5, 0.5, "No RTT data in this window",
-                    ha="center", va="center", color=TEXT_SECONDARY,
+                    ha="center", va="center", color=_s.TEXT_SECONDARY,
                     fontsize=10, transform=ax.transAxes)
         else:
-            ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
+            ax.set_ylabel("RTT (ms)", color=_s.TEXT_SECONDARY, fontsize=9)
             if len(series_hosts) > 1:
                 ax.legend(fontsize=8, framealpha=0.9, loc="upper right")
-            ax.axhline(100, color=AMBER, linewidth=1.0, linestyle="--", alpha=0.7, zorder=2)
-            ax.text(1.0, 100, " 100ms threshold", color=AMBER, fontsize=8,
+            ax.axhline(100, color=_s.AMBER, linewidth=1.0, linestyle="--", alpha=0.7, zorder=2)
+            ax.text(1.0, 100, " 100ms threshold", color=_s.AMBER, fontsize=8,
                     va="bottom", ha="right", transform=ax.get_yaxis_transform(), alpha=0.8)
 
         self._rtt_card.canvas.draw_idle()
@@ -716,12 +729,13 @@ class HistoryPage(QWidget):
         series_hosts  = data.get("series_hosts", [])
         rollup_series = data.get("rollup_series", {})
 
+        colors = _series_colors()
         plotted = False
         for i, host in enumerate(series_hosts):
             pts = rollup_series.get(host, [])
             if not pts:
                 continue
-            color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+            color = colors[i % len(colors)]
             days  = [datetime.datetime.strptime(p.day, "%Y-%m-%d") for p in pts]
             mins  = [p.min for p in pts]
             avgs  = [p.avg for p in pts]
@@ -732,10 +746,10 @@ class HistoryPage(QWidget):
 
         if not plotted:
             ax.text(0.5, 0.5, "No long-term data yet — check back after 30+ days",
-                    ha="center", va="center", color=TEXT_SECONDARY,
+                    ha="center", va="center", color=_s.TEXT_SECONDARY,
                     fontsize=10, transform=ax.transAxes)
         else:
-            ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
+            ax.set_ylabel("RTT (ms)", color=_s.TEXT_SECONDARY, fontsize=9)
             if len(series_hosts) > 1:
                 ax.legend(fontsize=8, framealpha=0.9, loc="upper right")
 
@@ -752,26 +766,27 @@ class HistoryPage(QWidget):
 
         if not series_hosts:
             ax.text(0.5, 0.5, "No availability data in this window",
-                    ha="center", va="center", color=TEXT_SECONDARY,
+                    ha="center", va="center", color=_s.TEXT_SECONDARY,
                     fontsize=10, transform=ax.transAxes)
             self._avail_card.canvas.draw_idle()
             return
 
         ips = series_hosts
         ax.set_yticks(range(len(ips)))
-        ax.set_yticklabels(ips[::-1], fontsize=8, color=TEXT_PRIMARY)
+        ax.set_yticklabels(ips[::-1], fontsize=8, color=_s.TEXT_PRIMARY)
         ax.set_ylim(-0.5, len(ips) - 0.5)
 
+        state_colors = _state_colors()
         for y, ip in enumerate(reversed(ips)):
             hist = state_series.get(ip, [])
             for pt in hist:
                 dt    = datetime.datetime.fromtimestamp(pt.ts)
-                color = _STATE_COLORS.get(pt.state, TEXT_MUTED)
+                color = state_colors.get(pt.state, _s.TEXT_MUTED)
                 ax.barh(y, 1 / 60, left=mdates.date2num(dt),
                         height=0.6, color=color, linewidth=0)
 
         import matplotlib.patches as mpatches
-        patches = [mpatches.Patch(color=v, label=k) for k, v in _STATE_COLORS.items()]
+        patches = [mpatches.Patch(color=v, label=k) for k, v in state_colors.items()]
         ax.legend(handles=patches, fontsize=8, loc="upper right", framealpha=0.9)
         ax.xaxis_date()
 

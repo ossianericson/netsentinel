@@ -15,10 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.utils import get_app_data_dir
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, BG_CARD, BORDER, BORDER_MED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 _LOG_FILE = "feedback.log"
 _MAX_CHARS = 2000
@@ -32,10 +29,8 @@ class FeedbackDialog(QDialog):
         self.setWindowTitle("Give Feedback")
         self.setModal(True)
         self.setMinimumWidth(460)
-        self.setStyleSheet(
-            f"QDialog {{ background:{BG_CARD}; }}"
-            f"QLabel  {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _s.themed_ss(self, "QDialog {{ background:{BG_CARD}; }}"
+            "QLabel  {{ color:{TEXT_PRIMARY}; background:transparent; }}")
         self._build()
 
     def _build(self) -> None:
@@ -44,7 +39,7 @@ class FeedbackDialog(QDialog):
         vlay.setSpacing(10)
 
         title = QLabel("Share feedback about NetSentinel")
-        title.setStyleSheet(f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};")
+        _s.themed_ss(title, "font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};")
         vlay.addWidget(title)
 
         hint = QLabel(
@@ -52,26 +47,24 @@ class FeedbackDialog(QDialog):
             "Nothing is sent over the network."
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(hint, "font-size:11px; color:{TEXT_SECONDARY};")
         vlay.addWidget(hint)
 
         self._edit = QPlainTextEdit()
         self._edit.setPlaceholderText("What's working well? What could be better?")
         self._edit.setMinimumHeight(120)
         self._edit.setMaximumHeight(200)
-        self._edit.setStyleSheet(
-            f"QPlainTextEdit {{"
-            f"  background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f"  border:1px solid {BORDER_MED}; border-radius:4px;"
-            f"  padding:6px; font-size:12px;"
-            f"}}"
-            f"QPlainTextEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._edit, "QPlainTextEdit {{"
+            "  background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            "  border:1px solid {BORDER_MED}; border-radius:4px;"
+            "  padding:6px; font-size:12px;"
+            "}}"
+            "QPlainTextEdit:focus {{ border-color:{ACCENT}; }}")
         self._edit.textChanged.connect(self._on_text_changed)
         vlay.addWidget(self._edit)
 
         self._char_lbl = QLabel(f"0 / {_MAX_CHARS}")
-        self._char_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._char_lbl, "font-size:10px; color:{TEXT_SECONDARY};")
         vlay.addWidget(self._char_lbl)
 
         btns = QDialogButtonBox(
@@ -80,20 +73,16 @@ class FeedbackDialog(QDialog):
         ok_btn = btns.button(QDialogButtonBox.StandardButton.Ok)
         ok_btn.setText("Submit")
         ok_btn.setEnabled(False)
-        ok_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; padding:5px 16px; font-weight:bold; }}"
-            f"QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _s.themed_ss(ok_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; padding:5px 16px; font-weight:bold; }}"
+            "QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:disabled {{ background:{BORDER}; color:{TEXT_SECONDARY}; }}")
         cancel_btn = btns.button(QDialogButtonBox.StandardButton.Cancel)
-        cancel_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; border-radius:4px; padding:5px 16px; }}"
-            f"QPushButton:hover   {{ background:{BG_CARD}; color:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(cancel_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; border-radius:4px; padding:5px 16px; }}"
+            "QPushButton:hover   {{ background:{BG_CARD}; color:{ACCENT_LITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT}; color:{WHITE}; }}")
         self._ok_btn = ok_btn
         btns.accepted.connect(self._submit)
         btns.rejected.connect(self.reject)

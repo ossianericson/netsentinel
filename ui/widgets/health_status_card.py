@@ -29,22 +29,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT,
-    AMBER,
-    AMBER_BG,
-    BG_CARD,
-    BG_HOVER,
-    BORDER,
-    CARD_RADIUS,
-    GREEN,
-    GREEN_BG,
-    RED,
-    RED_BG,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-)
+from ui import styles as _s
+from ui.styles import CARD_RADIUS
 
 # ── History persistence ───────────────────────────────────────────────────────
 
@@ -89,10 +75,10 @@ def _append_snapshot(snapshot) -> None:
 # ── Sparkline widget ──────────────────────────────────────────────────────────
 
 _STATE_COLOUR = {
-    "green":   GREEN,
-    "amber":   AMBER,
-    "red":     RED,
-    "unknown": TEXT_MUTED,
+    "green":   "GREEN",
+    "amber":   "AMBER",
+    "red":     "RED",
+    "unknown": "TEXT_MUTED",
 }
 
 
@@ -131,7 +117,7 @@ class _HealthSparkline(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Background
-        p.fillRect(0, 0, w, h, QColor(BG_CARD))
+        p.fillRect(0, 0, w, h, QColor(_s.BG_CARD))
 
         pad_top, pad_bot, pad_left, pad_right = 4, 8, 4, 4
         chart_w = w - pad_left - pad_right
@@ -140,7 +126,7 @@ class _HealthSparkline(QWidget):
         if len(entries) < 2:
             # Single dot
             e = entries[0]
-            colour = QColor(_STATE_COLOUR.get(e.get("state", "unknown"), TEXT_MUTED))
+            colour = QColor(getattr(_s, _STATE_COLOUR.get(e.get("state", "unknown"), "TEXT_MUTED")))
             cx = pad_left + chart_w // 2
             cy = pad_top + chart_h // 2
             p.setBrush(colour)
@@ -168,28 +154,28 @@ class _HealthSparkline(QWidget):
         for i in range(1, len(pts)):
             x0, y0, _ = pts[i - 1]
             x1, y1, state = pts[i]
-            colour = QColor(_STATE_COLOUR.get(state, TEXT_MUTED))
+            colour = QColor(getattr(_s, _STATE_COLOUR.get(state, "TEXT_MUTED")))
             pen = QPen(colour, 1.5)
             p.setPen(pen)
             p.drawLine(x0, y0, x1, y1)
 
         # Dot at the latest point
         lx, ly, lst = pts[-1]
-        colour = QColor(_STATE_COLOUR.get(lst, TEXT_MUTED))
+        colour = QColor(getattr(_s, _STATE_COLOUR.get(lst, "TEXT_MUTED")))
         p.setBrush(colour)
         p.setPen(Qt.PenStyle.NoPen)
         p.drawEllipse(lx - 3, ly - 3, 6, 6)
 
         # "7 days" label on the left
-        p.setPen(QColor(TEXT_MUTED))
+        p.setPen(QColor(_s.TEXT_MUTED))
         p.drawText(pad_left, h - 1, "7d")
 
         p.end()
 
     def _paint_empty(self) -> None:
         p = QPainter(self)
-        p.fillRect(0, 0, self.width(), self.height(), QColor(BG_CARD))
-        p.setPen(QColor(TEXT_MUTED))
+        p.fillRect(0, 0, self.width(), self.height(), QColor(_s.BG_CARD))
+        p.setPen(QColor(_s.TEXT_MUTED))
         p.drawText(
             self.rect(),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -201,16 +187,16 @@ class _HealthSparkline(QWidget):
 # ── Health status card ────────────────────────────────────────────────────────
 
 _STATE_BORDER = {
-    "green":   GREEN,
-    "amber":   AMBER,
-    "red":     RED,
-    "unknown": BORDER,
+    "green":   "GREEN",
+    "amber":   "AMBER",
+    "red":     "RED",
+    "unknown": "BORDER",
 }
 _STATE_BG = {
-    "green":   GREEN_BG,
-    "amber":   AMBER_BG,
-    "red":     RED_BG,
-    "unknown": BG_CARD,
+    "green":   "GREEN_BG",
+    "amber":   "AMBER_BG",
+    "red":     "RED_BG",
+    "unknown": "BG_CARD",
 }
 _STATE_ICON = {
     "green":   "✓",
@@ -219,10 +205,10 @@ _STATE_ICON = {
     "unknown": "○",
 }
 _STATE_ICON_COLOUR = {
-    "green":   GREEN,
-    "amber":   AMBER,
-    "red":     RED,
-    "unknown": TEXT_MUTED,
+    "green":   "GREEN",
+    "amber":   "AMBER",
+    "red":     "RED",
+    "unknown": "TEXT_MUTED",
 }
 _CTA_LABEL = {
     "green":   "View Dashboard →",
@@ -277,33 +263,33 @@ class HealthStatusCard(QWidget):
         self._icon_lbl = QLabel("○")
         self._icon_lbl.setFixedWidth(28)
         self._icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icon_lbl.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:{TEXT_MUTED};"
-            " background:transparent; border:none;"
-        )
+        self._set_icon_style("TEXT_MUTED")
 
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
 
         self._headline_lbl = QLabel("Gathering health data…")
-        self._headline_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            self._headline_lbl,
+            "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;",
         )
         self._headline_lbl.setWordWrap(True)
 
         self._sub_lbl = QLabel(
             "NetSentinel is reading from its monitors. This updates every 60 seconds."
         )
-        self._sub_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY};"
-            " background:transparent; border:none;"
+        _s.themed_ss(
+            self._sub_lbl,
+            "font-size:11px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;",
         )
         self._sub_lbl.setWordWrap(True)
 
         self._ts_lbl = QLabel("")
-        self._ts_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        _s.themed_ss(
+            self._ts_lbl,
+            "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;",
         )
 
         text_col.addWidget(self._headline_lbl)
@@ -316,7 +302,7 @@ class HealthStatusCard(QWidget):
         self._cta_btn.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
-        self._apply_cta_style(ACCENT)
+        self._apply_cta_style("ACCENT")
         self._cta_btn.clicked.connect(self._on_cta)
 
         top_row.addWidget(self._icon_lbl)
@@ -342,12 +328,9 @@ class HealthStatusCard(QWidget):
 
         self._apply_state_style(snapshot.state)
 
-        icon_colour = _STATE_ICON_COLOUR.get(snapshot.state, TEXT_MUTED)
+        icon_colour_name = _STATE_ICON_COLOUR.get(snapshot.state, "TEXT_MUTED")
         self._icon_lbl.setText(_STATE_ICON.get(snapshot.state, "○"))
-        self._icon_lbl.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:{icon_colour};"
-            " background:transparent; border:none;"
-        )
+        self._set_icon_style(icon_colour_name)
 
         self._headline_lbl.setText(snapshot.headline)
         self._sub_lbl.setText(snapshot.sub_text)
@@ -360,38 +343,44 @@ class HealthStatusCard(QWidget):
         cta_label = _CTA_LABEL.get(snapshot.state, "View Dashboard →")
         self._cta_btn.setText(cta_label)
 
-        btn_colour = _STATE_ICON_COLOUR.get(snapshot.state, ACCENT)
+        btn_colour_name = _STATE_ICON_COLOUR.get(snapshot.state, "ACCENT")
         if snapshot.state == "unknown":
-            btn_colour = ACCENT
-        self._apply_cta_style(btn_colour)
+            btn_colour_name = "ACCENT"
+        self._apply_cta_style(btn_colour_name)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _on_cta(self) -> None:
         self.navigate_to.emit(self._cta_page)
 
+    def _set_icon_style(self, colour_name: str) -> None:
+        _s.themed_ss(self._icon_lbl, lambda cn=colour_name: (
+            f"font-size:20px; font-weight:bold; color:{getattr(_s, cn)};"
+            " background:transparent; border:none;"
+        ))
+
     def _apply_state_style(self, state: str) -> None:
-        border_colour = _STATE_BORDER.get(state, BORDER)
-        bg_colour     = _STATE_BG.get(state, BG_CARD)
+        border_name = _STATE_BORDER.get(state, "BORDER")
+        bg_name     = _STATE_BG.get(state, "BG_CARD")
         # Crisp neutral border on all four sides; the coloured left accent + internal
         # status icon convey state (avoids the washed-out translucent-colour border).
-        self._frame.setStyleSheet(
+        _s.themed_ss(self._frame, lambda bn=border_name, gn=bg_name: (
             f"QFrame#healthFrame {{"
-            f" background:{bg_colour};"
-            f" border:1px solid {BORDER};"
-            f" border-left:3px solid {border_colour};"
+            f" background:{getattr(_s, gn)};"
+            f" border:1px solid {_s.BORDER};"
+            f" border-left:3px solid {getattr(_s, bn)};"
             f" border-radius:{CARD_RADIUS};"
             f"}}"
-        )
+        ))
 
-    def _apply_cta_style(self, colour: str) -> None:
-        self._cta_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{colour};"
-            f" border:1px solid {colour}88; border-radius:4px;"
+    def _apply_cta_style(self, colour_name: str) -> None:
+        _s.themed_ss(self._cta_btn, lambda cn=colour_name: (
+            f"QPushButton {{ background:transparent; color:{getattr(_s, cn)};"
+            f" border:1px solid {getattr(_s, cn)}88; border-radius:4px;"
             f" font-size:11px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; color:{colour}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{colour}; }}"
-        )
+            f"QPushButton:hover {{ background:{_s.BG_HOVER}; color:{getattr(_s, cn)}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{getattr(_s, cn)}; }}"
+        ))
 
     # ── Optional: expose sparkline for testing ────────────────────────────────
 

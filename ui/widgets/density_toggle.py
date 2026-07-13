@@ -11,20 +11,20 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QTableView
 
-from ui.styles import ACCENT, ACCENT_DARK, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, WHITE
+from ui import styles as _s
 
 _COMPACT_PX     = 24
 _COMFORTABLE_PX = 36
 
 _SS_ACTIVE = (
-    f"QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
-    f"border-radius:3px;padding:0 8px;font-size:10px;}}"
-    f"QPushButton:hover{{background:{ACCENT};}}"
+    "QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
+    "border-radius:3px;padding:0 8px;font-size:10px;}}"
+    "QPushButton:hover{{background:{ACCENT};}}"
 )
 _SS_INACTIVE = (
-    f"QPushButton{{background:transparent;color:{TEXT_MUTED};border:none;"
-    f"border-radius:3px;padding:0 8px;font-size:10px;}}"
-    f"QPushButton:hover{{background:{BG_DARK};color:{TEXT_PRIMARY};}}"
+    "QPushButton{{background:transparent;color:{TEXT_MUTED};border:none;"
+    "border-radius:3px;padding:0 8px;font-size:10px;}}"
+    "QPushButton:hover{{background:{BG_DARK};color:{TEXT_PRIMARY};}}"
 )
 
 
@@ -36,9 +36,7 @@ class DensityToggle(QFrame):
         self._key   = f"density/{table_key}"
         self._table = table
         self.setFixedHeight(24)
-        self.setStyleSheet(
-            f"QFrame{{background:{BG_DARK};border:1px solid {BORDER};border-radius:4px;}}"
-        )
+        _s.themed_ss(self, "QFrame{{background:{BG_DARK};border:1px solid {BORDER};border-radius:4px;}}")
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(1, 1, 1, 1)
@@ -72,11 +70,11 @@ class DensityToggle(QFrame):
         self._set_row_height(mode)
 
     def _refresh_styles(self, mode: str) -> None:
-        self._btn_compact.setStyleSheet(
-            _SS_ACTIVE if mode == "compact" else _SS_INACTIVE
+        _s.themed_ss(
+            self._btn_compact, _SS_ACTIVE if mode == "compact" else _SS_INACTIVE
         )
-        self._btn_comfortable.setStyleSheet(
-            _SS_ACTIVE if mode == "comfortable" else _SS_INACTIVE
+        _s.themed_ss(
+            self._btn_comfortable, _SS_ACTIVE if mode == "comfortable" else _SS_INACTIVE
         )
 
     def _set_row_height(self, mode: str) -> None:

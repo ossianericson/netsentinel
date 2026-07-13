@@ -1,0 +1,156 @@
+"""
+Ratchet test -- the long-tail driver for the Instant Theme Switching migration.
+
+Background
+----------
+~125 of 144 ui/ files destructure ``from ui.styles import ACCENT, ...`` --
+those names are copied at import time. ``apply_theme()``/``apply_accent_override()``
+mutate ``ui.styles`` module globals in place, but every already-imported bare
+name in a consumer file stays frozen at whatever value it had when that file
+was first imported. Converting a site to a live read (``from ui import styles
+as _s; _s.TOKEN``) or a ``themed_ss()`` template makes it immune; until then
+it is a frozen site that will show the pre-switch colour after a live theme
+change.
+
+This test locks in the CURRENT per-file frozen-site count so that:
+  * no new frozen site can be added without failing CI ("convert, never
+    raise the baseline"),
+  * a conversion commit that lowers a file's count must also lower its
+    baseline entry here in the same commit ("lower the stale baseline"),
+  * a brand-new ui/ file defaults to a baseline of 0 -- new UI must be born
+    live, never with fresh frozen sites.
+
+A "frozen site" = a bare ``ast.Name`` node whose id is a key in either theme
+dict in ``ui/styles.py``, outside of an import statement. This is AST-based
+(not a source regex) so multi-line f-strings count every field correctly.
+Converted forms are invisible to it by construction:
+  * a ``themed_ss(w, "...{TOKEN}...")`` template is a *string*, not a Name
+    node -- it has no bare-Name reference to count;
+  * ``_s.TOKEN`` is an ``ast.Attribute`` node (attribute of the ``_s`` Name),
+    never a bare ``ast.Name`` matching a theme-dict key.
+Theme-INdependent constants (``CHART_DOWN``/``CHART_UP``, ``TEAL``,
+``ACCENT_PURPLE``, ``MAP_LAND_*``, ``RADAR_*`` -- module assignments, not
+theme-dict keys) are never counted since they are never dict keys.
+
+Reuses the exact ``_DYNAMIC_CONSTANTS`` derivation and ``_bare_name_uses``
+machinery from test_style_imports.py so both tests agree on what counts as a
+dynamic style token.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).parent.parent
+_UI_ROOT = ROOT / "ui"
+_STYLES_PATH = _UI_ROOT / "styles.py"
+
+_styles_src = _STYLES_PATH.read_text(encoding="utf-8")
+
+# Extract keys from the theme dicts in styles.py -- the names injected into
+# module globals via globals().update() at import time and on every
+# apply_theme()/apply_accent_override() call. Same derivation as
+# test_style_imports.py's _DYNAMIC_CONSTANTS.
+_DYNAMIC_CONSTANTS: frozenset[str] = frozenset(
+    re.findall(r'"([A-Z][A-Z0-9_]{2,})":', _styles_src)
+)
+
+assert len(_DYNAMIC_CONSTANTS) >= 30, (
+    f"Only {len(_DYNAMIC_CONSTANTS)} dynamic constants found -- "
+    "regex may have broken; check ui/styles.py theme dict format"
+)
+
+
+def _collect_import_lines(tree: ast.Module) -> set[int]:
+    """Return the set of line numbers occupied by import statements."""
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for ln in range(node.lineno, node.end_lineno + 1):
+                lines.add(ln)
+    return lines
+
+
+def _bare_name_uses(tree: ast.Module, import_lines: set[int]) -> dict[str, list[int]]:
+    """Return mapping of dynamic-constant-name -> [line numbers] where the
+    name appears as a bare Name node outside of import statements."""
+    uses: dict[str, list[int]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Name):
+            continue
+        if node.id not in _DYNAMIC_CONSTANTS:
+            continue
+        if node.lineno in import_lines:
+            continue
+        uses.setdefault(node.id, []).append(node.lineno)
+    return uses
+
+
+def _frozen_count(path: Path) -> int:
+    """Number of frozen bare-Name style-token sites in this file."""
+    source = path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return 0
+    import_lines = _collect_import_lines(tree)
+    uses = _bare_name_uses(tree, import_lines)
+    return sum(len(lines) for lines in uses.values())
+
+
+def _ui_files() -> list[Path]:
+    return sorted(p for p in _UI_ROOT.rglob("*.py") if p.name != "styles.py")
+
+
+# Per-file baseline: {repo-relative path -> frozen-site count}.
+# Every entry must equal the file's ACTUAL current count -- this is a
+# ratchet, not a todo list. Unlisted files default to 0 (new UI files must
+# be born live: _s.TOKEN reads and themed_ss() templates only).
+#
+# Regenerate with: python tests/test_frozen_token_ratchet.py
+_BASELINE: dict[str, int] = {}
+
+
+def test_frozen_token_count_matches_baseline():
+    offenders = []
+    for path in _ui_files():
+        rel = path.relative_to(ROOT).as_posix()
+        n = _frozen_count(path)
+        baseline = _BASELINE.get(rel, 0)
+        if n > baseline:
+            offenders.append(
+                f"{rel}: {n} frozen token site(s), baseline {baseline} -- "
+                "convert, never raise the baseline"
+            )
+        elif n < baseline:
+            offenders.append(
+                f"{rel}: {n} frozen token site(s), baseline says {baseline} -- "
+                "lower the stale baseline in this commit"
+            )
+
+    assert not offenders, (
+        "Frozen style-token ratchet drifted from the per-file baseline in "
+        "test_frozen_token_ratchet.py:\n"
+        + "\n".join(f"  {o}" for o in offenders)
+        + "\n\nConvert each site to a live read (`from ui import styles as _s; "
+        "_s.TOKEN`) or register with `themed_ss()` per the conversion recipe "
+        "in the Instant Theme Switching plan, then update the baseline entry "
+        "in the same commit. Regenerate all baselines with: "
+        "python tests/test_frozen_token_ratchet.py"
+    )
+
+
+if __name__ == "__main__":
+    # Regenerate the baseline dict -- paste the printed block back into
+    # _BASELINE above after any conversion commit.
+    counts: dict[str, int] = {}
+    for path in _ui_files():
+        n = _frozen_count(path)
+        if n:
+            counts[path.relative_to(ROOT).as_posix()] = n
+    print("_BASELINE: dict[str, int] = {")
+    for rel, n in sorted(counts.items()):
+        print(f'    "{rel}": {n},')
+    print("}")

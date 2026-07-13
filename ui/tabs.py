@@ -26,14 +26,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, AMBER, AMBER_BG, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER,
-    INLINE_WARN_BG, INLINE_WARN_FG, NAV_DIVIDER, RED,
-    SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG,
-    SIDEBAR_SECTION_FG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
 from modules.scan_persistence import record_app_traffic_sample
 from ui.nav.labels import NavLabel as L
 from ui.nav.rail import _RailButton, _FlyoutPanel, _CanvasClickFilter, _make_nav_icon
@@ -60,6 +52,7 @@ from ui.tabs_analysis_isp import _AnalysisIspMixin
 from ui.tabs_recon import _ReconTabsMixin
 from ui.tabs_monitors import _MonitorTabsMixin
 from ui.tabs_help import _HelpTabsMixin
+from ui import styles as _s
 
 
 class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
@@ -498,13 +491,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         # and is never registered separately in the stack.
         from PyQt6.QtWidgets import QTabWidget as _LogTW
         self._logging_container = _LogTW()
-        self._logging_container.setStyleSheet(
-            f"QTabWidget::pane {{ border:1px solid {BORDER}; background:{BG_DARK}; }}"
-            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f"  padding:6px 18px; border:1px solid {BORDER}; border-bottom:none; margin-right:2px; }}"
-            f"QTabBar::tab:selected {{ background:{ACCENT}; color:{BG_DARK}; font-weight:bold; }}"
-            f"QTabBar::tab:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._logging_container, "QTabWidget::pane {{ border:1px solid {BORDER}; background:{BG_DARK}; }}"
+            "QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            "  padding:6px 18px; border:1px solid {BORDER}; border-bottom:none; margin-right:2px; }}"
+            "QTabBar::tab:selected {{ background:{ACCENT}; color:{BG_DARK}; font-weight:bold; }}"
+            "QTabBar::tab:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         self._logging_container.addTab(self._log_tab,       "Log Sources")
         self._logging_container.addTab(self._log_hub_page,  "Activity Log")
 
@@ -572,7 +563,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         # ── Sidebar list + stacked content ────────────────────────────────────
         self._nav = QListWidget()
         self._nav.setObjectName("sideNav")
-        self._nav_delegate = self._NavAdminDelegate(self._nav_admin_rows, RED, self._nav)
+        self._nav_delegate = self._NavAdminDelegate(self._nav_admin_rows, self._nav)
         self._nav.setItemDelegate(self._nav_delegate)
         # Right-click → pin/unpin to Favourites
         self._nav.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -748,7 +739,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         # Panel 0 — flat QListWidget sidebar (Home mode)
         self._nav_flat_panel = QWidget()
         self._nav_flat_panel.setFixedWidth(220)
-        self._nav_flat_panel.setStyleSheet(f"QWidget {{ background:{SIDEBAR_BG}; }}")
+        _s.themed_ss(self._nav_flat_panel, "QWidget {{ background:{SIDEBAR_BG}; }}")
         _fp_lay = QVBoxLayout(self._nav_flat_panel)
         _fp_lay.setContentsMargins(0, 0, 0, 0)
         _fp_lay.setSpacing(0)
@@ -761,25 +752,21 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._nav_search.setPlaceholderText("  Filter…")
         self._nav_search.setToolTip("Filter sidebar pages  (Ctrl+F)")
         self._nav_search.setFixedHeight(28)
-        self._nav_search.setStyleSheet(
-            f"QLineEdit#navSearch {{"
-            f" background:{SIDEBAR_HOVER}; color:{SIDEBAR_ITEM_FG};"
-            f" border:none; border-bottom:1px solid {NAV_DIVIDER};"
-            f" padding:0 8px; font-size:11px; }}"
-            f"QLineEdit#navSearch:focus {{ color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._nav_search, "QLineEdit#navSearch {{"
+            " background:{SIDEBAR_HOVER}; color:{SIDEBAR_ITEM_FG};"
+            " border:none; border-bottom:1px solid {NAV_DIVIDER};"
+            " padding:0 8px; font-size:11px; }}"
+            "QLineEdit#navSearch:focus {{ color:{WHITE}; }}")
         self._nav_search.textChanged.connect(self._on_nav_search_changed)
         self._nav_search.setVisible(False)
 
         # Collapse ◀ / ▶ toggle (flat panel footer)
         self._sidebar_toggle_btn = QPushButton("◀")
         self._sidebar_toggle_btn.setFixedHeight(24)
-        self._sidebar_toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{SIDEBAR_SECTION_BG}; color:{SIDEBAR_SECTION_FG};"
-            f" border:none; border-top:1px solid {NAV_DIVIDER}; font-size:11px; }}"
-            f"QPushButton:hover {{ color:{WHITE}; background:{SIDEBAR_HOVER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._sidebar_toggle_btn, "QPushButton {{ background:{SIDEBAR_SECTION_BG}; color:{SIDEBAR_SECTION_FG};"
+            " border:none; border-top:1px solid {NAV_DIVIDER}; font-size:11px; }}"
+            "QPushButton:hover {{ color:{WHITE}; background:{SIDEBAR_HOVER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
 
         _fp_lay.addWidget(self._nav_search)
@@ -788,7 +775,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
 
         # Panel 1 — activity rail + flyout (Standard/Pro mode)
         self._nav_rail_panel = QWidget()
-        self._nav_rail_panel.setStyleSheet(f"QWidget {{ background:{SIDEBAR_BG}; }}")
+        _s.themed_ss(self._nav_rail_panel, "QWidget {{ background:{SIDEBAR_BG}; }}")
         _rp_lay = QHBoxLayout(self._nav_rail_panel)
         _rp_lay.setContentsMargins(0, 0, 0, 0)
         _rp_lay.setSpacing(0)
@@ -796,9 +783,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         # 48px icon rail
         self._nav_rail = QWidget()
         self._nav_rail.setFixedWidth(56)
-        self._nav_rail.setStyleSheet(
-            f"background: {SIDEBAR_BG}; border-right: 1px solid {NAV_DIVIDER};"
-        )
+        _s.themed_ss(self._nav_rail, "background: {SIDEBAR_BG}; border-right: 1px solid {NAV_DIVIDER};")
         self._nav_rail_lay = QVBoxLayout(self._nav_rail)
         self._nav_rail_lay.setContentsMargins(0, 0, 0, 0)
         self._nav_rail_lay.setSpacing(0)
@@ -808,7 +793,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         _rail_search_btn.setFixedSize(56, 32)
         _rail_search_btn.setToolTip("Search all pages  (Ctrl+K)")
         _rail_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _rail_search_btn.setIcon(_make_nav_icon("search", 18, TEXT_MUTED))
+        _rail_search_btn.setIcon(_make_nav_icon("search", 18, _s.TEXT_MUTED))
         _rail_search_btn.setIconSize(QSize(18, 18))
         _rail_search_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; border: none; outline: none; }}"
@@ -821,10 +806,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         _ctrlk_chip = QLabel("Ctrl+K")
         _ctrlk_chip.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         _ctrlk_chip.setFixedWidth(56)
-        _ctrlk_chip.setStyleSheet(
-            f"font-size:8px; color:{TEXT_MUTED}; background:transparent;"
-            f" border:none; border-bottom:1px solid {NAV_DIVIDER}; padding-bottom:4px;"
-        )
+        _s.themed_ss(_ctrlk_chip, "font-size:8px; color:{TEXT_MUTED}; background:transparent;"
+            " border:none; border-bottom:1px solid {NAV_DIVIDER}; padding-bottom:4px;")
         _ctrlk_chip.setCursor(Qt.CursorShape.PointingHandCursor)
         _ctrlk_chip.mousePressEvent = lambda _e: self._open_command_palette()
         self._nav_rail_lay.addWidget(_rail_search_btn)
@@ -865,7 +848,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         # 1px divider between sidebar stack and content
         div = QFrame()
         div.setFrameShape(QFrame.Shape.VLine)
-        div.setStyleSheet(f"background: {NAV_DIVIDER}; max-width: 1px;")
+        _s.themed_ss(div, "background: {NAV_DIVIDER}; max-width: 1px;")
         h.addWidget(div)
         # Content wrapper
         content_wrapper = QWidget()
@@ -882,22 +865,18 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._back_btn = QPushButton("‹ Back")
         self._back_btn.setFixedHeight(20)
         self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._back_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0 4px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._back_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0 4px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._back_btn.setVisible(False)
         self._back_btn.clicked.connect(self._nav_go_back)
         bc_row.addWidget(self._back_btn)
 
         self._breadcrumb_lbl = QLabel("Getting Started  ›  Home")
         self._breadcrumb_lbl.setFixedHeight(20)
-        self._breadcrumb_lbl.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 11px; padding: 0 2px;"
-            f" background: transparent; border: none;"
-        )
+        _s.themed_ss(self._breadcrumb_lbl, "color: {TEXT_SECONDARY}; font-size: 11px; padding: 0 2px;"
+            " background: transparent; border: none;")
         bc_row.addWidget(self._breadcrumb_lbl, 1)
 
         cw_lay.addLayout(bc_row)
@@ -906,40 +885,32 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._tip_bar.setCheckable(True)
         self._tip_bar.setFixedHeight(22)
         self._tip_bar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tip_bar.setStyleSheet(
-            f"QPushButton {{ text-align:left; padding:0 10px; font-size:10px;"
-            f" color:{ACCENT}; background:transparent; border:none;"
-            f" border-bottom:1px solid {BORDER}; }}"
-            f"QPushButton:hover {{ color:{WHITE}; }}"
-            f"QPushButton:checked {{ color:{WHITE}; font-weight:bold;"
-            f" border-bottom:1px solid {ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._tip_bar, "QPushButton {{ text-align:left; padding:0 10px; font-size:10px;"
+            " color:{ACCENT}; background:transparent; border:none;"
+            " border-bottom:1px solid {BORDER}; }}"
+            "QPushButton:hover {{ color:{WHITE}; }}"
+            "QPushButton:checked {{ color:{WHITE}; font-weight:bold;"
+            " border-bottom:1px solid {ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._tip_bar.toggled.connect(self._toggle_help_panel)
         cw_lay.addWidget(self._tip_bar)
 
         # Collapsible help strip — shown below breadcrumb, hidden by default
         self._help_panel = QFrame()
         self._help_panel.setObjectName("pageHelpPanel")
-        self._help_panel.setStyleSheet(
-            f"QFrame#pageHelpPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:6px; }}"
-        )
+        _s.themed_ss(self._help_panel, "QFrame#pageHelpPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:6px; }}")
         self._help_panel.setVisible(False)
         hp_lay = QVBoxLayout(self._help_panel)
         hp_lay.setContentsMargins(12, 8, 12, 8)
         hp_lay.setSpacing(4)
         self._help_what_lbl = QLabel()
         self._help_what_lbl.setWordWrap(True)
-        self._help_what_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._help_what_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         hp_lay.addWidget(self._help_what_lbl)
         self._help_hidden_lbl = QLabel()
         self._help_hidden_lbl.setWordWrap(True)
-        self._help_hidden_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._help_hidden_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         hp_lay.addWidget(self._help_hidden_lbl)
 
         _kbd_shortcuts = [
@@ -957,10 +928,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             "   ·   ".join(f"<code>{k}</code> {d}" for k, d in _kbd_shortcuts)
         )
         self._help_shortcuts_lbl.setWordWrap(True)
-        self._help_shortcuts_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-            f" border-top:1px solid {BORDER}; padding-top:4px; margin-top:2px;"
-        )
+        _s.themed_ss(self._help_shortcuts_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            " border-top:1px solid {BORDER}; padding-top:4px; margin-top:2px;")
         self._help_shortcuts_lbl.setTextFormat(Qt.TextFormat.RichText)
         hp_lay.addWidget(self._help_shortcuts_lbl)
 
@@ -968,27 +937,23 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
 
         # HEALTH-2: offline/no-LAN amber banner (hidden until 3 consecutive ping failures)
         self._lan_banner = QFrame()
-        self._lan_banner.setStyleSheet(
-            f"QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER};"
-            f" border-radius:4px; }}"
-        )
+        _s.themed_ss(self._lan_banner, "QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER};"
+            " border-radius:4px; }}")
         self._lan_banner.setFixedHeight(32)
         self._lan_banner.setVisible(False)
         _lbb = QHBoxLayout(self._lan_banner)
         _lbb.setContentsMargins(10, 0, 10, 0)
         _lbb.setSpacing(8)
         _lan_icon = QLabel("⚠")
-        _lan_icon.setStyleSheet(f"font-size:13px; color:{AMBER}; border:none; background:transparent;")
+        _s.themed_ss(_lan_icon, "font-size:13px; color:{AMBER}; border:none; background:transparent;")
         _lan_lbl = QLabel("No internet connection detected — operating in offline mode.")
-        _lan_lbl.setStyleSheet(f"font-size:11px; color:{INLINE_WARN_FG}; border:none; background:transparent;")
+        _s.themed_ss(_lan_lbl, "font-size:11px; color:{INLINE_WARN_FG}; border:none; background:transparent;")
         _lan_dismiss = QPushButton("Dismiss")
         _lan_dismiss.setFixedHeight(22)
-        _lan_dismiss.setStyleSheet(
-            f"QPushButton {{ font-size:10px; color:{INLINE_WARN_FG}; background:transparent;"
-            f" border:1px solid {AMBER}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{INLINE_WARN_BG}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(_lan_dismiss, "QPushButton {{ font-size:10px; color:{INLINE_WARN_FG}; background:transparent;"
+            " border:1px solid {AMBER}; border-radius:3px; padding:0 8px; }}"
+            "QPushButton:hover {{ background:{INLINE_WARN_BG}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         _lan_dismiss.clicked.connect(lambda: (
             self._lan_banner.setVisible(False),
             setattr(self, "_lan_fail_count", 0),

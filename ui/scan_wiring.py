@@ -19,10 +19,7 @@ from modules.scan_persistence import persist_alert, upsert_known_device
 from ui.tabs import _add_row
 from ui.tabs_helpers import format_scan_status, risk_to_label
 
-from ui.styles import (
-    ACCENT_LITE, AMBER, AMBER_BG, BLUE, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
-    GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
-)
+from ui import styles as _s
 from ui.nav.labels import NavLabel as L
 from ui.scan_enrichment import ScanEnrichmentMixin
 
@@ -76,10 +73,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for p in data.open_ports:
             row = self._ps_table.rowCount()
             self._ps_table.insertRow(row)
-            risk_color = RED if p.risk == "HIGH" else TEXT_PRIMARY
+            risk_color = _s.RED if p.risk == "HIGH" else _s.TEXT_PRIMARY
             for col, val in enumerate([str(p.port), p.name, p.service_version or "", p.banner or "", p.risk]):
                 item = QTableWidgetItem(val)
-                item.setForeground(QColor(risk_color if col in (1, 4) else TEXT_PRIMARY))
+                item.setForeground(QColor(risk_color if col in (1, 4) else _s.TEXT_PRIMARY))
                 self._ps_table.setItem(row, col, item)
         if hasattr(self, "_ps_status"):
             self._ps_status.setText(data.plain_verdict)
@@ -139,8 +136,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for d in devices:
             row = self._ipv6_table.rowCount()
             self._ipv6_table.insertRow(row)
-            source_color = ACCENT_LITE if d.get("source") == "active" else TEXT_SECONDARY
-            state_color  = GREEN if d.get("state", "").upper() == "REACHABLE" else TEXT_SECONDARY
+            source_color = _s.ACCENT_LITE if d.get("source") == "active" else _s.TEXT_SECONDARY
+            state_color  = _s.GREEN if d.get("state", "").upper() == "REACHABLE" else _s.TEXT_SECONDARY
             for col, val in enumerate([
                 d.get("ip6", ""), d.get("mac", ""),
                 d.get("state", ""), d.get("source", ""),
@@ -151,7 +148,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 elif col == 3:
                     item.setForeground(QColor(source_color))
                 else:
-                    item.setForeground(QColor(TEXT_PRIMARY))
+                    item.setForeground(QColor(_s.TEXT_PRIMARY))
                 self._ipv6_table.setItem(row, col, item)
         if not devices:
             self._ipv6_status.setText(
@@ -165,7 +162,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             )
 
     def _on_cloud_local_result(self, result):
-        risk_color = {"NONE": GREEN, "INFO": AMBER, "HIGH": RED}.get(result.risk_level, TEXT_SECONDARY)
+        risk_color = {"NONE": _s.GREEN, "INFO": _s.AMBER, "HIGH": _s.RED}.get(result.risk_level, _s.TEXT_SECONDARY)
         risk_icon  = {"NONE": "✔", "INFO": "ℹ", "HIGH": "⚠"}.get(result.risk_level, "?")
         lines = [
             f"<b style='color:{risk_color}'>{risk_icon} [{risk_to_label(result.risk_level)}]  {result.plain_verdict}</b>",
@@ -185,11 +182,11 @@ class ScanResultMixin(ScanEnrichmentMixin):
             if result.project_id:
                 lines.append(f"<b>Project:</b> {result.project_id}")
             if result.imdsv2_enforced is not None:
-                v2_color = GREEN if result.imdsv2_enforced else RED
+                v2_color = _s.GREEN if result.imdsv2_enforced else _s.RED
                 v2_txt   = "enforced (secure)" if result.imdsv2_enforced else "NOT enforced — HIGH RISK"
                 lines.append(f"<b>IMDSv2:</b> <span style='color:{v2_color}'>{v2_txt}</span>")
         for finding in result.findings:
-            lines.append(f"<br><span style='color:{AMBER}'>⚠ {finding}</span>")
+            lines.append(f"<br><span style='color:{_s.AMBER}'>⚠ {finding}</span>")
         self._cloud_local_box.setHtml("<br>".join(lines))
 
     def _on_cloud_network_result(self, results: list):
@@ -198,8 +195,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for r in results:
             row = self._cloud_network_table.rowCount()
             self._cloud_network_table.insertRow(row)
-            exposed_color = RED if r.exposed else GREEN
-            row_color = RED if r.exposed else TEXT_SECONDARY
+            exposed_color = _s.RED if r.exposed else _s.GREEN
+            row_color = _s.RED if r.exposed else _s.TEXT_SECONDARY
             finding_str = r.findings[0][:100] if r.findings else "—"
             for col, val in enumerate([
                 r.device_ip, r.device_mac, r.hostname,
@@ -212,7 +209,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 elif col in (4, 5):
                     item.setForeground(QColor(row_color))
                 else:
-                    item.setForeground(QColor(TEXT_SECONDARY if not r.exposed else RED))
+                    item.setForeground(QColor(_s.TEXT_SECONDARY if not r.exposed else _s.RED))
                 self._cloud_network_table.setItem(row, col, item)
 
     def _on_snmp_result(self, result):
@@ -227,8 +224,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._snmp_table.setItem(row, col, QTableWidgetItem(str(val)))
 
     def _on_snmp_if_result(self, entries: list) -> None:
-        """Populate interface error table and bar chart (V4 — Cat2)."""
+        """Populate interface error table and bar chart (V4 — Cat2).
+
+        Colours are read live (via ``_s``) so ``refresh_theme`` (which re-invokes
+        this with the cached ``_snmp_if_last_entries``) recolours the chart.
+        """
         from PyQt6.QtGui import QColor
+        self._snmp_if_last_entries = list(entries)   # cached for live theme redraw
         self._snmp_if_table.setRowCount(0)
         for entry in entries:
             row = self._snmp_if_table.rowCount()
@@ -243,7 +245,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             for col, val in enumerate(cells):
                 item = QTableWidgetItem(val)
                 if col > 0 and int(val) > 0:
-                    item.setForeground(QColor(RED if int(val) > 10 else AMBER))
+                    item.setForeground(QColor(_s.RED if int(val) > 10 else _s.AMBER))
                 self._snmp_if_table.setItem(row, col, item)
 
         # Update chart
@@ -252,13 +254,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if ax is None or canvas is None or not entries:
             return
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-        ax.grid(True, color=CHART_GRID, linewidth=0.8, axis="y")
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.8, axis="y")
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
         for sp in ("bottom", "left"):
-            ax.spines[sp].set_color(CHART_SPINE)
+            ax.spines[sp].set_color(_s.CHART_SPINE)
 
         labels  = [e.if_descr[:12] for e in entries]
         in_err  = [e.in_errors   for e in entries]
@@ -267,14 +269,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
         out_dis = [e.out_discards for e in entries]
         xs = list(range(len(labels)))
         w  = 0.2
-        ax.bar([x - 1.5 * w for x in xs], in_err,  w, label="In Errors",    color=RED)
-        ax.bar([x - 0.5 * w for x in xs], out_err, w, label="Out Errors",   color=AMBER)
-        ax.bar([x + 0.5 * w for x in xs], in_dis,  w, label="In Discards",  color=BLUE)
-        ax.bar([x + 1.5 * w for x in xs], out_dis, w, label="Out Discards", color=GREEN)
+        ax.bar([x - 1.5 * w for x in xs], in_err,  w, label="In Errors",    color=_s.RED)
+        ax.bar([x - 0.5 * w for x in xs], out_err, w, label="Out Errors",   color=_s.AMBER)
+        ax.bar([x + 0.5 * w for x in xs], in_dis,  w, label="In Discards",  color=_s.BLUE)
+        ax.bar([x + 1.5 * w for x in xs], out_dis, w, label="Out Discards", color=_s.GREEN)
         ax.set_xticks(xs)
         ax.set_xticklabels(labels, rotation=25, ha="right")
         ax.legend(fontsize=7, framealpha=0.7)
-        ax.set_title("Error distribution per interface", fontsize=9, color=TEXT_PRIMARY, pad=4)
+        ax.set_title("Error distribution per interface", fontsize=9, color=_s.TEXT_PRIMARY, pad=4)
         try:
             canvas.draw()
         except Exception:
@@ -298,7 +300,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for p in result.open_ports:
             row = self._recon_syn_table.rowCount()
             self._recon_syn_table.insertRow(row)
-            color = RED if p.state == "open" else AMBER
+            color = _s.RED if p.state == "open" else _s.AMBER
             _cols = [str(p.port), p.state, p.proto, p.service, p.service_version, p.banner]
             for col, val in enumerate(_cols):
                 item = QTableWidgetItem(val)
@@ -308,7 +310,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             svc_key = (p.service or "").split()[0].lower()
             cve_n = _cve_counts.get(svc_key, 0)
             cve_item = QTableWidgetItem(f"{cve_n} CVEs" if cve_n else "—")
-            cve_item.setForeground(QColor(AMBER if cve_n else TEXT_MUTED))
+            cve_item.setForeground(QColor(_s.AMBER if cve_n else _s.TEXT_MUTED))
             if cve_n:
                 cve_item.setToolTip(f"Click to view {cve_n} CVE(s) for {p.service}")
             self._recon_syn_table.setItem(row, 6, cve_item)
@@ -353,7 +355,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for p in result.open_ports:
             row = self._recon_udp_table.rowCount()
             self._recon_udp_table.insertRow(row)
-            color = AMBER if p.state == "open|filtered" else GREEN
+            color = _s.AMBER if p.state == "open|filtered" else _s.GREEN
             for col, val in enumerate([str(p.port), p.state, p.service]):
                 item = QTableWidgetItem(val)
                 item.setForeground(QColor(color))
@@ -391,16 +393,16 @@ class ScanResultMixin(ScanEnrichmentMixin):
             row = self._recon_cve_table.rowCount()
             self._recon_cve_table.insertRow(row)
             sev = (cve.severity or "NONE").upper()
-            color = (RED if sev in ("CRITICAL", "HIGH") else
-                     AMBER if sev == "MEDIUM" else
-                     BLUE if sev == "LOW" else TEXT_SECONDARY)
+            color = (_s.RED if sev in ("CRITICAL", "HIGH") else
+                     _s.AMBER if sev == "MEDIUM" else
+                     _s.BLUE if sev == "LOW" else _s.TEXT_SECONDARY)
             for col, val in enumerate([
                 cve.cve_id, service_version,
                 f"{cve.cvss_score:.1f}", sev,
                 cve.published, cve.description,
             ]):
                 item = QTableWidgetItem(str(val))
-                item.setForeground(QColor(color if col in (2, 3) else TEXT_PRIMARY))
+                item.setForeground(QColor(color if col in (2, 3) else _s.TEXT_PRIMARY))
                 self._recon_cve_table.setItem(row, col, item)
         if hasattr(self, "_monitor_overview_page"):
             self._monitor_overview_page.set_cve_count(self._recon_cve_table.rowCount())
@@ -410,20 +412,18 @@ class ScanResultMixin(ScanEnrichmentMixin):
 
     def _on_exposure_result(self, result):
         from PyQt6.QtGui import QColor
-        risk_color = RED if result.risk == "HIGH" else AMBER if result.risk == "MEDIUM" else GREEN
         self._exposure_verdict.setText(result.plain_verdict)
-        self._exposure_verdict.setStyleSheet(
-            f"color:{risk_color};font-size:12px;font-weight:bold;padding:6px;"
-            f"background:{RED_BG};border-radius:4px;" if result.risk == "HIGH" else
-            f"color:{risk_color};font-size:12px;font-weight:bold;padding:6px;"
-            f"background:{AMBER_BG};border-radius:4px;"
-        )
+        _s.themed_ss(self._exposure_verdict, lambda risk=result.risk: (
+            f"color:{_s.RED if risk == 'HIGH' else _s.AMBER if risk == 'MEDIUM' else _s.GREEN};"
+            f"font-size:12px;font-weight:bold;padding:6px;"
+            f"background:{_s.RED_BG if risk == 'HIGH' else _s.AMBER_BG};border-radius:4px;"
+        ))
         self._exposure_verdict.show()
         self._recon_exposure_table.setRowCount(0)
         for m in result.upnp_mappings:
             row = self._recon_exposure_table.rowCount()
             self._recon_exposure_table.insertRow(row)
-            row_color = RED if m.enabled else TEXT_SECONDARY
+            row_color = _s.RED if m.enabled else _s.TEXT_SECONDARY
             for col, val in enumerate([
                 m.internal_ip, str(m.external_port), str(m.internal_port),
                 m.protocol, m.description, "Yes" if m.enabled else "No",
@@ -525,7 +525,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     v_item = self._m1_table.item(row, 3)
                     if v_item and v_item.text() in ("Unknown", ""):
                         v_item.setText(vendor)
-                        v_item.setForeground(_QC(TEXT_PRIMARY))
+                        v_item.setForeground(_QC(_s.TEXT_PRIMARY))
                         v_item.setToolTip(f"Vendor resolved from OUI database\n({mac_item.text()[:8].upper()})")
                     break
         except Exception:
@@ -722,7 +722,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._bl_table.setRowCount(0)
             if new_devs:
                 self._bl_new_lbl.setText(f"⚠  {len(new_devs)} new device(s) detected since last scan!")
-                self._bl_new_lbl.setStyleSheet(f"color:{AMBER}; font-size:11px;")
+                _s.themed_ss(self._bl_new_lbl, "color:{AMBER}; font-size:11px;")
                 for nd in new_devs:
                     first = baseline.get((nd.get("mac") or "").lower(), {}).get("first_seen", "—")
                     _add_row(self._bl_table,
@@ -731,7 +731,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                              "MEDIUM")
             else:
                 self._bl_new_lbl.setText("✓  No new devices since last scan.")
-                self._bl_new_lbl.setStyleSheet(f"color:{GREEN}; font-size:11px;")
+                _s.themed_ss(self._bl_new_lbl, "color:{GREEN}; font-size:11px;")
         except Exception as _exc:
             self._bl_new_lbl.setText(f"Baseline check failed: {_exc}")
 
@@ -773,7 +773,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 self._last_new_ips: set = {d.ip for d in tr.new_devices if d.ip}
                 if tr.new_devices:
                     if hasattr(self, "_live_bandwidth_page"):
-                        self._live_bandwidth_page.annotate_event("Device joined", GREEN)
+                        self._live_bandwidth_page.annotate_event("Device joined", _s.GREEN)
                     msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})"
                             for d in tr.new_devices[:3]]
                     extra = f" +{len(tr.new_devices)-3} more" if len(tr.new_devices) > 3 else ""
@@ -1304,7 +1304,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             ] + tb_lines
             self._plugin_result_text.setPlainText("\n".join(lines))
             self._plugin_status.setText(f"'{res.plugin_name}' failed — see output below.")
-            self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+            _s.themed_ss(self._plugin_status, "color:{RED};font-size:11px;")
             return
         lines = [f"Plugin: {res.plugin_name}", f"Risk: {risk_to_label(res.risk_level)}"]
         if res.findings:
@@ -1314,12 +1314,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
         else:
             lines.append("No findings.")
         self._plugin_result_text.setPlainText("\n".join(lines))
-        color = RED if res.risk_level in ("HIGH", "CRITICAL") else (AMBER if res.risk_level == "MEDIUM" else GREEN)
         self._plugin_status.setText(
             f"'{res.plugin_name}' complete — {risk_to_label(res.risk_level)} "
             f"({len(res.findings)} finding{'s' if len(res.findings) != 1 else ''})."
         )
-        self._plugin_status.setStyleSheet(f"color:{color};font-size:11px;")
+        _s.themed_ss(self._plugin_status, lambda rl=res.risk_level: (
+            f"color:{_s.RED if rl in ('HIGH', 'CRITICAL') else (_s.AMBER if rl == 'MEDIUM' else _s.GREEN)};"
+            f"font-size:11px;"
+        ))
 
     # ── Startup cache restore ─────────────────────────────────────────────────
 
@@ -1440,9 +1442,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._m1_status.setText(
             f"Cached — last scanned {_age}  ·  {_summary}  ·  Run Scan to refresh"
         )
-        self._m1_status.setStyleSheet(
-            f"color:{TEXT_MUTED};font-size:11px;padding:2px 0;"
-        )
+        _s.themed_ss(self._m1_status, "color:{TEXT_MUTED};font-size:11px;padding:2px 0;")
 
         # Downstream pages read devices from here — prefer the cached
         # live-render data over the UNKNOWN-risk reconstruction.
@@ -1604,7 +1604,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         row = self._pe_table.rowCount()
         self._pe_table.insertRow(row)
 
-        status_color = GREEN if res.status == "PASS" else (AMBER if res.status == "WARN" else RED)
+        status_color = _s.GREEN if res.status == "PASS" else (_s.AMBER if res.status == "WARN" else _s.RED)
         ips_str  = ", ".join(res.resolved_ips[:3]) + ("…" if len(res.resolved_ips) > 3 else "")
         priv_str = "✔ Yes" if res.is_private else ("⚠ LEAK" if res.dns_leak else "—")
         tcp_str  = "✔" if res.tcp_open else "✘"
@@ -1618,7 +1618,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for col, val in enumerate(vals):
             item = QTableWidgetItem(str(val))
             c = status_color if col == 0 else (
-                (GREEN if "✔" in str(val) else (RED if "✘" in str(val) or "LEAK" in str(val) else TEXT_PRIMARY))
+                (_s.GREEN if "✔" in str(val) else (_s.RED if "✘" in str(val) or "LEAK" in str(val) else _s.TEXT_PRIMARY))
             )
             item.setForeground(QColor(c))
             self._pe_table.setItem(row, col, item)

@@ -21,11 +21,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_CARD,
-    BG_DARK, BORDER, CARD_RADIUS, GREEN,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
 from ui.widgets.hub_card import (
     _btn,
     _CommunityDownloadThread,
@@ -35,6 +30,7 @@ from ui.widgets.hub_card import (
     _save_paths,
     _validate_script,
 )
+from ui import styles as _s
 
 
 class _HardwareBrowseMixin:
@@ -52,7 +48,7 @@ class _HardwareBrowseMixin:
     def _build_browse_tab(self) -> QWidget:
         self._browse_index_thread: Optional[QThread] = None
         tab = QWidget()
-        tab.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(tab, "background:{BG_DARK};")
         lay = QVBoxLayout(tab)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(6)
@@ -60,11 +56,11 @@ class _HardwareBrowseMixin:
         bar = QHBoxLayout()
         title = QLabel("Community Plugins")
         title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; border:none;")
         bar.addWidget(title)
         bar.addStretch()
         self._browse_status = QLabel("Press Refresh to fetch the index.")
-        self._browse_status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
+        _s.themed_ss(self._browse_status, "color:{TEXT_MUTED}; font-size:10px; border:none;")
         bar.addWidget(self._browse_status)
         btn_refresh = _btn("↻  Refresh")
         btn_refresh.clicked.connect(self._fetch_community_index)
@@ -75,7 +71,7 @@ class _HardwareBrowseMixin:
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; }")
         self._browse_inner = QWidget()
-        self._browse_inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(self._browse_inner, "background:{BG_DARK};")
         self._browse_lay = QVBoxLayout(self._browse_inner)
         self._browse_lay.setContentsMargins(0, 4, 0, 4)
         self._browse_lay.setSpacing(4)
@@ -124,10 +120,8 @@ class _HardwareBrowseMixin:
 
     def _build_community_card(self, entry: dict) -> QFrame:
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         lay = QHBoxLayout(card)
         lay.setContentsMargins(12, 8, 10, 8)
         lay.setSpacing(10)
@@ -135,20 +129,20 @@ class _HardwareBrowseMixin:
         info = QVBoxLayout()
         name_lbl = QLabel(f"<b>{entry.get('name', 'Unknown')}</b>")
         name_lbl.setTextFormat(Qt.TextFormat.RichText)
-        name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none; background:transparent;")
+        _s.themed_ss(name_lbl, "color:{TEXT_PRIMARY}; border:none; background:transparent;")
         info.addWidget(name_lbl)
 
         author = entry.get("author", "")
         pypi   = entry.get("pypi", "")
         meta_parts = [p for p in [f"by {author}" if author else "", f"pip: {pypi}" if pypi else ""] if p]
         sub = QLabel("  ·  ".join(meta_parts))
-        sub.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;")
+        _s.themed_ss(sub, "color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;")
         info.addWidget(sub)
 
         desc = entry.get("desc", entry.get("description", ""))
         if desc:
             desc_lbl = QLabel(desc)
-            desc_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none; background:transparent;")
+            _s.themed_ss(desc_lbl, "color:{TEXT_SECONDARY}; font-size:10px; border:none; background:transparent;")
             desc_lbl.setWordWrap(True)
             info.addWidget(desc_lbl)
 
@@ -216,10 +210,8 @@ class _HardwareBrowseMixin:
             return
 
         hdr_lbl = QLabel("AVAILABLE PLUGINS")
-        hdr_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; font-weight:bold;"
-            " letter-spacing:0.5px; padding:4px 8px 2px 8px;"
-        )
+        _s.themed_ss(hdr_lbl, "color:{TEXT_SECONDARY}; font-size:10px; font-weight:bold;"
+            " letter-spacing:0.5px; padding:4px 8px 2px 8px;")
         self._hub_lay.addWidget(hdr_lbl)
 
         for path, meta in entries:
@@ -227,9 +219,7 @@ class _HardwareBrowseMixin:
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(
-            f"border:none; border-top:1px solid {BORDER}; background:transparent;"
-        )
+        _s.themed_ss(sep, "border:none; border-top:1px solid {BORDER}; background:transparent;")
         sep.setFixedHeight(1)
         self._hub_lay.addWidget(sep)
 
@@ -238,10 +228,8 @@ class _HardwareBrowseMixin:
                       "switch": "🔗", "other": "🔌"}
         card = QFrame()
         card.setObjectName("hubCatalogCard")
-        card.setStyleSheet(
-            f"QFrame#hubCatalogCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }"
-        )
+        _s.themed_ss(card, "QFrame#hubCatalogCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}")
         lay = QHBoxLayout(card)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(10)
@@ -273,36 +261,28 @@ class _HardwareBrowseMixin:
         txt = QVBoxLayout()
         txt.setSpacing(1)
         name_lbl = QLabel(meta.get("name", Path(path).stem))
-        name_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(name_lbl, "color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+            " background:transparent; border:none;")
         txt.addWidget(name_lbl)
         desc = meta.get("description", "")
         if desc:
             desc_lbl = QLabel(desc)
-            desc_lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-            )
+            _s.themed_ss(desc_lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
             desc_lbl.setWordWrap(True)
             txt.addWidget(desc_lbl)
         lay.addLayout(txt, 1)
 
         ip_lbl = QLabel(meta.get("ip", ""))
-        ip_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(ip_lbl, "color:{TEXT_SECONDARY}; font-size:10px; background:transparent; border:none;")
         lay.addWidget(ip_lbl)
 
         add_btn = QPushButton("＋  Add")
         add_btn.setFixedHeight(26)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            " border-radius:3px; font-size:11px; padding:0 12px; }"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(add_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:11px; padding:0 12px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         add_btn.clicked.connect(lambda _, p=path: self._import_bundled(p))
         lay.addWidget(add_btn)
         return card
@@ -355,20 +335,18 @@ class _HardwareBrowseMixin:
         native_active: bool = False,
     ) -> QWidget:
         row = QFrame()
-        row.setStyleSheet(
-            f"background:transparent; border:none;"
-            f" border-bottom:1px solid {BORDER};"
-        )
+        _s.themed_ss(row, "background:transparent; border:none;"
+            " border-bottom:1px solid {BORDER};")
         lay = QHBoxLayout(row)
         lay.setContentsMargins(12, 8, 10, 8)
         lay.setSpacing(10)
 
         dot = QLabel("●")
         if confidence >= 0.7:
-            dot.setStyleSheet(f"color:{GREEN}; font-size:11px; border:none;")
+            _s.themed_ss(dot, "color:{GREEN}; font-size:11px; border:none;")
             dot.setToolTip(f"Strong match ({confidence:.0%})")
         else:
-            dot.setStyleSheet(f"color:{AMBER}; font-size:11px; border:none;")
+            _s.themed_ss(dot, "color:{AMBER}; font-size:11px; border:none;")
             dot.setToolTip(f"Possible match ({confidence:.0%})")
         lay.addWidget(dot)
 
@@ -376,12 +354,12 @@ class _HardwareBrowseMixin:
         info_col.setSpacing(2)
         info_col.setContentsMargins(0, 0, 0, 0)
         name_lbl = QLabel(f"<b>{plugin.get('name', '?')}</b>  "
-                          f"<span style='color:{TEXT_MUTED}; font-size:9px;'>"
+                          f"<span style='color:{_s.TEXT_MUTED}; font-size:9px;'>"
                           f"{plugin.get('manufacturer','')}</span>")
         name_lbl.setTextFormat(Qt.TextFormat.RichText)
-        name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; border:none;")
+        _s.themed_ss(name_lbl, "color:{TEXT_PRIMARY}; font-size:11px; border:none;")
         sig_lbl = QLabel(" · ".join(signals[:3]))
-        sig_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px; border:none;")
+        _s.themed_ss(sig_lbl, "color:{TEXT_MUTED}; font-size:9px; border:none;")
         sig_lbl.setWordWrap(True)
         info_col.addWidget(name_lbl)
         info_col.addWidget(sig_lbl)
@@ -393,9 +371,7 @@ class _HardwareBrowseMixin:
 
         if native_active and native_page:
             status_lbl = QLabel("Active")
-            status_lbl.setStyleSheet(
-                f"color:{GREEN}; font-size:9px; font-weight:bold; border:none;"
-            )
+            _s.themed_ss(status_lbl, "color:{GREEN}; font-size:9px; font-weight:bold; border:none;")
             lay.addWidget(status_lbl)
             btn_open = _btn(f"Open {native_page} →", accent=True)
             btn_open.setFixedHeight(24)

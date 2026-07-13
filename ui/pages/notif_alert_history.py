@@ -28,13 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    alpha,
-    ACCENT, ACCENT_DARK, AMBER,
-    BG_ALT_ROW, BG_CARD, BG_HOVER,
-    BORDER, GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 
 # ── Alert CTA routing ────────────────────────────────────────────────────────
@@ -116,9 +110,22 @@ def _enrich_alert_sublabel(alert: dict) -> str:
 
 # ── Severity / channel colour maps ───────────────────────────────────────────
 
-_SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED}
-_CH_COLOR  = {"TOAST": ACCENT, "WEBHOOK": GREEN, "EMAIL": AMBER,
-              "PUSHOVER": RED, "NTFY": GREEN, "TELEGRAM": ACCENT}
+_SEV_LEVELS = ("INFO", "WARNING", "CRITICAL")
+
+
+def _sev_color(sev: str) -> str:
+    """Live severity → colour (read at call time so it follows theme switches)."""
+    return {"INFO": _s.ACCENT, "WARNING": _s.AMBER, "CRITICAL": _s.RED}.get(
+        sev, _s.TEXT_PRIMARY
+    )
+
+
+def _ch_color(ch: str) -> str:
+    """Live channel-type → colour (read at call time)."""
+    return {"TOAST": _s.ACCENT, "WEBHOOK": _s.GREEN, "EMAIL": _s.AMBER,
+            "PUSHOVER": _s.RED, "NTFY": _s.GREEN, "TELEGRAM": _s.ACCENT}.get(
+        ch, _s.TEXT_PRIMARY
+    )
 
 
 # ── J/K navigation event filter ──────────────────────────────────────────────
@@ -158,48 +165,46 @@ class _NotifAlertHistoryMixin:
         from PyQt6.QtWidgets import QFrame as _QFrame
         card = _QFrame()
         card.setObjectName("card")
-        card.setStyleSheet(
-            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:0px;}}"
-        )
+        _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:0px;}}")
         cl = QVBoxLayout(card)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
         tb = _QFrame()
         tb.setFixedHeight(32)
-        tb.setStyleSheet(
-            f"background:{BG_CARD};border-bottom:1px solid {BORDER};"
-        )
+        _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {BORDER};")
         tbl_lbl_lay = QHBoxLayout(tb)
         tbl_lbl_lay.setContentsMargins(12, 0, 12, 0)
         _title_lbl = QLabel("Alert History & Delivery Log")
-        _title_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;"
-        )
+        _s.themed_ss(_title_lbl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
         tbl_lbl_lay.addWidget(_title_lbl)
         tbl_lbl_lay.addStretch()
         cl.addWidget(tb)
         body = QWidget()
-        body.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(body, "background:{BG_CARD};")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(16, 12, 16, 14)
         bl.setSpacing(8)
         cl.addWidget(body)
 
         _tbl_qss = (
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
+            "QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            "gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            "QTableWidget::item{{padding:2px 5px;}}"
+        )
+        _refresh_btn_ss = (
+            "QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 12px;font-size:11px;}}"
+            "QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         tabs = QTabWidget()
-        tabs.setStyleSheet(
-            f"QTabWidget::pane {{ border:1px solid {BORDER}; border-top:none; }}"
-            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-bottom:none; padding:4px 12px; font-size:11px; }}"
-            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; border-bottom:2px solid {ACCENT}; }}"
-            f"QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(tabs, "QTabWidget::pane {{ border:1px solid {BORDER}; border-top:none; }}"
+            "QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-bottom:none; padding:4px 12px; font-size:11px; }}"
+            "QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; border-bottom:2px solid {ACCENT}; }}"
+            "QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}")
 
         # ── Tab 1: Alert History ──────────────────────────────────────────────
         hist_tab = QWidget()
@@ -213,36 +218,34 @@ class _NotifAlertHistoryMixin:
         filter_row.setSpacing(6)
         filter_row.setContentsMargins(0, 0, 0, 2)
         sev_lbl = QLabel("Severity:")
-        sev_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _s.themed_ss(sev_lbl, "font-size:10px; color:{TEXT_MUTED};")
         filter_row.addWidget(sev_lbl)
         self._hist_sev_btns: dict = {}
-        for sev, col in _SEV_COLOR.items():
+        for sev in _SEV_LEVELS:
             btn = QPushButton(sev)
             btn.setCheckable(True)
             btn.setChecked(True)
             btn.setFixedHeight(20)
-            btn.setStyleSheet(
-                f"QPushButton {{ font-size:9px; font-weight:bold; border:1px solid {col};"
-                f" border-radius:3px; padding:0 6px; color:{col}; background:transparent; }}"
-                f"QPushButton:checked {{ background:{col}; color:{WHITE}; }}"
+            _s.themed_ss(btn, lambda s=sev: (
+                f"QPushButton {{ font-size:9px; font-weight:bold; border:1px solid {_sev_color(s)};"
+                f" border-radius:3px; padding:0 6px; color:{_sev_color(s)}; background:transparent; }}"
+                f"QPushButton:checked {{ background:{_sev_color(s)}; color:{_s.WHITE}; }}"
                 f"QPushButton:unchecked {{ background:transparent; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            )
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_PRIMARY}; }}"
+            ))
             btn.toggled.connect(lambda checked, s=sev: self._toggle_hist_sev(s, checked))
             self._hist_sev_btns[sev] = btn
             filter_row.addWidget(btn)
         filter_row.addSpacing(12)
         time_lbl = QLabel("Window:")
-        time_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _s.themed_ss(time_lbl, "font-size:10px; color:{TEXT_MUTED};")
         filter_row.addWidget(time_lbl)
         self._hist_time_combo = QComboBox()
         self._hist_time_combo.setFixedHeight(22)
         self._hist_time_combo.addItems(["1h", "6h", "24h", "72h", "7d"])
         self._hist_time_combo.setCurrentText("72h")
-        self._hist_time_combo.setStyleSheet(
-            f"QComboBox {{ font-size:10px; background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:0 4px; }}"
-        )
+        _s.themed_ss(self._hist_time_combo, "QComboBox {{ font-size:10px; background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:0 4px; }}")
         self._hist_time_combo.currentTextChanged.connect(self._on_hist_time_changed)
         filter_row.addWidget(self._hist_time_combo)
         filter_row.addStretch()
@@ -251,36 +254,32 @@ class _NotifAlertHistoryMixin:
         # Storm suggestion banner (hidden until a burst is detected)
         self._storm_banner = QFrame()
         self._storm_banner.setVisible(False)
-        self._storm_banner.setStyleSheet(
-            f"QFrame {{ background:{alpha(AMBER, 0x22)}; border:1px solid {AMBER}; border-radius:4px; }}"
-        )
+        _s.themed_ss(self._storm_banner, lambda: (
+            f"QFrame {{ background:{_s.alpha(_s.AMBER, 0x22)}; border:1px solid {_s.AMBER}; border-radius:4px; }}"
+        ))
         _sb_lay = QHBoxLayout(self._storm_banner)
         _sb_lay.setContentsMargins(10, 6, 10, 6)
         _sb_lay.setSpacing(8)
         self._storm_banner_lbl = QLabel("")
         self._storm_banner_lbl.setWordWrap(True)
-        self._storm_banner_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._storm_banner_lbl, "color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;")
         _sb_lay.addWidget(self._storm_banner_lbl, 1)
         _sb_setup_btn = QPushButton("Set up →")
         _sb_setup_btn.setFixedHeight(24)
         _sb_setup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _sb_setup_btn.setStyleSheet(
-            f"QPushButton{{background:{AMBER};color:{WHITE};font-size:10px;font-weight:600;"
+        _s.themed_ss(_sb_setup_btn, lambda: (
+            f"QPushButton{{background:{_s.AMBER};color:{_s.WHITE};font-size:10px;font-weight:600;"
             f"border:none;border-radius:3px;padding:0 10px;}}"
-            f"QPushButton:hover{{background:{alpha(AMBER, 0xCC)};}}"
-            f"QPushButton:pressed{{background:{alpha(AMBER, 0xAA)};color:{TEXT_PRIMARY};}}"
-        )
+            f"QPushButton:hover{{background:{_s.alpha(_s.AMBER, 0xCC)};}}"
+            f"QPushButton:pressed{{background:{_s.alpha(_s.AMBER, 0xAA)};color:{_s.TEXT_PRIMARY};}}"
+        ))
         _sb_setup_btn.clicked.connect(self._storm_go_to_dep)
         _sb_dismiss_btn = QPushButton("×")
         _sb_dismiss_btn.setFixedSize(20, 20)
-        _sb_dismiss_btn.setStyleSheet(
-            f"QPushButton{{background:transparent;color:{TEXT_SECONDARY};border:none;"
-            f"font-size:13px;font-weight:bold;padding:0;}}"
-            f"QPushButton:hover{{color:{TEXT_PRIMARY};}}"
-            f"QPushButton:pressed{{background:{BG_HOVER};color:{TEXT_SECONDARY};}}"
-        )
+        _s.themed_ss(_sb_dismiss_btn, "QPushButton{{background:transparent;color:{TEXT_SECONDARY};border:none;"
+            "font-size:13px;font-weight:bold;padding:0;}}"
+            "QPushButton:hover{{color:{TEXT_PRIMARY};}}"
+            "QPushButton:pressed{{background:{BG_HOVER};color:{TEXT_SECONDARY};}}")
         _sb_dismiss_btn.clicked.connect(lambda: self._storm_banner.setVisible(False))
         _sb_lay.addWidget(_sb_setup_btn)
         _sb_lay.addWidget(_sb_dismiss_btn)
@@ -304,7 +303,7 @@ class _NotifAlertHistoryMixin:
         self._alert_history_table.setAlternatingRowColors(True)
         self._alert_history_table.verticalHeader().setDefaultSectionSize(24)
         self._alert_history_table.setFixedHeight(200)
-        self._alert_history_table.setStyleSheet(_tbl_qss)
+        _s.themed_ss(self._alert_history_table, _tbl_qss)
         for w, col in zip((100, 80, 100, 80), range(4)):
             self._alert_history_table.setColumnWidth(col, w)
         self._alert_history_table.itemClicked.connect(self._on_alert_row_single_click)
@@ -326,56 +325,47 @@ class _NotifAlertHistoryMixin:
 
         self._hist_empty_lbl = QLabel("No alerts recorded yet — alerts appear here after the first detection event.")
         self._hist_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._hist_empty_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;"
-        )
+        _s.themed_ss(self._hist_empty_lbl, "color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;")
         hist_lay.addWidget(self._hist_empty_lbl)
 
         # Bulk action bar
         self._bulk_bar = QFrame()
         self._bulk_bar.setVisible(False)
-        self._bulk_bar.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px; }}"
-        )
+        _s.themed_ss(self._bulk_bar, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px; }}")
         _bb_lay = QHBoxLayout(self._bulk_bar)
         _bb_lay.setContentsMargins(8, 4, 8, 4)
         _bb_lay.setSpacing(6)
         self._bulk_lbl = QLabel("0 selected")
-        self._bulk_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; font-weight:600;"
-        )
+        _s.themed_ss(self._bulk_lbl, "font-size:11px; color:{TEXT_PRIMARY}; font-weight:600;")
         _bb_lay.addWidget(self._bulk_lbl)
         _bb_lay.addSpacing(6)
         _bb_dismiss = QPushButton("Dismiss")
         _bb_dismiss.setFixedHeight(22)
-        _bb_dismiss.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};font-size:10px;font-weight:600;"
-            f"border:none;border-radius:3px;padding:0 10px;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(_bb_dismiss, "QPushButton{{background:{ACCENT};color:{WHITE};font-size:10px;font-weight:600;"
+            "border:none;border-radius:3px;padding:0 10px;}}"
+            "QPushButton:hover{{background:{ACCENT_DARK};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         _bb_dismiss.clicked.connect(self._bulk_dismiss)
+        _snooze_ss = (
+            "QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};font-size:10px;"
+            "border:1px solid {BORDER};border-radius:3px;padding:0 10px;}}"
+            "QPushButton:hover{{border-color:{ACCENT};color:{ACCENT};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
         _bb_snooze1 = QPushButton("Snooze 1h")
         _bb_snooze1.setFixedHeight(22)
-        _bb_snooze1.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};font-size:10px;"
-            f"border:1px solid {BORDER};border-radius:3px;padding:0 10px;}}"
-            f"QPushButton:hover{{border-color:{ACCENT};color:{ACCENT};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(_bb_snooze1, _snooze_ss)
         _bb_snooze1.clicked.connect(lambda: self._bulk_snooze(3600))
         _bb_snooze8 = QPushButton("Snooze 8h")
         _bb_snooze8.setFixedHeight(22)
-        _bb_snooze8.setStyleSheet(_bb_snooze1.styleSheet())
+        _s.themed_ss(_bb_snooze8, _snooze_ss)
         _bb_snooze8.clicked.connect(lambda: self._bulk_snooze(28800))
         _bb_deselect = QPushButton("Deselect all")
         _bb_deselect.setFixedHeight(22)
-        _bb_deselect.setStyleSheet(
-            f"QPushButton{{background:transparent;color:{TEXT_MUTED};font-size:10px;"
-            f"border:none;padding:0 8px;}}"
-            f"QPushButton:hover{{color:{TEXT_PRIMARY};}}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(_bb_deselect, "QPushButton{{background:transparent;color:{TEXT_MUTED};font-size:10px;"
+            "border:none;padding:0 8px;}}"
+            "QPushButton:hover{{color:{TEXT_PRIMARY};}}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         _bb_deselect.clicked.connect(self._alert_history_table.clearSelection)
         for w in (_bb_dismiss, _bb_snooze1, _bb_snooze8):
             _bb_lay.addWidget(w)
@@ -386,16 +376,11 @@ class _NotifAlertHistoryMixin:
         hist_btn_row = QHBoxLayout()
         btn_hist_refresh = QPushButton("Refresh")
         btn_hist_refresh.setFixedHeight(24)
-        btn_hist_refresh.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(btn_hist_refresh, _refresh_btn_ss)
         btn_hist_refresh.clicked.connect(self._refresh_alert_history)
         btn_hist_export = QPushButton("↓ Export CSV")
         btn_hist_export.setFixedHeight(24)
-        btn_hist_export.setStyleSheet(btn_hist_refresh.styleSheet())
+        _s.themed_ss(btn_hist_export, _refresh_btn_ss)
         btn_hist_export.clicked.connect(self._export_alert_history_csv)
         hist_btn_row.addWidget(btn_hist_refresh)
         hist_btn_row.addWidget(btn_hist_export)
@@ -423,7 +408,7 @@ class _NotifAlertHistoryMixin:
         self._log_table.setAlternatingRowColors(True)
         self._log_table.verticalHeader().setDefaultSectionSize(24)
         self._log_table.setFixedHeight(200)
-        self._log_table.setStyleSheet(_tbl_qss)
+        _s.themed_ss(self._log_table, _tbl_qss)
         for w, col in zip((110, 90, 80, 120, 80), range(5)):
             self._log_table.setColumnWidth(col, w)
         self._log_table.itemClicked.connect(self._on_log_row_clicked)
@@ -433,41 +418,31 @@ class _NotifAlertHistoryMixin:
 
         self._log_empty_lbl = QLabel("No delivery attempts recorded yet — entries appear here after the first alert is sent.")
         self._log_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._log_empty_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;"
-        )
+        _s.themed_ss(self._log_empty_lbl, "color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;")
         log_lay.addWidget(self._log_empty_lbl)
 
         self._log_detail = QFrame()
         self._log_detail.setVisible(False)
-        self._log_detail.setStyleSheet(
-            f"QFrame {{ background:{BG_ALT_ROW}; border:1px solid {BORDER}; border-radius:4px; }}"
-        )
+        _s.themed_ss(self._log_detail, "QFrame {{ background:{BG_ALT_ROW}; border:1px solid {BORDER}; border-radius:4px; }}")
         _det_lay = QVBoxLayout(self._log_detail)
         _det_lay.setContentsMargins(10, 8, 10, 8)
         _det_lay.setSpacing(4)
         self._log_detail_error_lbl = QLabel("")
         self._log_detail_error_lbl.setWordWrap(True)
-        self._log_detail_error_lbl.setStyleSheet(
-            f"font-size:11px; color:{RED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._log_detail_error_lbl, "font-size:11px; color:{RED}; background:transparent; border:none;")
         _det_btn_row = QHBoxLayout()
         self._log_detail_retry_btn = QPushButton("Retry →")
         self._log_detail_retry_btn.setFixedHeight(24)
-        self._log_detail_retry_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; padding:0 12px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._log_detail_retry_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; padding:0 12px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         _det_close_btn = QPushButton("Close")
         _det_close_btn.setFixedHeight(24)
-        _det_close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:11px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(_det_close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:11px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         _det_close_btn.clicked.connect(lambda: self._log_detail.setVisible(False))
         _det_btn_row.addWidget(self._log_detail_retry_btn)
         _det_btn_row.addWidget(_det_close_btn)
@@ -480,16 +455,11 @@ class _NotifAlertHistoryMixin:
         btn_row = QHBoxLayout()
         btn_refresh = QPushButton("Refresh Log")
         btn_refresh.setFixedHeight(24)
-        btn_refresh.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(btn_refresh, _refresh_btn_ss)
         btn_refresh.clicked.connect(self.refresh_log)
         btn_clear = QPushButton("Clear Log")
         btn_clear.setFixedHeight(24)
-        btn_clear.setStyleSheet(btn_refresh.styleSheet())
+        _s.themed_ss(btn_clear, _refresh_btn_ss)
         btn_clear.clicked.connect(self._clear_log)
         btn_row.addWidget(btn_refresh)
         btn_row.addWidget(btn_clear)
@@ -499,12 +469,10 @@ class _NotifAlertHistoryMixin:
         cta = QPushButton("＋  Create custom alert →")
         cta.setFlat(True)
         cta.setCursor(Qt.CursorShape.PointingHandCursor)
-        cta.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:4px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(cta, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:4px 0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         cta.clicked.connect(lambda: self.navigate_to.emit("Custom Triggers"))
         log_lay.addWidget(cta)
         tabs.addTab(log_tab, "Delivery & Retry")
@@ -525,17 +493,17 @@ class _NotifAlertHistoryMixin:
             self._log_table.insertRow(row)
             ts_str    = time.strftime("%H:%M:%S", time.localtime(entry.get("ts", 0)))
             sev       = entry.get("severity", "")
-            sev_color = _SEV_COLOR.get(sev, TEXT_PRIMARY)
+            sev_color = _sev_color(sev)
             ch_type   = entry.get("channel_type", "")
-            ch_color  = _CH_COLOR.get(ch_type, TEXT_PRIMARY)
+            ch_color  = _ch_color(ch_type)
             status    = entry.get("status", "PENDING")
             err       = entry.get("error", "")
             if status == "DELIVERED":
-                status_txt, status_color = "✓ Delivered", GREEN
+                status_txt, status_color = "✓ Delivered", _s.GREEN
             elif status == "FAILED":
-                status_txt, status_color = "✗ Failed", RED
+                status_txt, status_color = "✗ Failed", _s.RED
             else:
-                status_txt, status_color = "⟳ Pending", TEXT_MUTED
+                status_txt, status_color = "⟳ Pending", _s.TEXT_MUTED
             for col, val in enumerate([
                 ts_str, entry.get("channel_name", ""), sev,
                 entry.get("host", ""), entry.get("message", ""), status_txt,
@@ -549,7 +517,7 @@ class _NotifAlertHistoryMixin:
                 elif col == 5:
                     item.setForeground(QColor(status_color))
                 if status == "FAILED":
-                    item.setBackground(QBrush(QColor(RED + "22")))
+                    item.setBackground(QBrush(QColor(_s.RED + "22")))
                     if err and col == 5:
                         item.setToolTip(err)
                 self._log_table.setItem(row, col, item)
@@ -660,7 +628,7 @@ class _NotifAlertHistoryMixin:
             self._alert_history_table.insertRow(row)
             ts_str    = time.strftime("%m-%d %H:%M", time.localtime(alert.get("ts", 0)))
             sev       = alert.get("severity", "INFO")
-            sev_col   = _SEV_COLOR.get(sev, TEXT_PRIMARY)
+            sev_col   = _sev_color(sev)
             rule_name = alert.get("rule_name", "")
             rule_disp = f"{rule_name}  ×{count}" if count > 1 else rule_name
             snooze_expiry = snoozes.get(rule_name)
@@ -669,13 +637,13 @@ class _NotifAlertHistoryMixin:
                     status = "Snoozed ∞"
                 else:
                     status = time.strftime("Snoozed →%H:%M", time.localtime(snooze_expiry))
-                st_col = TEXT_MUTED
+                st_col = _s.TEXT_MUTED
             elif alert.get("acked_ts"):
                 status = "✓ Acked"
-                st_col = GREEN
+                st_col = _s.GREEN
             else:
                 status = "Pending"
-                st_col = AMBER
+                st_col = _s.AMBER
             for col, val in enumerate([ts_str, rule_disp, alert.get("host", ""), sev, status]):
                 it = QTableWidgetItem(str(val))
                 it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -694,15 +662,11 @@ class _NotifAlertHistoryMixin:
             _cl.setContentsMargins(4, 2, 4, 1)
             _cl.setSpacing(0)
             _lr = QLabel(rule_disp)
-            _lr.setStyleSheet(
-                f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
-            )
+            _s.themed_ss(_lr, "color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;")
             _cl.addWidget(_lr)
             if sub_label:
                 _ls = QLabel(sub_label)
-                _ls.setStyleSheet(
-                    f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-                )
+                _s.themed_ss(_ls, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
                 _cl.addWidget(_ls)
             _cl.addStretch()
             self._alert_history_table.setCellWidget(row, 1, _cw)
@@ -758,11 +722,9 @@ class _NotifAlertHistoryMixin:
             return
         host = alert.get("host") or alert.get("ip") or "*"
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-            f" font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{ACCENT}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " font-size:11px; }}"
+            "QMenu::item:selected {{ background:{ACCENT}; color:{WHITE}; }}")
         _col = self._alert_history_table.currentColumn()
         act_copy_cell = menu.addAction("Copy cell")
         act_copy_row  = menu.addAction("Copy row")

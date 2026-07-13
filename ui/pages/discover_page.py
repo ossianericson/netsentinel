@@ -16,20 +16,15 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, CARD_RADIUS,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 from ui.pages.discover_data import _FEATURES, _RECOMMENDED_PAGES
 
 
 
-_REQUIRES_COLOR = {
-    "Npcap": AMBER,
-    "admin": RED,
+_REQUIRES_COLOR_NAME = {
+    "Npcap": "AMBER",
+    "admin": "RED",
 }
 
 
@@ -77,10 +72,8 @@ class FeatureGuidePage(QWidget):
         # Page header
         hdr = QLabel("Feature Guide")
         hdr.setFixedHeight(32)
-        hdr.setStyleSheet(
-            f"QLabel {{ background:{BG_DARK}; font-size:15px; font-weight:bold;"
-            f" color:{TEXT_PRIMARY}; padding:0 16px; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(hdr, "QLabel {{ background:{BG_DARK}; font-size:15px; font-weight:bold;"
+            " color:{TEXT_PRIMARY}; padding:0 16px; border-bottom:1px solid {BORDER}; }}")
         root.addWidget(hdr)
 
         # Search bar
@@ -90,15 +83,13 @@ class FeatureGuidePage(QWidget):
 
         self._search = QLineEdit()
         self._search.setPlaceholderText("Search features, synonyms, page names…")
-        self._search.setStyleSheet(
-            f"QLineEdit {{ border:1px solid {BORDER}; border-radius:4px;"
-            f" padding:4px 10px; font-size:12px; background:{BG_CARD}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._search, "QLineEdit {{ border:1px solid {BORDER}; border-radius:4px;"
+            " padding:4px 10px; font-size:12px; background:{BG_CARD}; color:{TEXT_PRIMARY}; }}")
         self._search.textChanged.connect(self._apply_filter)
         search_row.addWidget(self._search)
 
         sub = QLabel(f"{len(_FEATURES)} features")
-        sub.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED}; background:transparent;")
+        _s.themed_ss(sub, "font-size:11px; color:{TEXT_MUTED}; background:transparent;")
         search_row.addWidget(sub)
         root.addLayout(search_row)
 
@@ -106,10 +97,10 @@ class FeatureGuidePage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(f"QScrollArea {{ background:{BG_DARK}; border:none; }}")
+        _s.themed_ss(scroll, "QScrollArea {{ background:{BG_DARK}; border:none; }}")
 
         self._body = QWidget()
-        self._body.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(self._body, "background:{BG_DARK};")
         self._body_lay = QVBoxLayout(self._body)
         self._body_lay.setContentsMargins(16, 8, 16, 16)
         self._body_lay.setSpacing(4)
@@ -130,10 +121,8 @@ class FeatureGuidePage(QWidget):
             recommended = self._recommended_features()
             if recommended:
                 rec_lbl = QLabel("RECOMMENDED FOR YOU")
-                rec_lbl.setStyleSheet(
-                    f"font-size:10px; font-weight:bold; color:{ACCENT};"
-                    f" background:transparent; letter-spacing:1px;"
-                )
+                _s.themed_ss(rec_lbl, "font-size:10px; font-weight:bold; color:{ACCENT};"
+                    " background:transparent; letter-spacing:1px;")
                 self._body_lay.addWidget(rec_lbl)
                 for feat in recommended:
                     self._body_lay.addWidget(self._make_card(feat))
@@ -144,10 +133,8 @@ class FeatureGuidePage(QWidget):
             if g != current_group:
                 current_group = g
                 grp_lbl = QLabel(g.upper())
-                grp_lbl.setStyleSheet(
-                    f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
-                    f" background:transparent; letter-spacing:1px; padding-top:10px;"
-                )
+                _s.themed_ss(grp_lbl, "font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+                    " background:transparent; letter-spacing:1px; padding-top:10px;")
                 self._body_lay.addWidget(grp_lbl)
 
             card = self._make_card(feat)
@@ -155,7 +142,7 @@ class FeatureGuidePage(QWidget):
 
         if not features:
             empty = QLabel("No features match your search.")
-            empty.setStyleSheet(f"font-size:12px; color:{TEXT_MUTED}; background:transparent;")
+            _s.themed_ss(empty, "font-size:12px; color:{TEXT_MUTED}; background:transparent;")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._body_lay.addWidget(empty)
 
@@ -163,19 +150,15 @@ class FeatureGuidePage(QWidget):
 
     def _make_card(self, feat: dict) -> QFrame:
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:{CARD_RADIUS}; }}")
         lay = QHBoxLayout(card)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(10)
 
         icon_lbl = QLabel(feat["icon"])
         icon_lbl.setFixedWidth(18)
-        icon_lbl.setStyleSheet(
-            f"font-size:14px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(icon_lbl, "font-size:14px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         lay.addWidget(icon_lbl)
 
         text_col = QVBoxLayout()
@@ -185,14 +168,12 @@ class FeatureGuidePage(QWidget):
         name_row = QHBoxLayout()
         name_row.setSpacing(6)
         name_lbl = QLabel(feat["name"])
-        name_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(name_lbl, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         name_row.addWidget(name_lbl)
 
         if feat.get("requires"):
-            req_color = _REQUIRES_COLOR.get(feat["requires"], AMBER)
+            req_color = getattr(_s, _REQUIRES_COLOR_NAME.get(feat["requires"], "AMBER"))
             req_lbl = QLabel(feat["requires"])
             req_lbl.setStyleSheet(
                 f"font-size:9px; font-weight:bold; color:{req_color};"
@@ -211,21 +192,19 @@ class FeatureGuidePage(QWidget):
                 except ValueError:
                     badge_active = False
             if badge_active:
-                badge_color = GREEN if badge == "new" else AMBER
+                badge_color = _s.GREEN if badge == "new" else _s.AMBER
                 badge_lbl = QLabel("New" if badge == "new" else "Updated")
                 badge_lbl.setStyleSheet(
-                    f"font-size:9px; font-weight:bold; color:{WHITE};"
+                    f"font-size:9px; font-weight:bold; color:{_s.WHITE};"
                     f" background:{badge_color}; border-radius:3px; padding:0 5px;"
                 )
                 name_row.addWidget(badge_lbl)
 
         if feat.get("page") and feat["page"] in self._visited_pages:
             used_lbl = QLabel("✓ Used")
-            used_lbl.setStyleSheet(
-                f"font-size:9px; font-weight:bold; color:{TEXT_MUTED};"
-                f" background:transparent; border:1px solid {BORDER};"
-                f" border-radius:3px; padding:0 5px;"
-            )
+            _s.themed_ss(used_lbl, "font-size:9px; font-weight:bold; color:{TEXT_MUTED};"
+                " background:transparent; border:1px solid {BORDER};"
+                " border-radius:3px; padding:0 5px;")
             name_row.addWidget(used_lbl)
 
         name_row.addStretch()
@@ -233,9 +212,7 @@ class FeatureGuidePage(QWidget):
 
         desc_lbl = QLabel(feat["desc"])
         desc_lbl.setWordWrap(True)
-        desc_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(desc_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         text_col.addWidget(desc_lbl)
         lay.addLayout(text_col, 1)
 
@@ -243,12 +220,10 @@ class FeatureGuidePage(QWidget):
             btn = QPushButton("Open →")
             btn.setFixedHeight(26)
             btn.setFixedWidth(72)
-            btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
-                f" color:{ACCENT}; border-radius:4px; font-size:11px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(btn, "QPushButton {{ background:transparent; border:1px solid {ACCENT};"
+                " color:{ACCENT}; border-radius:4px; font-size:11px; }}"
+                "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             _page = feat["page"]
             btn.clicked.connect(lambda _=False, p=_page: self.navigate_to.emit(p))

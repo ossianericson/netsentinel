@@ -47,14 +47,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, GREEN,
-    RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_BORDER,
-    TH_TEXT,
-)
+from ui import styles as _s
 from modules.device_admin import (
     record_ha_detected, update_device_ha_info, upsert_known_device,
 )
@@ -91,7 +84,11 @@ _CAT_ICON = {
     "unknown":         "❓",
 }
 
-_STATUS_COLOR = {"UP": GREEN, "DOWN": RED, "DEGRADED": AMBER, "UNKNOWN": TEXT_MUTED}
+_STATUS_COLOR = {"UP": "GREEN", "DOWN": "RED", "DEGRADED": "AMBER", "UNKNOWN": "TEXT_MUTED"}
+
+
+def _status_color(status: str) -> str:
+    return getattr(_s, _STATUS_COLOR.get(status, "TEXT_MUTED"))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,25 +96,19 @@ _STATUS_COLOR = {"UP": GREEN, "DOWN": RED, "DEGRADED": AMBER, "UNKNOWN": TEXT_MU
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setObjectName("card")
-    frame.setStyleSheet(
-        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0; }}"
-    )
+    _s.themed_ss(frame, "QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0; }}")
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
 
     hdr = QFrame()
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0;"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0;")
     hl = QHBoxLayout(hdr)
     hl.setContentsMargins(12, 0, 10, 0)
     t = QLabel(title.upper())
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-        f" letter-spacing:0.5px; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+        " letter-spacing:0.5px; background:transparent; border:none;")
     hl.addWidget(t)
     hl.addStretch()
     outer.addWidget(hdr)
@@ -128,27 +119,23 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     return frame, body
 
 
-def _kpi_tile(label: str, color: str = ACCENT) -> tuple[QFrame, QLabel]:
+def _kpi_tile(label: str, color_name: str = "ACCENT") -> tuple[QFrame, QLabel]:
     """Return (tile_frame, value_label)."""
     tile = QFrame()
-    tile.setStyleSheet(
-        f"background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {color}; border-radius:0;"
-    )
+    _s.themed_ss(tile, lambda cn=color_name: (
+        f"background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
+        f" border-left:3px solid {getattr(_s, cn)}; border-radius:0;"
+    ))
     lay = QVBoxLayout(tile)
     lay.setContentsMargins(12, 8, 12, 8)
     lay.setSpacing(2)
 
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(
-        f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-        f" letter-spacing:0.5px; border:none; background:transparent;"
-    )
+    _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+        " letter-spacing:0.5px; border:none; background:transparent;")
     val = QLabel("—")
-    val.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:22px; font-weight:bold;"
-        f" border:none; background:transparent;"
-    )
+    _s.themed_ss(val, "color:{TEXT_PRIMARY}; font-size:22px; font-weight:bold;"
+        " border:none; background:transparent;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return tile, val
@@ -163,32 +150,32 @@ class _DeviceEditDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Edit Device")
         self.setMinimumWidth(420)
-        self.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+        _s.themed_ss(self, "background:{BG_DARK}; color:{TEXT_PRIMARY};")
         form = QFormLayout(self)
         form.setSpacing(8)
 
         _inp = (
-            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
-            f" font-size:11px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+            "QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
+            " font-size:11px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         _cbo = (
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
-            f" font-size:11px; }}"
+            "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
+            " font-size:11px; }}"
         )
 
         self._name  = QLineEdit(device_data.get("custom_name") or "")
         self._name.setPlaceholderText("e.g. Living Room Hub")
-        self._name.setStyleSheet(_inp)
+        _s.themed_ss(self._name, _inp)
 
         self._room  = QLineEdit(device_data.get("room") or "")
         self._room.setPlaceholderText("e.g. Living Room")
-        self._room.setStyleSheet(_inp)
+        _s.themed_ss(self._room, _inp)
 
         self._cat   = QComboBox()
-        self._cat.setStyleSheet(_cbo)
+        _s.themed_ss(self._cat, _cbo)
         for key, label in _CATEGORIES:
             self._cat.addItem(f"{_CAT_ICON.get(key, '')}  {label}", key)
         cur_cat = device_data.get("category", "unknown")
@@ -199,11 +186,9 @@ class _DeviceEditDialog(QDialog):
 
         self._notes = QPlainTextEdit(device_data.get("notes") or "")
         self._notes.setMaximumHeight(80)
-        self._notes.setStyleSheet(
-            f"QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:4px;"
-            f" font-size:11px; }}"
-        )
+        _s.themed_ss(self._notes, "QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:4px;"
+            " font-size:11px; }}")
 
         form.addRow("Friendly Name:", self._name)
         form.addRow("Room:",          self._room)
@@ -231,13 +216,15 @@ class _DeviceEditDialog(QDialog):
 class _RttMiniChart(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._fig    = Figure(figsize=(3.5, 1.4), dpi=96, facecolor=BG_CARD)
+        self._fig    = Figure(figsize=(3.5, 1.4), dpi=96, facecolor=_s.BG_CARD)
         self._ax     = self._fig.add_subplot(111)
         self._fig.set_layout_engine("tight", pad=0.5)  # applied once; avoids per-redraw accumulation
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
+        _s.themed_ss(self._canvas, "background:{BG_CARD}; border:none;")
+        self._last_points: list = []   # remembered so a theme switch can redraw
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self._canvas)
@@ -246,31 +233,32 @@ class _RttMiniChart(QWidget):
     def _draw_empty(self) -> None:
         ax = self._ax
         ax.cla()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color(CHART_SPINE)
-        ax.spines["bottom"].set_color(CHART_SPINE)
-        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
+        ax.spines["left"].set_color(_s.CHART_SPINE)
+        ax.spines["bottom"].set_color(_s.CHART_SPINE)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
         ax.set_xlabel("", fontsize=0)
-        ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
+        ax.set_ylabel("RTT ms", color=_s.TEXT_SECONDARY, fontsize=8)
         ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
-                ha="center", va="center", color=TEXT_MUTED, fontsize=9)
-        ax.grid(True, color=CHART_GRID, linewidth=0.6)
+                ha="center", va="center", color=_s.TEXT_MUTED, fontsize=9)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.6)
         self._canvas.draw_idle()
 
     def plot(self, points: list) -> None:
         """points: list of RttPoint objects."""
+        self._last_points = list(points) if points else []
         ax = self._ax
         ax.cla()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color(CHART_SPINE)
-        ax.spines["bottom"].set_color(CHART_SPINE)
-        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-        ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
-        ax.grid(True, color=CHART_GRID, linewidth=0.6)
+        ax.spines["left"].set_color(_s.CHART_SPINE)
+        ax.spines["bottom"].set_color(_s.CHART_SPINE)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.set_ylabel("RTT ms", color=_s.TEXT_SECONDARY, fontsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.6)
 
         if not points:
             self._draw_empty()
@@ -284,12 +272,18 @@ class _RttMiniChart(QWidget):
         y    = [r if r is not None else float("nan") for r in rtts]
         drops = [xi for xi, ri in zip(x, rtts) if ri is None]
 
-        ax.plot(x, y, color=ACCENT, linewidth=1.2)
+        ax.plot(x, y, color=_s.ACCENT, linewidth=1.2)
         if drops:
-            ax.scatter(drops, [0] * len(drops), color=RED, marker="x", s=30)
+            ax.scatter(drops, [0] * len(drops), color=_s.RED, marker="x", s=30)
 
-        ax.set_xlabel("Min ago", color=TEXT_SECONDARY, fontsize=8)
+        ax.set_xlabel("Min ago", color=_s.TEXT_SECONDARY, fontsize=8)
         self._canvas.draw_idle()
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the figure facecolor and redraw the last
+        data (canvas background re-applies via the themed_ss registry)."""
+        self._fig.set_facecolor(_s.BG_CARD)
+        self.plot(self._last_points)
 
 
 # ── Pinned widget mini-tile ───────────────────────────────────────────────────
@@ -303,57 +297,47 @@ class _PinnedTile(QFrame):
         super().__init__(parent)
         self._mac = device.get("mac", "")
         self.setFixedSize(160, 80)
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-left:3px solid {ACCENT}; border-radius:0; }}"
-        )
+        _s.themed_ss(self, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-left:3px solid {ACCENT}; border-radius:0; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(2)
 
         name = device.get("custom_name") or device.get("hostname") or device.get("mac", "?")
         self._name_lbl = QLabel(name[:22])
-        self._name_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(self._name_lbl, "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " border:none; background:transparent;")
 
         cat   = device.get("category", "unknown")
         icon  = _CAT_ICON.get(cat, "❓")
         room  = device.get("room") or ""
         self._sub_lbl = QLabel(f"{icon}  {room}" if room else icon)
-        self._sub_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY};"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(self._sub_lbl, "font-size:10px; color:{TEXT_SECONDARY};"
+            " border:none; background:transparent;")
 
         status = device.get("status", "UNKNOWN")
-        color  = _STATUS_COLOR.get(status, TEXT_MUTED)
         self._status_lbl = QLabel(f"● {status}")
-        self._status_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:bold; color:{color};"
+        _s.themed_ss(self._status_lbl, lambda st=status: (
+            f"font-size:10px; font-weight:bold; color:{_status_color(st)};"
             f" border:none; background:transparent;"
-        )
+        ))
 
         lay.addWidget(self._name_lbl)
         lay.addWidget(self._sub_lbl)
         lay.addWidget(self._status_lbl)
 
     def update_status(self, status: str) -> None:
-        color = _STATUS_COLOR.get(status, TEXT_MUTED)
         self._status_lbl.setText(f"● {status}")
-        self._status_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:bold; color:{color};"
+        _s.themed_ss(self._status_lbl, lambda st=status: (
+            f"font-size:10px; font-weight:bold; color:{_status_color(st)};"
             f" border:none; background:transparent;"
-        )
+        ))
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; font-size:11px; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         unpin = menu.addAction("Unpin from Overview")
         action = menu.exec(event.globalPos())
         if action == unpin and self.unpin_requested:
@@ -385,6 +369,13 @@ class HomeAutomationPage(QWidget):
         self._load_devices()
         self._refresh_timer.start()
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: forward to the embedded RTT mini-chart so its
+        matplotlib figure adopts the new palette."""
+        chart = getattr(self, "_rtt_chart", None)
+        if chart is not None and hasattr(chart, "refresh_theme"):
+            chart.refresh_theme()
+
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
@@ -394,27 +385,23 @@ class HomeAutomationPage(QWidget):
 
         # Page header
         title = QLabel("Home Automation Hub")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            " background:transparent; border:none;")
         sub = QLabel(
             "Discover, label and monitor smart home devices on your network"
         )
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none; padding:0 0 4px 0;"
-        )
+        _s.themed_ss(sub, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none; padding:0 0 4px 0;")
         root.addWidget(title)
         root.addWidget(sub)
 
         # ── KPI row ───────────────────────────────────────────────────────────
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_total,    self._lbl_total    = _kpi_tile("Total Devices",    ACCENT)
-        self._kpi_online,   self._lbl_online   = _kpi_tile("Online Now",       GREEN)
-        self._kpi_offline,  self._lbl_offline  = _kpi_tile("Offline",          RED)
-        self._kpi_detected, self._lbl_detected = _kpi_tile("Auto-Detected",    AMBER)
+        self._kpi_total,    self._lbl_total    = _kpi_tile("Total Devices",    "ACCENT")
+        self._kpi_online,   self._lbl_online   = _kpi_tile("Online Now",       "GREEN")
+        self._kpi_offline,  self._lbl_offline  = _kpi_tile("Offline",          "RED")
+        self._kpi_detected, self._lbl_detected = _kpi_tile("Auto-Detected",    "AMBER")
         for tile in (self._kpi_total, self._kpi_online,
                      self._kpi_offline, self._kpi_detected):
             kpi_row.addWidget(tile, 1)
@@ -425,26 +412,26 @@ class HomeAutomationPage(QWidget):
         filter_row.setSpacing(8)
 
         cbo_style = (
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
-            f" font-size:11px; min-height:26px; }}"
-            f"QComboBox::drop-down {{ border:none; }}"
+            "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
+            " font-size:11px; min-height:26px; }}"
+            "QComboBox::drop-down {{ border:none; }}"
         )
         inp_style = (
-            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
-            f" font-size:11px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+            "QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
+            " font-size:11px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
 
         self._room_filter = QComboBox()
-        self._room_filter.setStyleSheet(cbo_style)
+        _s.themed_ss(self._room_filter, cbo_style)
         self._room_filter.setMinimumWidth(130)
         self._room_filter.addItem("All Rooms", None)
         self._room_filter.currentIndexChanged.connect(self._apply_filters)
 
         self._cat_filter  = QComboBox()
-        self._cat_filter.setStyleSheet(cbo_style)
+        _s.themed_ss(self._cat_filter, cbo_style)
         self._cat_filter.setMinimumWidth(150)
         self._cat_filter.addItem("All Categories", None)
         for key, label in _CATEGORIES[:-1]:   # exclude 'unknown'
@@ -454,7 +441,7 @@ class HomeAutomationPage(QWidget):
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Search name, IP, MAC…")
         self._search_box.setClearButtonEnabled(True)
-        self._search_box.setStyleSheet(inp_style)
+        _s.themed_ss(self._search_box, inp_style)
         self._search_box.textChanged.connect(self._apply_filters)
 
         btn_scan = QPushButton("⊕  Scan Network")
@@ -481,17 +468,13 @@ class HomeAutomationPage(QWidget):
 
         # ── Status label ──────────────────────────────────────────────────────
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none;")
         root.addWidget(self._status_lbl)
 
         # ── Main splitter: device table | detail panel ────────────────────────
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setStyleSheet(
-            f"QSplitter::handle {{ background:{BORDER}; width:1px; }}"
-        )
+        _s.themed_ss(splitter, "QSplitter::handle {{ background:{BORDER}; width:1px; }}")
 
         # Device table
         tbl_card, tbl_body = _card("Devices")
@@ -515,17 +498,15 @@ class HomeAutomationPage(QWidget):
         self._tbl.setColumnWidth(4, 110)
         self._tbl.setColumnWidth(5, 160)
         self._tbl.setColumnWidth(6, 120)
-        self._tbl.setStyleSheet(
-            f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QHeaderView::section {{"
-            f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-            f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid {TH_BORDER};"
-            f"}}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-            f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-        )
+        _s.themed_ss(self._tbl, "QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QHeaderView::section {{"
+            "  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            "  font-weight:bold; padding:4px 5px; border:none;"
+            "  border-right:1px solid {TH_BORDER};"
+            "}}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+            "QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+            "QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}")
         self._tbl.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tbl.customContextMenuRequested.connect(self._context_menu)
         self._tbl.selectionModel().currentRowChanged.connect(
@@ -548,18 +529,14 @@ class HomeAutomationPage(QWidget):
         )
         _empty_ha_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _empty_ha_desc.setWordWrap(True)
-        _empty_ha_desc.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(_empty_ha_desc, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         _btn_mqtt = QPushButton("Configure MQTT / Home Assistant →")
         _btn_mqtt.setFlat(True)
         _btn_mqtt.setCursor(Qt.CursorShape.PointingHandCursor)
-        _btn_mqtt.setStyleSheet(
-            f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
-            f"border:none;padding:4px 0;}}"
-            f"QPushButton:hover{{color:{ACCENT_DARK};}}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(_btn_mqtt, "QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
+            "border:none;padding:4px 0;}}"
+            "QPushButton:hover{{color:{ACCENT_DARK};}}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         _btn_mqtt.clicked.connect(
             lambda: self.navigate_to.emit("MQTT / Home Assistant")
         )
@@ -591,12 +568,10 @@ class HomeAutomationPage(QWidget):
         self._pin_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self._pin_scroll.setStyleSheet(
-            f"QScrollArea {{ border:none; background:{BG_DARK}; }}"
-        )
+        _s.themed_ss(self._pin_scroll, "QScrollArea {{ border:none; background:{BG_DARK}; }}")
 
         self._pin_container = QWidget()
-        self._pin_container.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(self._pin_container, "background:{BG_DARK};")
         self._pin_layout = QHBoxLayout(self._pin_container)
         self._pin_layout.setContentsMargins(0, 4, 0, 4)
         self._pin_layout.setSpacing(8)
@@ -605,9 +580,7 @@ class HomeAutomationPage(QWidget):
         self._pin_empty_lbl = QLabel(
             "No pinned devices yet — right-click a device → Pin to Overview"
         )
-        self._pin_empty_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._pin_empty_lbl, "color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;")
         self._pin_layout.addWidget(self._pin_empty_lbl)
 
         self._pin_scroll.setWidget(self._pin_container)
@@ -616,30 +589,22 @@ class HomeAutomationPage(QWidget):
 
     def _build_detail_panel(self) -> QWidget:
         panel = QFrame()
-        panel.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-left:3px solid {BORDER}; }}"
-        )
+        _s.themed_ss(panel, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-left:3px solid {BORDER}; }}")
         lay = QVBoxLayout(panel)
         lay.setContentsMargins(12, 12, 12, 12)
         lay.setSpacing(8)
 
         self._det_name = QLabel("Select a device")
-        self._det_name.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(self._det_name, "font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " border:none; background:transparent;")
         self._det_name.setWordWrap(True)
 
         self._det_status = QLabel("")
-        self._det_status.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._det_status, "font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;")
 
         self._det_meta = QLabel("")
-        self._det_meta.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._det_meta, "font-size:11px; color:{TEXT_PRIMARY}; border:none; background:transparent;")
         self._det_meta.setWordWrap(True)
 
         self._rtt_chart = _RttMiniChart()
@@ -736,9 +701,8 @@ class HomeAutomationPage(QWidget):
             self._tbl.insertRow(row)
 
             status = d.get("status", "UNKNOWN")
-            sc = _STATUS_COLOR.get(status, TEXT_MUTED)
             status_item = QTableWidgetItem(f"●  {status}")
-            status_item.setForeground(QColor(sc))
+            status_item.setForeground(QColor(_status_color(status)))
 
             name = d.get("custom_name") or d.get("hostname") or d.get("mac", "?")
             cat  = d.get("category", "unknown")
@@ -822,12 +786,11 @@ class HomeAutomationPage(QWidget):
         self._det_name.setText(name)
 
         status = d.get("status", "UNKNOWN")
-        sc = _STATUS_COLOR.get(status, TEXT_MUTED)
         self._det_status.setText(f"● {status}")
-        self._det_status.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{sc};"
+        _s.themed_ss(self._det_status, lambda st=status: (
+            f"font-size:12px; font-weight:bold; color:{_status_color(st)};"
             f" border:none; background:transparent;"
-        )
+        ))
 
         meta_parts = []
         if d.get("ip"):       meta_parts.append(f"IP: {d['ip']}")
@@ -997,27 +960,25 @@ class HomeAutomationPage(QWidget):
         dlg = QDialog(self)
         dlg.setWindowTitle("Add Device Manually")
         dlg.setMinimumWidth(380)
-        dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+        _s.themed_ss(dlg, "background:{BG_DARK}; color:{TEXT_PRIMARY};")
         form = QFormLayout(dlg)
         form.setSpacing(8)
 
         _inp = (
-            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
-            f" font-size:11px; }}"
+            "QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:4px 8px;"
+            " font-size:11px; }}"
         )
         mac_edit  = QLineEdit(); mac_edit.setPlaceholderText("aa:bb:cc:dd:ee:ff")
-        mac_edit.setStyleSheet(_inp)
+        _s.themed_ss(mac_edit, _inp)
         name_edit = QLineEdit(); name_edit.setPlaceholderText("Friendly name")
-        name_edit.setStyleSheet(_inp)
+        _s.themed_ss(name_edit, _inp)
         room_edit = QLineEdit(); room_edit.setPlaceholderText("e.g. Kitchen")
-        room_edit.setStyleSheet(_inp)
+        _s.themed_ss(room_edit, _inp)
         cat_cbo   = QComboBox()
-        cat_cbo.setStyleSheet(
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
-            f" font-size:11px; }}"
-        )
+        _s.themed_ss(cat_cbo, "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
+            " font-size:11px; }}")
         for key, label in _CATEGORIES:
             cat_cbo.addItem(f"{_CAT_ICON.get(key, '')}  {label}", key)
 
@@ -1069,12 +1030,10 @@ class HomeAutomationPage(QWidget):
         d = self._devices[row]
 
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
-            f"QMenu::item {{ padding:5px 20px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
+            "QMenu::item {{ padding:5px 20px; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         act_edit   = menu.addAction("✏  Edit Device…")
         pin_label  = "📌  Unpin from Overview" if d.get("is_pinned") else "📌  Pin to Overview"
         act_pin    = menu.addAction(pin_label)

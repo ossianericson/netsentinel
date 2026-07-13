@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY
+from ui import styles as _s
 from modules.alert_suppressor import rule_settings_key as _rule_key
 from ui.widgets.alert_drawer import AlertDrawer
 from ui.widgets.skeleton import insert_skeleton_rows
@@ -76,19 +76,19 @@ class NotificationsPage(
 
         # ── Primary tabs: Configure / Alert History ───────────────────────────
         _tab_qss = (
-            f"QTabWidget::pane {{ border:none; }}"
-            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-bottom:none; padding:5px 18px; font-size:11px; font-weight:600; }}"
-            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; border-bottom:2px solid {ACCENT}; }}"
-            f"QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QTabWidget::pane {{ border:none; }}"
+            "QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-bottom:none; padding:5px 18px; font-size:11px; font-weight:600; }}"
+            "QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; border-bottom:2px solid {ACCENT}; }}"
+            "QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}"
         )
         self._notif_tabs = QTabWidget()
-        self._notif_tabs.setStyleSheet(_tab_qss)
+        _s.themed_ss(self._notif_tabs, _tab_qss)
         self._notif_tabs.currentChanged.connect(self._on_notif_tab_changed)
 
         # Tab 0 — Configure: all channel and rule cards
         _cfg_widget = QWidget()
-        _cfg_widget.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(_cfg_widget, "background:{BG_DARK};")
         _cfg_layout = QVBoxLayout(_cfg_widget)
         _cfg_layout.setContentsMargins(0, 0, 0, 0)
         _cfg_layout.setSpacing(0)
@@ -99,7 +99,7 @@ class NotificationsPage(
         self._notif_scroll.setStyleSheet("background:transparent;")
 
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         il = QVBoxLayout(inner)
         il.setContentsMargins(16, 8, 16, 16)
         il.setSpacing(12)
@@ -123,7 +123,7 @@ class NotificationsPage(
 
         # Tab 1 — Alert History: history table + delivery log
         _hist_widget = QWidget()
-        _hist_widget.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(_hist_widget, "background:{BG_DARK};")
         _hist_layout = QVBoxLayout(_hist_widget)
         _hist_layout.setContentsMargins(16, 12, 16, 12)
         _hist_layout.setSpacing(0)

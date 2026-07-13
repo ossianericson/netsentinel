@@ -23,15 +23,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ui.styles import (
-    ACCENT, AMBER,
-    BG_ALT_ROW, BG_DARK,
-    BLACK, BORDER,
-    GREEN, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    TH_BG, TH_BORDER, TH_TEXT,
-)
 from ui.widgets.hub_helpers import _rsrp_color, _sinr_color
+from ui import styles as _s
 
 class _ModemDetailPanel(QFrame):
     """Two-column signal grid: 5G NR | LTE Primary."""
@@ -39,21 +32,19 @@ class _ModemDetailPanel(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("modemDetailPanel")
-        self.setStyleSheet(
-            f"QFrame#modemDetailPanel {{ background:{BG_DARK}; border:none;"
-            f" border-top:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self, "QFrame#modemDetailPanel {{ background:{BG_DARK}; border:none;"
+            " border-top:1px solid {BORDER}; }}")
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self._nr_col  = self._make_col("5G NR",       ACCENT, border_right=True)
-        self._lte_col = self._make_col("LTE Primary",  AMBER,  border_right=False)
+        self._nr_col  = self._make_col("5G NR",       "ACCENT", border_right=True)
+        self._lte_col = self._make_col("LTE Primary",  "AMBER",  border_right=False)
         root.addWidget(self._nr_col[0], 1)
         root.addWidget(self._lte_col[0], 1)
 
-        _ls = f"color:{TEXT_SECONDARY}; font-size:10px; border:none; background:transparent;"
-        _vs = f"color:{TEXT_PRIMARY}; font-size:10px; font-weight:bold; border:none; background:transparent;"
+        _ls = "color:{TEXT_SECONDARY}; font-size:10px; border:none; background:transparent;"
+        _vs = "color:{TEXT_PRIMARY}; font-size:10px; font-weight:bold; border:none; background:transparent;"
 
         def _row(col_lay, label, attr):
             h = QHBoxLayout()
@@ -61,9 +52,9 @@ class _ModemDetailPanel(QFrame):
             h.setSpacing(6)
             l = QLabel(f"{label}:")
             l.setFixedWidth(52)
-            l.setStyleSheet(_ls)
+            _s.themed_ss(l, _ls)
             v = QLabel("—")
-            v.setStyleSheet(_vs)
+            _s.themed_ss(v, _vs)
             setattr(self, attr, v)
             h.addWidget(l)
             h.addWidget(v, 1)
@@ -87,22 +78,20 @@ class _ModemDetailPanel(QFrame):
 
         # Connection strip
         conn = QFrame()
-        conn.setStyleSheet(
-            f"background:{BG_DARK}; border:none; border-bottom:1px solid {BORDER};"
-        )
+        _s.themed_ss(conn, "background:{BG_DARK}; border:none; border-bottom:1px solid {BORDER};")
         cl = QHBoxLayout(conn)
         cl.setContentsMargins(12, 4, 12, 4)
         cl.setSpacing(0)
 
         def _cpair(label, attr):
             ll = QLabel(f"{label}: ")
-            ll.setStyleSheet(_ls)
+            _s.themed_ss(ll, _ls)
             vl = QLabel("—")
-            vl.setStyleSheet(_vs)
+            _s.themed_ss(vl, _vs)
             setattr(self, attr, vl)
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.VLine)
-            sep.setStyleSheet(f"border:none; border-left:1px solid {BORDER}; margin:0 12px;")
+            _s.themed_ss(sep, "border:none; border-left:1px solid {BORDER}; margin:0 12px;")
             cl.addWidget(ll); cl.addWidget(vl); cl.addWidget(sep)
 
         _cpair("Operator", "_conn_op")
@@ -116,25 +105,28 @@ class _ModemDetailPanel(QFrame):
         outer.addWidget(conn)
 
         body = QFrame()
-        body.setStyleSheet(f"background:{BG_DARK}; border:none;")
+        _s.themed_ss(body, "background:{BG_DARK}; border:none;")
         body.setLayout(root)
         outer.addWidget(body)
 
         self.setLayout(outer)
 
     def _make_col(self, title: str, color: str, border_right: bool):
+        # color: name of a theme token in ui.styles (e.g. "ACCENT") — read live
         col = QFrame()
-        border = f"border-right:1px solid {BORDER};" if border_right else ""
-        col.setStyleSheet(f"background:{BG_DARK}; border:none; {border}")
+        _s.themed_ss(col, lambda br=border_right: (
+            f"background:{_s.BG_DARK}; border:none;"
+            + (f" border-right:1px solid {_s.BORDER};" if br else "")
+        ))
         lay = QVBoxLayout(col)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(2)
         t = QLabel(title)
-        t.setStyleSheet(
-            f"color:{color}; font-size:10px; font-weight:bold; border:none;"
-            f" border-bottom:1px solid {BORDER}; background:transparent;"
+        _s.themed_ss(t, lambda c=color: (
+            f"color:{getattr(_s, c)}; font-size:10px; font-weight:bold; border:none;"
+            f" border-bottom:1px solid {_s.BORDER}; background:transparent;"
             f" padding-bottom:3px; margin-bottom:2px;"
-        )
+        ))
         lay.addWidget(t)
         return col, lay
 
@@ -213,30 +205,30 @@ class _RouterDetailPanel(QFrame):
     check_abuse_ip = pyqtSignal(str)
 
     _TABLE_SS = (
-        f"QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; }}"
-        f"QHeaderView::section {{"
-        f"  background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
-        f"  font-weight:bold; padding:3px 5px; border:none;"
-        f"  border-right:1px solid {TH_BORDER};"
-        f"}}"
-        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-        f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
+        "QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; }}"
+        "QHeaderView::section {{"
+        "  background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
+        "  font-weight:bold; padding:3px 5px; border:none;"
+        "  border-right:1px solid {TH_BORDER};"
+        "}}"
+        "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+        "QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+        "QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
     )
     _TREE_SS = (
-        f"QTreeWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY};"
-        f"  background:{BG_DARK}; alternate-background-color:{BG_ALT_ROW}; }}"
-        f"QTreeWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER};"
-        f"  padding:2px 0; }}"
-        f"QTreeWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        f"QHeaderView::section {{"
-        f"  background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
-        f"  font-weight:bold; padding:3px 5px; border:none;"
-        f"  border-right:1px solid {TH_BORDER};"
-        f"}}"
-        f"QTreeWidget::branch:has-children:!has-siblings:closed,"
-        f"QTreeWidget::branch:closed:has-children:has-siblings {{"
-        f"  image: none; border-image: none; }}"
+        "QTreeWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY};"
+        "  background:{BG_DARK}; alternate-background-color:{BG_ALT_ROW}; }}"
+        "QTreeWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER};"
+        "  padding:2px 0; }}"
+        "QTreeWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+        "QHeaderView::section {{"
+        "  background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
+        "  font-weight:bold; padding:3px 5px; border:none;"
+        "  border-right:1px solid {TH_BORDER};"
+        "}}"
+        "QTreeWidget::branch:has-children:!has-siblings:closed,"
+        "QTreeWidget::branch:closed:has-children:has-siblings {{"
+        "  image: none; border-image: none; }}"
     )
 
     def __init__(self, parent=None):
@@ -246,20 +238,16 @@ class _RouterDetailPanel(QFrame):
         self._last_nodes: list = []
 
         self.setObjectName("routerDetailPanel")
-        self.setStyleSheet(
-            f"QFrame#routerDetailPanel {{ background:{BG_DARK}; border:none;"
-            f" border-top:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self, "QFrame#routerDetailPanel {{ background:{BG_DARK}; border:none;"
+            " border-top:1px solid {BORDER}; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 8, 12, 10)
         lay.setSpacing(8)
 
         # ── Mesh nodes ────────────────────────────────────────────────────────
         nodes_hdr = QLabel("MESH NODES")
-        nodes_hdr.setStyleSheet(
-            f"color:{ACCENT}; font-size:9px; font-weight:bold; border:none;"
-            f" background:transparent; letter-spacing:0.5px;"
-        )
+        _s.themed_ss(nodes_hdr, "color:{ACCENT}; font-size:9px; font-weight:bold; border:none;"
+            " background:transparent; letter-spacing:0.5px;")
         lay.addWidget(nodes_hdr)
 
         self._node_table = QTableWidget(0, 3)
@@ -272,30 +260,24 @@ class _RouterDetailPanel(QFrame):
         self._node_table.setShowGrid(True)
         self._node_table.verticalHeader().setDefaultSectionSize(24)
         self._node_table.setMaximumHeight(180)
-        self._node_table.setStyleSheet(self._TABLE_SS)
+        _s.themed_ss(self._node_table, self._TABLE_SS)
         lay.addWidget(self._node_table)
 
         # ── Connected clients header ──────────────────────────────────────────
         cli_hdr_row = QHBoxLayout()
         cli_hdr_row.setContentsMargins(0, 4, 0, 0)
         clients_hdr = QLabel("CONNECTED CLIENTS")
-        clients_hdr.setStyleSheet(
-            f"color:{AMBER}; font-size:9px; font-weight:bold; border:none;"
-            f" background:transparent; letter-spacing:0.5px;"
-        )
+        _s.themed_ss(clients_hdr, "color:{AMBER}; font-size:9px; font-weight:bold; border:none;"
+            " background:transparent; letter-spacing:0.5px;")
         self._client_count_lbl = QLabel("")
-        self._client_count_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
-        )
+        _s.themed_ss(self._client_count_lbl, "color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;")
         self._toggle_btn = QPushButton("Group by node")
         self._toggle_btn.setFixedHeight(20)
-        self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_DARK}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f"  border-radius:3px; font-size:9px; padding:0 6px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
-            f"QPushButton:checked {{ background:{ACCENT}; color:{BLACK}; border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._toggle_btn, "QPushButton {{ background:{BG_DARK}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            "  border-radius:3px; font-size:9px; padding:0 6px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
+            "QPushButton:checked {{ background:{ACCENT}; color:{BLACK}; border-color:{ACCENT}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._toggle_btn.setCheckable(True)
         self._toggle_btn.toggled.connect(self._on_toggle)
         cli_hdr_row.addWidget(clients_hdr)
@@ -326,7 +308,7 @@ class _RouterDetailPanel(QFrame):
         self._client_table.setShowGrid(True)
         self._client_table.verticalHeader().setDefaultSectionSize(24)
         self._client_table.setMaximumHeight(220)
-        self._client_table.setStyleSheet(self._TABLE_SS)
+        _s.themed_ss(self._client_table, self._TABLE_SS)
         self._client_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._client_table.customContextMenuRequested.connect(self._client_context_menu)
         self._client_stack.addWidget(self._client_table)  # index 0
@@ -344,7 +326,7 @@ class _RouterDetailPanel(QFrame):
         self._tree_widget.setEditTriggers(QTreeWidget.EditTrigger.NoEditTriggers)
         self._tree_widget.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
         self._tree_widget.setMaximumHeight(220)
-        self._tree_widget.setStyleSheet(self._TREE_SS)
+        _s.themed_ss(self._tree_widget, self._TREE_SS)
         self._tree_widget.setRootIsDecorated(True)
         self._tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree_widget.customContextMenuRequested.connect(self._tree_context_menu)
@@ -400,7 +382,7 @@ class _RouterDetailPanel(QFrame):
             self._node_table.setItem(r, 0, QTableWidgetItem(node.get("name", "—")))
             role_item = QTableWidgetItem(node.get("role", "—"))
             if node.get("role") == "master":
-                role_item.setForeground(QColor(GREEN))
+                role_item.setForeground(QColor(_s.GREEN))
             self._node_table.setItem(r, 1, role_item)
             # MAC in col 2 — store IP as UserRole for context menu
             mac_item = QTableWidgetItem(node.get("mac", "—"))
@@ -423,7 +405,7 @@ class _RouterDetailPanel(QFrame):
             band = c.get("band", "") or ""
             band_item = QTableWidgetItem(band if band else "—")
             if "5" in band:
-                band_item.setForeground(QColor(ACCENT))
+                band_item.setForeground(QColor(_s.ACCENT))
             self._client_table.setItem(r, 2, band_item)
             self._client_table.setItem(r, 3, QTableWidgetItem(c.get("unit", "") or "—"))
             ul = QTableWidgetItem(self._bw_str(c.get("upload_kbps")))
@@ -464,7 +446,7 @@ class _RouterDetailPanel(QFrame):
                 f"{group_name}{role_suffix}  ·  {n} device{'s' if n != 1 else ''}",
                 "", "", "", "",
             ])
-            header.setForeground(0, QColor(ACCENT if role == "master" else TEXT_MUTED))
+            header.setForeground(0, QColor(_s.ACCENT if role == "master" else _s.TEXT_MUTED))
             self._tree_widget.addTopLevelItem(header)
 
             for c in group_clients:
@@ -479,7 +461,7 @@ class _RouterDetailPanel(QFrame):
                 child.setData(0, Qt.ItemDataRole.UserRole,
                               {"ip": c.get("ip", ""), "mac": c.get("mac", "")})
                 if "5" in band:
-                    child.setForeground(2, QColor(ACCENT))
+                    child.setForeground(2, QColor(_s.ACCENT))
                 for col in (3, 4):
                     child.setTextAlignment(col, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 header.addChild(child)

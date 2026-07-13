@@ -21,10 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.npcap_banner import NpcapMissingBanner
-from ui.styles import (
-    BG_CARD, BORDER, CHART_BG, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
-    GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
-)
+from ui import styles as _s
 from ui.tabs_helpers import _empty_state_widget, _table
 from ui.monitor_state import _color_for_level
 
@@ -106,7 +103,7 @@ class _MonitorTabsMixin:
         lay.setContentsMargins(8, 8, 8, 8)
         lay.addWidget(NpcapMissingBanner(parent=w))
         self._arp_status = QLabel("ARP spoof monitor not running.")
-        self._arp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._arp_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         btn_row = QHBoxLayout()
         btn_start = QPushButton("▶  Start ARP Monitor (30s)")
         btn_start.setObjectName("btnNetRefresh")
@@ -150,7 +147,7 @@ class _MonitorTabsMixin:
         QSettings("NetSentinel", "NetSentinel").setValue("home/setup/arp_started", True)
         self._save_monitor_state("arp", True)
         self._push_monitor_pills()
-        self._set_flyout_dot("ARP Spoof Watch", GREEN)
+        self._set_flyout_dot("ARP Spoof Watch", _s.GREEN)
 
     @pyqtSlot(object)
     def _on_arp_event(self, event):
@@ -184,7 +181,7 @@ class _MonitorTabsMixin:
         lay.setContentsMargins(8, 8, 8, 8)
         lay.addWidget(NpcapMissingBanner(parent=w))
         self._dhcp_status = QLabel("DHCP rogue server monitor not running.")
-        self._dhcp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._dhcp_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         btn_row = QHBoxLayout()
         btn_start = QPushButton("▶  Send DHCP Discover")
         btn_start.setObjectName("btnNetRefresh")
@@ -214,7 +211,7 @@ class _MonitorTabsMixin:
         self._dhcp_worker.start()
         self._dhcp_status.setText("DHCP discover sent — listening for offers…")
         self._push_monitor_pills()
-        self._set_flyout_dot("DHCP Rogue Monitor", GREEN)
+        self._set_flyout_dot("DHCP Rogue Monitor", _s.GREEN)
 
     @pyqtSlot(object)
     def _on_dhcp_offer(self, offer):
@@ -241,7 +238,7 @@ class _MonitorTabsMixin:
         lay.setContentsMargins(8, 8, 8, 8)
         lay.addWidget(NpcapMissingBanner(parent=w))
         self._bw_status = QLabel("Bandwidth monitor not running. Requires admin + Npcap.")
-        self._bw_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._bw_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         btn_row = QHBoxLayout()
         btn_start = QPushButton("▶  Start Bandwidth Monitor")
         btn_start.setObjectName("btnNetRefresh")
@@ -329,7 +326,7 @@ class _MonitorTabsMixin:
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
         self._sched_status = QLabel("Scheduled scanner not running.")
-        self._sched_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._sched_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl_row = QHBoxLayout()
         self._sched_interval = QSpinBox()
         self._sched_interval.setRange(1, 1440)
@@ -349,7 +346,7 @@ class _MonitorTabsMixin:
         ctrl_row.addStretch()
         self._sched_log = QTextEdit()
         self._sched_log.setReadOnly(True)
-        self._sched_log.setStyleSheet(f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;")
+        _s.themed_ss(self._sched_log, "background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;")
         lay.addWidget(self._sched_status)
         lay.addLayout(ctrl_row)
         lay.addWidget(self._sched_log, 1)
@@ -395,7 +392,7 @@ class _MonitorTabsMixin:
 
         # ── Device poll section ───────────────────────────────────────────────
         self._snmp_status = QLabel("SNMP poller not running.")
-        self._snmp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._snmp_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl_row = QHBoxLayout()
         self._snmp_community = QLineEdit()
         self._snmp_community.setFixedWidth(120)
@@ -426,22 +423,16 @@ class _MonitorTabsMixin:
 
         # ── Interface error metrics card ──────────────────────────────────────
         if_card = QWidget()
-        if_card.setStyleSheet(
-            f"QWidget{{background:{BG_CARD};border:1px solid {BORDER};}}"
-        )
+        _s.themed_ss(if_card, "QWidget{{background:{BG_CARD};border:1px solid {BORDER};}}")
         if_lay = QVBoxLayout(if_card)
         if_lay.setContentsMargins(8, 6, 8, 6)
         if_lay.setSpacing(4)
 
         title_row = QHBoxLayout()
         lbl_if = QLabel("◆ Interface Error & Discard Counters")
-        lbl_if.setStyleSheet(
-            f"font-weight:600;color:{TEXT_PRIMARY};font-size:12px;border:none;"
-        )
+        _s.themed_ss(lbl_if, "font-weight:600;color:{TEXT_PRIMARY};font-size:12px;border:none;")
         self._snmp_if_status = QLabel("Select a device above and click Poll.")
-        self._snmp_if_status.setStyleSheet(
-            f"color:{TEXT_SECONDARY};font-size:11px;border:none;"
-        )
+        _s.themed_ss(self._snmp_if_status, "color:{TEXT_SECONDARY};font-size:11px;border:none;")
         self._snmp_if_host = QLineEdit()
         self._snmp_if_host.setFixedWidth(130)
         self._snmp_if_host.setPlaceholderText("host IP")
@@ -472,21 +463,22 @@ class _MonitorTabsMixin:
         try:
             from matplotlib.figure import Figure
             from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-            self._snmp_if_fig = Figure(facecolor=CHART_BG, figsize=(4, 2.5))
+            self._snmp_if_fig = Figure(facecolor=_s.CHART_BG, figsize=(4, 2.5))
             self._snmp_if_fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.22)
             self._snmp_if_ax  = self._snmp_if_fig.add_subplot(111)
-            self._snmp_if_ax.set_facecolor(CHART_PLOT_BG)
-            self._snmp_if_ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-            self._snmp_if_ax.grid(True, color=CHART_GRID, linewidth=0.8)
+            self._snmp_if_ax.set_facecolor(_s.CHART_PLOT_BG)
+            self._snmp_if_ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+            self._snmp_if_ax.grid(True, color=_s.CHART_GRID, linewidth=0.8)
             for sp in ("top", "right"):
                 self._snmp_if_ax.spines[sp].set_visible(False)
             for sp in ("bottom", "left"):
-                self._snmp_if_ax.spines[sp].set_color(CHART_SPINE)
+                self._snmp_if_ax.spines[sp].set_color(_s.CHART_SPINE)
             self._snmp_if_ax.set_title(
                 "Error distribution per interface", fontsize=9,
-                color=TEXT_PRIMARY, pad=4,
+                color=_s.TEXT_PRIMARY, pad=4,
             )
             self._snmp_if_canvas = FigureCanvasQTAgg(self._snmp_if_fig)
+            _s.themed_ss(self._snmp_if_canvas, "background:{CHART_BG}; border:none;")
             content_split.addWidget(self._snmp_if_canvas)
         except Exception:
             pass  # matplotlib not available — chart omitted gracefully
@@ -496,6 +488,38 @@ class _MonitorTabsMixin:
         if_lay.addWidget(content_split, 1)
         lay.addWidget(if_card, 1)
         return w
+
+    def refresh_snmp_if_theme(self) -> None:
+        """Live theme switch: recolour the SNMP interface-errors bar chart.
+
+        The chart lives on the Dashboard (this mixin), not on a stack page, so
+        the dashboard's theme fan-out forwards here explicitly. When data has
+        been plotted it re-invokes the (now theme-live) result handler with the
+        cached entries; otherwise it just re-reads the empty-axes colours.
+        """
+        fig    = getattr(self, "_snmp_if_fig", None)
+        ax     = getattr(self, "_snmp_if_ax", None)
+        canvas = getattr(self, "_snmp_if_canvas", None)
+        if fig is None or ax is None or canvas is None:
+            return
+        fig.set_facecolor(_s.CHART_BG)
+        entries = getattr(self, "_snmp_if_last_entries", None)
+        if entries:
+            self._on_snmp_if_result(entries)   # full recolour with cached data
+            return
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        ax.tick_params(colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color=_s.CHART_GRID, linewidth=0.8)
+        for sp in ("bottom", "left"):
+            ax.spines[sp].set_color(_s.CHART_SPINE)
+        ax.set_title(
+            "Error distribution per interface", fontsize=9,
+            color=_s.TEXT_PRIMARY, pad=4,
+        )
+        try:
+            canvas.draw_idle()
+        except Exception:
+            pass  # non-fatal if canvas is detached
 
     @pyqtSlot()
     def _on_snmp_table_selection(self) -> None:

@@ -22,12 +22,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.empty_state_card import EmptyStateCard
+from ui import styles as _s
 
-from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, WHITE,
-)
 
 _SOURCE_PAGE_MAP = {
     "Devices":          "Devices",
@@ -51,14 +47,39 @@ _SOURCE_SPEED   = "Speed Tests"
 _SOURCE_CHANGES = "Device Changes"
 _SOURCE_LOGGER  = "Network Logger"
 
+# Token NAME strings (resolved live via getattr(_s, name)) — a bare-token dict
+# would freeze at import and never follow a theme switch.
 _SOURCE_COLORS = {
-    _SOURCE_DEVICE:  ACCENT,
-    _SOURCE_ALERTS:  AMBER,
-    _SOURCE_CVE:     RED,
-    _SOURCE_SPEED:   GREEN,
-    _SOURCE_CHANGES: TEXT_MUTED,
-    _SOURCE_LOGGER:  RED,
+    _SOURCE_DEVICE:  "ACCENT",
+    _SOURCE_ALERTS:  "AMBER",
+    _SOURCE_CVE:     "RED",
+    _SOURCE_SPEED:   "GREEN",
+    _SOURCE_CHANGES: "TEXT_MUTED",
+    _SOURCE_LOGGER:  "RED",
 }
+
+
+def _source_color(source: str) -> str:
+    """Live theme colour for a timeline source tag."""
+    return getattr(_s, _SOURCE_COLORS.get(source, "TEXT_MUTED"))
+
+
+def _chip_style(source: str, active: bool) -> str:
+    """Live QSS for a source filter chip (state-dependent, theme-live)."""
+    if active:
+        color = _source_color(source)
+        return (
+            f"QPushButton {{ font-size:10px; font-weight:bold; color:{color};"
+            f" background:{color}18; border:1px solid {color}; border-radius:10px;"
+            f" padding:1px 10px; }}"
+            f"QPushButton:hover {{ background:{color}30; }}"
+        )
+    return (
+        f"QPushButton {{ font-size:10px; color:{_s.TEXT_MUTED};"
+        f" background:transparent; border:1px solid {_s.BORDER}; border-radius:10px;"
+        f" padding:1px 10px; }}"
+        f"QPushButton:hover {{ background:{_s.BG_HOVER}; }}"
+    )
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -130,7 +151,7 @@ class TimelinePage(QWidget):
 
     def _setup_ui(self) -> None:
         self.setObjectName("TimelinePage")
-        self.setStyleSheet(f"QWidget#TimelinePage {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget#TimelinePage {{ background:{BG_DARK}; }}")
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 0)
@@ -149,32 +170,28 @@ class TimelinePage(QWidget):
 
         # ── TIMELINE-2: Today at a glance ─────────────────────────────────────
         self._glance = QFrame()
-        self._glance.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}"
-        )
+        _s.themed_ss(self._glance, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}")
         glance_lay = QHBoxLayout(self._glance)
         glance_lay.setContentsMargins(14, 8, 14, 8)
         glance_lay.setSpacing(20)
 
         _today_hdr = QLabel("TODAY AT A GLANCE")
-        _today_hdr.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{TEXT_MUTED}; background:transparent;"
-        )
+        _s.themed_ss(_today_hdr, "font-size:9px; font-weight:bold; color:{TEXT_MUTED}; background:transparent;")
         glance_lay.addWidget(_today_hdr)
 
         self._glance_labels: dict[str, QLabel] = {}
-        for key, label, color in [
-            ("alerts",   "Alerts",          AMBER),
-            ("devices",  "Device Events",   ACCENT),
-            ("cves",     "CVEs",            RED),
-            ("speed",    "Speed Tests",     GREEN),
-            ("changes",  "Device Changes",  TEXT_MUTED),
-            ("outages",  "Log Outages",     RED),
+        for key, label, cname in [
+            ("alerts",   "Alerts",          "AMBER"),
+            ("devices",  "Device Events",   "ACCENT"),
+            ("cves",     "CVEs",            "RED"),
+            ("speed",    "Speed Tests",     "GREEN"),
+            ("changes",  "Device Changes",  "TEXT_MUTED"),
+            ("outages",  "Log Outages",     "RED"),
         ]:
             tile = QLabel(f"<b>—</b> {label}")
-            tile.setStyleSheet(
-                f"font-size:11px; color:{color}; background:transparent; border:none;"
-            )
+            _s.themed_ss(tile, lambda c=cname: (
+                f"font-size:11px; color:{getattr(_s, c)}; background:transparent; border:none;"
+            ))
             glance_lay.addWidget(tile)
             self._glance_labels[key] = tile
 
@@ -185,7 +202,7 @@ class TimelinePage(QWidget):
         chip_row = QHBoxLayout()
         chip_row.setSpacing(6)
         chip_lbl = QLabel("Show:")
-        chip_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED}; background:transparent;")
+        _s.themed_ss(chip_lbl, "font-size:11px; color:{TEXT_MUTED}; background:transparent;")
         chip_row.addWidget(chip_lbl)
 
         self._chip_btns: dict[str, QPushButton] = {}
@@ -195,7 +212,7 @@ class TimelinePage(QWidget):
             btn.setCheckable(True)
             btn.setChecked(True)
             btn.setFixedHeight(24)
-            btn.setStyleSheet(self._chip_style(src, True))
+            _s.themed_ss(btn, lambda s=src: _chip_style(s, True))
             btn.toggled.connect(lambda checked, s=src: self._on_chip_toggled(s, checked))
             chip_row.addWidget(btn)
             self._chip_btns[src] = btn
@@ -206,16 +223,14 @@ class TimelinePage(QWidget):
         self._tl_search.setPlaceholderText("Search events…")
         self._tl_search.setFixedHeight(24)
         self._tl_search.setFixedWidth(180)
-        self._tl_search.setStyleSheet(
-            f"QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            f" font-size:10px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._tl_search, "QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
+            " font-size:10px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._tl_search.textChanged.connect(lambda: self._tl_search_timer.start())
         chip_row.addWidget(self._tl_search)
 
         self._tl_match_lbl = QLabel("")
-        self._tl_match_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; background:transparent;")
+        _s.themed_ss(self._tl_match_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent;")
         chip_row.addWidget(self._tl_match_lbl)
 
         outer.addLayout(chip_row)
@@ -452,9 +467,7 @@ class TimelinePage(QWidget):
             msg = "No events match your search." if q else "No events in the last 7 days."
             empty = QLabel(msg)
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setStyleSheet(
-                f"font-size:12px; color:{TEXT_MUTED}; padding:40px; background:transparent;"
-            )
+            _s.themed_ss(empty, "font-size:12px; color:{TEXT_MUTED}; padding:40px; background:transparent;")
             self._feed_layout.insertWidget(0, empty)
             return
 
@@ -464,10 +477,8 @@ class TimelinePage(QWidget):
             if date_str != last_date:
                 last_date = date_str
                 date_hdr = QLabel(date_str.upper())
-                date_hdr.setStyleSheet(
-                    f"font-size:9px; font-weight:bold; color:{TEXT_MUTED};"
-                    f" background:transparent; padding:12px 0 4px 0;"
-                )
+                _s.themed_ss(date_hdr, "font-size:9px; font-weight:bold; color:{TEXT_MUTED};"
+                    " background:transparent; padding:12px 0 4px 0;")
                 self._feed_layout.insertWidget(i, date_hdr)
 
             row = self._make_event_row(ev)
@@ -476,11 +487,9 @@ class TimelinePage(QWidget):
     def _make_event_row(self, ev: _Ev) -> QFrame:
         dest = _SOURCE_PAGE_MAP.get(ev.source, "")
         row = QFrame()
-        row.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
-            f" border-bottom:1px solid {BORDER}; }}"
-            f"QFrame:hover {{ background:{BG_HOVER}; }}"
-        )
+        _s.themed_ss(row, "QFrame {{ background:{BG_CARD}; border:none;"
+            " border-bottom:1px solid {BORDER}; }}"
+            "QFrame:hover {{ background:{BG_HOVER}; }}")
         if dest:
             row.setCursor(Qt.CursorShape.PointingHandCursor)
             row.mousePressEvent = lambda _ev, d=dest: self.navigate_to.emit(d)
@@ -491,7 +500,7 @@ class TimelinePage(QWidget):
         # Source colour bar
         bar = QFrame()
         bar.setFixedWidth(3)
-        src_color = _SOURCE_COLORS.get(ev.source, TEXT_MUTED)
+        src_color = _source_color(ev.source)
         bar.setStyleSheet(f"background:{src_color}; border:none;")
         lay.addWidget(bar)
 
@@ -499,9 +508,7 @@ class TimelinePage(QWidget):
         ts_lbl = QLabel(_fmt_ts(ev.ts))
         ts_lbl.setFixedWidth(80)
         ts_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        ts_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; padding:0 8px;"
-        )
+        _s.themed_ss(ts_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; padding:0 8px;")
         lay.addWidget(ts_lbl)
 
         # Source chip
@@ -520,15 +527,11 @@ class TimelinePage(QWidget):
         text_col.setContentsMargins(0, 6, 0, 6)
         text_col.setSpacing(1)
         title_lbl = QLabel(ev.title)
-        title_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _s.themed_ss(title_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
         text_col.addWidget(title_lbl)
         if ev.detail:
             detail_lbl = QLabel(ev.detail)
-            detail_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_MUTED}; background:transparent;"
-            )
+            _s.themed_ss(detail_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent;")
             text_col.addWidget(detail_lbl)
 
         lay.addLayout(text_col, 1)
@@ -563,25 +566,20 @@ class TimelinePage(QWidget):
             self._active_sources.add(source)
         else:
             self._active_sources.discard(source)
-        self._chip_btns[source].setStyleSheet(self._chip_style(source, checked))
+        _s.themed_ss(self._chip_btns[source],
+                     lambda s=source, a=checked: _chip_style(s, a))
         self._render()
         self._update_glance()
 
-    def _chip_style(self, source: str, active: bool) -> str:
-        color = _SOURCE_COLORS.get(source, TEXT_MUTED)
-        if active:
-            return (
-                f"QPushButton {{ font-size:10px; font-weight:bold; color:{color};"
-                f" background:{color}18; border:1px solid {color}; border-radius:10px;"
-                f" padding:1px 10px; }}"
-                f"QPushButton:hover {{ background:{color}30; }}"
-            )
-        return (
-            f"QPushButton {{ font-size:10px; color:{TEXT_MUTED};"
-            f" background:transparent; border:1px solid {BORDER}; border-radius:10px;"
-            f" padding:1px 10px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-        )
+    # ── Theme ─────────────────────────────────────────────────────────────────
+
+    def refresh_theme(self) -> None:
+        """Rebuild the transient event feed so per-row colours follow the theme.
+
+        Persistent chrome (chips, glance tiles, headers) re-styles itself via
+        themed_ss; the event rows are rebuilt on each _render(), so re-render.
+        """
+        self._render()
 
     # ── showEvent ─────────────────────────────────────────────────────────────
 

@@ -14,10 +14,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    alpha,
-    ACCENT_DARK, WHITE,
-)
+from ui import styles as _s
+from ui.styles import alpha
 
 
 _RISK_LABELS: dict[str, str] = {
@@ -97,21 +95,20 @@ def _empty_state_widget(icon: str, headline: str, body: str,
     """Reusable empty-state panel: icon + headline + body text + optional CTA button."""
     from PyQt6.QtWidgets import QWidget as _W, QVBoxLayout as _VL, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
     from PyQt6.QtCore import Qt as _Qt
-    from ui.styles import ACCENT as _AC, TEXT_PRIMARY as _TP, TEXT_SECONDARY as _TS
     w = _W()
     vl = _VL(w)
     vl.setContentsMargins(32, 32, 32, 32)
     vl.setAlignment(_Qt.AlignmentFlag.AlignCenter)
     ic = _L(icon)
     ic.setAlignment(_Qt.AlignmentFlag.AlignCenter)
-    ic.setStyleSheet(f"font-size:30px; background:transparent; border:none;")
+    ic.setStyleSheet("font-size:30px; background:transparent; border:none;")
     hd = _L(headline)
     hd.setAlignment(_Qt.AlignmentFlag.AlignCenter)
-    hd.setStyleSheet(f"font-size:13px; font-weight:bold; color:{_TP}; background:transparent; border:none;")
+    _s.themed_ss(hd, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;")
     bd = _L(body)
     bd.setAlignment(_Qt.AlignmentFlag.AlignCenter)
     bd.setWordWrap(True)
-    bd.setStyleSheet(f"font-size:11px; color:{_TS}; background:transparent; border:none;")
+    _s.themed_ss(bd, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
     vl.addWidget(ic)
     vl.addWidget(hd)
     vl.addSpacing(4)
@@ -121,11 +118,12 @@ def _empty_state_widget(icon: str, headline: str, body: str,
         btn = _B(cta_label)
         btn.setFixedHeight(28)
         btn.setCursor(_Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet(
-            f"QPushButton {{ background:{_AC}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{_TP}; }}"
+        _s.themed_ss(
+            btn,
+            "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn.clicked.connect(cta_action)
         hl = _HL()

@@ -29,27 +29,30 @@ from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QMenu, QSizePolicy, QWidget, QVBoxLayout
 
-from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BLUE,
-    CHART_PURPLE, CHART_SPINE, CHART_TITLE, GREEN, RED, TEAL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-)
+from ui import styles as _s
 from modules.topology_layout import (
     NodePosition, TopologyEdge, clear_layout, compute_scan_id, load_layout, save_layout,
 )
 
-RISK_NODE_COLOR: Dict[str, str] = {
-    "HIGH":    RED,
-    "MEDIUM":  AMBER,
-    "LOW":     BLUE,
-    "CLEAN":   GREEN,
-    "UNKNOWN": TEXT_MUTED,
-}
-GATEWAY_COLOR  = ACCENT
-INTERNET_COLOR = ACCENT
-MESH_SAT_COLOR = CHART_PURPLE   # satellite nodes — distinct from all risk colours
-MODEM_COLOR    = GREEN           # WAN modem node
-LLDP_NODE_COLOR = TEAL           # LLDP-discovered infrastructure nodes
+
+def _risk_node_color(risk: str) -> str:
+    """Node fill for a device risk level — read live so a theme switch recolours."""
+    return {
+        "HIGH":    _s.RED,
+        "MEDIUM":  _s.AMBER,
+        "LOW":     _s.BLUE,
+        "CLEAN":   _s.GREEN,
+        "UNKNOWN": _s.TEXT_MUTED,
+    }.get(risk, _s.TEXT_MUTED)
+
+
+# Semantic node-colour roles — thin live accessors over ui.styles tokens so an
+# Arctic <-> Midnight switch recolours the map on the next render.
+def _gateway_color() -> str:   return _s.ACCENT
+def _internet_color() -> str:  return _s.ACCENT
+def _mesh_sat_color() -> str:  return _s.CHART_PURPLE   # distinct from all risk colours
+def _modem_color() -> str:     return _s.GREEN          # WAN modem node
+def _lldp_node_color() -> str: return _s.TEAL           # LLDP infrastructure nodes
 
 _PIN_LINEWIDTH = 3.0    # border width for pinned nodes
 _SEG_LINEWIDTH = 2.0    # border width when a segment colour is applied
@@ -63,10 +66,11 @@ class TopologyWidget(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self._fig    = Figure(figsize=(8, 5), dpi=96, facecolor=BG_DARK)
+        self._fig    = Figure(figsize=(8, 5), dpi=96, facecolor=_s.BG_DARK)
         self._ax     = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        _s.themed_ss(self._canvas, "background:{BG_DARK}; border:none;")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._canvas)
@@ -103,7 +107,7 @@ class TopologyWidget(QWidget):
 
     def _style_axes(self) -> None:
         ax = self._ax
-        ax.set_facecolor(BG_CARD)
+        ax.set_facecolor(_s.BG_CARD)
         ax.axis("off")
         # Small fixed margins so nodes and labels near the canvas edge aren't clipped.
         # Do NOT call tight_layout after this — it fights these values.
@@ -164,7 +168,7 @@ class TopologyWidget(QWidget):
 
         if not devices:
             ax.text(0.5, 0.5, "No devices to display.\nRun a scan first.",
-                    ha="center", va="center", color=TEXT_MUTED,
+                    ha="center", va="center", color=_s.TEXT_MUTED,
                     fontsize=13, transform=ax.transAxes)
             self._canvas.draw()
             return
@@ -208,7 +212,7 @@ class TopologyWidget(QWidget):
                 0.5, 0.01,
                 "⬡  Run as administrator to discover managed switch topology via LLDP",
                 ha="center", va="bottom", fontsize=8,
-                color=TEAL, transform=ax.transAxes, alpha=0.80,
+                color=_s.TEAL, transform=ax.transAxes, alpha=0.80,
             )
 
         # Extend y-axis below 0 so labels placed at (y - 0.07) near the bottom
@@ -221,8 +225,8 @@ class TopologyWidget(QWidget):
                 "", xy=(0.5, 0.5), xytext=(0, 14),
                 textcoords="offset points",
                 ha="center", va="bottom", fontsize=8, zorder=6,
-                color=TEXT_PRIMARY,
-                bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=CHART_SPINE, alpha=0.95),
+                color=_s.TEXT_PRIMARY,
+                bbox=dict(boxstyle="round,pad=0.3", fc=_s.BG_CARD, ec=_s.CHART_SPINE, alpha=0.95),
             )
             self._hover_ann.set_visible(False)
 
@@ -234,6 +238,22 @@ class TopologyWidget(QWidget):
         self._ax.cla()
         self._style_axes()
         self._canvas.draw()
+
+    def refresh_theme(self) -> None:
+        """Re-read theme colours and repaint after a live theme switch.
+
+        The canvas widget background re-applies automatically (themed_ss
+        registry).  All node/edge/legend colours are read live at draw time, so
+        replaying the last render restyles the whole map; if nothing has been
+        rendered yet we just restyle the empty axes.
+        """
+        self._fig.set_facecolor(_s.BG_DARK)
+        if self._last_render_kwargs:
+            self.render(**self._last_render_kwargs)
+        else:
+            self._ax.cla()
+            self._style_axes()
+            self._canvas.draw_idle()
 
     # ── toolbar actions ───────────────────────────────────────────────────────
 
@@ -296,7 +316,7 @@ class TopologyWidget(QWidget):
     def _segment_edge_color(self, ip: str) -> tuple[str, float]:
         """Return (edge_hex_colour, linewidth) for a device node at *ip*."""
         if not self._segments or not ip:
-            return BG_CARD, _DEF_LINEWIDTH
+            return _s.BG_CARD, _DEF_LINEWIDTH
         try:
             from modules.network_segments import classify_device_segment
             seg = classify_device_segment(ip, self._segments)
@@ -308,7 +328,7 @@ class TopologyWidget(QWidget):
                 return seg.color, lw
         except Exception:
             pass  # non-fatal — fall back to default
-        return BG_CARD, _DEF_LINEWIDTH
+        return _s.BG_CARD, _DEF_LINEWIDTH
 
     # ── flat star layout ──────────────────────────────────────────────────────
 
@@ -318,8 +338,8 @@ class TopologyWidget(QWidget):
             saved = {}
 
         nodes: List[dict] = [
-            {"id": "internet", "label": "☁  Internet", "color": INTERNET_COLOR, "size": 1200},
-            {"id": "gateway",  "label": f"Gateway\n{gateway_ip or '?'}", "color": GATEWAY_COLOR, "size": 1000},
+            {"id": "internet", "label": "☁  Internet", "color": _internet_color(), "size": 1200},
+            {"id": "gateway",  "label": f"Gateway\n{gateway_ip or '?'}", "color": _gateway_color(), "size": 1000},
         ]
         for d in devices:
             ip    = _attr(d, "ip",         "?")
@@ -329,7 +349,7 @@ class TopologyWidget(QWidget):
             nodes.append({
                 "id":    mac or ip,
                 "label": f"{host[:14]}\n{ip}",
-                "color": RISK_NODE_COLOR.get(risk, RISK_NODE_COLOR["UNKNOWN"]),
+                "color": _risk_node_color(risk),
                 "size":  700,
                 "ip":    ip,
             })
@@ -375,23 +395,23 @@ class TopologyWidget(QWidget):
 
         if has_modem:
             mx, my = positions["__modem__"]
-            ax.plot([ix, mx], [iy, my], color=CHART_SPINE, linewidth=1.5, zorder=1)
-            ax.plot([mx, gx], [my, gy], color=CHART_SPINE, linewidth=1.5, zorder=1)
+            ax.plot([ix, mx], [iy, my], color=_s.CHART_SPINE, linewidth=1.5, zorder=1)
+            ax.plot([mx, gx], [my, gy], color=_s.CHART_SPINE, linewidth=1.5, zorder=1)
         else:
-            ax.plot([ix, gx], [iy, gy], color=CHART_SPINE, linewidth=1.5, zorder=1)
+            ax.plot([ix, gx], [iy, gy], color=_s.CHART_SPINE, linewidth=1.5, zorder=1)
 
         for node in nodes[2:]:
             nx, ny = positions[node["id"]]
-            ax.plot([gx, nx], [gy, ny], color=CHART_SPINE, linewidth=1.0, zorder=1)
+            ax.plot([gx, nx], [gy, ny], color=_s.CHART_SPINE, linewidth=1.0, zorder=1)
 
         # Draw infrastructure nodes (no segment colouring)
         for node in nodes[:2]:
             _scatter(ax, positions[node["id"]], node["color"], node["size"],
-                     node["label"], edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+                     node["label"], edge_color=_s.BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         if has_modem:
-            _scatter(ax, positions["__modem__"], MODEM_COLOR, 900,
-                     _modem_label(modem_data), edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+            _scatter(ax, positions["__modem__"], _modem_color(), 900,
+                     _modem_label(modem_data), edge_color=_s.BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         # Draw device nodes with segment edge colours
         for d, node in zip(devices, nodes[2:]):
@@ -401,12 +421,12 @@ class TopologyWidget(QWidget):
             # Pinned nodes get thicker border regardless of segment colour
             if nk in self._pinned:
                 lw = _PIN_LINEWIDTH
-                ec = ec if ec != BG_CARD else ACCENT
+                ec = ec if ec != _s.BG_CARD else _s.ACCENT
             _scatter(ax, positions[node["id"]], node["color"], node["size"],
                      node["label"], edge_color=ec, linewidth=lw)
 
         self._legend(ax, mesh=False, modem=has_modem)
-        ax.set_title("Network Topology", color=CHART_TITLE, fontsize=11, fontweight="bold", pad=4)
+        ax.set_title("Network Topology", color=_s.CHART_TITLE, fontsize=11, fontweight="bold", pad=4)
 
     # ── mesh 3-tier layout ────────────────────────────────────────────────────
 
@@ -548,44 +568,44 @@ class TopologyWidget(QWidget):
         ix, iy = pos["__internet__"]
         if has_modem:
             mx, my = pos["__modem__"]
-            ax.plot([ix, mx], [iy, my], color=CHART_SPINE, linewidth=2.0, zorder=1)
-            ax.plot([mx, gx], [my, gy], color=CHART_SPINE, linewidth=2.0, zorder=1)
+            ax.plot([ix, mx], [iy, my], color=_s.CHART_SPINE, linewidth=2.0, zorder=1)
+            ax.plot([mx, gx], [my, gy], color=_s.CHART_SPINE, linewidth=2.0, zorder=1)
         else:
-            ax.plot([ix, gx], [iy, gy], color=CHART_SPINE, linewidth=2.0, zorder=1)
+            ax.plot([ix, gx], [iy, gy], color=_s.CHART_SPINE, linewidth=2.0, zorder=1)
 
         for unit in satellites:
             sx, sy = pos[unit.mac]
-            ax.plot([gx, sx], [gy, sy], color=CHART_SPINE, linewidth=1.4, zorder=1)
+            ax.plot([gx, sx], [gy, sy], color=_s.CHART_SPINE, linewidth=1.4, zorder=1)
             for d in by_unit.get(unit.name, []):
                 did = _dev_id(d)
                 if did in pos:
                     cx, cy = pos[did]
-                    ax.plot([sx, cx], [sy, cy], color=CHART_SPINE, linewidth=0.7, zorder=1)
+                    ax.plot([sx, cx], [sy, cy], color=_s.CHART_SPINE, linewidth=0.7, zorder=1)
 
         for d in unassigned:
             did = _dev_id(d)
             if did in pos:
                 cx, cy = pos[did]
-                ax.plot([gx, cx], [gy, cy], color=CHART_SPINE, linewidth=0.7,
+                ax.plot([gx, cx], [gy, cy], color=_s.CHART_SPINE, linewidth=0.7,
                         linestyle="--", alpha=0.55, zorder=1)
 
         # ── Draw infrastructure nodes ─────────────────────────────────────────
-        _scatter(ax, pos["__internet__"], INTERNET_COLOR, 1200, "☁  Internet",
-                 edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+        _scatter(ax, pos["__internet__"], _internet_color(), 1200, "☁  Internet",
+                 edge_color=_s.BG_CARD, linewidth=_DEF_LINEWIDTH)
         if has_modem:
-            _scatter(ax, pos["__modem__"], MODEM_COLOR, 900, _modem_label(modem_data),
-                     edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+            _scatter(ax, pos["__modem__"], _modem_color(), 900, _modem_label(modem_data),
+                     edge_color=_s.BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         gw_name  = master.name if master else "Gateway"
         gw_label = f"{gw_name}\n{gateway_ip or ''}"
-        _scatter(ax, pos["__gateway__"], GATEWAY_COLOR, 1000, gw_label,
-                 edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+        _scatter(ax, pos["__gateway__"], _gateway_color(), 1000, gw_label,
+                 edge_color=_s.BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         for unit in satellites:
             nc    = len(by_unit.get(unit.name, []))
             label = f"⬡  {unit.name}\n{nc} client{'s' if nc != 1 else ''}"
-            _scatter(ax, pos[unit.mac], MESH_SAT_COLOR, 900, label,
-                     edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+            _scatter(ax, pos[unit.mac], _mesh_sat_color(), 900, label,
+                     edge_color=_s.BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         # ── Draw device nodes with segment edge colours ───────────────────────
         def _draw_device_seg(d: Any) -> None:
@@ -595,11 +615,11 @@ class TopologyWidget(QWidget):
             ip    = _attr(d, "ip",         "?")
             host  = _attr(d, "hostname",   "") or _attr(d, "vendor", "") or "Device"
             risk  = _attr(d, "risk_level", "UNKNOWN") or "UNKNOWN"
-            color = RISK_NODE_COLOR.get(risk, RISK_NODE_COLOR["UNKNOWN"])
+            color = _risk_node_color(risk)
             ec, lw = self._segment_edge_color(ip)
             if dev_id in self._pinned:
                 lw = _PIN_LINEWIDTH
-                ec = ec if ec != BG_CARD else ACCENT
+                ec = ec if ec != _s.BG_CARD else _s.ACCENT
             _scatter(ax, pos[dev_id], color, 600, f"{host[:13]}\n{ip}",
                      edge_color=ec, linewidth=lw)
 
@@ -610,7 +630,7 @@ class TopologyWidget(QWidget):
             _draw_device_seg(d)
 
         self._legend(ax, mesh=True, modem=has_modem)
-        ax.set_title("Network Topology — Mesh", color=CHART_TITLE,
+        ax.set_title("Network Topology — Mesh", color=_s.CHART_TITLE,
                      fontsize=11, fontweight="bold", pad=4)
 
     # ── Sprint 3: edge health overlays + node status dots ─────────────────────
@@ -623,12 +643,12 @@ class TopologyWidget(QWidget):
         else:
             lw = 1.4
         if edge.status == "down":
-            return RED, max(lw, 1.8)
+            return _s.RED, max(lw, 1.8)
         if edge.status == "degraded":
-            return AMBER, max(lw, 1.4)
+            return _s.AMBER, max(lw, 1.4)
         if edge.status == "up":
-            return GREEN, lw
-        return CHART_SPINE, 1.0  # unknown — let the base grey line show through
+            return _s.GREEN, lw
+        return _s.CHART_SPINE, 1.0  # unknown — let the base grey line show through
 
     def _draw_health_overlays(
         self,
@@ -667,21 +687,21 @@ class TopologyWidget(QWidget):
                     ax.annotate(
                         f"{edge.latency_ms:.0f} ms",
                         xy=(mx, my), fontsize=7, ha="center", va="center",
-                        zorder=5, color=TEXT_PRIMARY,
-                        bbox=dict(boxstyle="round,pad=0.15", fc=BG_CARD,
-                                  ec=CHART_SPINE, alpha=0.92, linewidth=0.8),
+                        zorder=5, color=_s.TEXT_PRIMARY,
+                        bbox=dict(boxstyle="round,pad=0.15", fc=_s.BG_CARD,
+                                  ec=_s.CHART_SPINE, alpha=0.92, linewidth=0.8),
                     )
 
         # ── Node status dots ───────────────────────────────────────────────
         for nk, (nx, ny) in self._pos_map.items():
             ip = self._ip_map.get(nk, "")
             if ip in down_ips:
-                ax.scatter(nx, ny, s=65, c=RED, zorder=5,
-                           marker="o", edgecolors=BG_CARD, linewidths=1.5)
+                ax.scatter(nx, ny, s=65, c=_s.RED, zorder=5,
+                           marker="o", edgecolors=_s.BG_CARD, linewidths=1.5)
             if ip in new_ips:
                 ring = _mp.Circle(
                     (nx, ny), radius=0.036, fill=False,
-                    edgecolor=BLUE, linewidth=2.2, alpha=0.45, zorder=5,
+                    edgecolor=_s.BLUE, linewidth=2.2, alpha=0.45, zorder=5,
                 )
                 ax.add_patch(ring)
 
@@ -706,10 +726,10 @@ class TopologyWidget(QWidget):
                     xy=(nx, ny),
                     ha="center", va="center",
                     fontsize=9, fontweight="bold",
-                    color=BG_CARD, zorder=7,
+                    color=_s.BG_CARD, zorder=7,
                     bbox=dict(
                         boxstyle="circle,pad=0.3",
-                        fc=TEAL, ec=TEAL, linewidth=0,
+                        fc=_s.TEAL, ec=_s.TEAL, linewidth=0,
                     ),
                 )
 
@@ -721,7 +741,7 @@ class TopologyWidget(QWidget):
                 ghost = _mp.Circle(
                     (gx, gy), radius=0.034,
                     fill=True,
-                    facecolor=TEXT_MUTED, edgecolor=TEXT_MUTED,
+                    facecolor=_s.TEXT_MUTED, edgecolor=_s.TEXT_MUTED,
                     linewidth=1.5, linestyle="--",
                     alpha=0.25, zorder=3,
                 )
@@ -731,7 +751,7 @@ class TopologyWidget(QWidget):
                     xy=(gx, gy), xytext=(0, -18),
                     textcoords="offset points",
                     ha="center", va="top",
-                    fontsize=7, color=TEXT_MUTED,
+                    fontsize=7, color=_s.TEXT_MUTED,
                     alpha=0.55, zorder=4,
                 )
 
@@ -745,7 +765,7 @@ class TopologyWidget(QWidget):
                     gx, gy = gw_pos
                     nx, ny = self._pos_map[nk]
                     ax.plot([gx, nx], [gy, ny],
-                            color=GREEN, linewidth=1.8,
+                            color=_s.GREEN, linewidth=1.8,
                             linestyle="--", alpha=0.75, zorder=2)
 
         # ── Removed edges — RED dotted line at previous positions ─────────
@@ -756,7 +776,7 @@ class TopologyWidget(QWidget):
                     gx, gy = gw_pos
                     nx, ny = self._prev_pos_map[nk]
                     ax.plot([gx, nx], [gy, ny],
-                            color=RED, linewidth=1.8,
+                            color=_s.RED, linewidth=1.8,
                             linestyle=":", alpha=0.5, zorder=2)
 
         # ── Diff legend (upper-left, alongside the existing risk legend) ──
@@ -764,29 +784,29 @@ class TopologyWidget(QWidget):
         if diff.added_ips:
             legend_items.append(
                 _L2D([0], [0], marker="o", color="w",
-                     markerfacecolor=TEAL, markersize=8, label="New device")
+                     markerfacecolor=_s.TEAL, markersize=8, label="New device")
             )
         if diff.removed_ips:
             legend_items.append(
                 _L2D([0], [0], marker="o", color="w",
-                     markerfacecolor=TEXT_MUTED, markersize=8,
+                     markerfacecolor=_s.TEXT_MUTED, markersize=8,
                      alpha=0.4, label="Device gone")
             )
         if diff.added_edges:
             legend_items.append(
-                _L2D([0], [0], color=GREEN, linewidth=2,
+                _L2D([0], [0], color=_s.GREEN, linewidth=2,
                      linestyle="--", label="New link")
             )
         if diff.removed_edges:
             legend_items.append(
-                _L2D([0], [0], color=RED, linewidth=2,
+                _L2D([0], [0], color=_s.RED, linewidth=2,
                      linestyle=":", label="Link gone")
             )
         if legend_items:
             ax.legend(
                 handles=legend_items, loc="upper left", fontsize=8,
-                labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
-                edgecolor=CHART_SPINE, framealpha=0.9,
+                labelcolor=_s.TEXT_SECONDARY, facecolor=_s.BG_CARD,
+                edgecolor=_s.CHART_SPINE, framealpha=0.9,
                 title="Changes", title_fontsize=8,
             )
 
@@ -844,7 +864,7 @@ class TopologyWidget(QWidget):
             # Edge: gateway → LLDP node
             ax.plot(
                 [gx, nx], [gy, ny],
-                color=LLDP_NODE_COLOR, linewidth=2.5,
+                color=_lldp_node_color(), linewidth=2.5,
                 zorder=2, alpha=0.85, solid_capstyle="round",
             )
 
@@ -864,31 +884,31 @@ class TopologyWidget(QWidget):
         # Draw square-marker infrastructure nodes
         for nx, ny, label in infra_nodes:
             ax.scatter(
-                nx, ny, s=700, c=LLDP_NODE_COLOR,
+                nx, ny, s=700, c=_lldp_node_color(),
                 marker="s", zorder=3, alpha=0.90,
-                edgecolors=BG_CARD, linewidths=1.5,
+                edgecolors=_s.BG_CARD, linewidths=1.5,
             )
             ax.annotate(
                 label, xy=(nx, ny), xytext=(0, -18),
                 textcoords="offset points",
                 ha="center", va="top", fontsize=7,
-                color=TEXT_PRIMARY, zorder=4, clip_on=False,
-                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=CHART_SPINE, alpha=0.90),
+                color=_s.TEXT_PRIMARY, zorder=4, clip_on=False,
+                bbox=dict(boxstyle="round,pad=0.2", fc=_s.BG_CARD, ec=_s.CHART_SPINE, alpha=0.90),
             )
 
         # Draw diamond-marker leaf LLDP nodes
         for nx, ny, label in leaf_nodes:
             ax.scatter(
-                nx, ny, s=600, c=LLDP_NODE_COLOR,
+                nx, ny, s=600, c=_lldp_node_color(),
                 marker="D", zorder=3, alpha=0.90,
-                edgecolors=BG_CARD, linewidths=1.5,
+                edgecolors=_s.BG_CARD, linewidths=1.5,
             )
             ax.annotate(
                 label, xy=(nx, ny), xytext=(0, -16),
                 textcoords="offset points",
                 ha="center", va="top", fontsize=7,
-                color=TEXT_PRIMARY, zorder=4, clip_on=False,
-                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=CHART_SPINE, alpha=0.90),
+                color=_s.TEXT_PRIMARY, zorder=4, clip_on=False,
+                bbox=dict(boxstyle="round,pad=0.2", fc=_s.BG_CARD, ec=_s.CHART_SPINE, alpha=0.90),
             )
 
         # LLDP legend items (appended below the main risk legend)
@@ -896,20 +916,20 @@ class TopologyWidget(QWidget):
         if infra_nodes:
             lldp_items.append(
                 _L2D([0], [0], marker="s", color="w",
-                     markerfacecolor=LLDP_NODE_COLOR, markersize=8,
+                     markerfacecolor=_lldp_node_color(), markersize=8,
                      label="LLDP switch/router")
             )
         if leaf_nodes:
             lldp_items.append(
                 _L2D([0], [0], marker="D", color="w",
-                     markerfacecolor=LLDP_NODE_COLOR, markersize=8,
+                     markerfacecolor=_lldp_node_color(), markersize=8,
                      label="LLDP device")
             )
         if lldp_items:
             ax.legend(
                 handles=lldp_items, loc="lower left", fontsize=8,
-                labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
-                edgecolor=CHART_SPINE, framealpha=0.9,
+                labelcolor=_s.TEXT_SECONDARY, facecolor=_s.BG_CARD,
+                edgecolor=_s.CHART_SPINE, framealpha=0.9,
                 title="LLDP", title_fontsize=8,
             )
 
@@ -918,22 +938,22 @@ class TopologyWidget(QWidget):
     def _legend(self, ax, mesh: bool = False, modem: bool = False) -> None:
         from matplotlib.lines import Line2D as _L2D
         items = [
-            (RED,           "HIGH risk"),
-            (AMBER,         "MEDIUM risk"),
-            (BLUE,          "LOW / known"),
-            (GREEN,         "Clean / Modem"),
-            (GATEWAY_COLOR, "Gateway"),
+            (_s.RED,           "HIGH risk"),
+            (_s.AMBER,         "MEDIUM risk"),
+            (_s.BLUE,          "LOW / known"),
+            (_s.GREEN,         "Clean / Modem"),
+            (_gateway_color(), "Gateway"),
         ]
         if mesh:
-            items.append((MESH_SAT_COLOR, "Mesh satellite"))
+            items.append((_mesh_sat_color(), "Mesh satellite"))
         handles = [
             _L2D([0], [0], marker="o", color="w", markerfacecolor=c,
                  markersize=9, label=lbl)
             for c, lbl in items
         ]
         ax.legend(handles=handles, loc="lower right", fontsize=8,
-                  labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
-                  edgecolor=CHART_SPINE, framealpha=0.9)
+                  labelcolor=_s.TEXT_SECONDARY, facecolor=_s.BG_CARD,
+                  edgecolor=_s.CHART_SPINE, framealpha=0.9)
 
     # ── interactive event handlers ────────────────────────────────────────────
 
@@ -1037,7 +1057,7 @@ def _dev_id(d: Any) -> str:
 
 
 def _scatter(ax, pos: tuple, color: str, size: int, label: str,
-             edge_color: str = BG_CARD, linewidth: float = _DEF_LINEWIDTH) -> None:
+             edge_color: str = _s.BG_CARD, linewidth: float = _DEF_LINEWIDTH) -> None:
     x, y = pos
     ax.scatter(x, y, s=size, c=color, zorder=3, alpha=0.9,
                edgecolors=edge_color, linewidths=linewidth)
@@ -1045,8 +1065,8 @@ def _scatter(ax, pos: tuple, color: str, size: int, label: str,
     ax.annotate(label, xy=(x, y), xytext=(0, -(marker_r + 4)),
                 textcoords="offset points",
                 ha="center", va="top", fontsize=7,
-                color=TEXT_PRIMARY, zorder=4, clip_on=False,
-                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=CHART_SPINE, alpha=0.9))
+                color=_s.TEXT_PRIMARY, zorder=4, clip_on=False,
+                bbox=dict(boxstyle="round,pad=0.2", fc=_s.BG_CARD, ec=_s.CHART_SPINE, alpha=0.9))
 
 
 def _modem_label(data: dict) -> str:

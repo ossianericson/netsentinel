@@ -27,13 +27,6 @@ from PyQt6.QtWidgets import (
 
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table as _make_table
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_ALT_ROW, BG_CARD, BG_DARK, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
 
 try:
     from modules.threat_intel import load_from_cache
@@ -43,54 +36,48 @@ except Exception:
 
 from modules.alert_types import SECURITY_RELEVANT_RULE_TYPES
 from ui.widgets.context_menu import install_copy_menu
+from ui import styles as _s
 
 
 # ── UI helpers ─────────────────────────────────────────────────────────────────
 
 def _card(title: str = "") -> tuple[QWidget, QVBoxLayout]:
     frame = QFrame()
-    frame.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(frame, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-radius:{CARD_RADIUS}; }}")
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(12, 10, 12, 12)
     lay.setSpacing(6)
     if title:
         hdr = QLabel(title)
         hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        hdr.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
-            f" border-bottom:1px solid {CARD_HDR_BORDER}; padding-bottom:4px;"
-        )
+        _s.themed_ss(hdr, "color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
+            " border-bottom:1px solid {CARD_HDR_BORDER}; padding-bottom:4px;")
         lay.addWidget(hdr)
     return frame, lay
 
 
 def _kpi_tile(label: str, value: str, color: str) -> QWidget:
+    # `color` is a theme-token NAME (e.g. "RED"), resolved live via themed_ss.
     frame = QFrame()
-    frame.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(frame, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-radius:{CARD_RADIUS}; }}")
     frame.setMinimumHeight(80)
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(14, 10, 14, 10)
     lay.setSpacing(2)
     val_lbl = QLabel(value)
     val_lbl.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-    val_lbl.setStyleSheet(f"color:{color};")
+    _s.themed_ss(val_lbl, lambda tk=color: f"color:{getattr(_s, tk)};")
     lbl_lbl = QLabel(label)
-    lbl_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px;")
+    _s.themed_ss(lbl_lbl, "color:{TEXT_MUTED}; font-size:10px;")
     hint_btn = QPushButton("")
     hint_btn.setFlat(True)
     hint_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-    hint_btn.setStyleSheet(
-        f"QPushButton {{ color:{ACCENT}; font-size:9px; background:transparent;"
-        f" border:none; padding:0; text-align:left; }}"
-        f"QPushButton:hover {{ color:{ACCENT_LITE}; }}"
-        f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
-    )
+    _s.themed_ss(hint_btn, "QPushButton {{ color:{ACCENT}; font-size:9px; background:transparent;"
+        " border:none; padding:0; text-align:left; }}"
+        "QPushButton:hover {{ color:{ACCENT_LITE}; }}"
+        "QPushButton:pressed {{ color:{ACCENT_DARK}; }}")
     hint_btn.setVisible(False)
     lay.addStretch()
     lay.addWidget(val_lbl)
@@ -105,18 +92,18 @@ def _kpi_tile(label: str, value: str, color: str) -> QWidget:
 def _severity_color(sev: str) -> str:
     s = sev.lower()
     if s == "critical":
-        return RED
+        return _s.RED
     if s in ("high", "warning"):
-        return AMBER
-    return TEXT_MUTED
+        return _s.AMBER
+    return _s.TEXT_MUTED
 
 
 def _confidence_color(conf: int) -> str:
     if conf >= 80:
-        return RED
+        return _s.RED
     if conf >= 50:
-        return AMBER
-    return TEXT_SECONDARY
+        return _s.AMBER
+    return _s.TEXT_SECONDARY
 
 
 # C-3: Scan types shown in the Scan Status overview card
@@ -132,12 +119,14 @@ _AUDIT_SCAN_LABELS: tuple[str, ...] = (
     L.FULL_DEVICE_DISCOVERY,
 )
 
+# Values are theme-token NAMES resolved live via _state_color (below) so the
+# Scan Status pills restyle on a theme switch, not only on the next refresh.
 _STATE_COLORS: dict[str, str] = {
-    "fresh":   GREEN,
-    "stale":   AMBER,
-    "running": ACCENT,
-    "error":   RED,
-    "never":   TEXT_MUTED,
+    "fresh":   "GREEN",
+    "stale":   "AMBER",
+    "running": "ACCENT",
+    "error":   "RED",
+    "never":   "TEXT_MUTED",
 }
 _STATE_LABELS: dict[str, str] = {
     "fresh":   "Fresh",
@@ -146,6 +135,11 @@ _STATE_LABELS: dict[str, str] = {
     "error":   "Error",
     "never":   "Never run",
 }
+
+
+def _state_color(state: str) -> str:
+    """Live theme hex for a scan-registry state (falls back to TEXT_MUTED)."""
+    return getattr(_s, _STATE_COLORS.get(state, "TEXT_MUTED"))
 
 
 # ── Main page ──────────────────────────────────────────────────────────────────
@@ -210,7 +204,7 @@ class SecurityOverviewPage(QWidget):
         scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
 
         inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(inner, "background:{BG_DARK};")
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
@@ -223,9 +217,7 @@ class SecurityOverviewPage(QWidget):
             "CVE Tracker, TLS audit, or Login Test to populate each section."
         )
         subtitle.setWordWrap(True)
-        subtitle.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(subtitle, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
         root.addWidget(subtitle)
 
         # Admin/Npcap requirement banner — auto-hides if Npcap is installed
@@ -250,19 +242,15 @@ class SecurityOverviewPage(QWidget):
 
         scan_hdr = QLabel("Security Scan Findings")
         scan_hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        scan_hdr.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
-            f" background:transparent;"
-        )
+        _s.themed_ss(scan_hdr, "color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
+            " background:transparent;")
         root.addWidget(scan_hdr)
         root.addLayout(self._build_scan_kpi_row())
 
         threat_hdr = QLabel("Threat Intelligence")
         threat_hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        threat_hdr.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
-            f" background:transparent;"
-        )
+        _s.themed_ss(threat_hdr, "color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
+            " background:transparent;")
         root.addWidget(threat_hdr)
         root.addLayout(self._build_threat_kpi_row())
 
@@ -289,19 +277,15 @@ class SecurityOverviewPage(QWidget):
         action_row.setContentsMargins(0, 0, 0, 0)
         self._copy_md_btn = QPushButton("⧉  Copy as Markdown")
         self._copy_md_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._copy_md_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:9px; background:transparent;"
-            f" border:none; padding:2px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
-        )
+        _s.themed_ss(self._copy_md_btn, "QPushButton {{ color:{ACCENT}; font-size:9px; background:transparent;"
+            " border:none; padding:2px 0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_LITE}; }}"
+            "QPushButton:pressed {{ color:{ACCENT_DARK}; }}")
         self._copy_md_btn.clicked.connect(self._copy_scan_status_md)
         action_row.addWidget(self._copy_md_btn)
         action_row.addStretch()
         self._copy_md_status = QLabel("")
-        self._copy_md_status.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:9px; background:transparent;"
-        )
+        _s.themed_ss(self._copy_md_status, "color:{TEXT_SECONDARY}; font-size:9px; background:transparent;")
         action_row.addWidget(self._copy_md_status)
         lay.addLayout(action_row)
 
@@ -326,9 +310,7 @@ class SecurityOverviewPage(QWidget):
         lay.addWidget(t)
 
         self._unacked_alerts_empty_lbl = QLabel("No unresolved security alerts.")
-        self._unacked_alerts_empty_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; padding:4px 0;"
-        )
+        _s.themed_ss(self._unacked_alerts_empty_lbl, "color:{TEXT_SECONDARY}; font-size:10px; padding:4px 0;")
         lay.addWidget(self._unacked_alerts_empty_lbl)
 
         self._rebuild_unacked_alerts_table()
@@ -365,12 +347,10 @@ class SecurityOverviewPage(QWidget):
 
             ack_btn = QPushButton("✓ Acknowledge")
             ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            ack_btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
-                f" border:1px solid {BORDER}; border-radius:3px; padding:2px 6px; }}"
-                f"QPushButton:hover {{ background:{BG_ALT_ROW}; color:{ACCENT_LITE}; }}"
-                f"QPushButton:pressed {{ background:{BG_ALT_ROW}; color:{ACCENT_DARK}; }}"
-            )
+            _s.themed_ss(ack_btn, "QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+                " border:1px solid {BORDER}; border-radius:3px; padding:2px 6px; }}"
+                "QPushButton:hover {{ background:{BG_ALT_ROW}; color:{ACCENT_LITE}; }}"
+                "QPushButton:pressed {{ background:{BG_ALT_ROW}; color:{ACCENT_DARK}; }}")
             alert_id = row.get("id")
             ack_btn.clicked.connect(lambda _c=False, aid=alert_id: self._on_ack_unacked_alert(aid))
             t.setCellWidget(r, 4, ack_btn)
@@ -413,7 +393,7 @@ class SecurityOverviewPage(QWidget):
             "since the last run — not just while their own page is open."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(note, "color:{TEXT_SECONDARY}; font-size:10px;")
         body.addWidget(note)
 
         self._posture_checks: dict[str, QCheckBox] = {}
@@ -426,7 +406,7 @@ class SecurityOverviewPage(QWidget):
         )
         for key, label in _toggles:
             chk = QCheckBox(label)
-            chk.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+            _s.themed_ss(chk, "QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
             chk.setChecked(QSettings("NetSentinel", "NetSentinel").value(
                 f"posture/{key}_enabled", False, type=bool
             ))
@@ -482,12 +462,12 @@ class SecurityOverviewPage(QWidget):
             t.setItem(r, 0, QTableWidgetItem(label))
             pill = QLabel(_STATE_LABELS.get(state, "Never run"))
             pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            pill.setStyleSheet(
-                "background:" + _STATE_COLORS.get(state, TEXT_MUTED) + ";"
-                " color:" + WHITE + ";"
+            _s.themed_ss(pill, lambda st=state: (
+                "background:" + _state_color(st) + ";"
+                " color:" + _s.WHITE + ";"
                 " border-radius:8px; padding:1px 8px;"
                 " font-size:10px; font-weight:bold; margin:2px;"
-            )
+            ))
             t.setCellWidget(r, 1, pill)
             t.setItem(r, 2, QTableWidgetItem(_scan_age_str(ts) if ts else "Never"))
             t.setItem(r, 3, QTableWidgetItem(verdict or "—"))
@@ -499,10 +479,10 @@ class SecurityOverviewPage(QWidget):
     def _build_scan_kpi_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(8)
-        self._tile_ports = _kpi_tile("High-Risk Ports", "—", RED)
-        self._tile_cves  = _kpi_tile("Devices w/ CVEs", "—", AMBER)
-        self._tile_tls   = _kpi_tile("TLS Issues",      "—", AMBER)
-        self._tile_cred  = _kpi_tile("Login Failures",  "—", RED)
+        self._tile_ports = _kpi_tile("High-Risk Ports", "—", "RED")
+        self._tile_cves  = _kpi_tile("Devices w/ CVEs", "—", "AMBER")
+        self._tile_tls   = _kpi_tile("TLS Issues",      "—", "AMBER")
+        self._tile_cred  = _kpi_tile("Login Failures",  "—", "RED")
         self._tile_ports._hint_btn.setText("→ Run Port Scan")
         self._tile_ports._hint_btn.clicked.connect(
             lambda: self.navigate_to.emit("Port Scan (TCP)")
@@ -520,10 +500,10 @@ class SecurityOverviewPage(QWidget):
     def _build_threat_kpi_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(8)
-        self._tile_total   = _kpi_tile("Threat Indicators", "—", ACCENT)
-        self._tile_ips     = _kpi_tile("Malicious IPs",     "—", RED)
-        self._tile_domains = _kpi_tile("Blocked Domains",   "—", AMBER)
-        self._tile_updated = _kpi_tile("Last Updated",      "—", TEXT_SECONDARY)
+        self._tile_total   = _kpi_tile("Threat Indicators", "—", "ACCENT")
+        self._tile_ips     = _kpi_tile("Malicious IPs",     "—", "RED")
+        self._tile_domains = _kpi_tile("Blocked Domains",   "—", "AMBER")
+        self._tile_updated = _kpi_tile("Last Updated",      "—", "TEXT_SECONDARY")
         self._tile_total._hint_btn.setText("→ Refresh Threat Intel")
         self._tile_total._hint_btn.clicked.connect(
             lambda: self.navigate_to.emit("Threat Intel")
@@ -549,12 +529,10 @@ class SecurityOverviewPage(QWidget):
             btn = QPushButton(label)
             btn.setFlat(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
-                f" border:1px solid {BORDER}; border-radius:3px; padding:2px 8px; }}"
-                f"QPushButton:hover {{ background:{BG_ALT_ROW}; color:{ACCENT_LITE}; }}"
-                f"QPushButton:pressed {{ background:{BG_ALT_ROW}; color:{ACCENT_DARK}; }}"
-            )
+            _s.themed_ss(btn, "QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+                " border:1px solid {BORDER}; border-radius:3px; padding:2px 8px; }}"
+                "QPushButton:hover {{ background:{BG_ALT_ROW}; color:{ACCENT_LITE}; }}"
+                "QPushButton:pressed {{ background:{BG_ALT_ROW}; color:{ACCENT_DARK}; }}")
             btn.clicked.connect(lambda _c, t=target: self.navigate_to.emit(t))
             row.addWidget(btn)
         row.addStretch()
@@ -564,14 +542,12 @@ class SecurityOverviewPage(QWidget):
 
     def _build_findings_tabs(self) -> QWidget:
         self._findings_tabs = QTabWidget()
-        self._findings_tabs.setStyleSheet(
-            f"QTabWidget::pane {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" padding:4px 14px; border:1px solid {BORDER}; border-bottom:none;"
-            f" font-size:10px; }}"
-            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; font-weight:600;"
-            f" border-top:2px solid {ACCENT}; }}"
-        )
+        _s.themed_ss(self._findings_tabs, "QTabWidget::pane {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            "QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " padding:4px 14px; border:1px solid {BORDER}; border-bottom:none;"
+            " font-size:10px; }}"
+            "QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; font-weight:600;"
+            " border-top:2px solid {ACCENT}; }}")
 
         # ── Tab 1: Security Findings ──────────────────────────────────────────
         sec_tab = QWidget()
@@ -621,9 +597,7 @@ class SecurityOverviewPage(QWidget):
         )
         self._scan_empty.setWordWrap(True)
         self._scan_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._scan_empty.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; padding:24px; background:transparent;"
-        )
+        _s.themed_ss(self._scan_empty, "color:{TEXT_MUTED}; font-size:11px; padding:24px; background:transparent;")
         sec_lay.addWidget(self._scan_table)
         sec_lay.addWidget(self._scan_empty)
         self._findings_tabs.addTab(sec_tab, "Security Findings")
@@ -676,9 +650,7 @@ class SecurityOverviewPage(QWidget):
         )
         self._empty_widget.setWordWrap(True)
         self._empty_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_widget.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; padding:24px; background:transparent;"
-        )
+        _s.themed_ss(self._empty_widget, "color:{TEXT_MUTED}; font-size:11px; padding:24px; background:transparent;")
         threat_lay.addWidget(self._findings_table)
         threat_lay.addWidget(self._empty_widget)
         self._findings_tabs.addTab(threat_tab, "Threat Intel")
@@ -731,28 +703,28 @@ class SecurityOverviewPage(QWidget):
 
         def _col(done: bool, n: int, alarm: str) -> str:
             if not done:
-                return TEXT_MUTED
-            return alarm if n > 0 else GREEN
+                return _s.TEXT_MUTED
+            return alarm if n > 0 else _s.GREEN
 
         self._tile_ports._val_lbl.setText(_val(self._port_scan_done, port_n))
-        self._tile_ports._val_lbl.setStyleSheet(
-            f"color:{_col(self._port_scan_done, port_n, RED)};"
+        _s.themed_ss(self._tile_ports._val_lbl, lambda d=self._port_scan_done, n=port_n: (
+            f"color:{_col(d, n, _s.RED)};"
             f" font-size:24px; font-weight:bold;"
-        )
+        ))
         store_done = self._store is not None
         self._tile_cves._val_lbl.setText(_val(store_done, cve_n))
-        self._tile_cves._val_lbl.setStyleSheet(
-            f"color:{_col(store_done, cve_n, AMBER)}; font-size:24px; font-weight:bold;"
-        )
+        _s.themed_ss(self._tile_cves._val_lbl, lambda d=store_done, n=cve_n: (
+            f"color:{_col(d, n, _s.AMBER)}; font-size:24px; font-weight:bold;"
+        ))
         self._tile_tls._val_lbl.setText(_val(store_done, tls_n))
-        self._tile_tls._val_lbl.setStyleSheet(
-            f"color:{_col(store_done, tls_n, AMBER)}; font-size:24px; font-weight:bold;"
-        )
+        _s.themed_ss(self._tile_tls._val_lbl, lambda d=store_done, n=tls_n: (
+            f"color:{_col(d, n, _s.AMBER)}; font-size:24px; font-weight:bold;"
+        ))
         self._tile_cred._val_lbl.setText(_val(self._cred_scan_done, cred_n))
-        self._tile_cred._val_lbl.setStyleSheet(
-            f"color:{_col(self._cred_scan_done, cred_n, RED)};"
+        _s.themed_ss(self._tile_cred._val_lbl, lambda d=self._cred_scan_done, n=cred_n: (
+            f"color:{_col(d, n, _s.RED)};"
             f" font-size:24px; font-weight:bold;"
-        )
+        ))
         self._tile_ports._hint_btn.setVisible(not self._port_scan_done)
         self._tile_cred._hint_btn.setVisible(not self._cred_scan_done)
 
@@ -784,7 +756,7 @@ class SecurityOverviewPage(QWidget):
             color = _severity_color(severity)
             for col, val in enumerate([type_, severity, host, finding]):
                 item = QTableWidgetItem(val)
-                item.setForeground(QColor(color if col == 1 else TEXT_PRIMARY))
+                item.setForeground(QColor(color if col == 1 else _s.TEXT_PRIMARY))
                 item.setTextAlignment(
                     Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
                 )

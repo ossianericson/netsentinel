@@ -56,13 +56,7 @@ from modules.trigger_expression import (
 )
 from ui.widgets.context_menu import install_copy_menu
 from ui.tabs_helpers import _table
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, INPUT_PLACEHOLDER,
-    RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
+from ui import styles as _s
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
@@ -86,21 +80,17 @@ class _EvalWorker(QThread):
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     card = QWidget()
     card.setObjectName("trigCard")
-    card.setStyleSheet(
-        f"QWidget#trigCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(card, "QWidget#trigCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
     hdr = QLabel(title)
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; color:{TEXT_PRIMARY}; font-weight:600; font-size:11px;"
-        f"padding:0 12px; border-bottom:1px solid {CARD_HDR_BORDER};"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; color:{TEXT_PRIMARY}; font-weight:600; font-size:11px;"
+        "padding:0 12px; border-bottom:1px solid {CARD_HDR_BORDER};")
     outer.addWidget(hdr)
     inner_w = QWidget()
-    inner_w.setStyleSheet(f"background:{BG_CARD};")
+    _s.themed_ss(inner_w, "background:{BG_CARD};")
     inner = QVBoxLayout(inner_w)
     inner.setContentsMargins(10, 8, 10, 8)
     inner.setSpacing(5)
@@ -113,25 +103,25 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
     b.setFixedHeight(26)
     b.setFont(QFont("Segoe UI", 9))
     if accent:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f"  border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            "  border-radius:3px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     else:
-        b.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f"  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(b, "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            "  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     return b
 
 
-_SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED}
+_SEV_COLOR = {"INFO": "ACCENT", "WARNING": "AMBER", "CRITICAL": "RED"}
+
+
+def _sev_color(sev: str) -> str:
+    return getattr(_s, _SEV_COLOR.get(sev, "ACCENT"))
 
 _BUILDER_METRICS = [
     "rtt[\"<ip>\"]",
@@ -194,10 +184,9 @@ class _RuleEditorDialog(QDialog):
 
         self._preview_lbl = QLabel("—")
         self._preview_lbl.setWordWrap(True)
-        self._preview_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px;"
-            f"background:{BG_ALT_ROW}; border:1px solid {BORDER};"
-            f"border-radius:3px; padding:4px 8px;")
+        _s.themed_ss(self._preview_lbl, "color:{TEXT_SECONDARY}; font-size:10px;"
+            "background:{BG_ALT_ROW}; border:1px solid {BORDER};"
+            "border-radius:3px; padding:4px 8px;")
 
         self._cooldown_spin = QLineEdit("300")
         self._cooldown_spin.setFixedWidth(80)
@@ -217,7 +206,7 @@ class _RuleEditorDialog(QDialog):
         self._example_combo.currentIndexChanged.connect(self._on_load_example)
 
         self._validate_lbl = QLabel("")
-        self._validate_lbl.setStyleSheet(f"color:{RED}; font-size:9px;")
+        _s.themed_ss(self._validate_lbl, "color:{RED}; font-size:9px;")
 
         form.addRow("Name:", self._name_edit)
         form.addRow("Severity:", self._sev_combo)
@@ -323,12 +312,12 @@ class TriggerBuilderPage(QWidget):
 
         title = QLabel("Custom Trigger Expressions")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY};")
         sub = QLabel(
             "Write custom alert conditions using metric functions. "
             "Rules are evaluated each monitoring cycle and fire an alert when true."
         )
-        sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(sub, "color:{TEXT_SECONDARY}; font-size:10px;")
         sub.setWordWrap(True)
         root.addWidget(title)
         root.addWidget(sub)
@@ -363,17 +352,13 @@ class TriggerBuilderPage(QWidget):
         )
         _empty_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _empty_desc.setWordWrap(True)
-        _empty_desc.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; background:transparent;"
-        )
+        _s.themed_ss(_empty_desc, "color:{TEXT_SECONDARY}; font-size:10px; background:transparent;")
         _btn_template = QPushButton("＋  Alert when host goes down →")
         _btn_template.setFixedHeight(28)
-        _btn_template.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
-            f"border-radius:3px;padding:0 10px;font-size:10px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(_btn_template, "QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
+            "border-radius:3px;padding:0 10px;font-size:10px;font-weight:bold;}}"
+            "QPushButton:hover{{background:{ACCENT_DARK};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         _btn_template.clicked.connect(self._on_add_template)
         _btn_template.clicked.connect(lambda: self.scan_requested.emit())
         _el.addWidget(_empty_desc)
@@ -458,26 +443,24 @@ class TriggerBuilderPage(QWidget):
 
         self._selected_name_lbl = QLabel("No rule selected.")
         self._selected_name_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self._selected_name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        _s.themed_ss(self._selected_name_lbl, "color:{TEXT_PRIMARY};")
 
         self._expr_display = QPlainTextEdit()
         self._expr_display.setReadOnly(True)
         self._expr_display.setFixedHeight(60)
         self._expr_display.setFont(QFont("Cascadia Mono", 9))
-        self._expr_display.setStyleSheet(
-            f"background:{BG_ALT_ROW}; border:1px solid {BORDER}; "
-            f"border-radius:3px; color:{TEXT_PRIMARY};")
+        _s.themed_ss(self._expr_display, "background:{BG_ALT_ROW}; border:1px solid {BORDER}; "
+            "border-radius:3px; color:{TEXT_PRIMARY};")
 
         self._preview_lbl = QLabel("—")
         self._preview_lbl.setWordWrap(True)
-        self._preview_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; padding:4px 8px;"
-            f"background:{BG_ALT_ROW}; border:1px solid {BORDER}; border-radius:3px;")
+        _s.themed_ss(self._preview_lbl, "color:{TEXT_SECONDARY}; font-size:10px; padding:4px 8px;"
+            "background:{BG_ALT_ROW}; border:1px solid {BORDER}; border-radius:3px;")
 
         btn_test = _btn("▶  Test Now", accent=True)
         btn_test.clicked.connect(self._on_test)
         self._test_status = QLabel("")
-        self._test_status.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._test_status, "font-size:10px; color:{TEXT_SECONDARY};")
 
         prev_inner.addWidget(self._selected_name_lbl)
         prev_inner.addWidget(QLabel("Expression:"))
@@ -503,7 +486,7 @@ class TriggerBuilderPage(QWidget):
         )
         ref_text.setTextFormat(Qt.TextFormat.RichText)
         ref_text.setWordWrap(True)
-        ref_text.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        _s.themed_ss(ref_text, "color:{TEXT_SECONDARY}; font-size:10px;")
         ref_inner.addWidget(ref_text)
 
         # Test fire log card
@@ -512,8 +495,7 @@ class TriggerBuilderPage(QWidget):
         self._log.setReadOnly(True)
         self._log.setFont(QFont("Cascadia Mono", 9))
         self._log.setMinimumHeight(120)
-        self._log.setStyleSheet(
-            f"background:{BG_ALT_ROW}; border:1px solid {BORDER}; color:{TEXT_PRIMARY};")
+        _s.themed_ss(self._log, "background:{BG_ALT_ROW}; border:1px solid {BORDER}; color:{TEXT_PRIMARY};")
         log_inner.addWidget(self._log)
 
         lay.addWidget(prev_card)
@@ -531,9 +513,9 @@ class TriggerBuilderPage(QWidget):
             self._rule_table.insertRow(row)
             name_item = QTableWidgetItem(rule.name)
             sev_item  = QTableWidgetItem(rule.severity)
-            sev_item.setForeground(QColor(_SEV_COLOR.get(rule.severity, ACCENT)))
+            sev_item.setForeground(QColor(_sev_color(rule.severity)))
             ena_item  = QTableWidgetItem("Yes" if rule.enabled else "No")
-            ena_item.setForeground(QColor(GREEN if rule.enabled else TEXT_MUTED))
+            ena_item.setForeground(QColor(_s.GREEN if rule.enabled else _s.TEXT_MUTED))
             for col, item in enumerate((name_item, sev_item, ena_item)):
                 item.setTextAlignment(
                     Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
@@ -636,7 +618,7 @@ class TriggerBuilderPage(QWidget):
                 f"Trigger evaluation failed — {error}. "
                 "Check that the metric name and operator are correct."
             )
-            self._test_status.setStyleSheet(f"font-size:10px; color:{RED};")
+            _s.themed_ss(self._test_status, "font-size:10px; color:{RED};")
             self._log.appendPlainText(f"[ERROR] {rule.name}: {error}")
             return
 
@@ -648,11 +630,11 @@ class TriggerBuilderPage(QWidget):
         if triggered:
             msg = f"FIRED — {rule.name}  LHS={lhs_str}"
             self._test_status.setText(f"● TRIGGERED  (LHS = {lhs_str})")
-            self._test_status.setStyleSheet(f"font-size:10px; color:{RED};")
+            _s.themed_ss(self._test_status, "font-size:10px; color:{RED};")
         else:
             msg = f"OK — {rule.name}  LHS={lhs_str}  (not triggered)"
             self._test_status.setText(f"● Not triggered  (LHS = {lhs_str})")
-            self._test_status.setStyleSheet(f"font-size:10px; color:{GREEN};")
+            _s.themed_ss(self._test_status, "font-size:10px; color:{GREEN};")
 
         self._log.appendPlainText(msg)
 

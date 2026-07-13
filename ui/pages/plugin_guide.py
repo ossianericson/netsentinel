@@ -24,7 +24,7 @@ from ui.widgets.hub_card import (
     _prompt_block,
     _btn,
 )
-from ui.styles import BG_DARK, BORDER, TEXT_PRIMARY
+from ui import styles as _s
 
 
 class PluginGuide(QScrollArea):
@@ -40,7 +40,7 @@ class PluginGuide(QScrollArea):
         self.setStyleSheet("QScrollArea { border: none; }")
 
         body = QWidget()
-        body.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(body, "background:{BG_DARK};")
         lay = QVBoxLayout(body)
         lay.setContentsMargins(0, 4, 0, 8)
         lay.setSpacing(10)
@@ -146,10 +146,8 @@ class PluginGuide(QScrollArea):
         template_edit.setPlainText(_TEMPLATE)
         template_edit.setFont(QFont("Consolas", 8))
         template_edit.setFixedHeight(240)
-        template_edit.setStyleSheet(
-            f"QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; }}"
-        )
+        _s.themed_ss(template_edit, "QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:4px; }}")
         lay.addWidget(template_edit)
 
         from PyQt6.QtWidgets import QHBoxLayout

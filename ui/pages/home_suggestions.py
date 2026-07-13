@@ -13,10 +13,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QMenu, QPushButton, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_HOVER, RED,
-    TEXT_PRIMARY,
-)
+from ui import styles as _s
 
 _SNOOZE_DAYS = 7
 
@@ -114,7 +111,6 @@ class _HomeSuggestionsMixin:
             target     = sug.get("target")
             priority   = sug.get("priority", "medium")
             action_key = sug.get("action_key")
-            colour     = RED if priority == "high" else (AMBER if priority == "medium" else ACCENT)
 
             row = QWidget()
             row.setStyleSheet("background:transparent;")
@@ -124,21 +120,24 @@ class _HomeSuggestionsMixin:
 
             dot = QLabel("●")
             dot.setFixedWidth(12)
-            dot.setStyleSheet(
-                f"font-size:8px; color:{colour}; background:transparent; border:none;"
-            )
+
+            def _dot_ss(pri=priority):
+                c = _s.RED if pri == "high" else (_s.AMBER if pri == "medium" else _s.ACCENT)
+                return f"font-size:8px; color:{c}; background:transparent; border:none;"
+            _s.themed_ss(dot, _dot_ss)
             lbl = QLabel(text)
-            lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            _s.themed_ss(
+                lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
             )
             btn = QPushButton(action)
             btn.setFlat(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:11px;"
-                f" background:transparent; border:none; padding:0; }}"
-                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            _s.themed_ss(
+                btn,
+                "QPushButton {{ color:{ACCENT}; font-size:11px;"
+                " background:transparent; border:none; padding:0; }}"
+                "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}",
             )
 
             if target == "__live__":

@@ -41,14 +41,7 @@ from PyQt6.QtWidgets import (
 
 from ui import styles as _styles
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_PURPLE, AMBER,
-    BADGE_OFF_BG, BADGE_OFF_BORDER, BADGE_OFF_FG, BADGE_OK_BG,
-    BADGE_OK_BORDER, BADGE_OK_FG, BG_ALT_ROW, BG_CARD,
-    BG_HOVER, BORDER, BTN_HOVER_BG,
-    CARD_HDR_BORDER, CARD_RADIUS, DEEP_ORANGE, GREEN,
-    INLINE_WARN_BG, INLINE_WARN_FG, NAV_BAR, PRO_WARN_BG,
-    RED, RED_BG, TEAL, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE, qss_chip, qss_frame, qss_label, qss_muted_label,
+    ACCENT_PURPLE, DEEP_ORANGE, TEAL, qss_chip,
 )
 from ui.widgets.context_menu import install_copy_menu as _install_copy_menu
 
@@ -222,25 +215,19 @@ class _UninstallWorker(QThread):
 def _page_header(title: str, subtitle: str = "") -> QFrame:
     container = QFrame()
     container.setObjectName("pageHeader")
-    container.setStyleSheet(
-        f"QFrame#pageHeader {{ background: transparent; border: none;"
-        f" border-bottom: 1px solid {BORDER}; }}"
-    )
+    _styles.themed_ss(container, "QFrame#pageHeader {{ background: transparent; border: none;"
+        " border-bottom: 1px solid {BORDER}; }}")
     vbox = QVBoxLayout(container)
     vbox.setContentsMargins(20, 16, 20, 12)
     vbox.setSpacing(2)
     t = QLabel(title)
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-        "padding:0; background:transparent; border:none;"
-    )
+    _styles.themed_ss(t, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;")
     vbox.addWidget(t)
     if subtitle:
         s = QLabel(subtitle)
-        s.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            "padding:0; background:transparent; border:none;"
-        )
+        _styles.themed_ss(s, "color:{TEXT_SECONDARY}; font-size:11px;"
+            "padding:0; background:transparent; border:none;")
         vbox.addWidget(s)
     return container
 
@@ -248,22 +235,22 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
 def _card(title: str) -> "tuple[QFrame, QVBoxLayout]":
     card = QFrame()
     card.setObjectName("card")
-    card.setStyleSheet(qss_frame("card", radius=CARD_RADIUS))
+    _styles.themed_ss(card, lambda: _styles.qss_frame("card", radius=_styles.CARD_RADIUS))
     cl = QVBoxLayout(card)
     cl.setContentsMargins(0, 0, 0, 0)
     cl.setSpacing(0)
     tb = QFrame()
     tb.setFixedHeight(32)
-    tb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    _styles.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
     tbl = QHBoxLayout(tb)
     tbl.setContentsMargins(12, 0, 12, 0)
     lbl = QLabel(title)
-    lbl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    _styles.themed_ss(lbl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
     tbl.addWidget(lbl)
     tbl.addStretch()
     cl.addWidget(tb)
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD};")
+    _styles.themed_ss(body, "background:{BG_CARD};")
     bl = QVBoxLayout(body)
     bl.setContentsMargins(16, 12, 16, 14)
     bl.setSpacing(10)
@@ -389,7 +376,7 @@ class _SettingsCardsMixin:
             "Click a chip to jump to the relevant settings."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet(qss_muted_label(11))
+        _styles.themed_ss(intro, lambda: _styles.qss_muted_label(11))
         bl.addWidget(intro)
 
         chips_row = QHBoxLayout()
@@ -416,11 +403,13 @@ class _SettingsCardsMixin:
         return card
 
     def _chip_style(self, state: str) -> str:
+        # State-dependent (recipe I): read tokens live so a theme switch is reflected
+        # the next time the chip is refreshed.
         if state == "green":
-            return qss_chip(BADGE_OK_FG, BADGE_OK_BG, BADGE_OK_BORDER)
+            return qss_chip(_styles.BADGE_OK_FG, _styles.BADGE_OK_BG, _styles.BADGE_OK_BORDER)
         if state == "amber":
-            return qss_chip(INLINE_WARN_FG, INLINE_WARN_BG, AMBER)
-        return qss_chip(BADGE_OFF_FG, BADGE_OFF_BG, BADGE_OFF_BORDER)
+            return qss_chip(_styles.INLINE_WARN_FG, _styles.INLINE_WARN_BG, _styles.AMBER)
+        return qss_chip(_styles.BADGE_OFF_FG, _styles.BADGE_OFF_BG, _styles.BADGE_OFF_BORDER)
 
     def refresh_config_completeness(self, cve_count: int = 0, rule_count: int = 0) -> None:
         if not hasattr(self, "_cfg_chips"):
@@ -459,21 +448,21 @@ class _SettingsCardsMixin:
             row.setSpacing(8)
             lbl = QLabel(label)
             lbl.setFixedWidth(190)
-            lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
+            _styles.themed_ss(lbl, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
             status_val = status_fn()
             ok = status_val[0]
             status_txt = status_val[1]
             s_lbl = QLabel(status_txt)
-            s_lbl.setStyleSheet(
-                f"font-size:11px;color:{GREEN if ok else TEXT_MUTED};background:transparent;"
-            )
+            _styles.themed_ss(s_lbl, lambda ok=ok:
+                f"font-size:11px;color:{_styles.GREEN if ok else _styles.TEXT_MUTED};background:transparent;")
             cfg_btn = QPushButton("Configure →")
             cfg_btn.setFlat(True)
             cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            cfg_btn.setStyleSheet(
-                f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;border:none;padding:0;}}"
-                f"QPushButton:hover{{color:{ACCENT_DARK};}}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            _styles.themed_ss(
+                cfg_btn,
+                "QPushButton{{color:{ACCENT};font-size:11px;background:transparent;border:none;padding:0;}}"
+                "QPushButton:hover{{color:{ACCENT_DARK};}}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             cfg_btn.clicked.connect(lambda _=False, t=nav_target: self.navigate_to.emit(t))
             row.addWidget(lbl)
@@ -486,31 +475,29 @@ class _SettingsCardsMixin:
             row.setSpacing(8)
             lbl = QLabel(label)
             lbl.setFixedWidth(190)
-            lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
+            _styles.themed_ss(lbl, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
             status_val = status_fn()
             ok = status_val[0]
             status_txt = status_val[1]
             s_lbl = QLabel(status_txt)
-            s_lbl.setStyleSheet(
-                f"font-size:11px;color:{GREEN if ok else TEXT_MUTED};background:transparent;"
-            )
+            _styles.themed_ss(s_lbl, lambda ok=ok:
+                f"font-size:11px;color:{_styles.GREEN if ok else _styles.TEXT_MUTED};background:transparent;")
             test_btn = QPushButton("Send test")
             test_btn.setFlat(True)
             test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            test_btn.setStyleSheet(
-                f"QPushButton{{color:{TEXT_SECONDARY};font-size:11px;background:transparent;"
-                f"border:1px solid {BORDER};border-radius:3px;padding:1px 8px;}}"
-                f"QPushButton:hover{{color:{TEXT_PRIMARY};border-color:{ACCENT};}}"
-                f"QPushButton:disabled{{color:{TEXT_MUTED};}}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-            )
+            _styles.themed_ss(test_btn, "QPushButton{{color:{TEXT_SECONDARY};font-size:11px;background:transparent;"
+                "border:1px solid {BORDER};border-radius:3px;padding:1px 8px;}}"
+                "QPushButton:hover{{color:{TEXT_PRIMARY};border-color:{ACCENT};}}"
+                "QPushButton:disabled{{color:{TEXT_MUTED};}}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
             cfg_btn = QPushButton("Configure →")
             cfg_btn.setFlat(True)
             cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            cfg_btn.setStyleSheet(
-                f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;border:none;padding:0;}}"
-                f"QPushButton:hover{{color:{ACCENT_DARK};}}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            _styles.themed_ss(
+                cfg_btn,
+                "QPushButton{{color:{ACCENT};font-size:11px;background:transparent;border:none;padding:0;}}"
+                "QPushButton:hover{{color:{ACCENT_DARK};}}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             cfg_btn.clicked.connect(lambda _=False, t=nav_target: self.navigate_to.emit(t))
 
@@ -587,9 +574,7 @@ class _SettingsCardsMixin:
         self._chk_auto_snap = QCheckBox(
             "Auto-snapshot after every scan (keeps last 10) — Config Snapshots"
         )
-        self._chk_auto_snap.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_auto_snap, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_auto_snap.setChecked(qs.value("baseline/auto_snapshot", False, type=bool))
         self._chk_auto_snap.toggled.connect(self._on_auto_snap_toggled)
         bl.addWidget(self._chk_auto_snap)
@@ -599,7 +584,7 @@ class _SettingsCardsMixin:
             "badge appear on Config Snapshots."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(qss_muted_label(10))
+        _styles.themed_ss(note, lambda: _styles.qss_muted_label(10))
         bl.addWidget(note)
         return card
 
@@ -613,25 +598,21 @@ class _SettingsCardsMixin:
         card, bl = _card("Scheduled Full Scan")
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_sched_scan = QCheckBox("Enable scheduled full network scan")
-        self._chk_sched_scan.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_sched_scan, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_sched_scan.setChecked(qs.value("sched_scan/enabled", False, bool))
         bl.addWidget(self._chk_sched_scan)
 
         rec_row = QHBoxLayout()
         rec_row.setSpacing(8)
         rec_lbl = QLabel("Run every")
-        rec_lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
+        _styles.themed_ss(rec_lbl, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._sched_scan_combo = QComboBox()
         self._sched_scan_combo.addItems(["24 hours (daily)", "12 hours", "6 hours", "1 hour"])
         _interval_map = {"24 hours (daily)": 24, "12 hours": 12, "6 hours": 6, "1 hour": 1}
         _saved_hours = qs.value("sched_scan/interval_hours", 24, int)
         _rev = {v: k for k, v in _interval_map.items()}
         self._sched_scan_combo.setCurrentText(_rev.get(_saved_hours, "24 hours (daily)"))
-        self._sched_scan_combo.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _styles.themed_ss(self._sched_scan_combo, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         rec_row.addWidget(rec_lbl)
         rec_row.addWidget(self._sched_scan_combo)
         rec_row.addStretch()
@@ -640,23 +621,19 @@ class _SettingsCardsMixin:
         time_row = QHBoxLayout()
         time_row.setSpacing(8)
         time_lbl = QLabel("Start time (today)")
-        time_lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
+        _styles.themed_ss(time_lbl, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._sched_hour_spin = QSpinBox()
         self._sched_hour_spin.setRange(0, 23)
         self._sched_hour_spin.setValue(qs.value("sched_scan/hour", 2, int))
         self._sched_hour_spin.setFixedWidth(55)
-        self._sched_hour_spin.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _styles.themed_ss(self._sched_hour_spin, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         colon = QLabel(":")
-        colon.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
+        _styles.themed_ss(colon, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._sched_min_spin = QSpinBox()
         self._sched_min_spin.setRange(0, 59)
         self._sched_min_spin.setValue(qs.value("sched_scan/minute", 0, int))
         self._sched_min_spin.setFixedWidth(55)
-        self._sched_min_spin.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _styles.themed_ss(self._sched_min_spin, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         time_row.addWidget(time_lbl)
         time_row.addWidget(self._sched_hour_spin)
         time_row.addWidget(colon)
@@ -666,19 +643,15 @@ class _SettingsCardsMixin:
 
         save_btn = QPushButton("Save Schedule")
         save_btn.setFixedHeight(28)
-        save_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" font-size:11px; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _styles.themed_ss(save_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " font-size:11px; border-radius:4px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         save_btn.clicked.connect(self._save_sched_scan)
         bl.addWidget(save_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self._sched_scan_next_lbl = QLabel("")
-        self._sched_scan_next_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent;"
-        )
+        _styles.themed_ss(self._sched_scan_next_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent;")
         bl.addWidget(self._sched_scan_next_lbl)
         self._refresh_sched_scan_label()
         return card
@@ -731,18 +704,14 @@ class _SettingsCardsMixin:
         self._chk_tray = QCheckBox(
             "Minimize to system tray on close  (app keeps running in the background)"
         )
-        self._chk_tray.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_tray, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_tray.setChecked(qs.value("tray/minimize_to_tray", True, type=bool))
         self._chk_tray.toggled.connect(self._on_tray_toggled)
         bl.addWidget(self._chk_tray)
         self._chk_minimize_tray = QCheckBox(
             "Minimize button also hides to tray  (default is minimize to taskbar)"
         )
-        self._chk_minimize_tray.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_minimize_tray, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_minimize_tray.setChecked(
             qs.value("tray/minimize_window_to_tray", False, type=bool)
         )
@@ -751,9 +720,7 @@ class _SettingsCardsMixin:
         self._chk_startup = QCheckBox(
             "Start NetSentinel automatically when Windows starts  (runs in tray, starts background logger)"
         )
-        self._chk_startup.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_startup, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         if sys.platform != "win32":
             self._chk_startup.setEnabled(False)
             self._chk_startup.setToolTip("Startup registration is only available on Windows")
@@ -763,19 +730,15 @@ class _SettingsCardsMixin:
         bl.addWidget(self._chk_startup)
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color:{BORDER}; background:{BORDER}; max-height:1px; border:none;")
+        _styles.themed_ss(sep, "color:{BORDER}; background:{BORDER}; max-height:1px; border:none;")
         bl.addWidget(sep)
         notif_lbl = QLabel("Notifications  (all off by default)")
-        notif_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:600; color:{TEXT_PRIMARY}; background:transparent;"
-        )
+        _styles.themed_ss(notif_lbl, "font-size:11px; font-weight:600; color:{TEXT_PRIMARY}; background:transparent;")
         bl.addWidget(notif_lbl)
         self._chk_notify_new_device = QCheckBox(
             "Notify when a new device joins the network"
         )
-        self._chk_notify_new_device.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_notify_new_device, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_notify_new_device.setChecked(
             qs.value("tray/notify_new_device", False, type=bool)
         )
@@ -789,9 +752,7 @@ class _SettingsCardsMixin:
         self._chk_notify_gone = QCheckBox(
             "Notify when a known device leaves the network"
         )
-        self._chk_notify_gone.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_notify_gone, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_notify_gone.setChecked(
             qs.value("tray/notify_device_gone", False, type=bool)
         )
@@ -807,7 +768,7 @@ class _SettingsCardsMixin:
             "are configured per-rule in the Alerts tab."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(qss_muted_label(10))
+        _styles.themed_ss(note, lambda: _styles.qss_muted_label(10))
         bl.addWidget(note)
         return card
 
@@ -846,49 +807,47 @@ class _SettingsCardsMixin:
             "Click Install to download a plugin to your local plugins folder."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(qss_muted_label(11))
+        _styles.themed_ss(desc, lambda: _styles.qss_muted_label(11))
         bl.addWidget(desc)
         url_row = QHBoxLayout()
         url_row.setSpacing(6)
         url_lbl = QLabel("Registry URL:")
-        url_lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};")
+        _styles.themed_ss(url_lbl, "font-size:11px;color:{TEXT_PRIMARY};")
         url_lbl.setFixedWidth(90)
         self._pm_url = QLineEdit(REGISTRY_URL)
-        self._pm_url.setStyleSheet(
-            f"font-size:11px;color:{TEXT_PRIMARY};border:1px solid {BORDER};padding:2px 6px;"
-        )
+        _styles.themed_ss(self._pm_url, "font-size:11px;color:{TEXT_PRIMARY};border:1px solid {BORDER};padding:2px 6px;")
         url_row.addWidget(url_lbl)
         url_row.addWidget(self._pm_url, 1)
         bl.addLayout(url_row)
+        # Shared template registered against each button (recipe F — never copy a
+        # rendered sheet); themed_ss re-renders every registered widget on theme change.
         _btn_qss = (
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};"
-            f"border:1px solid {ACCENT};border-radius:2px;"
-            f"padding:0 12px;font-size:11px;height:26px;}}"
-            f"QPushButton:hover{{background:{BTN_HOVER_BG};}}"
-            f"QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
+            "QPushButton{{background:{BG_CARD};color:{ACCENT};"
+            "border:1px solid {ACCENT};border-radius:2px;"
+            "padding:0 12px;font-size:11px;height:26px;}}"
+            "QPushButton:hover{{background:{BTN_HOVER_BG};}}"
+            "QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
         )
         tb_row = QHBoxLayout()
         tb_row.setSpacing(6)
         self._pm_btn_refresh = QPushButton("↻  Refresh")
-        self._pm_btn_refresh.setStyleSheet(_btn_qss)
+        _styles.themed_ss(self._pm_btn_refresh, _btn_qss)
         self._pm_btn_refresh.clicked.connect(self._pm_refresh)
         self._pm_btn_install = QPushButton("▼  Install")
-        self._pm_btn_install.setStyleSheet(_btn_qss)
+        _styles.themed_ss(self._pm_btn_install, _btn_qss)
         self._pm_btn_install.setEnabled(False)
         self._pm_btn_install.clicked.connect(self._pm_install_selected)
         self._pm_btn_uninstall = QPushButton("✕  Uninstall")
-        self._pm_btn_uninstall.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{RED};"
-            f"border:1px solid {RED};border-radius:2px;"
-            f"padding:0 12px;font-size:11px;height:26px;}}"
-            f"QPushButton:hover{{background:{PRO_WARN_BG};}}"
-            f"QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _styles.themed_ss(self._pm_btn_uninstall, "QPushButton{{background:{BG_CARD};color:{RED};"
+            "border:1px solid {RED};border-radius:2px;"
+            "padding:0 12px;font-size:11px;height:26px;}}"
+            "QPushButton:hover{{background:{PRO_WARN_BG};}}"
+            "QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._pm_btn_uninstall.setEnabled(False)
         self._pm_btn_uninstall.clicked.connect(self._pm_uninstall_selected)
         self._pm_btn_folder = QPushButton("📁  Open Plugins Folder")
-        self._pm_btn_folder.setStyleSheet(_btn_qss)
+        _styles.themed_ss(self._pm_btn_folder, _btn_qss)
         self._pm_btn_folder.clicked.connect(self._pm_open_folder)
         tb_row.addWidget(self._pm_btn_refresh)
         tb_row.addWidget(self._pm_btn_install)
@@ -920,20 +879,16 @@ class _SettingsCardsMixin:
         self._pm_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._pm_table.setAlternatingRowColors(True)
         self._pm_table.setMinimumHeight(160)
-        self._pm_table.setStyleSheet(
-            f"QTableWidget{{font-size:11px;background:{BG_CARD};border:1px solid {BORDER};}}"
-            f"QHeaderView::section{{background:{BG_CARD};color:{TEXT_PRIMARY};"
-            f"font-size:11px;font-weight:bold;border:none;"
-            f"border-bottom:1px solid {BORDER};padding:3px 6px;}}"
-            f"QTableWidget::item:selected{{background:{ACCENT};color:{WHITE};}}"
-        )
+        _styles.themed_ss(self._pm_table, "QTableWidget{{font-size:11px;background:{BG_CARD};border:1px solid {BORDER};}}"
+            "QHeaderView::section{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            "font-size:11px;font-weight:bold;border:none;"
+            "border-bottom:1px solid {BORDER};padding:3px 6px;}}"
+            "QTableWidget::item:selected{{background:{ACCENT};color:{WHITE};}}")
         self._pm_table.itemSelectionChanged.connect(self._pm_on_selection)
         _install_copy_menu(self._pm_table)
         bl.addWidget(self._pm_table)
         self._pm_status = QLabel("Click ↻ Refresh to load the community plugin registry.")
-        self._pm_status.setStyleSheet(
-            qss_muted_label(10)
-        )
+        _styles.themed_ss(self._pm_status, lambda: _styles.qss_muted_label(10))
         bl.addWidget(self._pm_status)
         self._pm_entries: list = []
         self._pm_workers: list = []
@@ -958,7 +913,7 @@ class _SettingsCardsMixin:
             row = self._pm_table.rowCount()
             self._pm_table.insertRow(row)
             installed = is_installed(e)
-            dot_color = GREEN if installed else TEXT_MUTED
+            dot_color = _styles.GREEN if installed else _styles.TEXT_MUTED
             dot_text  = "● Installed" if installed else "○ Available"
             for col, text in enumerate([e.name, e.author, e.tag_str, e.version]):
                 item = QTableWidgetItem(text)
@@ -1066,19 +1021,15 @@ class _SettingsCardsMixin:
         ]
         for i, (key, desc) in enumerate(shortcuts):
             row_w = QWidget()
-            row_w.setStyleSheet(f"background:{BG_ALT_ROW if i % 2 else BG_CARD};")
+            _styles.themed_ss(row_w, lambda i=i: f"background:{_styles.BG_ALT_ROW if i % 2 else _styles.BG_CARD};")
             row_l = QHBoxLayout(row_w)
             row_l.setContentsMargins(0, 3, 0, 3)
             row_l.setSpacing(12)
             k = QLabel(key)
             k.setFixedWidth(150)
-            k.setStyleSheet(
-                f"font-family:Consolas;font-size:10px;color:{ACCENT_DARK};background:transparent;"
-            )
+            _styles.themed_ss(k, "font-family:Consolas;font-size:10px;color:{ACCENT_DARK};background:transparent;")
             d = QLabel(desc)
-            d.setStyleSheet(
-                qss_label(TEXT_PRIMARY, 11)
-            )
+            _styles.themed_ss(d, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
             row_l.addWidget(k)
             row_l.addWidget(d, 1)
             bl.addWidget(row_w)
@@ -1093,25 +1044,23 @@ class _SettingsCardsMixin:
             "Use this after updating offenders.json or installing a new vendor list."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(qss_muted_label(11))
+        _styles.themed_ss(desc, lambda: _styles.qss_muted_label(11))
         bl.addWidget(desc)
 
-        for label, signal_name, color in [
-            ("Reload OUI Database",      "reload_oui_requested",      ACCENT),
-            ("Reset all dismissed notices", "reset_dismissed_requested", None),
-            ("Export All Data (ZIP)",     "export_all_requested",       None),
+        for label, signal_name, accent in [
+            ("Reload OUI Database",      "reload_oui_requested",      True),
+            ("Reset all dismissed notices", "reset_dismissed_requested", False),
+            ("Export All Data (ZIP)",     "export_all_requested",       False),
         ]:
             btn = QPushButton(label)
             btn.setFixedWidth(220)
-            c = color or TEXT_SECONDARY
-            bc = color or BORDER
-            btn.setStyleSheet(
-                f"QPushButton {{ background:{BG_CARD}; color:{c};"
-                f" border:1px solid {bc}; padding:4px 14px;"
+            # accent flag bound as default arg (loop-capture trap); tokens resolve live.
+            _styles.themed_ss(btn, lambda acc=accent:
+                f"QPushButton {{ background:{_styles.BG_CARD}; color:{_styles.ACCENT if acc else _styles.TEXT_SECONDARY};"
+                f" border:1px solid {_styles.ACCENT if acc else _styles.BORDER}; padding:4px 14px;"
                 f" font-size:11px; border-radius:4px; }}"
-                f"QPushButton:hover {{ background:{BTN_HOVER_BG}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-            )
+                f"QPushButton:hover {{ background:{_styles.BTN_HOVER_BG}; }}"
+                f"QPushButton:pressed {{ color:{_styles.TEXT_PRIMARY}; }}")
             btn.clicked.connect(getattr(self, signal_name).emit)
             bl.addWidget(btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -1120,13 +1069,11 @@ class _SettingsCardsMixin:
         skip_hints_btn.setToolTip(
             "Mark every first-run coach mark as seen so they never appear again."
         )
-        skip_hints_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _styles.themed_ss(skip_hints_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BTN_HOVER_BG}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         skip_hints_btn.clicked.connect(self._on_skip_all_hints)
         bl.addWidget(skip_hints_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -1135,21 +1082,17 @@ class _SettingsCardsMixin:
         restart_tour_btn.setToolTip(
             "Replay the 5-step introductory tour that runs on first launch."
         )
-        restart_tour_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _styles.themed_ss(restart_tour_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            " border:1px solid {ACCENT}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{ACCENT}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         restart_tour_btn.clicked.connect(self._on_restart_guided_tour)
         bl.addWidget(restart_tour_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         bl.addSpacing(6)
         settings_hdr = QLabel("Settings Export / Import")
-        settings_hdr.setStyleSheet(
-            f"font-size:11px;font-weight:bold;color:{TEXT_PRIMARY};background:transparent;"
-        )
+        _styles.themed_ss(settings_hdr, "font-size:11px;font-weight:bold;color:{TEXT_PRIMARY};background:transparent;")
         bl.addWidget(settings_hdr)
         settings_desc = QLabel(
             "Export all settings to a JSON file for backup or migration. "
@@ -1157,9 +1100,7 @@ class _SettingsCardsMixin:
             "NOT included in the export."
         )
         settings_desc.setWordWrap(True)
-        settings_desc.setStyleSheet(
-            qss_muted_label(11)
-        )
+        _styles.themed_ss(settings_desc, lambda: _styles.qss_muted_label(11))
         bl.addWidget(settings_desc)
 
         backup_guide = QLabel(
@@ -1172,27 +1113,21 @@ class _SettingsCardsMixin:
         )
         backup_guide.setWordWrap(True)
         backup_guide.setTextFormat(Qt.TextFormat.RichText)
-        backup_guide.setStyleSheet(
-            f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;"
-            f"border-left:3px solid {ACCENT};padding:6px 10px;margin:4px 0;"
-        )
+        _styles.themed_ss(backup_guide, "font-size:11px;color:{TEXT_SECONDARY};background:transparent;"
+            "border-left:3px solid {ACCENT};padding:6px 10px;margin:4px 0;")
         bl.addWidget(backup_guide)
 
         self._settings_io_status = QLabel("")
-        self._settings_io_status.setStyleSheet(
-            f"font-size:11px;color:{ACCENT};background:transparent;"
-        )
+        _styles.themed_ss(self._settings_io_status, "font-size:11px;color:{ACCENT};background:transparent;")
 
         io_row = QHBoxLayout()
         io_row.setSpacing(8)
         exp_btn = QPushButton("Export settings (JSON)")
         exp_btn.setFixedWidth(190)
-        exp_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
-            f" border:1px solid {BORDER}; padding:4px 14px; font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _styles.themed_ss(exp_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " border:1px solid {BORDER}; padding:4px 14px; font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         exp_btn.clicked.connect(self._on_export_settings)
         imp_btn = QPushButton("Import settings")
         imp_btn.setFixedWidth(140)
@@ -1213,40 +1148,32 @@ class _SettingsCardsMixin:
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"color:{BORDER}; background:{BORDER}; max-height:1px; border:none;")
+        _styles.themed_ss(sep2, "color:{BORDER}; background:{BORDER}; max-height:1px; border:none;")
         bl.addWidget(sep2)
 
         reset_hdr = QLabel("Danger Zone")
-        reset_hdr.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{RED}; background:transparent;"
-        )
+        _styles.themed_ss(reset_hdr, "font-size:11px; font-weight:bold; color:{RED}; background:transparent;")
         bl.addWidget(reset_hdr)
         reset_desc = QLabel(
             "Clear all application settings and restore factory defaults. "
             "Secrets stored in the OS keychain are not affected."
         )
         reset_desc.setWordWrap(True)
-        reset_desc.setStyleSheet(
-            qss_muted_label(11)
-        )
+        _styles.themed_ss(reset_desc, lambda: _styles.qss_muted_label(11))
         bl.addWidget(reset_desc)
 
         reset_all_btn = QPushButton("Reset all settings to defaults")
         reset_all_btn.setFixedWidth(240)
-        reset_all_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{RED};"
-            f" border:1px solid {RED}; padding:4px 14px;"
-            f" font-size:11px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{PRO_WARN_BG}; color:{RED}; }}"
-            f"QPushButton:pressed {{ background:{RED_BG}; color:{RED}; }}"
-        )
+        _styles.themed_ss(reset_all_btn, "QPushButton {{ background:{BG_CARD}; color:{RED};"
+            " border:1px solid {RED}; padding:4px 14px;"
+            " font-size:11px; border-radius:4px; }}"
+            "QPushButton:hover {{ background:{PRO_WARN_BG}; color:{RED}; }}"
+            "QPushButton:pressed {{ background:{RED_BG}; color:{RED}; }}")
         reset_all_btn.clicked.connect(self._on_reset_settings)
         bl.addWidget(reset_all_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self._reset_settings_status = QLabel("")
-        self._reset_settings_status.setStyleSheet(
-            f"font-size:11px; color:{RED}; background:transparent;"
-        )
+        _styles.themed_ss(self._reset_settings_status, "font-size:11px; color:{RED}; background:transparent;")
         bl.addWidget(self._reset_settings_status)
         return card
 
@@ -1378,20 +1305,16 @@ class _SettingsCardsMixin:
         tbl = QTableWidget(6, 2)
         tbl.setHorizontalHeaderLabels(["Component", "Status"])
         tbl.horizontalHeader().setStretchLastSection(True)
-        tbl.horizontalHeader().setStyleSheet(
-            f"QHeaderView::section {{ background:{NAV_BAR}; color:{WHITE};"
-            f" font-size:10px; font-weight:bold; padding:4px 8px; border:none; }}"
-        )
+        _styles.themed_ss(tbl.horizontalHeader(), "QHeaderView::section {{ background:{NAV_BAR}; color:{WHITE};"
+            " font-size:10px; font-weight:bold; padding:4px 8px; border:none; }}")
         tbl.verticalHeader().setVisible(False)
         tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         tbl.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         tbl.setAlternatingRowColors(True)
-        tbl.setStyleSheet(
-            f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
-            f" background:{BG_CARD}; alternate-background-color:{BG_ALT_ROW};"
-            f" gridline-color:{BORDER}; }}"
-            f"QTableWidget::item {{ padding:4px 8px; }}"
-        )
+        _styles.themed_ss(tbl, "QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
+            " background:{BG_CARD}; alternate-background-color:{BG_ALT_ROW};"
+            " gridline-color:{BORDER}; }}"
+            "QTableWidget::item {{ padding:4px 8px; }}")
         tbl.setFixedHeight(168)
         for row, name in enumerate([
             "Scheduler", "ARP Monitor", "Bandwidth Monitor",
@@ -1417,7 +1340,7 @@ class _SettingsCardsMixin:
                 status_str, ok = statuses[name]
                 item = QTableWidgetItem(status_str)
                 from PyQt6.QtGui import QColor
-                item.setForeground(QColor(GREEN if ok else RED))
+                item.setForeground(QColor(_styles.GREEN if ok else _styles.RED))
                 tbl.setItem(row, 1, item)
 
     # ── Appearance card ───────────────────────────────────────────────────────
@@ -1425,15 +1348,13 @@ class _SettingsCardsMixin:
     def _build_appearance_card(self) -> QFrame:
         card, bl = _card("Appearance — Colour Theme")
         desc = QLabel(
-            "Choose a colour theme. Takes effect after restarting the app."
+            "Choose a colour theme. Takes effect immediately."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(qss_muted_label(11))
+        _styles.themed_ss(desc, lambda: _styles.qss_muted_label(11))
         bl.addWidget(desc)
         self._theme_status_lbl = QLabel("")
-        self._theme_status_lbl.setStyleSheet(
-            f"font-size:11px;color:{ACCENT};background:transparent;"
-        )
+        _styles.themed_ss(self._theme_status_lbl, "font-size:11px;color:{ACCENT};background:transparent;")
         swatch_row = QHBoxLayout()
         swatch_row.setSpacing(10)
         self._theme_swatches: dict[str, _ThemeSwatch] = {}
@@ -1448,28 +1369,22 @@ class _SettingsCardsMixin:
         self._refresh_theme_swatches()
         bl.addSpacing(10)
         accent_hdr = QLabel("Accent Colour")
-        accent_hdr.setStyleSheet(
-            f"font-size:11px;font-weight:bold;color:{TEXT_PRIMARY};background:transparent;"
-        )
+        _styles.themed_ss(accent_hdr, "font-size:11px;font-weight:bold;color:{TEXT_PRIMARY};background:transparent;")
         bl.addWidget(accent_hdr)
         accent_desc = QLabel(
-            "Override the active theme's accent colour. Takes effect on next launch."
+            "Override the active theme's accent colour. Applies immediately."
         )
         accent_desc.setWordWrap(True)
-        accent_desc.setStyleSheet(
-            qss_muted_label(11)
-        )
+        _styles.themed_ss(accent_desc, lambda: _styles.qss_muted_label(11))
         bl.addWidget(accent_desc)
         _ACCENT_PRESETS = [
-            (ACCENT, "Blue"), (ACCENT_PURPLE, "Purple"), (GREEN, "Green"),
-            (TEAL, "Teal"), (RED, "Red"), (DEEP_ORANGE, "Orange"),
+            (_styles.ACCENT, "Blue"), (ACCENT_PURPLE, "Purple"), (_styles.GREEN, "Green"),
+            (TEAL, "Teal"), (_styles.RED, "Red"), (DEEP_ORANGE, "Orange"),
         ]
         swatch_row = QHBoxLayout()
         swatch_row.setSpacing(6)
         self._accent_status_lbl = QLabel("")
-        self._accent_status_lbl.setStyleSheet(
-            f"font-size:11px;color:{ACCENT};background:transparent;"
-        )
+        _styles.themed_ss(self._accent_status_lbl, "font-size:11px;color:{ACCENT};background:transparent;")
         current_override = _styles.get_accent_override()
         for hex_val, name in _ACCENT_PRESETS:
             sw = QPushButton()
@@ -1477,11 +1392,11 @@ class _SettingsCardsMixin:
             sw.setToolTip(f"{name} ({hex_val})")
             sw.setCursor(Qt.CursorShape.PointingHandCursor)
             active = (current_override == hex_val)
-            border = ACCENT if active else BORDER
-            sw.setStyleSheet(
-                f"QPushButton{{background:{hex_val};border:2px solid {border};border-radius:4px;}}"
-                f"QPushButton:hover{{border-color:{hex_val};}}"
-            )
+            # Loop-capture trap: bind hex_val + active as default args so each swatch keeps
+            # its own colour; the active-border token resolves live via _styles.* on re-render.
+            _styles.themed_ss(sw, lambda hx=hex_val, act=active:
+                f"QPushButton{{background:{hx};border:2px solid {_styles.ACCENT if act else _styles.BORDER};border-radius:4px;}}"
+                f"QPushButton:hover{{border-color:{hx};}}")
             sw.clicked.connect(
                 lambda _=False, hx=hex_val, nm=name: self._on_accent_swatch(hx, nm)
             )
@@ -1489,23 +1404,19 @@ class _SettingsCardsMixin:
         custom_btn = QPushButton("Custom…")
         custom_btn.setFlat(True)
         custom_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        custom_btn.setStyleSheet(
-            f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
-            f"border:1px solid {BORDER};border-radius:4px;padding:3px 10px;}}"
-            f"QPushButton:hover{{border-color:{ACCENT};}}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _styles.themed_ss(custom_btn, "QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
+            "border:1px solid {BORDER};border-radius:4px;padding:3px 10px;}}"
+            "QPushButton:hover{{border-color:{ACCENT};}}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         custom_btn.clicked.connect(self._on_accent_custom)
         swatch_row.addWidget(custom_btn)
         reset_btn = QPushButton("Reset")
         reset_btn.setFlat(True)
         reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        reset_btn.setStyleSheet(
-            f"QPushButton{{color:{TEXT_SECONDARY};font-size:11px;background:transparent;"
-            f"border:1px solid {BORDER};border-radius:4px;padding:3px 10px;}}"
-            f"QPushButton:hover{{border-color:{ACCENT};}}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
+        _styles.themed_ss(reset_btn, "QPushButton{{color:{TEXT_SECONDARY};font-size:11px;background:transparent;"
+            "border:1px solid {BORDER};border-radius:4px;padding:3px 10px;}}"
+            "QPushButton:hover{{border-color:{ACCENT};}}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         reset_btn.clicked.connect(self._on_accent_reset)
         swatch_row.addWidget(reset_btn)
         swatch_row.addStretch()
@@ -1540,10 +1451,10 @@ class _SettingsCardsMixin:
             sw.set_active(name == active)
 
     def _on_theme(self, name: str) -> None:
-        from ui.styles import set_active_theme_name
-        set_active_theme_name(name)
+        from ui.styles import apply_theme
+        apply_theme(name)   # persists + emits itself — do NOT also call set_active_theme_name
         self._refresh_theme_swatches()
-        self._theme_status_lbl.setText(f"Theme '{name}' saved — restart the app to apply.")
+        self._theme_status_lbl.setText(f"Theme '{name}' applied.")
 
     # ── Display preferences ───────────────────────────────────────────────────
 
@@ -1551,16 +1462,12 @@ class _SettingsCardsMixin:
         card, bl = _card("Display Preferences")
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_compact = QCheckBox("Compact table rows (24 px — more devices visible)")
-        self._chk_compact.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_compact, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_compact.setChecked(qs.value("display/compact_rows", True, type=bool))
         self._chk_compact.toggled.connect(self._on_compact_toggled)
         bl.addWidget(self._chk_compact)
         self._chk_tooltips = QCheckBox("Show extended tooltips on hover (400 ms delay)")
-        self._chk_tooltips.setStyleSheet(
-            qss_label(TEXT_PRIMARY, 11)
-        )
+        _styles.themed_ss(self._chk_tooltips, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._chk_tooltips.setChecked(qs.value("display/tooltips_enabled", True, type=bool))
         self._chk_tooltips.toggled.connect(self._on_tooltip_toggled)
         bl.addWidget(self._chk_tooltips)
@@ -1568,7 +1475,7 @@ class _SettingsCardsMixin:
             "Row height and tooltip settings take effect the next time a table is populated."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(qss_muted_label(10))
+        _styles.themed_ss(note, lambda: _styles.qss_muted_label(10))
         bl.addWidget(note)
         return card
 

@@ -18,10 +18,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    RED, TEXT_PRIMARY, TEXT_SECONDARY,
-)
+from ui import styles as _s
 from ui.widgets.page_header import PageHeaderBar
 
 # ── Tile definitions ──────────────────────────────────────────────────────────
@@ -35,7 +32,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "▶",
         "navigate",
         "Service Diagnostics",
-        ACCENT,
+        "ACCENT",
     ),
     (
         "Gaming lag, high ping or disconnects",
@@ -43,7 +40,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "◈",
         "navigate",
         "Service Diagnostics",
-        RED,
+        "RED",
     ),
     (
         "My internet is slow",
@@ -51,7 +48,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "⟳",
         "diagnose",
         "slow",
-        AMBER,
+        "AMBER",
     ),
     (
         "A website or app isn't loading",
@@ -59,7 +56,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "◆",
         "navigate",
         "Service Diagnostics",
-        AMBER,
+        "AMBER",
     ),
     (
         "Device won't connect to the network",
@@ -67,7 +64,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "○",
         "diagnose",
         "noconn",
-        RED,
+        "RED",
     ),
     (
         "Wi-Fi keeps dropping",
@@ -75,7 +72,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "◉",
         "diagnose",
         "dropping",
-        AMBER,
+        "AMBER",
     ),
     (
         "Something is using all my bandwidth",
@@ -83,7 +80,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "■",
         "navigate",
         "App Traffic",
-        AMBER,
+        "AMBER",
     ),
     (
         "There's a suspicious device on my network",
@@ -91,7 +88,7 @@ _TILES: list[tuple[str, str, str, str, str, str]] = [
         "▲",
         "navigate",
         "Devices",
-        RED,
+        "RED",
     ),
 ]
 
@@ -107,7 +104,7 @@ class TroubleshootPage(QWidget):
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
@@ -126,18 +123,14 @@ class TroubleshootPage(QWidget):
         # "Not sure?" helper strip
         unsure_row = QHBoxLayout()
         unsure_lbl = QLabel("Not sure what the problem is?")
-        unsure_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(unsure_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         unsure_btn = QPushButton("Run a full diagnosis →")
         unsure_btn.setFlat(True)
         unsure_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        unsure_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:{BG_HOVER}; }}"
-        )
+        _s.themed_ss(unsure_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{ACCENT_DARK}; background:{BG_HOVER}; }}")
         unsure_btn.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
         unsure_row.addWidget(unsure_lbl)
         unsure_row.addWidget(unsure_btn)
@@ -149,17 +142,17 @@ class TroubleshootPage(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"QScrollArea {{ background:{BG_DARK}; border:none; }}")
+        _s.themed_ss(scroll, "QScrollArea {{ background:{BG_DARK}; border:none; }}")
 
         grid_container = QWidget()
-        grid_container.setStyleSheet(f"background:{BG_DARK};")
+        _s.themed_ss(grid_container, "background:{BG_DARK};")
         grid = QGridLayout(grid_container)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(10)
 
         cols = 2
-        for i, (label, desc, icon, action_type, action_arg, color) in enumerate(_TILES):
-            card = self._make_tile(label, desc, icon, action_type, action_arg, color)
+        for i, (label, desc, icon, action_type, action_arg, color_name) in enumerate(_TILES):
+            card = self._make_tile(label, desc, icon, action_type, action_arg, color_name)
             grid.addWidget(card, i // cols, i % cols)
 
         scroll.setWidget(grid_container)
@@ -168,18 +161,14 @@ class TroubleshootPage(QWidget):
         # Footer ISP shortcut
         footer = QHBoxLayout()
         footer_lbl = QLabel("Want to know if it's your ISP or your router?")
-        footer_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(footer_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         isp_btn = QPushButton("Quick ISP test on What's Wrong? →")
         isp_btn.setFlat(True)
         isp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        isp_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:{BG_HOVER}; }}"
-        )
+        _s.themed_ss(isp_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; padding:0; text-align:left; }}"
+            "QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{ACCENT_DARK}; background:{BG_HOVER}; }}")
         isp_btn.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
         footer.addWidget(footer_lbl)
         footer.addWidget(isp_btn)
@@ -193,15 +182,15 @@ class TroubleshootPage(QWidget):
         icon: str,
         action_type: str,
         action_arg: str,
-        color: str,
+        color_name: str,
     ) -> QFrame:
         card = QFrame()
         card.setObjectName("troubleshootTile")
-        card.setStyleSheet(
-            f"QFrame#troubleshootTile {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        _s.themed_ss(card, lambda cn=color_name: (
+            f"QFrame#troubleshootTile {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
             f" border-radius:6px; }}"
-            f"QFrame#troubleshootTile:hover {{ border-color:{color}; }}"
-        )
+            f"QFrame#troubleshootTile:hover {{ border-color:{getattr(_s, cn)}; }}"
+        ))
 
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 14, 16, 14)
@@ -210,24 +199,20 @@ class TroubleshootPage(QWidget):
         header_row = QHBoxLayout()
         icon_lbl = QLabel(icon)
         icon_lbl.setFixedWidth(22)
-        icon_lbl.setStyleSheet(
-            f"font-size:16px; color:{color}; background:transparent; border:none;"
-        )
+        _s.themed_ss(icon_lbl, lambda cn=color_name: (
+            f"font-size:16px; color:{getattr(_s, cn)}; background:transparent; border:none;"
+        ))
         title_lbl = QLabel(label)
         title_lbl.setWordWrap(True)
-        title_lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(title_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         header_row.addWidget(icon_lbl)
         header_row.addWidget(title_lbl, 1)
         lay.addLayout(header_row)
 
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
-        desc_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(desc_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         lay.addWidget(desc_lbl)
 
         if action_type == "diagnose":
@@ -243,12 +228,12 @@ class TroubleshootPage(QWidget):
         btn = QPushButton(action_label)
         btn.setFlat(True)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet(
-            f"QPushButton {{ color:{color}; font-size:11px; background:transparent;"
+        _s.themed_ss(btn, lambda cn=color_name: (
+            f"QPushButton {{ color:{getattr(_s, cn)}; font-size:11px; background:transparent;"
             f" border:none; padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:{BG_HOVER}; }}"
-        )
+            f"QPushButton:hover {{ color:{_s.ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ color:{_s.ACCENT_DARK}; background:{_s.BG_HOVER}; }}"
+        ))
 
         if action_type == "diagnose":
             btn.clicked.connect(

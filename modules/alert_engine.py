@@ -121,6 +121,9 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         self._host_down_since: Dict[str, int] = {}
         # service_key → ts_when_went_down (for SERVICE_DOWN resolution)
         self._service_down_since: Dict[str, int] = {}
+        # service_key → consecutive failed-check count since last success
+        # (grace period before the first SERVICE_DOWN alert fires)
+        self._service_fail_streak: Dict[str, int] = {}
         # ── S4-3: consolidation ────────────────────────────────────────────────
         # minimum simultaneous HOST_DOWN alerts to consolidate into one
         self._consolidation_threshold: int = 5

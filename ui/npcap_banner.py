@@ -24,10 +24,7 @@ from PyQt6.QtGui     import QDesktopServices
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy
 
 from modules.utils   import is_npcap_available, is_store_app
-from ui.styles       import (
-    ADMIN_WARN_BG, ADMIN_WARN_BORDER, ADMIN_WARN_FG, ADMIN_WARN_HOVER,
-    BG_HOVER,
-)
+from ui import styles as _s
 
 _NPCAP_URL = "https://npcap.com/#download"
 
@@ -64,19 +61,15 @@ class NpcapMissingBanner(QFrame):
             return   # nothing to build — widget will be invisible
 
         self.setFixedHeight(28)
-        self.setStyleSheet(
-            f"QFrame {{ background:{ADMIN_WARN_BG};"
-            f" border:none; border-bottom:1px solid {ADMIN_WARN_BORDER}; }}"
-        )
+        _s.themed_ss(self, "QFrame {{ background:{ADMIN_WARN_BG};"
+            " border:none; border-bottom:1px solid {ADMIN_WARN_BORDER}; }}")
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 0, 16, 0)
         lay.setSpacing(8)
 
         icon = QLabel("⚠")
-        icon.setStyleSheet(
-            f"font-size:12px; color:{ADMIN_WARN_FG}; background:transparent; border:none;"
-        )
+        _s.themed_ss(icon, "font-size:12px; color:{ADMIN_WARN_FG}; background:transparent; border:none;")
 
         sys_name = platform.system()
         if sys_name == "Windows" and is_store_app():
@@ -86,19 +79,15 @@ class NpcapMissingBanner(QFrame):
             msg_text = _INSTALL_HINT.get(sys_name, "Packet capture library is required.")
             dl_label = _DOWNLOAD_LABEL.get(sys_name, "View download →")
         msg = QLabel(msg_text)
-        msg.setStyleSheet(
-            f"font-size:11px; color:{ADMIN_WARN_FG}; background:transparent; border:none;"
-        )
+        _s.themed_ss(msg, "font-size:11px; color:{ADMIN_WARN_FG}; background:transparent; border:none;")
 
         btn = QPushButton(dl_label)
         btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet(
-            f"QPushButton {{ border:none; background:transparent; font-size:11px;"
-            f" font-weight:bold; color:{ADMIN_WARN_FG}; text-decoration:underline; }}"
-            f"QPushButton:hover {{ color:{ADMIN_WARN_HOVER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ADMIN_WARN_FG}; }}"
-        )
+        _s.themed_ss(btn, "QPushButton {{ border:none; background:transparent; font-size:11px;"
+            " font-weight:bold; color:{ADMIN_WARN_FG}; text-decoration:underline; }}"
+            "QPushButton:hover {{ color:{ADMIN_WARN_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ADMIN_WARN_FG}; }}")
         btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(_NPCAP_URL)))
 
         lay.addWidget(icon)

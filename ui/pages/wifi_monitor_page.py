@@ -16,12 +16,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.npcap_banner import NpcapMissingBanner
-from ui.styles import (
-    ACCENT, AMBER, BORDER, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_TEXT,
-)
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
+from ui import styles as _s
 
 
 class WiFiMonitorPage(QWidget):
@@ -44,9 +41,7 @@ class WiFiMonitorPage(QWidget):
         lay.addWidget(NpcapMissingBanner(parent=self))
 
         title = QLabel("Passive 802.11 Monitor")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-size:16px;font-weight:bold;padding:4px 0;"
-        )
+        _s.themed_ss(title, "color:{TEXT_PRIMARY};font-size:16px;font-weight:bold;padding:4px 0;")
         lay.addWidget(title)
 
         desc = QLabel(
@@ -57,9 +52,7 @@ class WiFiMonitorPage(QWidget):
             "Requires a Npcap-compatible wireless adapter with monitor mode support."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(
-            f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0 6px 0;"
-        )
+        _s.themed_ss(desc, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0 6px 0;")
         lay.addWidget(desc)
 
         # Controls row
@@ -85,7 +78,7 @@ class WiFiMonitorPage(QWidget):
         self._status_lbl = QLabel(
             "Ready — select an interface and click Start Capture."
         )
-        self._status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY};font-size:11px;")
         lay.addWidget(self._status_lbl)
 
         # ── Content stack: page 0 = empty state, page 1 = frame table ───────────
@@ -127,12 +120,10 @@ class WiFiMonitorPage(QWidget):
         self._table.setColumnWidth(1, 140)
         self._table.setColumnWidth(2, 160)
         self._table.setColumnWidth(3, 200)
-        self._table.setStyleSheet(
-            f"QTableWidget{{border:1px solid {BORDER};font-size:11px;"
-            f"color:{TEXT_PRIMARY};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{TH_TEXT};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-        )
+        _s.themed_ss(self._table, "QTableWidget{{border:1px solid {BORDER};font-size:11px;"
+            "color:{TEXT_PRIMARY};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{TH_TEXT};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}")
         def _wm_filter_bssid():
             r = self._table.currentRow()
             if r < 0:
@@ -153,9 +144,7 @@ class WiFiMonitorPage(QWidget):
 
         bottom = QHBoxLayout()
         self._frame_count_lbl = QLabel("0 frames captured")
-        self._frame_count_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY};font-size:10px;"
-        )
+        _s.themed_ss(self._frame_count_lbl, "color:{TEXT_SECONDARY};font-size:10px;")
         bottom.addWidget(self._frame_count_lbl)
         bottom.addStretch()
         clear_btn = QPushButton("Clear")
@@ -192,7 +181,7 @@ class WiFiMonitorPage(QWidget):
         self._worker.start()
         self._btn_start.setEnabled(False)
         self._btn_stop.setEnabled(True)
-        self._set_status(f"Starting monitor mode on {iface}…", GREEN)
+        self._set_status(f"Starting monitor mode on {iface}…", "GREEN")
 
     @pyqtSlot()
     def _stop(self) -> None:
@@ -201,7 +190,7 @@ class WiFiMonitorPage(QWidget):
             self._worker.wait(2000)
         self._btn_start.setEnabled(True)
         self._btn_stop.setEnabled(False)
-        self._set_status("Capture stopped.", TEXT_SECONDARY)
+        self._set_status("Capture stopped.", "TEXT_SECONDARY")
 
     @pyqtSlot()
     def _clear(self) -> None:
@@ -230,20 +219,20 @@ class WiFiMonitorPage(QWidget):
 
     @pyqtSlot(str)
     def _on_status(self, msg: str) -> None:
-        self._set_status(msg, GREEN)
+        self._set_status(msg, "GREEN")
 
     @pyqtSlot(str)
     def _on_error(self, msg: str) -> None:
         self._btn_start.setEnabled(True)
         self._btn_stop.setEnabled(False)
-        self._set_status(f"⚠ {msg}", RED)
+        self._set_status(f"⚠ {msg}", "RED")
 
     @pyqtSlot(str)
     def _on_unsupported(self, msg: str) -> None:
         self._btn_start.setEnabled(True)
         self._btn_stop.setEnabled(False)
-        self._set_status(f"ℹ {msg}", AMBER)
+        self._set_status(f"ℹ {msg}", "AMBER")
 
-    def _set_status(self, msg: str, color: str) -> None:
-        self._status_lbl.setStyleSheet(f"color:{color};font-size:11px;")
+    def _set_status(self, msg: str, color_name: str) -> None:
+        _s.themed_ss(self._status_lbl, lambda cn=color_name: f"color:{getattr(_s, cn)};font-size:11px;")
         self._status_lbl.setText(msg)

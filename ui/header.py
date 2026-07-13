@@ -19,9 +19,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSlot
 
-from ui.styles import (
-    NAV_DIVIDER,
-)
+from ui import styles as _s
 
 
 class AppHeaderMixin:
@@ -63,10 +61,9 @@ class AppHeaderMixin:
 
         def paintEvent(self, _e):
             from PyQt6.QtGui import QPainter, QColor
-            from ui.styles import NAV_BAR, NAV_DIVIDER
             p = QPainter(self)
-            p.fillRect(self.rect(), QColor(NAV_BAR))
-            p.setPen(QColor(NAV_DIVIDER))
+            p.fillRect(self.rect(), QColor(_s.NAV_BAR))
+            p.setPen(QColor(_s.NAV_DIVIDER))
             p.drawLine(0, self.height() - 1, self.width(), self.height() - 1)
             p.end()
 
@@ -101,17 +98,14 @@ class AppHeaderMixin:
     def _build_header(self) -> QWidget:
         """Slim top bar: brand | stretch | verdict | actions."""
         from PyQt6.QtWidgets import QMenu, QToolButton
-        from ui.styles import ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER, BORDER, NAV_BAR, RED
-        from ui.styles import alpha, SIDEBAR_HOVER, TEXT_MUTED, TEXT_PRIMARY
-        from ui.styles import WHITE
 
         w = self._DragHeader(self)
         w.setObjectName("appBar")
         w.setFixedHeight(42)
         # Background is painted by _DragHeader.paintEvent — no CSS needed for colour.
         # Stylesheet here only scopes child widget colours (labels transparent, etc.)
-        w.setStyleSheet(
-            f"QLabel {{ background:transparent; color:{WHITE}; border:none; }}"
+        _s.themed_ss(
+            w, "QLabel {{ background:transparent; color:{WHITE}; border:none; }}"
         )
         lay = QHBoxLayout(w)
         lay.setContentsMargins(14, 0, 0, 0)
@@ -125,7 +119,7 @@ class AppHeaderMixin:
         _icon = QLabel()
         _icon.setFixedSize(24, 24)
         _icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _icon.setStyleSheet(f"background:{NAV_BAR};")
+        _s.themed_ss(_icon, "background:{NAV_BAR};")
         if not _pix.isNull():
             _icon.setPixmap(
                 _pix.scaled(24, 24,
@@ -135,18 +129,20 @@ class AppHeaderMixin:
             _icon.repaint()
         else:
             _icon.setText("N")
-            _icon.setStyleSheet(
-                f"background:{ACCENT}; color:{WHITE}; border-radius:5px;"
-                " font-size:13px; font-weight:bold;"
+            _s.themed_ss(
+                _icon,
+                "background:{ACCENT}; color:{WHITE}; border-radius:5px;"
+                " font-size:13px; font-weight:bold;",
             )
         lay.addWidget(_icon)
         lay.addSpacing(6)
 
         brand_lbl = QLabel("NetSentinel")
         brand_lbl.setObjectName("lblTitle")
-        brand_lbl.setStyleSheet(
-            f"color:{WHITE}; background:transparent;"
-            " font-size:13px; font-weight:bold; letter-spacing:0.5px;"
+        _s.themed_ss(
+            brand_lbl,
+            "color:{WHITE}; background:transparent;"
+            " font-size:13px; font-weight:bold; letter-spacing:0.5px;",
         )
         lay.addWidget(brand_lbl)
 
@@ -155,8 +151,9 @@ class AppHeaderMixin:
 
         # ── Network status (centre) — hidden until a scan produces real data ────
         self._verdict_badge = QLabel()
+        # Shape J: restyled live by monitor_state / tabs_network — _s.* read, not themed_ss.
         self._verdict_badge.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; font-weight:600;"
+            f"color:{_s.TEXT_MUTED}; font-size:11px; font-weight:600;"
             f" background:transparent; border:none; padding:0 12px;"
         )
         self._verdict_badge.setToolTip("Overall network status")
@@ -174,10 +171,11 @@ class AppHeaderMixin:
 
         # ── Settings dropdown (⚙) ─────────────────────────────────────────────
         _menu_s = QMenu()
-        _menu_s.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; padding:4px; font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        _s.themed_ss(
+            _menu_s,
+            "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; padding:4px; font-size:11px; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}",
         )
 
         _act_about = _menu_s.addAction("About NetSentinel")
@@ -193,40 +191,42 @@ class AppHeaderMixin:
         # The border is a faint WHITE-alpha hairline so it blends on the dark header
         # bar in BOTH themes. (A plain-hex token like SIDEBAR_SECTION_BG is a light
         # near-white value in Arctic → it drew a harsh white box on the dark bar.)
-        _icon_btn_qss = (
-            f"QToolButton {{ background:transparent; color:{TEXT_MUTED};"
-            f" border:1px solid {alpha(WHITE, 0x22)}; border-radius:5px;"
-            f" font-family:'Segoe UI Symbol','Segoe UI',sans-serif;"
-            f" font-size:12px; padding:0 8px;"
-            f" min-height:26px; max-height:26px; }}"
-            f"QToolButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
-            "QToolButton::menu-indicator { image: none; }"
-        )
+        def _icon_btn_qss():
+            return (
+                f"QToolButton {{ background:transparent; color:{_s.TEXT_MUTED};"
+                f" border:1px solid {_s.alpha(_s.WHITE, 0x22)}; border-radius:5px;"
+                f" font-family:'Segoe UI Symbol','Segoe UI',sans-serif;"
+                f" font-size:12px; padding:0 8px;"
+                f" min-height:26px; max-height:26px; }}"
+                f"QToolButton:hover {{ background:{_s.ACCENT}; color:{_s.WHITE}; border-color:{_s.ACCENT_DARK}; }}"
+                "QToolButton::menu-indicator { image: none; }"
+            )
         _btn_settings = QToolButton()
         _btn_settings.setText("⚙︎")
         _btn_settings.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         _btn_settings.setMenu(_menu_s)
         _btn_settings.setToolTip("Scan Settings — module toggles, durations, and app preferences  (Ctrl+,)")
-        _btn_settings.setStyleSheet(_icon_btn_qss)
+        _s.themed_ss(_btn_settings, _icon_btn_qss)
         lay.addSpacing(4)
         lay.addWidget(_btn_settings)
 
         # ── Global time range picker (TIME-1) ────────────────────────────────
-        _time_combo_qss = (
-            f"QComboBox {{ background:transparent; color:{TEXT_MUTED};"
-            f" border:1px solid {alpha(WHITE, 0x22)}; border-radius:5px;"
-            f" font-size:11px; padding:0 6px;"
-            f" min-height:26px; max-height:26px; min-width:52px; }}"
-            f"QComboBox:hover {{ border-color:{ACCENT}; color:{WHITE}; }}"
-            f"QComboBox::drop-down {{ border:none; width:16px; }}"
-            f"QComboBox QAbstractItemView {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; selection-background-color:{ACCENT}; }}"
-        )
+        def _time_combo_qss():
+            return (
+                f"QComboBox {{ background:transparent; color:{_s.TEXT_MUTED};"
+                f" border:1px solid {_s.alpha(_s.WHITE, 0x22)}; border-radius:5px;"
+                f" font-size:11px; padding:0 6px;"
+                f" min-height:26px; max-height:26px; min-width:52px; }}"
+                f"QComboBox:hover {{ border-color:{_s.ACCENT}; color:{_s.WHITE}; }}"
+                f"QComboBox::drop-down {{ border:none; width:16px; }}"
+                f"QComboBox QAbstractItemView {{ background:{_s.BG_CARD}; color:{_s.TEXT_PRIMARY};"
+                f" border:1px solid {_s.BORDER}; selection-background-color:{_s.ACCENT}; }}"
+            )
         self._time_range_combo = QComboBox()
         self._time_range_combo.addItems(["1h", "6h", "24h", "7d", "30d"])
         self._time_range_combo.setCurrentText("24h")
         self._time_range_combo.setToolTip("Global time window — applies to all data pages")
-        self._time_range_combo.setStyleSheet(_time_combo_qss)
+        _s.themed_ss(self._time_range_combo, _time_combo_qss)
         self._time_range_combo.currentTextChanged.connect(self._on_global_time_changed)
         lay.addSpacing(4)
         lay.addWidget(self._time_range_combo)
@@ -237,22 +237,23 @@ class AppHeaderMixin:
         # fill on hover. (A previous session made it solid accent at rest — its
         # hover look — to work around an unrelated colour bug; that made it stop
         # matching its neighbours. This restores the shared at-rest style.)
-        _scan_btn_qss = (
-            f"QToolButton {{ background:transparent; color:{TEXT_MUTED};"
-            f" border:1px solid {alpha(WHITE, 0x22)}; border-radius:5px; font-weight:bold;"
-            f" font-family:'Segoe UI Symbol','Segoe UI',sans-serif;"
-            f" font-size:12px; padding:0 14px;"
-            f" min-height:26px; max-height:26px; }}"
-            f"QToolButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
-            f"QToolButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
-        )
+        def _scan_btn_qss():
+            return (
+                f"QToolButton {{ background:transparent; color:{_s.TEXT_MUTED};"
+                f" border:1px solid {_s.alpha(_s.WHITE, 0x22)}; border-radius:5px; font-weight:bold;"
+                f" font-family:'Segoe UI Symbol','Segoe UI',sans-serif;"
+                f" font-size:12px; padding:0 14px;"
+                f" min-height:26px; max-height:26px; }}"
+                f"QToolButton:hover {{ background:{_s.ACCENT}; color:{_s.WHITE}; border-color:{_s.ACCENT_DARK}; }}"
+                f"QToolButton:pressed {{ background:{_s.ACCENT_DARK}; color:{_s.WHITE}; border-color:{_s.ACCENT_DARK}; }}"
+            )
         self._header_scan_btn = QToolButton()
         self._header_scan_btn.setText("▶  Scan")
         self._header_scan_btn.setToolTip(
             "Run full network scan (ARP + WiFi + DNS + port discovery)\n"
             "Tip: Ctrl+K to search pages · Ctrl+F to filter sidebar · Ctrl+, for Settings"
         )
-        self._header_scan_btn.setStyleSheet(_scan_btn_qss)
+        _s.themed_ss(self._header_scan_btn, _scan_btn_qss)
         self._header_scan_btn.clicked.connect(self._start_full_scan)
         lay.addWidget(self._header_scan_btn)
 
@@ -263,7 +264,7 @@ class AppHeaderMixin:
         _sep.setFrameShape(QFrame.Shape.VLine)
         _sep.setFixedWidth(1)
         _sep.setFixedHeight(26)
-        _sep.setStyleSheet(f"background:{NAV_DIVIDER}; border:none;")
+        _s.themed_ss(_sep, "background:{NAV_DIVIDER}; border:none;")
         lay.addSpacing(8)
         lay.addWidget(_sep)
         lay.addSpacing(2)
@@ -277,16 +278,17 @@ class AppHeaderMixin:
                 super().initStyleOption(option)
                 option.state = option.state & ~QStyle.StateFlag.State_HasFocus
 
-        _wc_base = (
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
-            f" border:none; border-radius:0px; outline:none; padding:0;"
-            f" font-family:'Segoe MDL2 Assets','Segoe UI Symbol','Segoe UI';"
-            f" font-size:10px;"
-            f" min-width:46px; max-width:46px;"
-            f" min-height:42px; max-height:42px; }}"
-            f"QPushButton:focus, QPushButton:focus-visible {{ outline:none; border:none; }}"
-            f"QPushButton:pressed {{ outline:none; border:none; }}"
-        )
+        def _wc_base():
+            return (
+                f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED};"
+                f" border:none; border-radius:0px; outline:none; padding:0;"
+                f" font-family:'Segoe MDL2 Assets','Segoe UI Symbol','Segoe UI';"
+                f" font-size:10px;"
+                f" min-width:46px; max-width:46px;"
+                f" min-height:42px; max-height:42px; }}"
+                f"QPushButton:focus, QPushButton:focus-visible {{ outline:none; border:none; }}"
+                f"QPushButton:pressed {{ outline:none; border:none; }}"
+            )
         # NoSubpixelAntialias eliminates ClearType fringing on Segoe MDL2 glyphs
         _wc_font = QFont("Segoe MDL2 Assets", 10)
         _wc_font.setStyleStrategy(QFont.StyleStrategy.NoSubpixelAntialias)
@@ -295,10 +297,11 @@ class AppHeaderMixin:
         _btn_min.setToolTip("Minimise")
         _btn_min.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         _btn_min.setFont(_wc_font)
-        _btn_min.setStyleSheet(
-            _wc_base +
-            f"QPushButton:hover {{ background:{SIDEBAR_HOVER}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{SIDEBAR_HOVER}; color:{WHITE}; }}"
+        _s.themed_ss(
+            _btn_min,
+            lambda: _wc_base()
+            + f"QPushButton:hover {{ background:{_s.SIDEBAR_HOVER}; color:{_s.WHITE}; }}"
+            + f"QPushButton:pressed {{ background:{_s.SIDEBAR_HOVER}; color:{_s.WHITE}; }}",
         )
         _btn_min.clicked.connect(self.showMinimized)
         lay.addWidget(_btn_min)
@@ -307,10 +310,11 @@ class AppHeaderMixin:
         self._maximize_btn.setToolTip("Full Screen")
         self._maximize_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._maximize_btn.setFont(_wc_font)
-        self._maximize_btn.setStyleSheet(
-            _wc_base +
-            f"QPushButton:hover {{ background:{SIDEBAR_HOVER}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{SIDEBAR_HOVER}; color:{WHITE}; }}"
+        _s.themed_ss(
+            self._maximize_btn,
+            lambda: _wc_base()
+            + f"QPushButton:hover {{ background:{_s.SIDEBAR_HOVER}; color:{_s.WHITE}; }}"
+            + f"QPushButton:pressed {{ background:{_s.SIDEBAR_HOVER}; color:{_s.WHITE}; }}",
         )
         self._maximize_btn.clicked.connect(self._toggle_maximize)
         lay.addWidget(self._maximize_btn)
@@ -319,10 +323,11 @@ class AppHeaderMixin:
         _btn_close.setToolTip("Close")
         _btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         _btn_close.setFont(_wc_font)
-        _btn_close.setStyleSheet(
-            _wc_base +
-            f"QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}"
+        _s.themed_ss(
+            _btn_close,
+            lambda: _wc_base()
+            + f"QPushButton:hover {{ background:{_s.RED}; color:{_s.WHITE}; }}"
+            + f"QPushButton:pressed {{ background:{_s.RED}; color:{_s.WHITE}; }}",
         )
         _btn_close.clicked.connect(self._quit_app)
         lay.addWidget(_btn_close)
@@ -610,35 +615,35 @@ class AppHeaderMixin:
 
     def _build_update_bar(self) -> QWidget:
         """Thin update-available bar — hidden until a newer release is detected."""
-        from ui.styles import ACCENT, UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG
-        from ui.styles import BG_HOVER
-
         container = QWidget()
         container.setObjectName("updateNotifBar")
         container.setFixedHeight(36)
         row = QHBoxLayout(container)
         row.setContentsMargins(12, 4, 8, 4)
         row.setSpacing(6)
-        container.setStyleSheet(
-            f"QWidget#updateNotifBar {{ background:{UPDATE_BAR_BG}; "
-            f"border-bottom: 1px solid {UPDATE_BAR_BORDER}; }}"
+        _s.themed_ss(
+            container,
+            "QWidget#updateNotifBar {{ background:{UPDATE_BAR_BG}; "
+            "border-bottom: 1px solid {UPDATE_BAR_BORDER}; }}",
         )
         icon = QLabel("↑")
-        icon.setStyleSheet(f"color:{ACCENT}; font-size:12px; background:transparent; border:none;")
+        _s.themed_ss(icon, "color:{ACCENT}; font-size:12px; background:transparent; border:none;")
         row.addWidget(icon)
         self._update_bar_lbl = QLabel("A new version is available.")
-        self._update_bar_lbl.setStyleSheet(
-            f"color:{UPDATE_BAR_FG}; font-size:11px; background:transparent; border:none;"
+        _s.themed_ss(
+            self._update_bar_lbl,
+            "color:{UPDATE_BAR_FG}; font-size:11px; background:transparent; border:none;",
         )
         self._update_bar_lbl.setOpenExternalLinks(True)
         self._update_bar_lbl.setTextFormat(Qt.TextFormat.RichText)
         row.addWidget(self._update_bar_lbl, 1)
         btn_dismiss = QPushButton("✕")
         btn_dismiss.setFixedSize(20, 20)
-        btn_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:none; font-size:12px; }}"
-            f"QPushButton:hover {{ color:{UPDATE_BAR_FG}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+        _s.themed_ss(
+            btn_dismiss,
+            "QPushButton {{ background:transparent; color:{ACCENT}; border:none; font-size:12px; }}"
+            "QPushButton:hover {{ color:{UPDATE_BAR_FG}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}",
         )
         def _dismiss_update_bar() -> None:
             container.hide()
@@ -684,12 +689,11 @@ class AppHeaderMixin:
     def _on_update_available(self, latest: str):
         """Runs on the UI thread — safe to touch widgets."""
         from PyQt6.QtWidgets import QApplication
-        from ui.styles import ACCENT
         current = QApplication.applicationVersion()
         msg = (
             f"NetSentinel v{latest} is available (you have v{current}) — "
             f'<a href="https://github.com/ossianericson/netsentinel/releases/latest" '
-            f'style="color:{ACCENT};">Download</a>'
+            f'style="color:{_s.ACCENT};">Download</a>'
             f' &nbsp;·&nbsp; or run: <code>winget upgrade NetSentinel.NetSentinel</code>'
         )
         self._update_bar_lbl.setText(msg)

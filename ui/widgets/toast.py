@@ -29,11 +29,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QWidget,
 )
 
-from ui.styles import (
-    alpha,
-    ACCENT, BG_CARD, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
-    BG_HOVER,
-)
+from ui import styles as _s
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -42,12 +38,18 @@ _SPACING  = 8           # px between toasts
 _WIDTH    = 300         # fixed toast width
 _SLIDE_MS = 150         # slide-in animation duration
 
-_TYPE_BORDER = {
-    "success": GREEN,
-    "error":   RED,
-    "info":    ACCENT,
-    "action":  ACCENT,
-}
+
+def _type_border(kind: str) -> str:
+    """Left-accent colour per toast kind, read live so a theme switch is picked
+    up by the next toast (toasts are transient — see conversion shape G)."""
+    return {
+        "success": _s.GREEN,
+        "error":   _s.RED,
+        "info":    _s.ACCENT,
+        "action":  _s.ACCENT,
+    }.get(kind, _s.ACCENT)
+
+
 _AUTO_DISMISS_MS = {
     "success": 3000,
     "error":   0,
@@ -64,12 +66,12 @@ class _Toast(QFrame):
                  parent: QWidget = None):
         super().__init__(parent)
         self._kind = kind
-        color = _TYPE_BORDER.get(kind, ACCENT)
+        color = _type_border(kind)
 
         self.setFixedWidth(_WIDTH)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
-            f"_Toast {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"_Toast {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
             f" border-left:3px solid {color}; border-radius:4px; }}"
         )
 
@@ -88,7 +90,7 @@ class _Toast(QFrame):
         msg_lbl = QLabel(message)
         msg_lbl.setWordWrap(True)
         msg_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
+            f"color:{_s.TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
         )
 
         root.addWidget(icon_lbl)
@@ -99,11 +101,11 @@ class _Toast(QFrame):
             act_btn.setFixedHeight(22)
             act_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             act_btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{ACCENT};"
-                f" border:1px solid {ACCENT}; border-radius:3px;"
+                f"QPushButton {{ background:transparent; color:{_s.ACCENT};"
+                f" border:1px solid {_s.ACCENT}; border-radius:3px;"
                 f" font-size:10px; padding:0 8px; }}"
-                f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                f"QPushButton:hover {{ background:{_s.alpha(_s.ACCENT, 0x22)}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
             )
             act_btn.clicked.connect(action_callback)
             act_btn.clicked.connect(self._dismiss)
@@ -113,10 +115,10 @@ class _Toast(QFrame):
         close_btn.setFixedSize(18, 18)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; border:none;"
             f" font-size:13px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            f"QPushButton:hover {{ color:{_s.TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
         )
         close_btn.clicked.connect(self._dismiss)
         root.addWidget(close_btn)

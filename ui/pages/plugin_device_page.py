@@ -29,13 +29,9 @@ from PyQt6.QtWidgets import (
 )
 from ui.widgets.empty_state_card import EmptyStateCard
 
+from ui import styles as _s
 from ui.styles import (
-    alpha,
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, GREEN,
-    ORANGE, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
+    ORANGE,
 )
 
 log = logging.getLogger(__name__)
@@ -86,27 +82,21 @@ def _keyring_delete(ip: str) -> bool:
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     card = QFrame()
     card.setObjectName("pluginCard")
-    card.setStyleSheet(
-        f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        " border-radius:4px; }"
-    )
+    _s.themed_ss(card, "QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        " border-radius:4px; }}")
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
 
     hdr = QFrame()
     hdr.setObjectName("pluginCardHdr")
-    hdr.setStyleSheet(
-        f"QFrame#pluginCardHdr {{ background:{BG_CARD}; border:none;"
-        f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
-    )
+    _s.themed_ss(hdr, "QFrame#pluginCardHdr {{ background:{BG_CARD}; border:none;"
+        " border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}")
     hdr_lay = QHBoxLayout(hdr)
     hdr_lay.setContentsMargins(12, 6, 12, 6)
     lbl = QLabel(title.upper())
-    lbl.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-        " letter-spacing:0.5px; background:transparent; border:none;"
-    )
+    _s.themed_ss(lbl, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+        " letter-spacing:0.5px; background:transparent; border:none;")
     hdr_lay.addWidget(lbl)
     hdr_lay.addStretch()
     outer.addWidget(hdr)
@@ -123,14 +113,10 @@ def _row(label: str, layout: QVBoxLayout) -> QLabel:
     h.setContentsMargins(0, 0, 0, 0)
     lbl = QLabel(label)
     lbl.setFixedWidth(160)
-    lbl.setStyleSheet(
-        f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;"
-    )
+    _s.themed_ss(lbl, "color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
     val = QLabel("—")
-    val.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
-        " background:transparent; border:none;"
-    )
+    _s.themed_ss(val, "color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+        " background:transparent; border:none;")
     val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     h.addWidget(lbl)
     h.addWidget(val, 1)
@@ -145,15 +131,11 @@ def _signal_row(label: str, metric: str, layout: QVBoxLayout) -> tuple:
     h.setContentsMargins(0, 0, 0, 0)
     lbl = QLabel(label)
     lbl.setFixedWidth(160)
-    lbl.setStyleSheet(
-        f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;"
-    )
+    _s.themed_ss(lbl, "color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
     bar = SignalBar(metric=metric)
     val = QLabel("—")
-    val.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
-        " background:transparent; border:none;"
-    )
+    _s.themed_ss(val, "color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+        " background:transparent; border:none;")
     val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     h.addWidget(lbl)
     h.addWidget(bar)
@@ -164,14 +146,14 @@ def _signal_row(label: str, metric: str, layout: QVBoxLayout) -> tuple:
 
 def _quality_color(rsrp: Optional[float]) -> str:
     if rsrp is None:
-        return TEXT_SECONDARY
+        return _s.TEXT_SECONDARY
     if rsrp >= -80:
-        return GREEN
+        return _s.GREEN
     if rsrp >= -90:
         return ORANGE
     if rsrp >= -100:
-        return AMBER
-    return RED
+        return _s.AMBER
+    return _s.RED
 
 
 def _fmt(v, suffix: str = "") -> str:
@@ -181,19 +163,21 @@ def _fmt(v, suffix: str = "") -> str:
 
 
 _TBL_SS = (
-    f"QTableWidget {{ border:none; background:{BG_CARD};"
-    f" alternate-background-color:{BG_ALT_ROW}; }}"
-    f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
-    f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
+    "QTableWidget {{ border:none; background:{BG_CARD};"
+    " alternate-background-color:{BG_ALT_ROW}; }}"
+    "QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
+    " border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
 )
 
-_TREE_SS = (
-    f"QTreeWidget {{ border:none; background:{BG_CARD}; outline:none; }}"
-    f"QTreeWidget::item {{ padding:3px 4px; color:{TEXT_PRIMARY}; }}"
-    f"QTreeWidget::item:selected {{ background:{alpha(ACCENT, 0x22)}; color:{TEXT_PRIMARY}; }}"
-    f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
-    f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
-)
+
+def _tree_ss() -> str:
+    return (
+        f"QTreeWidget {{ border:none; background:{_s.BG_CARD}; outline:none; }}"
+        f"QTreeWidget::item {{ padding:3px 4px; color:{_s.TEXT_PRIMARY}; }}"
+        f"QTreeWidget::item:selected {{ background:{_s.alpha(_s.ACCENT, 0x22)}; color:{_s.TEXT_PRIMARY}; }}"
+        f"QHeaderView::section {{ background:{_s.BG_CARD}; color:{_s.TEXT_SECONDARY}; border:none;"
+        f" border-bottom:1px solid {_s.BORDER}; padding:4px 8px; font-size:11px; }}"
+    )
 
 
 # ── page ───────────────────────────────────────────────────────────────────────
@@ -249,7 +233,7 @@ class PluginDevicePage(QWidget):
         outer.addWidget(self._content_stack)
 
         inner = QWidget()
-        inner.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        _s.themed_ss(inner, "QWidget {{ background:{BG_DARK}; }}")
         scroll.setWidget(inner)
 
         self._root = QVBoxLayout(inner)
@@ -276,7 +260,7 @@ class PluginDevicePage(QWidget):
 
         # Timestamp row
         self._ts_lbl = QLabel("No data yet — run a Test from the Hardware page.")
-        self._ts_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px;")
+        _s.themed_ss(self._ts_lbl, "color:{TEXT_MUTED}; font-size:11px;")
         self._root.addWidget(self._ts_lbl)
 
         self._build_credentials_card()
@@ -292,33 +276,27 @@ class PluginDevicePage(QWidget):
 
     def _build_credentials_card(self) -> None:
         _field_ss = (
-            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
             " border-radius:3px; padding:3px 6px; font-size:12px;"
         )
 
         cred_card = QFrame()
         cred_card.setObjectName("pluginCard")
-        cred_card.setStyleSheet(
-            f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }"
-        )
+        _s.themed_ss(cred_card, "QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}")
         cred_outer = QVBoxLayout(cred_card)
         cred_outer.setContentsMargins(0, 0, 0, 0)
         cred_outer.setSpacing(0)
 
         hdr = QFrame()
         hdr.setObjectName("pluginCardHdr")
-        hdr.setStyleSheet(
-            f"QFrame#pluginCardHdr {{ background:{BG_CARD}; border:none;"
-            f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
-        )
+        _s.themed_ss(hdr, "QFrame#pluginCardHdr {{ background:{BG_CARD}; border:none;"
+            " border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}")
         hdr_lay = QHBoxLayout(hdr)
         hdr_lay.setContentsMargins(12, 6, 12, 6)
         hdr_lbl = QLabel("CONNECTION")
-        hdr_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-            " letter-spacing:0.5px; background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr_lbl, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+            " letter-spacing:0.5px; background:transparent; border:none;")
         hdr_lay.addWidget(hdr_lbl)
         hdr_lay.addStretch()
         cred_outer.addWidget(hdr)
@@ -331,60 +309,52 @@ class PluginDevicePage(QWidget):
         row1_lay.setSpacing(8)
 
         ip_lbl = QLabel("Gateway IP")
-        ip_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
+        _s.themed_ss(ip_lbl, "color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
         row1_lay.addWidget(ip_lbl)
 
         ip_badge = QLabel(self._hw_ip or "—")
-        ip_badge.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
-            f" background:{BG_DARK}; border:1px solid {BORDER};"
-            " border-radius:3px; padding:3px 8px;"
-        )
+        _s.themed_ss(ip_badge, "color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+            " background:{BG_DARK}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:3px 8px;")
         row1_lay.addWidget(ip_badge)
 
         pw_lbl = QLabel(self._credential_label)
-        pw_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
+        _s.themed_ss(pw_lbl, "color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
         row1_lay.addWidget(pw_lbl)
 
         self._cred_pw_edit = QLineEdit()
         self._cred_pw_edit.setPlaceholderText(f"Device {self._credential_label.lower()}")
         self._cred_pw_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self._cred_pw_edit.setFixedWidth(160)
-        self._cred_pw_edit.setStyleSheet(_field_ss)
+        _s.themed_ss(self._cred_pw_edit, _field_ss)
         self._cred_pw_edit.returnPressed.connect(self._on_test_clicked)
         row1_lay.addWidget(self._cred_pw_edit)
 
         self._cred_test_btn = QPushButton("▶  Test")
         self._cred_test_btn.setFixedHeight(28)
         self._cred_test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._cred_test_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            " border-radius:3px; font-size:12px; padding:0 16px; }"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(self._cred_test_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:12px; padding:0 16px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}")
         self._cred_test_btn.clicked.connect(self._on_test_clicked)
         row1_lay.addWidget(self._cred_test_btn)
 
         self._cred_status = QLabel()
-        self._cred_status.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._cred_status, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         row1_lay.addWidget(self._cred_status, 1)
         cred_outer.addWidget(row1)
 
         _sec_note = QLabel("🔒  Password saved to OS keychain — never written to disk or plugin file")
-        _sec_note.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; background:transparent; border:none;"
-            " padding:0 0 4px 12px;"
-        )
+        _s.themed_ss(_sec_note, "color:{TEXT_MUTED}; font-size:9px; background:transparent; border:none;"
+            " padding:0 0 4px 12px;")
         cred_outer.addWidget(_sec_note)
 
         # Divider
         div = QFrame()
         div.setFrameShape(QFrame.Shape.HLine)
-        div.setStyleSheet(f"border:none; border-top:1px solid {BORDER}; background:transparent;")
+        _s.themed_ss(div, "border:none; border-top:1px solid {BORDER}; background:transparent;")
         div.setFixedHeight(1)
         cred_outer.addWidget(div)
 
@@ -398,9 +368,7 @@ class PluginDevicePage(QWidget):
         self._cred_remember_cb = QCheckBox("Remember in OS Keychain")
         self._cred_remember_cb.setChecked(self._keyring_ok)
         self._cred_remember_cb.setEnabled(self._keyring_ok)
-        self._cred_remember_cb.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._cred_remember_cb, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         row2_lay.addWidget(self._cred_remember_cb)
 
         self._cred_forget_btn = QPushButton("Forget Saved Password")
@@ -408,13 +376,11 @@ class PluginDevicePage(QWidget):
         self._cred_forget_btn.setEnabled(False)
         self._cred_forget_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         # Destructive action → red treatment (amber is reserved for warnings/stale state)
-        self._cred_forget_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{RED}; border:1px solid {RED};"
-            " border-radius:3px; font-size:11px; padding:0 10px; }"
-            f"QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
-            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
-            f"QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._cred_forget_btn, "QPushButton {{ background:transparent; color:{RED}; border:1px solid {RED};"
+            " border-radius:3px; font-size:11px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
+            "QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
+            "QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}")
         self._cred_forget_btn.clicked.connect(self._on_forget_clicked)
         row2_lay.addWidget(self._cred_forget_btn)
         row2_lay.addStretch()
@@ -426,17 +392,13 @@ class PluginDevicePage(QWidget):
             PluginDevicePage._keyring_warned = True
             warn = QFrame()
             warn.setObjectName("pluginWarnBanner")
-            warn.setStyleSheet(
-                f"QFrame#pluginWarnBanner {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:0px; }}"
-            )
+            _s.themed_ss(warn, "QFrame#pluginWarnBanner {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:0px; }}")
             warn_lay = QHBoxLayout(warn)
             warn_lay.setContentsMargins(12, 8, 12, 8)
             warn_lbl = QLabel(
                 "⚠  No keyring backend found — password will not be saved between sessions."
             )
-            warn_lbl.setStyleSheet(
-                f"color:{AMBER}; font-size:11px; background:transparent; border:none;"
-            )
+            _s.themed_ss(warn_lbl, "color:{AMBER}; font-size:11px; background:transparent; border:none;")
             warn_lbl.setWordWrap(True)
             warn_lay.addWidget(warn_lbl)
             self._root.addWidget(warn)
@@ -532,31 +494,25 @@ class PluginDevicePage(QWidget):
         # Mesh Nodes tree — top-level rows are nodes, children are connected clients
         card2 = QFrame()
         card2.setObjectName("pluginCard")
-        card2.setStyleSheet(
-            f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }"
-        )
+        _s.themed_ss(card2, "QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}")
         card2_outer = QVBoxLayout(card2)
         card2_outer.setContentsMargins(0, 0, 0, 0)
         card2_outer.setSpacing(0)
 
         hdr2 = QFrame()
         hdr2.setObjectName("pluginMeshHdr")
-        hdr2.setStyleSheet(
-            f"QFrame#pluginMeshHdr {{ background:{BG_CARD}; border:none;"
-            f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
-        )
+        _s.themed_ss(hdr2, "QFrame#pluginMeshHdr {{ background:{BG_CARD}; border:none;"
+            " border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}")
         hdr2_lay = QHBoxLayout(hdr2)
         hdr2_lay.setContentsMargins(12, 6, 12, 6)
         hdr2_lbl = QLabel("MESH NODES")
-        hdr2_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-            " letter-spacing:0.5px; background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr2_lbl, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+            " letter-spacing:0.5px; background:transparent; border:none;")
         hdr2_lay.addWidget(hdr2_lbl)
         hdr2_lay.addStretch()
         hint = QLabel("▶ click node to collapse/expand connected devices")
-        hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
+        _s.themed_ss(hint, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         hdr2_lay.addWidget(hint)
         card2_outer.addWidget(hdr2)
 
@@ -567,7 +523,7 @@ class PluginDevicePage(QWidget):
         self._r_node_tree.setEditTriggers(QTreeWidget.EditTrigger.NoEditTriggers)
         self._r_node_tree.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
         self._r_node_tree.setRootIsDecorated(True)
-        self._r_node_tree.setStyleSheet(_TREE_SS)
+        _s.themed_ss(self._r_node_tree, _tree_ss)
         self._r_node_tree.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._r_node_tree.itemExpanded.connect(self._resize_node_tree_columns)
         self._r_node_tree.itemCollapsed.connect(self._resize_node_tree_columns)
@@ -577,27 +533,21 @@ class PluginDevicePage(QWidget):
         # Connected Clients — flat table matching old Mesh Router view
         card3 = QFrame()
         card3.setObjectName("pluginCard")
-        card3.setStyleSheet(
-            f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }"
-        )
+        _s.themed_ss(card3, "QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}")
         card3_outer = QVBoxLayout(card3)
         card3_outer.setContentsMargins(0, 0, 0, 0)
         card3_outer.setSpacing(0)
 
         hdr3 = QFrame()
         hdr3.setObjectName("pluginClientHdr")
-        hdr3.setStyleSheet(
-            f"QFrame#pluginClientHdr {{ background:{BG_CARD}; border:none;"
-            f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
-        )
+        _s.themed_ss(hdr3, "QFrame#pluginClientHdr {{ background:{BG_CARD}; border:none;"
+            " border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}")
         hdr3_lay = QHBoxLayout(hdr3)
         hdr3_lay.setContentsMargins(12, 6, 12, 6)
         hdr3_lbl = QLabel("CONNECTED CLIENTS")
-        hdr3_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-            " letter-spacing:0.5px; background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr3_lbl, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+            " letter-spacing:0.5px; background:transparent; border:none;")
         hdr3_lay.addWidget(hdr3_lbl)
         hdr3_lay.addStretch()
         card3_outer.addWidget(hdr3)
@@ -611,7 +561,7 @@ class PluginDevicePage(QWidget):
         self._r_client_tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._r_client_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._r_client_tbl.setAlternatingRowColors(True)
-        self._r_client_tbl.setStyleSheet(_TBL_SS)
+        _s.themed_ss(self._r_client_tbl, _TBL_SS)
         self._r_client_tbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         def _pdp_reload_plugin():
@@ -645,9 +595,9 @@ class PluginDevicePage(QWidget):
 
         file_ok = os.path.isfile(self._path)
         if not file_ok:
-            self._show_banner(f"Plugin file not found: {self._path}", RED)
+            self._show_banner(f"Plugin file not found: {self._path}", "RED")
         elif err:
-            self._show_banner(str(err), RED)
+            self._show_banner(str(err), "RED")
         else:
             self._banner.setVisible(False)
 
@@ -667,26 +617,24 @@ class PluginDevicePage(QWidget):
             self._cred_status.setText("Password saved securely in OS Credential Manager."
                                       if self._cred_remember_cb.isChecked() else "")
 
-    def _show_banner(self, text: str, color: str) -> None:
+    def _show_banner(self, text: str, color_name: str) -> None:
         import re as _re
         self._banner_lbl.setText(text)
-        self._banner_lbl.setStyleSheet(
-            f"font-size:12px; color:{color}; background:transparent; border:none;"
-        )
-        self._banner_frame.setStyleSheet(
-            f"background:{color}22; border:1px solid {color}44; border-radius:4px;"
-        )
+        _s.themed_ss(self._banner_lbl, lambda cn=color_name: (
+            f"font-size:12px; color:{getattr(_s, cn)}; background:transparent; border:none;"
+        ))
+        _s.themed_ss(self._banner_frame, lambda cn=color_name: (
+            f"background:{getattr(_s, cn)}22; border:1px solid {getattr(_s, cn)}44; border-radius:4px;"
+        ))
         # Detect "pip install <pkg>" and show install button
         m = _re.search(r"pip install\s+(\S+)", text)
         if m:
             pkg = m.group(1)
             self._banner_install_btn.setText(f"⬇ Install {pkg}")
-            self._banner_install_btn.setStyleSheet(
-                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-                f" border-radius:3px; padding:3px 10px; font-size:11px; }}"
-                f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            )
+            _s.themed_ss(self._banner_install_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+                " border-radius:3px; padding:3px 10px; font-size:11px; }}"
+                "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+                "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
             try:
                 self._banner_install_btn.clicked.disconnect()
             except (RuntimeError, TypeError):
@@ -729,10 +677,10 @@ class PluginDevicePage(QWidget):
         self._m_nr_band.setText(_fmt(extra.get("nr5g_band")))
         self._m_nr_rsrp_bar.set_value(nr_rsrp, "dBm")
         self._m_nr_rsrp.setText(_fmt(nr_rsrp, " dBm"))
-        self._m_nr_rsrp.setStyleSheet(
-            f"color:{_quality_color(nr_rsrp)}; font-size:12px; font-weight:bold;"
+        _s.themed_ss(self._m_nr_rsrp, lambda v=nr_rsrp: (
+            f"color:{_quality_color(v)}; font-size:12px; font-weight:bold;"
             " background:transparent; border:none;"
-        )
+        ))
         self._m_nr_sinr_bar.set_value(nr_sinr, "dB")
         self._m_nr_sinr.setText(_fmt(nr_sinr, " dB"))
         self._m_nr_rsrq.setText(_fmt(extra.get("nr5g_rsrq_db"), " dB"))
@@ -743,10 +691,10 @@ class PluginDevicePage(QWidget):
         self._m_lte_band.setText(_fmt(extra.get("lte_band")))
         self._m_lte_rsrp_bar.set_value(lte_rsrp, "dBm")
         self._m_lte_rsrp.setText(_fmt(lte_rsrp, " dBm"))
-        self._m_lte_rsrp.setStyleSheet(
-            f"color:{_quality_color(lte_rsrp)}; font-size:12px; font-weight:bold;"
+        _s.themed_ss(self._m_lte_rsrp, lambda v=lte_rsrp: (
+            f"color:{_quality_color(v)}; font-size:12px; font-weight:bold;"
             " background:transparent; border:none;"
-        )
+        ))
         self._m_lte_snr.setText(_fmt(extra.get("lte_snr_db"), " dB"))
         self._m_lte_rsrq.setText(_fmt(extra.get("lte_rsrq_db"), " dB"))
         self._m_lte_pci.setText(_fmt(extra.get("lte_pci")))
@@ -813,9 +761,9 @@ class PluginDevicePage(QWidget):
             node_item = QTreeWidgetItem([name, mac, ip, role])
             node_item.setFont(0, bold)
             node_item.setForeground(
-                0, QColor(ACCENT if role == "master" else TEXT_PRIMARY)
+                0, QColor(_s.ACCENT if role == "master" else _s.TEXT_PRIMARY)
             )
-            node_item.setForeground(3, QColor(ACCENT if role == "master" else TEXT_SECONDARY))
+            node_item.setForeground(3, QColor(_s.ACCENT if role == "master" else _s.TEXT_SECONDARY))
 
             # Child rows: clients connected to this node
             for c in buckets.get(name, []):
@@ -826,7 +774,7 @@ class PluginDevicePage(QWidget):
                     c.get("ip", "") or "",
                     c.get("band", "") or "",
                 ])
-                child.setForeground(0, QColor(TEXT_SECONDARY))
+                child.setForeground(0, QColor(_s.TEXT_SECONDARY))
                 node_item.addChild(child)
 
             node_item.setExpanded(True)
@@ -863,5 +811,5 @@ class PluginDevicePage(QWidget):
         """Grey the page out when the plugin file is missing."""
         self._show_banner(
             f"Plugin file not found — re-import it from the Hardware page:\n{self._path}",
-            AMBER,
+            "AMBER",
         )

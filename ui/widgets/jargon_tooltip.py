@@ -35,7 +35,7 @@ from typing import Optional
 from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
 
-from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_PRIMARY, TEXT_SECONDARY
+from ui import styles as _s
 
 # ── Glossary loader ────────────────────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ class JargonTooltip(QLabel):
         definition = get_definition(term)
         if definition:
             self.setText(
-                f'<span style="color:{ACCENT}; text-decoration:underline dotted;">{term}</span>'
+                f'<span style="color:{_s.ACCENT}; text-decoration:underline dotted;">{term}</span>'
             )
             self.setTextFormat(Qt.TextFormat.RichText)
             self.setToolTip(
@@ -137,26 +137,20 @@ class _LearnMorePopover(QFrame):
     def __init__(self, term: str, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setFixedWidth(280)
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}"
-        )
+        _s.themed_ss(self, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 12)
         lay.setSpacing(6)
 
         title = QLabel(term)
         title.setWordWrap(True)
-        title.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(title, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         lay.addWidget(title)
 
         defn = QLabel(get_definition(term) or "No definition available.")
         defn.setWordWrap(True)
-        defn.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(defn, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         lay.addWidget(defn)
 
         detail = get_detail(term)
@@ -164,13 +158,11 @@ class _LearnMorePopover(QFrame):
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.HLine)
             sep.setFixedHeight(1)
-            sep.setStyleSheet(f"color:{BORDER}; background:{BORDER};")
+            _s.themed_ss(sep, "color:{BORDER}; background:{BORDER};")
             lay.addWidget(sep)
             detail_lbl = QLabel(detail)
             detail_lbl.setWordWrap(True)
-            detail_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(detail_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
             lay.addWidget(detail_lbl)
 
     def show_at(self, global_pos: QPoint) -> None:
@@ -201,7 +193,7 @@ class LearnMoreLink(QLabel):
         super().__init__(parent)
         self._term = term
         self._popover: "_LearnMorePopover | None" = None
-        self.setText(f'<span style="color:{ACCENT};">ⓘ what is "{term}"? →</span>')
+        self.setText(f'<span style="color:{_s.ACCENT};">ⓘ what is "{term}"? →</span>')
         self.setTextFormat(Qt.TextFormat.RichText)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet("background:transparent; font-size:10px;")

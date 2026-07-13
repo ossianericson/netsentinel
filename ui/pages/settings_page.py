@@ -28,10 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, BG_CARD, BG_DARK, BORDER,
-    TEXT_MUTED, TEXT_PRIMARY, WHITE,
-)
+from ui import styles as _s
 
 from ui.pages.settings_cards import (
     _card,
@@ -80,21 +77,15 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
 
         # Header with dirty indicator
         hdr_container = QFrame()
-        hdr_container.setStyleSheet(
-            f"QFrame {{ background:transparent; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(hdr_container, "QFrame {{ background:transparent; border-bottom:1px solid {BORDER}; }}")
         hdr_lay = QHBoxLayout(hdr_container)
         hdr_lay.setContentsMargins(20, 16, 20, 12)
         hdr_lay.setSpacing(8)
         hdr_title = QLabel("Settings & Customisation")
-        hdr_title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            " padding:0; background:transparent; border:none;"
-        )
+        _s.themed_ss(hdr_title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            " padding:0; background:transparent; border:none;")
         self._dirty_dot = QLabel("● Unsaved changes")
-        self._dirty_dot.setStyleSheet(
-            f"font-size:10px; color:{AMBER}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._dirty_dot, "font-size:10px; color:{AMBER}; background:transparent; border:none;")
         self._dirty_dot.setVisible(False)
         hdr_lay.addWidget(hdr_title)
         hdr_lay.addSpacing(8)
@@ -104,23 +95,17 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
 
         # SETTINGS-1: search bar
         search_row = QFrame()
-        search_row.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(search_row, "QFrame {{ background:{BG_DARK}; border-bottom:1px solid {BORDER}; }}")
         search_lay = QHBoxLayout(search_row)
         search_lay.setContentsMargins(16, 6, 16, 6)
         search_lay.setSpacing(8)
         search_icon = QLabel("🔍")
-        search_icon.setStyleSheet(
-            f"font-size:12px; background:transparent; border:none; color:{TEXT_MUTED};"
-        )
+        _s.themed_ss(search_icon, "font-size:12px; background:transparent; border:none; color:{TEXT_MUTED};")
         self._settings_search = QLineEdit()
         self._settings_search.setPlaceholderText("Search settings…")
-        self._settings_search.setStyleSheet(
-            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-            f" border-radius:4px; padding:4px 8px; font-size:11px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._settings_search, "QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:4px; padding:4px 8px; font-size:11px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._settings_search.textChanged.connect(self._on_search_changed)
         search_lay.addWidget(search_icon)
         search_lay.addWidget(self._settings_search, 1)
@@ -128,27 +113,11 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
 
         # SETTINGS-CAT: category chip bar
         cat_row = QFrame()
-        cat_row.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border-bottom:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(cat_row, "QFrame {{ background:{BG_DARK}; border-bottom:1px solid {BORDER}; }}")
         cat_lay = QHBoxLayout(cat_row)
         cat_lay.setContentsMargins(16, 6, 16, 6)
         cat_lay.setSpacing(6)
         self._cat_btns: dict[str, QPushButton] = {}
-        _chip_base = (
-            f"QPushButton {{ font-size:11px; padding:3px 12px;"
-            f" border:1px solid {BORDER}; border-radius:10px;"
-            f" background:{BG_CARD}; color:{TEXT_MUTED}; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT}; }}"
-        )
-        _chip_active = (
-            f"QPushButton {{ font-size:11px; padding:3px 12px;"
-            f" border:1px solid {ACCENT}; border-radius:10px;"
-            f" background:{ACCENT}; color:{WHITE}; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; border-color:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
-        )
         qs_cat = QSettings("NetSentinel", "NetSentinel")
         saved_cat = qs_cat.value("settings/last_category", "All", type=str)
         for chip_label in ["All", "Appearance", "Monitoring", "Alerts", "Integrations", "Advanced"]:
@@ -156,20 +125,15 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
             btn.setCheckable(False)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFixedHeight(24)
-            is_active = chip_label == saved_cat
-            btn.setStyleSheet(_chip_active if is_active else _chip_base)
+            btn.setStyleSheet(self._chip_qss(chip_label == saved_cat))
             btn.clicked.connect(
-                lambda _, lbl=chip_label, base=_chip_base, active=_chip_active:
-                self._on_category_changed(lbl, base, active)
+                lambda _, lbl=chip_label: self._on_category_changed(lbl)
             )
             cat_lay.addWidget(btn)
             self._cat_btns[chip_label] = btn
         cat_lay.addStretch()
         outer.addWidget(cat_row)
         self._active_category = saved_cat
-        # Store QSS strings for later toggling
-        self._chip_base_qss = _chip_base
-        self._chip_active_qss = _chip_active
 
         self._settings_scroll = QScrollArea()
         self._settings_scroll.setWidgetResizable(True)
@@ -225,11 +189,30 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
 
     # ── Search + dirty guard ─────────────────────────────────────────────────
 
-    def _on_category_changed(self, label: str, base_qss: str, active_qss: str) -> None:
+    def _chip_qss(self, active: bool) -> str:
+        """Category-chip QSS from live theme tokens (shape I — re-applied on refresh_theme,
+        never registered with themed_ss because the applied state depends on selection)."""
+        if active:
+            return (
+                f"QPushButton {{ font-size:11px; padding:3px 12px;"
+                f" border:1px solid {_s.ACCENT}; border-radius:10px;"
+                f" background:{_s.ACCENT}; color:{_s.WHITE}; }}"
+                f"QPushButton:hover {{ background:{_s.ACCENT_LITE}; color:{_s.WHITE}; border-color:{_s.ACCENT_LITE}; }}"
+                f"QPushButton:pressed {{ background:{_s.ACCENT_DARK}; color:{_s.WHITE}; border-color:{_s.ACCENT_DARK}; }}"
+            )
+        return (
+            f"QPushButton {{ font-size:11px; padding:3px 12px;"
+            f" border:1px solid {_s.BORDER}; border-radius:10px;"
+            f" background:{_s.BG_CARD}; color:{_s.TEXT_MUTED}; }}"
+            f"QPushButton:hover {{ border-color:{_s.ACCENT}; color:{_s.TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{_s.ACCENT}; color:{_s.WHITE}; border-color:{_s.ACCENT}; }}"
+        )
+
+    def _on_category_changed(self, label: str) -> None:
         self._active_category = label
         QSettings("NetSentinel", "NetSentinel").setValue("settings/last_category", label)
         for lbl, btn in self._cat_btns.items():
-            btn.setStyleSheet(active_qss if lbl == label else base_qss)
+            btn.setStyleSheet(self._chip_qss(lbl == label))
         self._apply_visibility()
 
     def _apply_visibility(self) -> None:
@@ -243,7 +226,9 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         self._apply_visibility()
 
     def refresh_theme(self) -> None:
-        self._refresh_theme_buttons()
+        self._refresh_theme_swatches()
+        for lbl, btn in self._cat_btns.items():
+            btn.setStyleSheet(self._chip_qss(lbl == self._active_category))
 
     def _mark_dirty(self) -> None:
         self._dirty = True
@@ -290,12 +275,12 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
             "page Usage Insights card. Leave at 0 GB to hide this comparison."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; background:transparent;")
+        _s.themed_ss(desc, "font-size:10px; color:{TEXT_MUTED}; background:transparent;")
         bl.addWidget(desc)
 
         row = QHBoxLayout()
         lbl = QLabel("Monthly data cap:")
-        lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        _s.themed_ss(lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
         self._plan_cap_spin = QDoubleSpinBox()
         self._plan_cap_spin.setRange(0, 100_000)
         self._plan_cap_spin.setDecimals(0)
@@ -310,7 +295,7 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
 
         speed_row = QHBoxLayout()
         speed_lbl = QLabel("Promised download speed:")
-        speed_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        _s.themed_ss(speed_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
         self._plan_speed_spin = QDoubleSpinBox()
         self._plan_speed_spin.setRange(0, 100_000)
         self._plan_speed_spin.setDecimals(0)

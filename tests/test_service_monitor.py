@@ -236,6 +236,9 @@ class TestAlertEngineServiceDown:
         engine = AlertEngine(store=store, rules=[rule])
         results = [{"host": "192.168.1.1", "port": 80, "up": False,
                     "label": "HTTP", "error": "refused"}]
+        # 3 consecutive failed checks are required before the first alert fires.
+        engine.evaluate_service_checks(results)
+        engine.evaluate_service_checks(results)
         fired = engine.evaluate_service_checks(results)
         assert len(fired) == 1
         assert fired[0].rule_type == "SERVICE_DOWN"
@@ -255,6 +258,9 @@ class TestAlertEngineServiceDown:
         rule = AlertRule(name="Svc Down", rule_type="SERVICE_DOWN", cooldown_s=9999)
         engine = AlertEngine(store=store, rules=[rule])
         results = [{"host": "host", "port": 80, "up": False, "label": "x", "error": ""}]
+        # Clear the 3-consecutive-failure grace period first.
+        engine.evaluate_service_checks(results)
+        engine.evaluate_service_checks(results)
         fired1 = engine.evaluate_service_checks(results)
         fired2 = engine.evaluate_service_checks(results)
         assert len(fired1) == 1
@@ -269,6 +275,8 @@ class TestAlertEngineServiceDown:
             {"host": "watched", "port": 80, "up": False, "label": "W", "error": ""},
             {"host": "other",   "port": 80, "up": False, "label": "O", "error": ""},
         ]
+        engine.evaluate_service_checks(results)
+        engine.evaluate_service_checks(results)
         fired = engine.evaluate_service_checks(results)
         assert len(fired) == 1
         assert "watched" in fired[0].host
@@ -287,6 +295,8 @@ class TestAlertEngineServiceDown:
             {"host": "a", "port": 80,  "up": False, "label": "HTTP",  "error": ""},
             {"host": "b", "port": 443, "up": False, "label": "HTTPS", "error": ""},
         ]
+        engine.evaluate_service_checks(results)
+        engine.evaluate_service_checks(results)
         fired = engine.evaluate_service_checks(results)
         assert len(fired) == 2
 
@@ -295,5 +305,7 @@ class TestAlertEngineServiceDown:
         rule = AlertRule(name="Svc Down", rule_type="SERVICE_DOWN", cooldown_s=0)
         engine = AlertEngine(store=store, rules=[rule])
         results = [{"host": "host", "port": 80, "up": False, "label": "x", "error": ""}]
+        engine.evaluate_service_checks(results)
+        engine.evaluate_service_checks(results)
         fired = engine.evaluate_service_checks(results)
         assert fired[0].severity == "CRITICAL"

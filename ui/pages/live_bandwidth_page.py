@@ -41,40 +41,33 @@ from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from PyQt6.QtGui import QColor
 
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BORDER, CHART_AXIS, CHART_BG,
-    CHART_DOWN, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
-    TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    TH_BG, TH_BORDER, TH_TEXT,
+    CHART_AXIS, CHART_DOWN, CHART_UP,
 )
 
 _HISTORY_LEN  = 60          # seconds of rolling history
-_DOWN_COLOR   = CHART_DOWN  # blue  — download
-_UP_COLOR     = CHART_UP    # green — upload
+_DOWN_COLOR   = CHART_DOWN  # blue  — download (theme-independent)
+_UP_COLOR     = CHART_UP    # green — upload (theme-independent)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _kpi_tile(label: str, color: str = ACCENT) -> tuple[QFrame, QLabel]:
+def _kpi_tile(label: str, color_name: str = "ACCENT") -> tuple[QFrame, QLabel]:
     tile = QFrame()
-    tile.setStyleSheet(
-        f"background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {color}; border-radius:0;"
-    )
+    _s.themed_ss(tile, lambda cn=color_name: (
+        f"background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
+        f" border-left:3px solid {getattr(_s, cn)}; border-radius:0;"
+    ))
     lay = QVBoxLayout(tile)
     lay.setContentsMargins(12, 8, 12, 8)
     lay.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(
-        f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-        f" letter-spacing:0.5px; border:none; background:transparent;"
-    )
+    _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+        " letter-spacing:0.5px; border:none; background:transparent;")
     val = QLabel("—")
-    val.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:22px; font-weight:bold;"
-        f" border:none; background:transparent;"
-    )
+    _s.themed_ss(val, "color:{TEXT_PRIMARY}; font-size:22px; font-weight:bold;"
+        " border:none; background:transparent;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return tile, val
@@ -126,10 +119,10 @@ class LiveBandwidthPage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_up,    self._lbl_up    = _kpi_tile("↑ Up",       GREEN)
-        self._kpi_down,  self._lbl_down  = _kpi_tile("↓ Down",     ACCENT)
-        self._kpi_pkup,  self._lbl_pkup  = _kpi_tile("Peak Up",    AMBER)
-        self._kpi_pkdn,  self._lbl_pkdn  = _kpi_tile("Peak Down",  RED)
+        self._kpi_up,    self._lbl_up    = _kpi_tile("↑ Up",       "GREEN")
+        self._kpi_down,  self._lbl_down  = _kpi_tile("↓ Down",     "ACCENT")
+        self._kpi_pkup,  self._lbl_pkup  = _kpi_tile("Peak Up",    "AMBER")
+        self._kpi_pkdn,  self._lbl_pkdn  = _kpi_tile("Peak Down",  "RED")
         for t in (self._kpi_up, self._kpi_down, self._kpi_pkup, self._kpi_pkdn):
             kpi_row.addWidget(t, 1)
         root.addLayout(kpi_row)
@@ -139,16 +132,12 @@ class LiveBandwidthPage(QWidget):
         ctrl.setSpacing(8)
 
         _lbl = QLabel("Interface:")
-        _lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY};"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(_lbl, "font-size:11px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;")
         self._iface_combo = QComboBox()
-        self._iface_combo.setStyleSheet(
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px;"
-            f" padding:3px 8px; font-size:11px; min-height:26px; }}"
-        )
+        _s.themed_ss(self._iface_combo, "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px;"
+            " padding:3px 8px; font-size:11px; min-height:26px; }}")
         self._iface_combo.addItem("All interfaces (sum)")
         self._iface_combo.currentIndexChanged.connect(self._redraw_chart)
 
@@ -191,28 +180,27 @@ class LiveBandwidthPage(QWidget):
 
         # Matplotlib chart
         chart_frame = QFrame()
-        chart_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;"
+        _s.themed_ss(
+            chart_frame,
+            "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;",
         )
         chart_lay = QVBoxLayout(chart_frame)
         chart_lay.setContentsMargins(8, 8, 8, 8)
 
-        self._fig = Figure(figsize=(10, 3.2), facecolor=CHART_BG)
+        self._fig = Figure(figsize=(10, 3.2), facecolor=_s.CHART_BG)
         self._ax = self._fig.add_subplot(111)
         self._fig.subplots_adjust(left=0.06, right=0.99, top=0.93, bottom=0.15)
         self._canvas = FigureCanvas(self._fig)
-        self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")
+        _s.themed_ss(self._canvas, "background:{CHART_BG}; border:none;")
         self._canvas.setMinimumHeight(80)
         chart_lay.addWidget(self._canvas)
         content_lay.addWidget(chart_frame, 2)
 
         # Per-interface breakdown table
         tbl_label = QLabel("SESSION TOTALS BY INTERFACE")
-        tbl_label.setStyleSheet(
-            f"font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
-            f" letter-spacing:0.5px; background:transparent; border:none;"
-            f" padding:6px 0 2px 0;"
-        )
+        _s.themed_ss(tbl_label, "font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
+            " letter-spacing:0.5px; background:transparent; border:none;"
+            " padding:6px 0 2px 0;")
         content_lay.addWidget(tbl_label)
 
         self._tbl = QTableWidget(0, 5)
@@ -229,17 +217,15 @@ class LiveBandwidthPage(QWidget):
         self._tbl.verticalHeader().setVisible(False)
         self._tbl.verticalHeader().setDefaultSectionSize(24)
         self._tbl.setMaximumHeight(180)
-        self._tbl.setStyleSheet(
-            f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QHeaderView::section {{"
-            f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-            f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid {TH_BORDER};"
-            f"}}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-            f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-        )
+        _s.themed_ss(self._tbl, "QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QHeaderView::section {{"
+            "  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            "  font-weight:bold; padding:4px 5px; border:none;"
+            "  border-right:1px solid {TH_BORDER};"
+            "}}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+            "QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+            "QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}")
         def _bw_show_inventory():
             from PyQt6.QtWidgets import QApplication as _QA
             from ui.nav.labels import NavLabel as _L
@@ -265,7 +251,7 @@ class LiveBandwidthPage(QWidget):
         self._worker = IfaceBwPoller(interval_s=1.0, parent=self)
         self._worker.stats_ready.connect(self._on_stats)
         self._worker.error.connect(
-            lambda e: self._ax.set_title(f"⚠  {e}", color=RED, fontsize=9)
+            lambda e: self._ax.set_title(f"⚠  {e}", color=_s.RED, fontsize=9)
         )
         self._worker.start()
 
@@ -351,7 +337,7 @@ class LiveBandwidthPage(QWidget):
     def _draw_empty_chart(self) -> None:
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
         ax.fill_between(range(_HISTORY_LEN), 0, color=_DOWN_COLOR, alpha=0.15)
         ax.fill_between(range(_HISTORY_LEN), 0, color=_UP_COLOR,   alpha=0.15)
         ax.set_xlim(0, _HISTORY_LEN - 1)
@@ -360,8 +346,8 @@ class LiveBandwidthPage(QWidget):
         ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
         ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
-        ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
+            sp.set_edgecolor(_s.CHART_SPINE)
+        ax.grid(True, linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         self._canvas.draw_idle()
 
     @pyqtSlot()
@@ -369,7 +355,7 @@ class LiveBandwidthPage(QWidget):
         up, down = self._get_chart_data()
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
 
         xs = list(range(_HISTORY_LEN))
         ax.fill_between(xs, down, alpha=0.35, color=_DOWN_COLOR, label="↓ Download")
@@ -387,10 +373,10 @@ class LiveBandwidthPage(QWidget):
         ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
         ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
-        ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
+            sp.set_edgecolor(_s.CHART_SPINE)
+        ax.grid(True, linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         ax.legend(loc="upper left", fontsize=7, framealpha=0.7,
-                  facecolor=CHART_BG, edgecolor=CHART_SPINE)
+                  facecolor=_s.CHART_BG, edgecolor=_s.CHART_SPINE)
 
         # Event annotation ticks (device join = green, rate spike = red)
         y_top = ax.get_ylim()[1]
@@ -408,9 +394,18 @@ class LiveBandwidthPage(QWidget):
         ax.set_title(
             f"{sel}  —  "
             f"↑ {up[-1]:.2f} Mbps  ↓ {down[-1]:.2f} Mbps",
-            fontsize=8, color=TEXT_SECONDARY, pad=4,
+            fontsize=8, color=_s.TEXT_SECONDARY, pad=4,
         )
         self._canvas.draw_idle()
+
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read the matplotlib colour tokens and redraw.
+
+        The canvas widget background re-applies automatically (themed_ss
+        registry); this re-reads the figure facecolor and repaints the chart.
+        """
+        self._fig.set_facecolor(_s.CHART_BG)
+        self._redraw_chart()
 
     # ── Breakdown table ───────────────────────────────────────────────────────
 
@@ -420,11 +415,11 @@ class LiveBandwidthPage(QWidget):
             row = self._tbl.rowCount()
             self._tbl.insertRow(row)
             cells = [
-                (iface,                               TEXT_PRIMARY),
-                (f"{d['up_mb']:.2f}",                 GREEN),
-                (f"{d['down_mb']:.2f}",               ACCENT),
-                (f"{d['up_mbps']:.2f} Mbps",          TEXT_SECONDARY),
-                (f"{d['down_mbps']:.2f} Mbps",        TEXT_SECONDARY),
+                (iface,                               _s.TEXT_PRIMARY),
+                (f"{d['up_mb']:.2f}",                 _s.GREEN),
+                (f"{d['down_mb']:.2f}",               _s.ACCENT),
+                (f"{d['up_mbps']:.2f} Mbps",          _s.TEXT_SECONDARY),
+                (f"{d['down_mbps']:.2f} Mbps",        _s.TEXT_SECONDARY),
             ]
             for col, (text, color) in enumerate(cells):
                 item = QTableWidgetItem(text)

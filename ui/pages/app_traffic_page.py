@@ -46,13 +46,9 @@ from modules.cdn_ranges import cdn_breakdown_label
 from modules.colours import APP_CATEGORY_COLORS
 from modules.app_traffic_classifier import CATEGORY_ORDER as _CAT_ORDER
 from modules.metric_store import MetricStore
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE,
-    BG_ALT_ROW, BG_CARD, BORDER,
-    CHART_AXIS, CHART_BG, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
-    GREEN, RED, RED_DARK, RED_HOVER, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    TH_BG, TH_BORDER, TH_TEXT, WHITE,
+    CHART_AXIS,
 )
 from ui.widgets.empty_state_card import EmptyStateCard
 
@@ -76,23 +72,19 @@ def _cat_color(cat: str) -> str:
 
 def _make_card(title: str) -> tuple[QFrame, QVBoxLayout]:
     card = QFrame()
-    card.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0; }}"
-    )
+    _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0; }}")
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
 
     hdr = QFrame()
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(f"background:{TH_BG}; border:none; border-radius:0;")
+    _s.themed_ss(hdr, "background:{TH_BG}; border:none; border-radius:0;")
     hdr_lay = QHBoxLayout(hdr)
     hdr_lay.setContentsMargins(12, 0, 12, 0)
     lbl = QLabel(title)
-    lbl.setStyleSheet(
-        f"color:{TH_TEXT}; font-size:11px; font-weight:bold;"
-        f" background:transparent; border:none;"
-    )
+    _s.themed_ss(lbl, "color:{TH_TEXT}; font-size:11px; font-weight:bold;"
+        " background:transparent; border:none;")
     hdr_lay.addWidget(lbl)
     outer.addWidget(hdr)
 
@@ -158,32 +150,24 @@ class AppTrafficPage(QWidget):
         ctrl.setSpacing(8)
 
         hl = QLabel("Host:")
-        hl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(hl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._host_combo = QComboBox()
         self._host_combo.setMinimumWidth(240)
-        self._host_combo.setStyleSheet(
-            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px;"
-            f" padding:3px 8px; font-size:11px; min-height:26px; }}"
-        )
+        _s.themed_ss(self._host_combo, "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px;"
+            " padding:3px 8px; font-size:11px; min-height:26px; }}")
         self._host_combo.addItem("All Hosts")
         self._host_combo.currentTextChanged.connect(self._on_host_changed)
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._status_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;")
 
         self._toggle_btn = QPushButton("▶  Start Monitoring")
         self._toggle_btn.setFixedHeight(28)
-        self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:11px; font-weight:bold; padding:0 14px; }}"
-            f"QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._toggle_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:11px; font-weight:bold; padding:0 14px; }}"
+            "QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._toggle_btn.clicked.connect(self._toggle_monitoring)
 
         ctrl.addWidget(hl)
@@ -225,20 +209,18 @@ class AppTrafficPage(QWidget):
         bar_card, bar_body = _make_card(
             "HOST BREAKDOWN  —  BYTES PER PROTOCOL CATEGORY  (LAST 10 s)"
         )
-        self._fig = Figure(figsize=(10, 3.5), facecolor=CHART_BG)
+        self._fig = Figure(figsize=(10, 3.5), facecolor=_s.CHART_BG)
         self._fig.subplots_adjust(left=0.25, right=0.98, top=0.95, bottom=0.15)
         self._ax = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
-        self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")
+        _s.themed_ss(self._canvas, "background:{CHART_BG}; border:none;")
         self._canvas.setMinimumHeight(120)
         bar_body.addWidget(self._canvas)
         cl.addWidget(bar_card, 2)
 
         # Category legend
         legend_card = QFrame()
-        legend_card.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;"
-        )
+        _s.themed_ss(legend_card, "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;")
         self._legend_lay = QHBoxLayout(legend_card)
         self._legend_lay.setContentsMargins(12, 6, 12, 6)
         self._legend_lay.setSpacing(14)
@@ -250,11 +232,11 @@ class AppTrafficPage(QWidget):
         hist_card, hist_body = _make_card(
             "LAST 24 HOURS BY CATEGORY  —  CLICK A BAR FOR DEVICE & PROVIDER BREAKDOWN"
         )
-        self._fig_hist = Figure(figsize=(10, 2.6), facecolor=CHART_BG)
+        self._fig_hist = Figure(figsize=(10, 2.6), facecolor=_s.CHART_BG)
         self._fig_hist.subplots_adjust(left=0.25, right=0.98, top=0.92, bottom=0.18)
         self._ax_hist = self._fig_hist.add_subplot(111)
         self._canvas_hist = FigureCanvas(self._fig_hist)
-        self._canvas_hist.setStyleSheet(f"background:{CHART_BG}; border:none;")
+        _s.themed_ss(self._canvas_hist, "background:{CHART_BG}; border:none;")
         self._canvas_hist.setMinimumHeight(100)
         self._canvas_hist.mpl_connect("button_press_event", self._on_hist_bar_click)
         hist_body.addWidget(self._canvas_hist)
@@ -263,16 +245,12 @@ class AppTrafficPage(QWidget):
             "Click a category bar above to see which devices used the most data."
         )
         self._hist_breakdown_lbl.setWordWrap(True)
-        self._hist_breakdown_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._hist_breakdown_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         hist_body.addWidget(self._hist_breakdown_lbl)
 
         self._hist_cdn_lbl = QLabel("")
         self._hist_cdn_lbl.setWordWrap(True)
-        self._hist_cdn_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._hist_cdn_lbl, "font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;")
         hist_body.addWidget(self._hist_cdn_lbl)
 
         cl.addWidget(hist_card, 2)
@@ -297,17 +275,15 @@ class AppTrafficPage(QWidget):
         self._tbl.verticalHeader().setVisible(False)
         self._tbl.verticalHeader().setDefaultSectionSize(24)
         self._tbl.setMaximumHeight(220)
-        self._tbl.setStyleSheet(
-            f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QHeaderView::section {{"
-            f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-            f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid {TH_BORDER};"
-            f"}}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-            f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-        )
+        _s.themed_ss(self._tbl, "QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QHeaderView::section {{"
+            "  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            "  font-weight:bold; padding:4px 5px; border:none;"
+            "  border-right:1px solid {TH_BORDER};"
+            "}}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+            "QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+            "QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}")
         self._tbl.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tbl.customContextMenuRequested.connect(self._ctx_menu)
         tbl_body.addWidget(self._tbl)
@@ -338,12 +314,10 @@ class AppTrafficPage(QWidget):
         self._worker.start()
         self._running = True
         self._toggle_btn.setText("■  Stop Monitoring")
-        self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{RED}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:11px; font-weight:bold; padding:0 14px; }}"
-            f"QPushButton:hover   {{ background:{RED_HOVER}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{RED_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._toggle_btn, "QPushButton {{ background:{RED}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:11px; font-weight:bold; padding:0 14px; }}"
+            "QPushButton:hover   {{ background:{RED_HOVER}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{RED_DARK}; color:{WHITE}; }}")
         self._status_lbl.setText(f"Monitoring  •  {_INTERVAL_S:.0f} s window")
 
     def _stop_worker(self) -> None:
@@ -353,12 +327,10 @@ class AppTrafficPage(QWidget):
             self._worker = None
         self._running = False
         self._toggle_btn.setText("▶  Start Monitoring")
-        self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:11px; font-weight:bold; padding:0 14px; }}"
-            f"QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._toggle_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:11px; font-weight:bold; padding:0 14px; }}"
+            "QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._status_lbl.setText("Stopped")
 
     def closeEvent(self, event) -> None:
@@ -433,11 +405,11 @@ class AppTrafficPage(QWidget):
 
     def _on_error(self, msg: str) -> None:
         self._ax.clear()
-        self._ax.set_facecolor(CHART_PLOT_BG)
+        self._ax.set_facecolor(_s.CHART_PLOT_BG)
         self._ax.text(
             0.5, 0.5, msg,
             ha="center", va="center", fontsize=8,
-            color=RED, transform=self._ax.transAxes,
+            color=_s.RED, transform=self._ax.transAxes,
         )
         self._canvas.draw_idle()
         self._stop_worker()
@@ -464,19 +436,27 @@ class AppTrafficPage(QWidget):
 
     # ── Chart ─────────────────────────────────────────────────────────────────
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: re-read both figure facecolors and re-render the
+        per-host and 24-hour charts (canvas backgrounds re-apply via themed_ss)."""
+        self._fig.patch.set_facecolor(_s.CHART_BG)
+        self._fig_hist.patch.set_facecolor(_s.CHART_BG)
+        self._redraw_chart()
+        self._refresh_hist_chart()
+
     def _draw_empty_chart(self) -> None:
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        self._fig.patch.set_facecolor(CHART_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        self._fig.patch.set_facecolor(_s.CHART_BG)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
+            sp.set_edgecolor(_s.CHART_SPINE)
         ax.text(
             0.5, 0.5,
             "Start monitoring to see per-host protocol breakdown",
             ha="center", va="center", fontsize=9,
-            color=TEXT_MUTED, transform=ax.transAxes,
+            color=_s.TEXT_MUTED, transform=ax.transAxes,
         )
         self._canvas.draw_idle()
 
@@ -484,8 +464,8 @@ class AppTrafficPage(QWidget):
     def _redraw_chart(self) -> None:
         ax = self._ax
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        self._fig.patch.set_facecolor(CHART_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        self._fig.patch.set_facecolor(_s.CHART_BG)
 
         if not self._snapshots:
             self._draw_empty_chart()
@@ -529,8 +509,8 @@ class AppTrafficPage(QWidget):
         ax.set_xlabel("KB (this window)", fontsize=8, color=CHART_AXIS)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
-        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=CHART_GRID)
+            sp.set_edgecolor(_s.CHART_SPINE)
+        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         self._canvas.draw_idle()
 
     # ── Legend ────────────────────────────────────────────────────────────────
@@ -555,11 +535,11 @@ class AppTrafficPage(QWidget):
     def _refresh_hist_chart(self) -> None:
         ax = self._ax_hist
         ax.clear()
-        ax.set_facecolor(CHART_PLOT_BG)
-        self._fig_hist.patch.set_facecolor(CHART_BG)
+        ax.set_facecolor(_s.CHART_PLOT_BG)
+        self._fig_hist.patch.set_facecolor(_s.CHART_BG)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(CHART_SPINE)
+            sp.set_edgecolor(_s.CHART_SPINE)
 
         totals: Dict[str, int] = {}
         if self._store:
@@ -573,7 +553,7 @@ class AppTrafficPage(QWidget):
                 0.5, 0.5,
                 "No traffic history yet — start monitoring to build 24-hour data",
                 ha="center", va="center", fontsize=9,
-                color=TEXT_MUTED, transform=ax.transAxes,
+                color=_s.TEXT_MUTED, transform=ax.transAxes,
             )
             self._hist_categories = []
             self._canvas_hist.draw_idle()
@@ -592,7 +572,7 @@ class AppTrafficPage(QWidget):
         )
         ax.invert_yaxis()
         ax.set_xlabel("MB (last 24 hours)", fontsize=8, color=CHART_AXIS)
-        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=CHART_GRID)
+        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=_s.CHART_GRID)
         self._canvas_hist.draw_idle()
 
         if self._selected_hist_category in self._hist_categories:
@@ -661,12 +641,12 @@ class AppTrafficPage(QWidget):
             cat_item.setForeground(QColor(_cat_color(cat)))
 
             app_item = QTableWidgetItem(app)
-            app_item.setForeground(QColor(TEXT_PRIMARY))
+            app_item.setForeground(QColor(_s.TEXT_PRIMARY))
 
             bytes_item = QTableWidgetItem(_fmt_bytes(b))
-            bytes_item.setForeground(QColor(TEXT_SECONDARY))
+            bytes_item.setForeground(QColor(_s.TEXT_SECONDARY))
 
-            pct_fg = GREEN if pct > 50 else ACCENT if pct > 10 else TEXT_SECONDARY
+            pct_fg = _s.GREEN if pct > 50 else _s.ACCENT if pct > 10 else _s.TEXT_SECONDARY
             pct_item = QTableWidgetItem(f"{pct:.1f}%")
             pct_item.setForeground(QColor(pct_fg))
 

@@ -19,13 +19,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, BG_HOVER, NAV_DIVIDER, SIDEBAR_BG, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG,
-    TEXT_MUTED, TEXT_SECONDARY, WHITE,
-    NAV_RAIL_HOVER_BG, NAV_RAIL_ACTIVE_BG, NAV_RAIL_FOCUS_BORDER,
-    NAV_ITEM_PIN_HOVER_FG,
-)
-
 
 # -- Lucide icon library (MIT) -----------------------------------------------
 _LUCIDE: dict = {
@@ -240,7 +233,7 @@ _LUCIDE: dict = {
 }
 
 
-def _make_nav_icon(icon_name: str, size: int = 20, color: str = SIDEBAR_ITEM_FG) -> QIcon:
+def _make_nav_icon(icon_name: str, size: int, color: str) -> QIcon:
     """Render a Lucide SVG string to a QIcon at the given pixel size and colour."""
     from PyQt6.QtSvg import QSvgRenderer
     svg_str = _LUCIDE.get(icon_name, _LUCIDE["activity"])
@@ -268,10 +261,6 @@ class _NavEntry:
 class _RailButton(QPushButton):
     """48×58 icon + label button for the activity rail."""
 
-    _COLOR_NORMAL = SIDEBAR_ITEM_FG
-    _COLOR_ACTIVE = WHITE
-    _LABEL_COLOR  = TEXT_MUTED
-
     def __init__(self, icon_name: str, tooltip: str, parent=None):
         super().__init__(parent)
         self._icon_name = icon_name
@@ -295,24 +284,7 @@ class _RailButton(QPushButton):
         self.setFixedSize(56, 58)
         self.setToolTip(tooltip)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._refresh_icon()
-        self.setStyleSheet(
-            "QPushButton {"
-            "  background: transparent;"
-            "  border: 1px solid transparent;"
-            "  border-radius: 4px;"
-            "}"
-            f"QPushButton:hover {{"
-            f"  background: {NAV_RAIL_HOVER_BG};"
-            f"}}"
-            f"QPushButton:checked {{"
-            f"  background: {NAV_RAIL_ACTIVE_BG};"
-            f"}}"
-            f"QPushButton:focus {{"
-            f"  border: 1px solid {NAV_RAIL_FOCUS_BORDER};"
-            f"  outline: none;"
-            f"}}"
-        )
+        self.refresh_theme()
 
     @pyqtProperty(float)
     def badgeScale(self) -> float:
@@ -469,9 +441,6 @@ class _RailButton(QPushButton):
 
     def refresh_theme(self) -> None:
         from ui import styles as _s
-        _RailButton._COLOR_NORMAL = _s.SIDEBAR_ITEM_FG
-        _RailButton._COLOR_ACTIVE = _s.NAV_ITEM_ACTIVE_FG
-        _RailButton._LABEL_COLOR  = _s.TEXT_MUTED
         self.setStyleSheet(
             "QPushButton {"
             "  background: transparent;"
@@ -607,7 +576,6 @@ class _FlyoutPanel(QWidget):
         super().__init__(parent)
         self.setMinimumWidth(0)
         self.setMaximumWidth(0)
-        self.setStyleSheet(f"background: {SIDEBAR_BG};")
 
         self._anim = QPropertyAnimation(self, b"maximumWidth")
         self._anim.setDuration(150)
@@ -622,29 +590,15 @@ class _FlyoutPanel(QWidget):
         hdr = QWidget()
         self._flyout_hdr = hdr
         hdr.setFixedHeight(36)
-        hdr.setStyleSheet(
-            f"background: {SIDEBAR_SECTION_BG}; border-bottom: 1px solid {NAV_DIVIDER};"
-        )
         hlay = QHBoxLayout(hdr)
         hlay.setContentsMargins(12, 0, 4, 0)
         hlay.setSpacing(4)
         self._title_lbl = QLabel()
-        self._title_lbl.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 8px; font-weight: 600;"
-            f" letter-spacing: 1.5px; background: transparent; border: none;"
-        )
         self._pin_btn = QPushButton("⊞")
         self._pin_btn.setFixedSize(24, 24)
         self._pin_btn.setCheckable(True)
         self._pin_btn.setToolTip("Pin panel open")
         self._pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._pin_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none;"
-            f" color: {TEXT_SECONDARY}; font-size: 14px; }}"
-            f"QPushButton:hover {{ color: {NAV_ITEM_PIN_HOVER_FG}; }}"
-            f"QPushButton:checked {{ color: {ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
         hlay.addWidget(self._title_lbl, 1)
         hlay.addWidget(self._pin_btn)
         outer.addWidget(hdr)
@@ -668,14 +622,10 @@ class _FlyoutPanel(QWidget):
         _hint = QLabel("Right-click any page to pin it ★")
         self._hint_lbl = _hint
         _hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _hint.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 9px; padding: 4px 0;"
-            f" background: {SIDEBAR_BG}; border: none;"
-            f" border-top: 1px solid {NAV_DIVIDER};"
-        )
         outer.addWidget(_hint)
 
         self._items: dict = {}   # label -> _FlyoutItem
+        self.refresh_theme()
 
     def refresh_theme(self) -> None:
         from ui import styles as _s

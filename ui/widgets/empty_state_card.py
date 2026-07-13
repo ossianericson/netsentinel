@@ -36,11 +36,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE,
-    BG_CARD, BORDER,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 
 class EmptyStateCard(QWidget):
@@ -85,10 +81,8 @@ class EmptyStateCard(QWidget):
 
         # Card frame
         card = QWidget()
-        card.setStyleSheet(
-            f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:8px; }}"
-        )
+        _s.themed_ss(card, "QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:8px; }}")
         card.setFixedWidth(480)
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(32, 28, 32, 28)
@@ -96,9 +90,7 @@ class EmptyStateCard(QWidget):
 
         # Icon
         icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet(
-            f"font-size:32px; color:{ACCENT}; border:none; background:transparent;"
-        )
+        _s.themed_ss(icon_lbl, "font-size:32px; color:{ACCENT}; border:none; background:transparent;")
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_lay.addWidget(icon_lbl)
 
@@ -106,46 +98,36 @@ class EmptyStateCard(QWidget):
         title_lbl = QLabel(title)
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_lbl.setWordWrap(True)
-        title_lbl.setStyleSheet(
-            f"font-size:15px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" border:none; background:transparent;"
-        )
+        _s.themed_ss(title_lbl, "font-size:15px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " border:none; background:transparent;")
         card_lay.addWidget(title_lbl)
 
         card_lay.addSpacing(4)
 
         # "What this page shows"
         show_hdr = QLabel("What this page shows")
-        show_hdr.setStyleSheet(
-            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY}; text-transform:uppercase;"
-            f" letter-spacing:0.5px; border:none; background:transparent;"
-        )
+        _s.themed_ss(show_hdr, "font-size:10px; font-weight:600; color:{TEXT_SECONDARY}; text-transform:uppercase;"
+            " letter-spacing:0.5px; border:none; background:transparent;")
         card_lay.addWidget(show_hdr)
 
         show_body = QLabel(what_it_shows)
         show_body.setWordWrap(True)
         show_body.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        show_body.setStyleSheet(
-            f"font-size:12px; color:{TEXT_PRIMARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(show_body, "font-size:12px; color:{TEXT_PRIMARY}; border:none; background:transparent;")
         card_lay.addWidget(show_body)
 
         card_lay.addSpacing(4)
 
         # "Why it matters"
         why_hdr = QLabel("Why it matters")
-        why_hdr.setStyleSheet(
-            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY}; text-transform:uppercase;"
-            f" letter-spacing:0.5px; border:none; background:transparent;"
-        )
+        _s.themed_ss(why_hdr, "font-size:10px; font-weight:600; color:{TEXT_SECONDARY}; text-transform:uppercase;"
+            " letter-spacing:0.5px; border:none; background:transparent;")
         card_lay.addWidget(why_hdr)
 
         why_body = QLabel(why_it_matters)
         why_body.setWordWrap(True)
         why_body.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        why_body.setStyleSheet(
-            f"font-size:12px; color:{TEXT_PRIMARY}; border:none; background:transparent;"
-        )
+        _s.themed_ss(why_body, "font-size:12px; color:{TEXT_PRIMARY}; border:none; background:transparent;")
         card_lay.addWidget(why_body)
 
         card_lay.addSpacing(8)
@@ -153,13 +135,11 @@ class EmptyStateCard(QWidget):
         # CTA button
         btn = QPushButton(btn_label)
         btn.setFixedHeight(34)
-        btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:12px; font-weight:bold;"
-            f" padding:0 20px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:12px; font-weight:bold;"
+            " padding:0 20px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         btn.clicked.connect(self.clicked.emit)
         btn_row = QHBoxLayout()
         btn_row.addStretch()

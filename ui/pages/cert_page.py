@@ -34,13 +34,7 @@ from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from PyQt6.QtWidgets import QMenu
 
-from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
-    TH_TEXT,
-)
+from ui import styles as _s
 
 _QS_KEY = "cert_monitor/targets"
 _QS_EXCLUDED_KEY = "cert_monitor/auto_excluded"
@@ -154,11 +148,11 @@ class CertPage(QWidget):
         layout.setSpacing(8)
 
         title = QLabel("TLS Certificate Monitor")
-        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(title, "font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
         layout.addWidget(title)
 
         subtitle = QLabel("Latest TLS certificate status per host — checks run hourly.")
-        subtitle.setStyleSheet(f"font-size: 11px; color: {TEXT_SECONDARY};")
+        _s.themed_ss(subtitle, "font-size: 11px; color: {TEXT_SECONDARY};")
         layout.addWidget(subtitle)
 
         self._content_stack = QStackedWidget()
@@ -186,12 +180,12 @@ class CertPage(QWidget):
         e0_host = QLineEdit()
         e0_host.setPlaceholderText("Hostname  (e.g. example.com)")
         e0_host.setFixedWidth(220)
-        e0_host.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
+        _s.themed_ss(e0_host, "font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
         e0_port = QSpinBox()
         e0_port.setRange(1, 65535)
         e0_port.setValue(443)
         e0_port.setFixedWidth(75)
-        e0_port.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 4px;")
+        _s.themed_ss(e0_port, "font-size:11px; border:1px solid {BORDER}; padding:3px 4px;")
         e0_add = QPushButton("Add Host")
         e0_add.setObjectName("btnScan")
         e0_add.setFixedHeight(30)
@@ -228,32 +222,30 @@ class CertPage(QWidget):
 
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_ok       = self._make_kpi("CERTS OK",      "—", GREEN)
-        self._kpi_expiring = self._make_kpi("EXPIRING SOON", "—", AMBER)
-        self._kpi_expired  = self._make_kpi("EXPIRED",       "—", RED)
-        self._kpi_error    = self._make_kpi("UNREACHABLE",   "—", TEXT_SECONDARY)
+        self._kpi_ok       = self._make_kpi("CERTS OK",      "—", "GREEN")
+        self._kpi_expiring = self._make_kpi("EXPIRING SOON", "—", "AMBER")
+        self._kpi_expired  = self._make_kpi("EXPIRED",       "—", "RED")
+        self._kpi_error    = self._make_kpi("UNREACHABLE",   "—", "TEXT_SECONDARY")
         for w in (self._kpi_ok, self._kpi_expiring, self._kpi_expired, self._kpi_error):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
         cl.addLayout(kpi_row)
 
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
         # Title bar with inline add form
         title_bar = QFrame()
-        title_bar.setStyleSheet(f"background: {BG_CARD}; border-bottom: 1px solid {CARD_HDR_BORDER};")
+        _s.themed_ss(title_bar, "background: {BG_CARD}; border-bottom: 1px solid {CARD_HDR_BORDER};")
         tb_layout = QHBoxLayout(title_bar)
         tb_layout.setContentsMargins(10, 6, 10, 6)
         tb_layout.setSpacing(6)
 
         bar_lbl = QLabel("Certificate Status")
-        bar_lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(bar_lbl, "font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
         tb_layout.addWidget(bar_lbl)
         tb_layout.addStretch()
 
@@ -261,19 +253,17 @@ class CertPage(QWidget):
         self._txt_host.setPlaceholderText("Hostname")
         self._txt_host.setFixedWidth(180)
         self._txt_host.setFixedHeight(24)
-        self._txt_host.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
+        _s.themed_ss(self._txt_host, "font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
         self._spin_port = QSpinBox()
         self._spin_port.setRange(1, 65535)
         self._spin_port.setValue(443)
         self._spin_port.setFixedWidth(70)
         self._spin_port.setFixedHeight(24)
-        self._spin_port.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 3px;")
+        _s.themed_ss(self._spin_port, "font-size:11px; border:1px solid {BORDER}; padding:2px 3px;")
         btn_add = QPushButton("+ Add")
         btn_add.setFixedHeight(24)
-        btn_add.setStyleSheet(
-            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" background:transparent; padding:0 10px;"
-        )
+        _s.themed_ss(btn_add, "font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            " background:transparent; padding:0 10px;")
 
         def _add_from_bar():
             self._add_host(self._txt_host.text(), self._spin_port.value())
@@ -303,8 +293,7 @@ class CertPage(QWidget):
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
-        self._table.setStyleSheet(
-            f"""
+        _s.themed_ss(self._table, """
             QTableWidget {{
                 border: none; gridline-color: {TABLE_ROW_BORDER};
                 font-size: 11px; color: {TEXT_PRIMARY};
@@ -320,8 +309,7 @@ class CertPage(QWidget):
             QTableWidget::item:selected {{
                 background: {TABLE_SEL}; color: {TEXT_PRIMARY};
             }}
-            """
-        )
+            """)
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
@@ -337,19 +325,20 @@ class CertPage(QWidget):
     # ── KPI helpers ───────────────────────────────────────────────────────────
 
     def _make_kpi(self, label: str, value: str, accent: str) -> QFrame:
+        # `accent` is a theme-token NAME (e.g. "GREEN"), resolved live.
         frame = QFrame()
-        frame.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; "
-            f"border-left: 3px solid {accent}; }}"
-        )
+        _s.themed_ss(frame, lambda tk=accent: (
+            f"QFrame {{ background: {_s.BG_CARD}; border: 1px solid {_s.BORDER}; "
+            f"border-left: 3px solid {getattr(_s, tk)}; }}"
+        ))
         frame.setMinimumWidth(100)
         lay = QVBoxLayout(frame)
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
         lbl = QLabel(label)
-        lbl.setStyleSheet(f"font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};")
+        _s.themed_ss(lbl, "font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};")
         val = QLabel(value)
-        val.setStyleSheet(f"font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};")
+        _s.themed_ss(val, "font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};")
         val.setObjectName(f"kpi_val_{label}")
         lay.addWidget(lbl)
         lay.addWidget(val)
@@ -389,19 +378,19 @@ class CertPage(QWidget):
 
             if r.error:
                 status_text  = "UNREACHABLE"
-                status_color = TEXT_SECONDARY
+                status_ctok  = "TEXT_SECONDARY"
                 errored += 1
             elif r.is_expired:
                 status_text  = "EXPIRED"
-                status_color = RED
+                status_ctok  = "RED"
                 expired += 1
             elif r.days_remaining is not None and r.days_remaining < 30:
                 status_text  = "EXPIRING"
-                status_color = AMBER
+                status_ctok  = "AMBER"
                 expiring += 1
             else:
                 status_text  = "OK"
-                status_color = GREEN
+                status_ctok  = "GREEN"
                 ok += 1
 
             days_str    = str(r.days_remaining) if r.days_remaining is not None else "—"
@@ -422,26 +411,26 @@ class CertPage(QWidget):
                 else:
                     QSettings("NetSentinel", "NetSentinel").remove(snooze_key)
 
-            effective_color = TEXT_MUTED if snoozed else status_color
+            effective_ctok = "TEXT_MUTED" if snoozed else status_ctok
 
             self._table.setItem(row_idx, 0, self._cell(r.host))
             self._table.setItem(row_idx, 1, self._cell(str(r.port)))
 
             dot = QLabel(f"  {status_text}{snooze_chip}")
-            dot.setStyleSheet(
-                f"color: {effective_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
-            )
+            _s.themed_ss(dot, lambda tk=effective_ctok: (
+                f"color: {getattr(_s, tk)}; font-size: 11px; font-weight: bold; padding-left: 4px;"
+            ))
             dot.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
             self._table.setCellWidget(row_idx, 2, dot)
 
             days_item = self._cell(days_str)
             if not snoozed:
                 if r.is_expired:
-                    days_item.setForeground(QColor(RED))
+                    days_item.setForeground(QColor(_s.RED))
                 elif r.days_remaining is not None and r.days_remaining < 30:
-                    days_item.setForeground(QColor(AMBER))
+                    days_item.setForeground(QColor(_s.AMBER))
             else:
-                days_item.setForeground(QColor(TEXT_MUTED))
+                days_item.setForeground(QColor(_s.TEXT_MUTED))
             self._table.setItem(row_idx, 3, days_item)
             self._table.setItem(row_idx, 4, self._cell(expires_str))
             self._table.setItem(row_idx, 5, self._cell(r.subject or "—"))
@@ -450,7 +439,7 @@ class CertPage(QWidget):
         if not rows and self._configured:
             self._table.setRowCount(1)
             placeholder = QTableWidgetItem("Waiting for first check cycle…")
-            placeholder.setForeground(QColor(TEXT_SECONDARY))
+            placeholder.setForeground(QColor(_s.TEXT_SECONDARY))
             placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(0, 0, placeholder)
             self._table.setSpan(0, 0, 1, 7)
@@ -488,15 +477,14 @@ class CertPage(QWidget):
         )
         is_snoozed = snooze_until > _t.time()
 
+        _menu_ss = ("QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
+            " border:1px solid {BORDER}; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
-            f" border:1px solid {BORDER}; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, _menu_ss)
 
         snooze_menu = menu.addMenu("Snooze reminder")
-        snooze_menu.setStyleSheet(menu.styleSheet())
+        _s.themed_ss(snooze_menu, _menu_ss)
         act_7d = snooze_menu.addAction("Snooze 7 days")
         act_30d = snooze_menu.addAction("Snooze 30 days")
         act_7d.triggered.connect(lambda: self._snooze_cert(host, port, days=7))

@@ -73,16 +73,51 @@ def test_evaluate_service_checks_no_results():
 
 
 def test_evaluate_service_checks_fires_down():
-    """evaluate_service_checks fires when up=False."""
+    """evaluate_service_checks fires CRITICAL only after 3 consecutive failed checks."""
     from modules.alert_engine import AlertEngine, AlertRule
     engine = AlertEngine(rules=[
         AlertRule(name="svc_test", rule_type="SERVICE_DOWN", cooldown_s=0)
     ])
     results = [{"host": "192.168.1.1", "port": 80, "up": False, "label": "Web server", "error": None}]
+    assert engine.evaluate_service_checks(results) == []
+    assert engine.evaluate_service_checks(results) == []
     fired = engine.evaluate_service_checks(results)
     assert len(fired) == 1
     assert fired[0].rule_type == "SERVICE_DOWN"
     assert fired[0].severity == "CRITICAL"
+
+
+def test_evaluate_service_checks_single_blip_does_not_fire():
+    """A single failed check must not fire CRITICAL immediately.
+
+    Regression test: a target that was never reachable (e.g. a bogus
+    localhost:443 monitor added by mistake) used to alert CRITICAL on its
+    very first check and then every cooldown forever, indistinguishable from
+    a real outage. The grace period must absorb a lone blip."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="svc_test", rule_type="SERVICE_DOWN", cooldown_s=0)
+    ])
+    results = [{"host": "10.0.0.9", "port": 443, "up": False, "label": "bogus", "error": None}]
+    fired = engine.evaluate_service_checks(results)
+    assert fired == []
+
+
+def test_evaluate_service_checks_streak_resets_on_success():
+    """A recovery before the grace period elapses resets the failure streak."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="svc_test", rule_type="SERVICE_DOWN", cooldown_s=0)
+    ])
+    down = [{"host": "192.168.1.1", "port": 80, "up": False, "label": "Web", "error": None}]
+    up = [{"host": "192.168.1.1", "port": 80, "up": True, "label": "Web", "error": None}]
+
+    engine.evaluate_service_checks(down)
+    engine.evaluate_service_checks(down)
+    engine.evaluate_service_checks(up)  # recovers before streak reaches 3 -> resets
+
+    fired = engine.evaluate_service_checks(down)  # streak restarts at 1
+    assert fired == []
 
 
 def test_evaluate_service_checks_resolution():

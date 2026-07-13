@@ -97,6 +97,9 @@ def _netbios(ip: str) -> str:
     return ""
 
 
+_MDNS_ZONE_LABELS = {"in-addr", "arpa", "ip6", "local"}
+
+
 def _mdns_name(ip: str) -> str:
     """
     Query mDNS for the .local hostname of an IP by sending a reverse PTR query
@@ -126,9 +129,14 @@ def _mdns_name(ip: str) -> str:
         text = data[12:]
         names = re.findall(rb"[\x01-\x3f]([\x20-\x7e]{2,})", text)
         for n in names:
-            s = n.decode(errors="ignore")
+            s = n.decode(errors="ignore").strip()
+            # A responder without a real answer can echo the outgoing PTR
+            # question (".in-addr.arpa") back in the payload — those are
+            # reverse-DNS zone labels, never a real hostname.
+            if s.lower() in _MDNS_ZONE_LABELS:
+                continue
             if "." in s or len(s) > 3:
-                return s.strip()
+                return s
     except Exception:
         pass  # non-fatal
     return ""

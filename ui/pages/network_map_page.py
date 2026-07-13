@@ -37,11 +37,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE,
-    AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    GREEN, RED, TEAL, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    TEAL,
 )
 from ui.topology_widget import TopologyWidget
 from modules.topology_layout import (
@@ -63,12 +61,12 @@ _SETTINGS_KEY_VIEW   = "network_map/active_view"  # "interactive" | "classic"
 # #btnNetRefresh QSS which is designed for full-size action buttons, not
 # the tight fixed-width buttons (32–116 px) used in the map toolbar.
 _TOOLBAR_BTN_SS = (
-    f"QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-    f"border-radius:4px;padding:3px 10px;font-size:12px;font-weight:500;}}"
-    f"QPushButton:hover{{background:{BG_HOVER};border-color:{ACCENT};color:{ACCENT};}}"
-    f"QPushButton:pressed{{background:{ACCENT};color:{WHITE};border-color:{ACCENT_DARK};}}"
-    f"QPushButton:checked{{background:{ACCENT};color:{WHITE};border-color:{ACCENT_DARK};}}"
-    f"QPushButton:disabled{{background:{BG_CARD};color:{TEXT_MUTED};border-color:{BORDER};}}"
+    "QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+    "border-radius:4px;padding:3px 10px;font-size:12px;font-weight:500;}}"
+    "QPushButton:hover{{background:{BG_HOVER};border-color:{ACCENT};color:{ACCENT};}}"
+    "QPushButton:pressed{{background:{ACCENT};color:{WHITE};border-color:{ACCENT_DARK};}}"
+    "QPushButton:checked{{background:{ACCENT};color:{WHITE};border-color:{ACCENT_DARK};}}"
+    "QPushButton:disabled{{background:{BG_CARD};color:{TEXT_MUTED};border-color:{BORDER};}}"
 )
 
 
@@ -199,27 +197,23 @@ class NetworkMapPage(QWidget):
         empty_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_icon = QLabel("◆")
         empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        empty_icon.setStyleSheet(f"font-size:40px; color:{TEXT_MUTED};")
+        _s.themed_ss(empty_icon, "font-size:40px; color:{TEXT_MUTED};")
         empty_title = QLabel("Network Map")
         empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        empty_title.setStyleSheet(
-            f"font-size:18px; font-weight:600; color:{TEXT_PRIMARY}; margin-top:12px;"
-        )
+        _s.themed_ss(empty_title, "font-size:18px; font-weight:600; color:{TEXT_PRIMARY}; margin-top:12px;")
         empty_body = QLabel(
             "Run a device scan to visualise your network topology.\n"
             "Nodes are drag-to-arrange with physics-based auto-layout."
         )
         empty_body.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_body.setWordWrap(True)
-        empty_body.setStyleSheet(f"font-size:13px; color:{TEXT_SECONDARY}; margin:8px 40px;")
+        _s.themed_ss(empty_body, "font-size:13px; color:{TEXT_SECONDARY}; margin:8px 40px;")
         btn_scan = QPushButton("Run Scan")
         btn_scan.setFixedWidth(130)
-        btn_scan.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
-            f"border-radius:4px;padding:8px 16px;font-size:13px;font-weight:600;}}"
-            f"QPushButton:hover{{background:{ACCENT_LITE};color:{WHITE};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(btn_scan, "QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
+            "border-radius:4px;padding:8px 16px;font-size:13px;font-weight:600;}}"
+            "QPushButton:hover{{background:{ACCENT_LITE};color:{WHITE};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         btn_scan.clicked.connect(self.scan_requested)
         empty_lay.addWidget(empty_icon)
         empty_lay.addWidget(empty_title)
@@ -244,13 +238,11 @@ class NetworkMapPage(QWidget):
 
         # Inner tab: Interactive | Classic
         self._inner_tab = QTabWidget()
-        self._inner_tab.setStyleSheet(
-            f"QTabWidget::pane{{border:1px solid {BORDER};background:{BG_CARD};}}"
-            f"QTabBar::tab{{padding:4px 14px;font-size:12px;background:{BG_DARK};"
-            f"color:{TEXT_SECONDARY};border:1px solid {BORDER};}}"
-            f"QTabBar::tab:selected{{background:{BG_CARD};color:{TEXT_PRIMARY};"
-            f"font-weight:600;}}"
-        )
+        _s.themed_ss(self._inner_tab, "QTabWidget::pane{{border:1px solid {BORDER};background:{BG_CARD};}}"
+            "QTabBar::tab{{padding:4px 14px;font-size:12px;background:{BG_DARK};"
+            "color:{TEXT_SECONDARY};border:1px solid {BORDER};}}"
+            "QTabBar::tab:selected{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            "font-weight:600;}}")
         self._inner_tab.currentChanged.connect(self._on_view_tab_changed)
 
         # Interactive tab: QWebEngineView (lazy)
@@ -263,7 +255,7 @@ class NetworkMapPage(QWidget):
             "The Classic view below works without it."
         )
         self._web_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._web_placeholder.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:12px;")
+        _s.themed_ss(self._web_placeholder, "color:{TEXT_SECONDARY};font-size:12px;")
         ic_lay.addWidget(self._web_placeholder)
         self._web_container_layout = ic_lay
         # QWebEngineView init deferred to showEvent() — see __init__ note.
@@ -273,9 +265,7 @@ class NetworkMapPage(QWidget):
             "⬡  Run as administrator to discover managed switch topology via LLDP"
         )
         self._lldp_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._lldp_hint_label.setStyleSheet(
-            f"color:{TEXT_SECONDARY};font-size:11px;padding:3px 8px;"
-        )
+        _s.themed_ss(self._lldp_hint_label, "color:{TEXT_SECONDARY};font-size:11px;padding:3px 8px;")
         self._lldp_hint_label.setVisible(False)
         self._web_container_layout.addWidget(self._lldp_hint_label)
 
@@ -302,6 +292,18 @@ class NetworkMapPage(QWidget):
         # the widget is actually on screen.
         self._traffic_overlay_defaulted = False
 
+    def refresh_theme(self) -> None:
+        """Live theme switch: restyle the classic matplotlib map immediately.
+
+        The interactive Cytoscape view (QWebEngineView) bakes its theme colours
+        into generated HTML; per the Phase 5 decision it is NOT re-rendered on a
+        bare theme switch — it adopts the new palette on the next scan render
+        (which rebuilds the HTML from live tokens).
+        """
+        w = getattr(self, "_classic_widget", None)
+        if w is not None and hasattr(w, "refresh_theme"):
+            w.refresh_theme()
+
     def _build_toolbar(self) -> QHBoxLayout:
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 2, 0, 2)
@@ -310,15 +312,13 @@ class NetworkMapPage(QWidget):
         # Layout selector
         self._layout_combo = QComboBox()
         self._layout_combo.setFixedWidth(116)
-        self._layout_combo.setStyleSheet(
-            f"QComboBox{{background:{BG_CARD};border:1px solid {BORDER};"
-            f"border-radius:4px;padding:3px 8px;font-size:12px;color:{TEXT_PRIMARY};}}"
-            f"QComboBox:hover{{border-color:{ACCENT};}}"
-            f"QComboBox::drop-down{{border:none;width:18px;}}"
-            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
-            f"border:1px solid {BORDER};selection-background-color:{BG_HOVER};"
-            f"selection-color:{TEXT_PRIMARY};}}"
-        )
+        _s.themed_ss(self._layout_combo, "QComboBox{{background:{BG_CARD};border:1px solid {BORDER};"
+            "border-radius:4px;padding:3px 8px;font-size:12px;color:{TEXT_PRIMARY};}}"
+            "QComboBox:hover{{border-color:{ACCENT};}}"
+            "QComboBox::drop-down{{border:none;width:18px;}}"
+            "QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            "border:1px solid {BORDER};selection-background-color:{BG_HOVER};"
+            "selection-color:{TEXT_PRIMARY};}}")
         for label in LAYOUT_NAMES:
             self._layout_combo.addItem(label)
         s = QSettings()
@@ -332,7 +332,7 @@ class NetworkMapPage(QWidget):
             b = QPushButton(label)
             b.setFixedWidth(w)
             b.setToolTip(tip)
-            b.setStyleSheet(_TOOLBAR_BTN_SS)
+            _s.themed_ss(b, _TOOLBAR_BTN_SS)
             return b
 
         btn_fit  = _btn("Fit",  "Fit topology to window")
@@ -347,7 +347,7 @@ class NetworkMapPage(QWidget):
         self._btn_focus.setToolTip(
             "Highlight only the selected node and its direct neighbours"
         )
-        self._btn_focus.setStyleSheet(_TOOLBAR_BTN_SS)
+        _s.themed_ss(self._btn_focus, _TOOLBAR_BTN_SS)
 
         # Show Changes toggle (exposed as property for scan_wiring compat)
         self._btn_diff = QPushButton("Show Changes")
@@ -356,7 +356,7 @@ class NetworkMapPage(QWidget):
         self._btn_diff.setToolTip(
             "Overlay added/removed devices and links vs. the previous scan"
         )
-        self._btn_diff.setStyleSheet(_TOOLBAR_BTN_SS)
+        _s.themed_ss(self._btn_diff, _TOOLBAR_BTN_SS)
 
         # Diff badge label
         self._diff_label = QLabel()
@@ -372,7 +372,7 @@ class NetworkMapPage(QWidget):
         self._btn_lock.setToolTip(
             "Freeze all node positions — re-scans update data but cannot move nodes"
         )
-        self._btn_lock.setStyleSheet(_TOOLBAR_BTN_SS)
+        _s.themed_ss(self._btn_lock, _TOOLBAR_BTN_SS)
 
         # Traffic Overlay toggle — live per-MAC bandwidth (requires Scapy + admin)
         self._btn_traffic = QPushButton("Traffic Overlay")
@@ -381,18 +381,16 @@ class NetworkMapPage(QWidget):
         self._btn_traffic.setToolTip(
             "Color-code nodes by live bandwidth (requires Scapy + administrator)"
         )
-        self._btn_traffic.setStyleSheet(_TOOLBAR_BTN_SS)
+        _s.themed_ss(self._btn_traffic, _TOOLBAR_BTN_SS)
 
         # Bandwidth legend — visible only when Traffic Overlay is on
         self._bw_legend = QLabel(
-            f"<span style='color:{GREEN}'>●</span> &lt;0.5 Mbps&nbsp;&nbsp;"
-            f"<span style='color:{AMBER}'>●</span> 0.5–5 Mbps&nbsp;&nbsp;"
-            f"<span style='color:{RED}'>●</span> &gt;5 Mbps"
+            f"<span style='color:{_s.GREEN}'>●</span> &lt;0.5 Mbps&nbsp;&nbsp;"
+            f"<span style='color:{_s.AMBER}'>●</span> 0.5–5 Mbps&nbsp;&nbsp;"
+            f"<span style='color:{_s.RED}'>●</span> &gt;5 Mbps"
         )
         self._bw_legend.setTextFormat(Qt.TextFormat.RichText)
-        self._bw_legend.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; padding:0 6px;"
-        )
+        _s.themed_ss(self._bw_legend, "font-size:11px; color:{TEXT_SECONDARY}; padding:0 6px;")
         self._bw_legend.setVisible(False)
 
         # Export button
@@ -417,9 +415,7 @@ class NetworkMapPage(QWidget):
         # Stale-cache indicator — shown when the map is pre-populated from DB,
         # hidden as soon as a live scan completes via render().
         self._stale_label = QLabel("● Cached — run a scan to refresh")
-        self._stale_label.setStyleSheet(
-            f"color:{TEXT_MUTED};font-size:11px;font-style:italic;padding:0 6px;"
-        )
+        _s.themed_ss(self._stale_label, "color:{TEXT_MUTED};font-size:11px;font-style:italic;padding:0 6px;")
         self._stale_label.setVisible(False)
 
         toolbar.addWidget(self._layout_combo)
@@ -487,9 +483,9 @@ class NetworkMapPage(QWidget):
             # Show a light placeholder so the view is never a dark rectangle
             # before the first scan populates it.
             self._web_view.setHtml(
-                f"<html><body style='background:{BG_DARK};display:flex;"
+                f"<html><body style='background:{_s.BG_DARK};display:flex;"
                 f"align-items:center;justify-content:center;height:100vh;"
-                f"font-family:sans-serif;color:{TEXT_SECONDARY};font-size:13px;'>"
+                f"font-family:sans-serif;color:{_s.TEXT_SECONDARY};font-size:13px;'>"
                 f"Run a scan to populate the interactive map</body></html>"
             )
         except Exception as exc:

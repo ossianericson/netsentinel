@@ -36,11 +36,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK,
-    BG_ALT_ROW, BG_CARD, BG_HOVER,
-    BORDER, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 _QS_KEY = "alerts/dependencies"
 
@@ -83,7 +79,7 @@ class _AddDepDialog(QDialog):
             "HOST_DOWN alerts for all listed <b>children</b>."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(intro, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(intro)
 
         lay.addWidget(_field_lbl("Parent IP (gateway / switch)"))
@@ -102,7 +98,7 @@ class _AddDepDialog(QDialog):
             hint = QLabel(f"Known devices: {', '.join(known_ips[:12])}" +
                           (" …" if len(known_ips) > 12 else ""))
             hint.setWordWrap(True)
-            hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px;")
+            _s.themed_ss(hint, "color:{TEXT_MUTED}; font-size:10px;")
             lay.addWidget(hint)
 
         btns = QDialogButtonBox(
@@ -120,7 +116,7 @@ class _AddDepDialog(QDialog):
 
 def _field_lbl(text: str) -> QLabel:
     lbl = QLabel(text)
-    lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px;")
+    _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:10px;")
     return lbl
 
 
@@ -137,9 +133,7 @@ class _NotifDepMixin:
     def _build_dep_card(self) -> QWidget:
         card = QFrame()
         card.setObjectName("card")
-        card.setStyleSheet(
-            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:0px;}}"
-        )
+        _s.themed_ss(card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:0px;}}")
         cl = QVBoxLayout(card)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
@@ -147,32 +141,28 @@ class _NotifDepMixin:
         # Title bar
         tb = QFrame()
         tb.setFixedHeight(32)
-        tb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {BORDER};")
+        _s.themed_ss(tb, "background:{BG_CARD};border-bottom:1px solid {BORDER};")
         tbl_lay = QHBoxLayout(tb)
         tbl_lay.setContentsMargins(12, 0, 12, 0)
         _title = QLabel("Alert Dependency Trees")
-        _title.setStyleSheet(
-            f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;"
-        )
+        _s.themed_ss(_title, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
         tbl_lay.addWidget(_title)
         tbl_lay.addStretch()
 
         _add_btn = QPushButton("+ Add")
         _add_btn.setFixedHeight(22)
         _add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _add_btn.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:{WHITE};font-size:10px;font-weight:600;"
-            f"border:none;border-radius:3px;padding:0 10px;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
-            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
-        )
+        _s.themed_ss(_add_btn, "QPushButton{{background:{ACCENT};color:{WHITE};font-size:10px;font-weight:600;"
+            "border:none;border-radius:3px;padding:0 10px;}}"
+            "QPushButton:hover{{background:{ACCENT_DARK};}}"
+            "QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}")
         _add_btn.clicked.connect(self._dep_add)
         tbl_lay.addWidget(_add_btn)
         cl.addWidget(tb)
 
         # Body
         body = QWidget()
-        body.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(body, "background:{BG_CARD};")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(16, 12, 16, 14)
         bl.setSpacing(8)
@@ -183,15 +173,15 @@ class _NotifDepMixin:
             "Prevents 30+ alerts firing from a single upstream outage."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+        _s.themed_ss(desc, "color:{TEXT_SECONDARY};font-size:11px;")
         bl.addWidget(desc)
 
         _tbl_qss = (
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
+            "QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            "gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            "QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            "font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            "QTableWidget::item{{padding:2px 5px;}}"
         )
         self._dep_table = QTableWidget(0, 3)
         self._dep_table.setHorizontalHeaderLabels(["Parent IP", "Children (suppressed)", "Added"])
@@ -205,7 +195,7 @@ class _NotifDepMixin:
         self._dep_table.setAlternatingRowColors(True)
         self._dep_table.verticalHeader().setDefaultSectionSize(24)
         self._dep_table.setFixedHeight(160)
-        self._dep_table.setStyleSheet(_tbl_qss)
+        _s.themed_ss(self._dep_table, _tbl_qss)
         self._dep_table.setColumnWidth(0, 130)
         self._dep_table.setColumnWidth(2, 110)
         self._dep_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -217,20 +207,16 @@ class _NotifDepMixin:
         )
         self._dep_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._dep_empty_lbl.setWordWrap(True)
-        self._dep_empty_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;"
-        )
+        _s.themed_ss(self._dep_empty_lbl, "color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;")
         bl.addWidget(self._dep_empty_lbl)
 
         btn_row = QHBoxLayout()
         _remove_btn = QPushButton("Remove selected")
         _remove_btn.setFixedHeight(24)
-        _remove_btn.setStyleSheet(
-            f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
-            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{color:{RED};border-color:{RED};}}"
-            f"QPushButton:pressed{{color:{TEXT_PRIMARY};}}"
-        )
+        _s.themed_ss(_remove_btn, "QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 12px;font-size:11px;}}"
+            "QPushButton:hover{{color:{RED};border-color:{RED};}}"
+            "QPushButton:pressed{{color:{TEXT_PRIMARY};}}")
         _remove_btn.clicked.connect(self._dep_remove_selected)
         btn_row.addWidget(_remove_btn)
         btn_row.addStretch()
@@ -321,11 +307,9 @@ class _NotifDepMixin:
         if row < 0:
             return
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
-            f"font-size:11px;}}"
-            f"QMenu::item:selected{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
-        )
+        _s.themed_ss(menu, "QMenu{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            "font-size:11px;}}"
+            "QMenu::item:selected{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}")
         act_remove = menu.addAction("Remove dependency")
         chosen = menu.exec(self._dep_table.viewport().mapToGlobal(pos))
         if chosen == act_remove:

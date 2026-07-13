@@ -24,27 +24,15 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui import styles as _s
 from ui.styles import (
     alpha,
-    ACCENT,
-    ACCENT_DARK,
-    AMBER,
-    BG_CARD,
-    BG_DARK,
-    BORDER,
-    GREEN,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    BG_HOVER,
-    WHITE,
 )
 from ui.widgets.jargon_tooltip import LearnMoreLink, find_known_term
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED, "HEALTHY": GREEN}
+_SEV_COLOR = {"INFO": "ACCENT", "WARNING": "AMBER", "CRITICAL": "RED", "HEALTHY": "GREEN"}
 
 _RULE_PAGE: dict[str, str] = {
     "PORT_SCAN":   "Port Scan (TCP)",
@@ -294,9 +282,7 @@ class AlertDrawer(QFrame):
         super().__init__(parent)
         self.setMinimumWidth(0)
         self.setMaximumWidth(0)
-        self.setStyleSheet(
-            f"AlertDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}"
-        )
+        _s.themed_ss(self, "AlertDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}")
 
         self._store  = None
         self._router = None
@@ -357,9 +343,7 @@ class AlertDrawer(QFrame):
         # ── Header ────────────────────────────────────────────────────────────
         hdr = QFrame()
         hdr.setFixedHeight(44)
-        hdr.setStyleSheet(
-            f"background:{BG_DARK}; border-bottom:1px solid {BORDER};"
-        )
+        _s.themed_ss(hdr, "background:{BG_DARK}; border-bottom:1px solid {BORDER};")
         hlay = QHBoxLayout(hdr)
         hlay.setContentsMargins(12, 0, 8, 0)
         hlay.setSpacing(8)
@@ -367,27 +351,21 @@ class AlertDrawer(QFrame):
         self._sev_badge = QLabel("INFO")
         self._sev_badge.setFixedSize(62, 18)
         self._sev_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._sev_badge.setStyleSheet(
-            f"color:{WHITE}; font-size:9px; font-weight:bold;"
-            f" background:{ACCENT}; border-radius:3px; border:none;"
-        )
+        _s.themed_ss(self._sev_badge, "color:{WHITE}; font-size:9px; font-weight:bold;"
+            " background:{ACCENT}; border-radius:3px; border:none;")
 
         self._rule_lbl = QLabel("Alert Detail")
-        self._rule_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._rule_lbl, "color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold;"
+            " background:transparent; border:none;")
         self._rule_lbl.setMinimumWidth(0)
 
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(22, 22)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:13px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:13px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         close_btn.clicked.connect(self.close_drawer)
 
         hlay.addWidget(self._sev_badge)
@@ -402,31 +380,25 @@ class AlertDrawer(QFrame):
         scroll.setStyleSheet("background:transparent;")
 
         body = QWidget()
-        body.setStyleSheet(f"background:{BG_CARD};")
+        _s.themed_ss(body, "background:{BG_CARD};")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(12, 12, 12, 12)
         bl.setSpacing(8)
 
         self._meta_lbl = QLabel()
-        self._meta_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._meta_lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         bl.addWidget(self._meta_lbl)
 
         self._sublabel_lbl = QLabel()
-        self._sublabel_lbl.setStyleSheet(
-            f"color:{ACCENT}; font-size:11px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._sublabel_lbl, "color:{ACCENT}; font-size:11px; font-weight:bold;"
+            " background:transparent; border:none;")
         self._sublabel_lbl.setVisible(False)
         bl.addWidget(self._sublabel_lbl)
 
         self._msg_lbl = QLabel()
         self._msg_lbl.setWordWrap(True)
-        self._msg_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._msg_lbl, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none;")
         bl.addWidget(self._msg_lbl)
 
         # Contextual "learn more" link (S7-3) — populated per-alert in _populate()
@@ -437,151 +409,126 @@ class AlertDrawer(QFrame):
 
         fix_sep = QFrame()
         fix_sep.setFixedHeight(1)
-        fix_sep.setStyleSheet(f"background:{BORDER}; border:none;")
+        _s.themed_ss(fix_sep, "background:{BORDER}; border:none;")
         bl.addWidget(fix_sep)
 
         fix_hdr = QLabel("WHAT TO DO")
-        fix_hdr.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-            f" letter-spacing:1px; background:transparent; border:none;"
-        )
+        _s.themed_ss(fix_hdr, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+            " letter-spacing:1px; background:transparent; border:none;")
         bl.addWidget(fix_hdr)
 
         self._fix_lbl = QLabel()
         self._fix_lbl.setWordWrap(True)
         self._fix_lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self._fix_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; line-height:140%;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._fix_lbl, "color:{TEXT_SECONDARY}; font-size:10px; line-height:140%;"
+            " background:transparent; border:none;")
         self._fix_lbl.setVisible(False)
         bl.addWidget(self._fix_lbl)
 
         self._no_fix_lbl = QLabel("No specific remediation available for this alert type.")
         self._no_fix_lbl.setWordWrap(True)
-        self._no_fix_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:10px; font-style:italic;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._no_fix_lbl, "color:{TEXT_MUTED}; font-size:10px; font-style:italic;"
+            " background:transparent; border:none;")
         self._no_fix_lbl.setVisible(False)
         bl.addWidget(self._no_fix_lbl)
 
         sep = QFrame()
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background:{BORDER}; border:none;")
+        _s.themed_ss(sep, "background:{BORDER}; border:none;")
         bl.addWidget(sep)
 
         dev_hdr = QLabel("DEVICE CONTEXT")
-        dev_hdr.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-            f" letter-spacing:1px; background:transparent; border:none;"
-        )
+        _s.themed_ss(dev_hdr, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+            " letter-spacing:1px; background:transparent; border:none;")
         bl.addWidget(dev_hdr)
 
         self._dev_lbl = QLabel("—")
         self._dev_lbl.setWordWrap(True)
         self._dev_lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self._dev_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._dev_lbl, "color:{TEXT_SECONDARY}; font-size:11px;"
+            " background:transparent; border:none;")
         bl.addWidget(self._dev_lbl)
 
         ev_sep = QFrame()
         ev_sep.setFixedHeight(1)
-        ev_sep.setStyleSheet(f"background:{BORDER}; border:none;")
+        _s.themed_ss(ev_sep, "background:{BORDER}; border:none;")
         bl.addWidget(ev_sep)
 
         ev_hdr = QLabel("EVIDENCE")
-        ev_hdr.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-            f" letter-spacing:1px; background:transparent; border:none;"
-        )
+        _s.themed_ss(ev_hdr, "color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+            " letter-spacing:1px; background:transparent; border:none;")
         bl.addWidget(ev_hdr)
 
         self._ev_events_lbl = QLabel("…")
         self._ev_alerts_lbl = QLabel("…")
         self._ev_cve_lbl    = QLabel("…")
         for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
-            lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-            )
+            _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
             bl.addWidget(lbl)
 
         # ── Ack info (shown when already acknowledged) ────────────────────────
         ack_sep = QFrame()
         ack_sep.setFixedHeight(1)
-        ack_sep.setStyleSheet(f"background:{BORDER}; border:none;")
+        _s.themed_ss(ack_sep, "background:{BORDER}; border:none;")
         bl.addWidget(ack_sep)
 
         self._ack_info_lbl = QLabel()
         self._ack_info_lbl.setWordWrap(True)
-        self._ack_info_lbl.setStyleSheet(
-            f"color:{GREEN}; font-size:10px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._ack_info_lbl, "color:{GREEN}; font-size:10px; background:transparent; border:none;")
         self._ack_info_lbl.setVisible(False)
         bl.addWidget(self._ack_info_lbl)
 
         self._ack_comment_lbl = QLabel()
         self._ack_comment_lbl.setWordWrap(True)
-        self._ack_comment_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; font-style:italic;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(self._ack_comment_lbl, "color:{TEXT_SECONDARY}; font-size:10px; font-style:italic;"
+            " background:transparent; border:none;")
         self._ack_comment_lbl.setVisible(False)
         bl.addWidget(self._ack_comment_lbl)
 
         # ── Inline ack form (shown when user clicks Acknowledge) ──────────────
         self._ack_form = QFrame()
         self._ack_form.setVisible(False)
-        self._ack_form.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:3px; }}"
-        )
+        _s.themed_ss(self._ack_form, "QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:3px; }}")
         ack_form_lay = QVBoxLayout(self._ack_form)
         ack_form_lay.setContentsMargins(8, 8, 8, 8)
         ack_form_lay.setSpacing(6)
 
         ack_form_hdr = QLabel("Acknowledge alert")
-        ack_form_hdr.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
+        _s.themed_ss(ack_form_hdr, "color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold;"
+            " background:transparent; border:none;")
         ack_form_lay.addWidget(ack_form_hdr)
 
         self._ack_name_edit = QLineEdit()
         self._ack_name_edit.setPlaceholderText("Your name (optional)")
         self._ack_name_edit.setFixedHeight(24)
-        self._ack_name_edit.setStyleSheet(
-            f"QLineEdit {{ font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:2px; padding:0 4px; }}"
+        _ack_edit_ss = (
+            "QLineEdit {{ font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:2px; padding:0 4px; }}"
         )
+        _s.themed_ss(self._ack_name_edit, _ack_edit_ss)
         ack_form_lay.addWidget(self._ack_name_edit)
 
         self._ack_comment_edit = QLineEdit()
         self._ack_comment_edit.setPlaceholderText("Comment, e.g. tracking JIRA-123 (optional)")
         self._ack_comment_edit.setFixedHeight(24)
-        self._ack_comment_edit.setStyleSheet(self._ack_name_edit.styleSheet())
+        _s.themed_ss(self._ack_comment_edit, _ack_edit_ss)
         ack_form_lay.addWidget(self._ack_comment_edit)
 
         ack_btn_row = QHBoxLayout()
         self._ack_confirm_btn = QPushButton("✓ Confirm")
         self._ack_confirm_btn.setFixedHeight(24)
-        self._ack_confirm_btn.setStyleSheet(
-            f"QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
-            f"QPushButton:hover {{ opacity:0.9; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._ack_confirm_btn, "QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
+            "QPushButton:hover {{ opacity:0.9; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._ack_confirm_btn.clicked.connect(self._on_ack_confirm)
 
         _ack_cancel_btn = QPushButton("Cancel")
         _ack_cancel_btn.setFixedHeight(24)
-        _ack_cancel_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:10px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(_ack_cancel_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:10px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         _ack_cancel_btn.clicked.connect(lambda: self._ack_form.setVisible(False))
         ack_btn_row.addWidget(self._ack_confirm_btn)
         ack_btn_row.addWidget(_ack_cancel_btn)
@@ -596,9 +543,7 @@ class AlertDrawer(QFrame):
         # ── Actions row ───────────────────────────────────────────────────────
         acts = QFrame()
         acts.setFixedHeight(48)
-        acts.setStyleSheet(
-            f"background:{BG_DARK}; border-top:1px solid {BORDER};"
-        )
+        _s.themed_ss(acts, "background:{BG_DARK}; border-top:1px solid {BORDER};")
         alay = QHBoxLayout(acts)
         alay.setContentsMargins(8, 0, 8, 0)
         alay.setSpacing(6)
@@ -606,63 +551,57 @@ class AlertDrawer(QFrame):
         self._ack_btn = QPushButton("✓ Acknowledge")
         self._ack_btn.setFixedHeight(26)
         self._ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._ack_btn.setStyleSheet(
-            f"QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
-            f"QPushButton:hover {{ opacity:0.9; }}"
-            f"QPushButton:disabled {{ background:{BG_DARK}; color:{TEXT_MUTED};"
-            f" border:1px solid {BORDER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._ack_btn, "QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
+            "QPushButton:hover {{ opacity:0.9; }}"
+            "QPushButton:disabled {{ background:{BG_DARK}; color:{TEXT_MUTED};"
+            " border:1px solid {BORDER}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._ack_btn.clicked.connect(self._on_ack)
 
         self._snooze_btn = QPushButton("Snooze 1h")
         self._snooze_btn.setFixedHeight(26)
         self._snooze_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._snooze_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{AMBER};"
-            f" border:1px solid {AMBER}; border-radius:3px;"
+        _s.themed_ss(self._snooze_btn, lambda: (
+            f"QPushButton {{ background:transparent; color:{_s.AMBER};"
+            f" border:1px solid {_s.AMBER}; border-radius:3px;"
             f" font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{alpha(AMBER, 0x22)}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
-        )
+            f"QPushButton:hover {{ background:{alpha(_s.AMBER, 0x22)}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.AMBER}; }}"
+        ))
         self._snooze_btn.clicked.connect(self._on_snooze)
 
         self._log_btn = QPushButton("Network Logger →")
         self._log_btn.setFixedHeight(26)
         self._log_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._log_btn.setToolTip("Open Network Logger at ±30 min around this alert")
-        self._log_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; border-radius:3px;"
+        _s.themed_ss(self._log_btn, lambda: (
+            f"QPushButton {{ background:transparent; color:{_s.ACCENT};"
+            f" border:1px solid {_s.ACCENT}; border-radius:3px;"
             f" font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0x22)}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
+        ))
         self._log_btn.clicked.connect(self._on_view_log_hub)
 
         self._fix_btn = QPushButton("Fix this →")
         self._fix_btn.setFixedHeight(26)
         self._fix_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._fix_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._fix_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._fix_btn.clicked.connect(self._on_go)
         self._fix_btn.setVisible(False)
 
         self._go_btn = QPushButton("Go to page →")
         self._go_btn.setFixedHeight(26)
         self._go_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._go_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT};"
-            f" border:1px solid {BORDER}; border-radius:3px;"
-            f" font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._go_btn, "QPushButton {{ background:transparent; color:{ACCENT};"
+            " border:1px solid {BORDER}; border-radius:3px;"
+            " font-size:10px; padding:0 8px; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._go_btn.clicked.connect(self._on_go)
         self._go_btn.setVisible(False)
 
@@ -670,13 +609,11 @@ class AlertDrawer(QFrame):
         self._troubleshoot_btn.setFixedHeight(26)
         self._troubleshoot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._troubleshoot_btn.setToolTip("Open the Troubleshoot hub to find the right fix")
-        self._troubleshoot_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT};"
-            f" border:1px solid {BORDER}; border-radius:3px;"
-            f" font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._troubleshoot_btn, "QPushButton {{ background:transparent; color:{ACCENT};"
+            " border:1px solid {BORDER}; border-radius:3px;"
+            " font-size:10px; padding:0 8px; }}"
+            "QPushButton:hover {{ border-color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         self._troubleshoot_btn.clicked.connect(
             lambda: self.navigate_to.emit("Troubleshoot")
         )
@@ -698,12 +635,12 @@ class AlertDrawer(QFrame):
         ts   = alert.get("ts", 0)
         msg  = alert.get("message", "")
 
-        col = _SEV_COLOR.get(sev, ACCENT)
+        sev_colour_name = _SEV_COLOR.get(sev, "ACCENT")
         self._sev_badge.setText(sev)
-        self._sev_badge.setStyleSheet(
-            f"color:{WHITE}; font-size:9px; font-weight:bold;"
-            f" background:{col}; border-radius:3px; border:none;"
-        )
+        _s.themed_ss(self._sev_badge, lambda cn=sev_colour_name: (
+            f"color:{_s.WHITE}; font-size:9px; font-weight:bold;"
+            f" background:{getattr(_s, cn)}; border-radius:3px; border:none;"
+        ))
 
         self._rule_lbl.setText(rule)
 
@@ -884,9 +821,7 @@ class AlertDrawer(QFrame):
             self._evidence_worker.quit()
         for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
             lbl.setText("…")
-            lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-            )
+            _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         if not self._store:
             for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
                 lbl.setText("—")
@@ -924,7 +859,5 @@ class AlertDrawer(QFrame):
             self._ev_cve_lbl.setText("● No CVEs tracked")
 
         for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
-            lbl.setStyleSheet(
-                f"color:{TEXT_SECONDARY}; font-size:10px;"
-                f" background:transparent; border:none;"
-            )
+            _s.themed_ss(lbl, "color:{TEXT_SECONDARY}; font-size:10px;"
+                " background:transparent; border:none;")

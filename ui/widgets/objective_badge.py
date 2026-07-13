@@ -20,10 +20,7 @@ from typing import List
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget
 
-from ui.styles import (
-    ACCENT, CERT_CISCO_BG, CERT_NETPLUS_BG, CERT_SEC_BG,
-    NAV_BAR, WHITE,
-)
+from ui import styles as _s
 
 
 # ── Data loader ───────────────────────────────────────────────────────────────
@@ -56,9 +53,9 @@ _CERT_LABELS = {
 }
 
 _CERT_COLORS = {
-    "N+":   (CERT_NETPLUS_BG, WHITE),   # CompTIA red
-    "CCNA": (CERT_CISCO_BG,   NAV_BAR), # Cisco teal on dark bg
-    "Sec+": (CERT_SEC_BG,     WHITE),   # CompTIA purple
+    "N+":   ("CERT_NETPLUS_BG", "WHITE"),   # CompTIA red
+    "CCNA": ("CERT_CISCO_BG",   "NAV_BAR"), # Cisco teal on dark bg
+    "Sec+": ("CERT_SEC_BG",     "WHITE"),   # CompTIA purple
 }
 
 
@@ -75,16 +72,16 @@ class ObjectiveBadge(QLabel):
                  study_note: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._cert_label = cert_label
-        bg, fg = _CERT_COLORS.get(cert_label, (ACCENT, WHITE))
+        bg_name, fg_name = _CERT_COLORS.get(cert_label, ("ACCENT", "WHITE"))
 
         self.setText(cert_label)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setFixedHeight(18)
         self.setContentsMargins(6, 0, 6, 0)
-        self.setStyleSheet(
-            f"QLabel {{ background:{bg}; color:{fg}; border-radius:9px;"
+        _s.themed_ss(self, lambda bn=bg_name, fn=fg_name: (
+            f"QLabel {{ background:{getattr(_s, bn)}; color:{getattr(_s, fn)}; border-radius:9px;"
             f" font-size:9px; font-weight:bold; padding:0 6px; border:none; }}"
-        )
+        ))
 
         tip_lines = [f"<b>{cert_label} exam objectives:</b>"]
         for obj in objectives:

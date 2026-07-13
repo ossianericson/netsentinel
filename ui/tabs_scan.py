@@ -22,14 +22,8 @@ from modules.utils import is_npcap_available
 from ui.live_graph import LiveGraphWidget
 from ui.nav.labels import NavLabel as L
 from ui.npcap_banner import NpcapMissingBanner
-from ui.styles import (
-    alpha,
-    ACCENT, ACCENT_DARK, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, CHART_PURPLE,
-    GREEN, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
-)
 from ui.tabs_helpers import _make_card, _page_header, _table
+from ui import styles as _s
 
 
 class _ScanTabsMixin:
@@ -48,16 +42,14 @@ class _ScanTabsMixin:
         lay.addWidget(self._build_kpi_bar())
 
         self._m1_status = QLabel("Not yet scanned.")
-        self._m1_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        _s.themed_ss(self._m1_status, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
 
         self._m1_group_btn = QPushButton("▼▼  Collapse All")
         self._m1_group_btn.setFixedHeight(22)
-        self._m1_group_btn.setStyleSheet(
-            f"QPushButton{{background:{BG_DARK};color:{TEXT_MUTED};border:1px solid {BORDER};"
-            f"border-radius:3px;padding:0 8px;font-size:10px;}}"
-            f"QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._m1_group_btn, "QPushButton{{background:{BG_DARK};color:{TEXT_MUTED};border:1px solid {BORDER};"
+            "border-radius:3px;padding:0 8px;font-size:10px;}}"
+            "QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._m1_group_btn.setVisible(False)
         self._m1_group_btn.clicked.connect(self._m1_toggle_all_groups)
 
@@ -67,21 +59,22 @@ class _ScanTabsMixin:
         self._m1_group_by_node: bool = _node_grp_on
 
         # Segmented view control — always enabled, no plugin gate
+        # Shape-I state templates: re-registered via _s.themed_ss on every state
+        # flip (see below and scan_enrichment.py) so they follow both the toggle
+        # state AND live theme changes.
         self._m1_seg_active_ss = (
-            f"QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
-            f"border-radius:3px;padding:0 10px;font-size:10px;}}"
-            f"QPushButton:hover{{background:{ACCENT};}}"
+            "QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
+            "border-radius:3px;padding:0 10px;font-size:10px;}}"
+            "QPushButton:hover{{background:{ACCENT};}}"
         )
         self._m1_seg_inactive_ss = (
-            f"QPushButton{{background:transparent;color:{TEXT_MUTED};border:none;"
-            f"border-radius:3px;padding:0 10px;font-size:10px;}}"
-            f"QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
+            "QPushButton{{background:transparent;color:{TEXT_MUTED};border:none;"
+            "border-radius:3px;padding:0 10px;font-size:10px;}}"
+            "QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
         )
         _seg_frame = QFrame()
         _seg_frame.setFixedHeight(24)
-        _seg_frame.setStyleSheet(
-            f"QFrame{{background:{BG_DARK};border:1px solid {BORDER};border-radius:4px;}}"
-        )
+        _s.themed_ss(_seg_frame, "QFrame{{background:{BG_DARK};border:1px solid {BORDER};border-radius:4px;}}")
         _seg_lay = QHBoxLayout(_seg_frame)
         _seg_lay.setContentsMargins(1, 1, 1, 1)
         _seg_lay.setSpacing(0)
@@ -90,15 +83,17 @@ class _ScanTabsMixin:
         self._m1_seg_list.setFixedHeight(22)
         self._m1_seg_list.setCursor(Qt.CursorShape.PointingHandCursor)
         self._m1_seg_list.setToolTip("Flat device list")
-        self._m1_seg_list.setStyleSheet(
-            self._m1_seg_inactive_ss if _node_grp_on else self._m1_seg_active_ss
+        _s.themed_ss(
+            self._m1_seg_list,
+            self._m1_seg_inactive_ss if _node_grp_on else self._m1_seg_active_ss,
         )
         self._m1_seg_node = QPushButton("⊞  By Node")
         self._m1_seg_node.setFixedHeight(22)
         self._m1_seg_node.setCursor(Qt.CursorShape.PointingHandCursor)
         self._m1_seg_node.setToolTip("Group devices by mesh node / AP")
-        self._m1_seg_node.setStyleSheet(
-            self._m1_seg_active_ss if _node_grp_on else self._m1_seg_inactive_ss
+        _s.themed_ss(
+            self._m1_seg_node,
+            self._m1_seg_active_ss if _node_grp_on else self._m1_seg_inactive_ss,
         )
         _seg_lay.addWidget(self._m1_seg_list)
         _seg_lay.addWidget(self._m1_seg_node)
@@ -120,24 +115,21 @@ class _ScanTabsMixin:
         _ib_lay = QHBoxLayout(self._m1_int_banner)
         _ib_lay.setContentsMargins(10, 5, 10, 5)
         _ib_lay.setSpacing(8)
-        self._m1_int_banner.setStyleSheet(
-            f"QFrame {{ background:{alpha(ACCENT, 0x18)}; border:1px solid {alpha(ACCENT, 0x55)};"
-            " border-radius:4px; }"
+        _s.themed_ss(
+            self._m1_int_banner,
+            lambda: f"QFrame {{ background:{_s.alpha(_s.ACCENT, 0x18)};"
+                    f" border:1px solid {_s.alpha(_s.ACCENT, 0x55)}; border-radius:4px; }}",
         )
         self._m1_int_lbl = QLabel()
-        self._m1_int_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._m1_int_lbl, "color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;")
         _ib_lay.addWidget(self._m1_int_lbl, 1)
         _int_cfg_btn = QPushButton("Configure  →")
         _int_cfg_btn.setFixedHeight(22)
         _int_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _int_cfg_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            " border-radius:3px; font-size:10px; padding:0 10px; }"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(_int_cfg_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:10px; padding:0 10px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         _int_cfg_btn.clicked.connect(
             lambda: self._nav_rail_go_to(L.HARDWARE)
         )
@@ -161,9 +153,7 @@ class _ScanTabsMixin:
         # Node (6) and Band (7) are hidden until a Deco scan populates them
         self._m1_table.setColumnHidden(6, True)
         self._m1_table.setColumnHidden(7, True)
-        self._m1_table.setStyleSheet(
-            f"QTableWidget::item:hover {{ background-color: {BG_HOVER}; }}"
-        )
+        _s.themed_ss(self._m1_table, "QTableWidget::item:hover {{ background-color: {BG_HOVER}; }}")
 
         # Column sorting (click header to sort ascending/descending)
         self._m1_table.setSortingEnabled(True)
@@ -182,10 +172,8 @@ class _ScanTabsMixin:
         # Empty-state placeholder shown when table has no rows
         self._m1_empty = QLabel("Run a scan to discover devices on this network.")
         self._m1_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._m1_empty.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:13px; padding:40px;"
-            "background:transparent; border:none;"
-        )
+        _s.themed_ss(self._m1_empty, "color:{TEXT_MUTED}; font-size:13px; padding:40px;"
+            "background:transparent; border:none;")
 
         # ── Card wrapping table + empty state ─────────────────────────────────
         m1_card, m1_body = _make_card("Discovered Devices")
@@ -201,22 +189,21 @@ class _ScanTabsMixin:
         self._m1_search.setPlaceholderText("Search IP, hostname, MAC, vendor…")
         self._m1_search.setFixedHeight(26)
         self._m1_search.setClearButtonEnabled(True)
-        self._m1_search.setStyleSheet(
-            f"QLineEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:0 6px; font-size:11px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._m1_search, "QLineEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:0 6px; font-size:11px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._m1_search.textChanged.connect(self._m1_apply_filter)
         _frow.addWidget(self._m1_search, 1)
 
+        # Shape-I state templates: re-registered via _s.themed_ss on each chip flip.
         self._m1_chip_active_ss = (
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:3px; padding:0 8px; font-size:10px; }}"
+            "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; padding:0 8px; font-size:10px; }}"
         )
         self._m1_chip_inactive_ss = (
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
-            f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; font-size:10px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{TEXT_MUTED}; }}"
+            "QPushButton {{ background:transparent; color:{TEXT_MUTED};"
+            " border:1px solid {BORDER}; border-radius:3px; padding:0 8px; font-size:10px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{TEXT_MUTED}; }}"
         )
         self._m1_chip = "all"
         self._m1_chip_btns: dict = {}
@@ -227,8 +214,9 @@ class _ScanTabsMixin:
             _cbtn = QPushButton(_clabel)
             _cbtn.setFixedHeight(22)
             _cbtn.setCursor(Qt.CursorShape.PointingHandCursor)
-            _cbtn.setStyleSheet(
-                self._m1_chip_active_ss if _ckey == "all" else self._m1_chip_inactive_ss
+            _s.themed_ss(
+                _cbtn,
+                self._m1_chip_active_ss if _ckey == "all" else self._m1_chip_inactive_ss,
             )
             _cbtn.clicked.connect(lambda _=False, k=_ckey: self._m1_set_chip(k))
             self._m1_chip_btns[_ckey] = _cbtn
@@ -271,8 +259,9 @@ class _ScanTabsMixin:
     def _m1_set_chip(self, key: str) -> None:
         self._m1_chip = key
         for k, btn in self._m1_chip_btns.items():
-            btn.setStyleSheet(
-                self._m1_chip_active_ss if k == key else self._m1_chip_inactive_ss
+            _s.themed_ss(
+                btn,
+                self._m1_chip_active_ss if k == key else self._m1_chip_inactive_ss,
             )
         self._m1_apply_filter()
 
@@ -315,7 +304,7 @@ class _ScanTabsMixin:
         ip  = (first or QTableWidgetItem()).text()
         mac = (self._m1_table.item(row, 2) or QTableWidgetItem()).text()
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
+        _s.themed_ss(menu, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_scan     = menu.addAction(f"🔍  Port Scan  {ip}")
         act_geo      = menu.addAction(f"🗺  Show on Geolocation Map →")
         act_abuseipdb = menu.addAction(f"🛡  Check IP (AbuseIPDB) →")
@@ -385,7 +374,7 @@ class _ScanTabsMixin:
         )
         em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        _s.themed_ss(em_desc, "color:{TEXT_SECONDARY}; font-size:12px;")
         em_btn = QPushButton("Start STP Capture")
         em_btn.setObjectName("btnScan")
         em_btn.setFixedWidth(200)
@@ -407,7 +396,7 @@ class _ScanTabsMixin:
             " — a sign of misconfiguration or an unauthorized device."
         ))
         self._m2_status = QLabel("Not yet scanned.")
-        self._m2_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        _s.themed_ss(self._m2_status, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m2_status)
         card, card_body = _make_card("STP Frames Detected")
         self._m2_table = _table([
@@ -439,7 +428,7 @@ class _ScanTabsMixin:
         src_mac = (self._m2_table.item(row, 0) or QTableWidgetItem()).text()
         is_rogue = (self._m2_table.item(row, 7) or QTableWidgetItem()).text().strip().upper() in ("YES", "TRUE", "ROGUE")
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
+        _s.themed_ss(menu, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_fix  = menu.addAction("🔧  How to Fix")
         menu.addSeparator()
         act_copy = menu.addAction("📋  Copy MAC")
@@ -481,7 +470,7 @@ class _ScanTabsMixin:
         )
         em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        _s.themed_ss(em_desc, "color:{TEXT_SECONDARY}; font-size:12px;")
         em_btn = QPushButton("Start Broadcast Capture")
         em_btn.setObjectName("btnScan")
         em_btn.setFixedWidth(220)
@@ -503,7 +492,7 @@ class _ScanTabsMixin:
             " — usually a faulty switch or routing loop."
         ))
         self._m3_status = QLabel("Not yet scanned.")
-        self._m3_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        _s.themed_ss(self._m3_status, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m3_status)
         stats = QHBoxLayout()
         self._m3_bcast_lbl = self._stat_label("Broadcast/s", "—")
@@ -541,7 +530,7 @@ class _ScanTabsMixin:
         src_mac = (self._m3_table.item(row, 0) or QTableWidgetItem()).text()
         bcast   = (self._m3_table.item(row, 1) or QTableWidgetItem()).text()
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
+        _s.themed_ss(menu, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_fix  = menu.addAction("🔧  How to Fix")
         act_copy = menu.addAction("📋  Copy MAC")
         chosen = menu.exec(self._m3_table.viewport().mapToGlobal(pos))
@@ -579,7 +568,7 @@ class _ScanTabsMixin:
         )
         em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        _s.themed_ss(em_desc, "color:{TEXT_SECONDARY}; font-size:12px;")
         em_btn = QPushButton("Scan for WiFi Networks")
         em_btn.setObjectName("btnScan")
         em_btn.setFixedWidth(220)
@@ -599,7 +588,7 @@ class _ScanTabsMixin:
             "Wireless scan — SSID enumeration, rogue AP detection, co-channel interference"
         ))
         self._m4_status = QLabel("Not yet scanned.")
-        self._m4_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        _s.themed_ss(self._m4_status, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m4_status)
 
         # Deco band-usage KPI chips — hidden until mesh data arrives
@@ -633,12 +622,13 @@ class _ScanTabsMixin:
         row.setContentsMargins(0, 2, 0, 4)
         row.setSpacing(8)
 
-        def _chip(dot_color: str, label: str):
+        def _chip(dot_token: str, label: str):
             tile = QFrame()
             tile.setObjectName("card")
-            tile.setStyleSheet(
-                f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-                f"border-left:3px solid {dot_color};border-radius:0px;}}"
+            _s.themed_ss(
+                tile,
+                lambda tk=dot_token: f"QFrame#card{{background:{_s.BG_CARD};border:1px solid {_s.BORDER};"
+                                     f"border-left:3px solid {getattr(_s, tk)};border-radius:0px;}}",
             )
             vl = QVBoxLayout(tile)
             vl.setContentsMargins(8, 4, 8, 4)
@@ -646,28 +636,29 @@ class _ScanTabsMixin:
             hdr = QHBoxLayout()
             hdr.setSpacing(4)
             dot = QLabel("●")
-            dot.setStyleSheet(f"color:{dot_color};font-size:9px;background:transparent;border:none;")
-            lbl = QLabel(label.upper())
-            lbl.setStyleSheet(
-                f"color:{TEXT_MUTED};font-size:9px;font-weight:bold;"
-                "letter-spacing:0.5px;background:transparent;border:none;"
+            _s.themed_ss(
+                dot,
+                lambda tk=dot_token: f"color:{getattr(_s, tk)};font-size:9px;background:transparent;border:none;",
             )
+            lbl = QLabel(label.upper())
+            _s.themed_ss(lbl, "color:{TEXT_MUTED};font-size:9px;font-weight:bold;"
+                "letter-spacing:0.5px;background:transparent;border:none;")
             hdr.addWidget(dot); hdr.addWidget(lbl); hdr.addStretch()
             vl.addLayout(hdr)
             val = QLabel("—")
-            val.setStyleSheet(f"color:{TEXT_MUTED};font-size:18px;font-weight:bold;"
+            _s.themed_ss(val, "color:{TEXT_MUTED};font-size:18px;font-weight:bold;"
                               "background:transparent;border:none;")
             vl.addWidget(val)
             return tile, val
 
         header = QLabel("Deco band usage")
-        header.setStyleSheet(f"color:{TEXT_MUTED};font-size:10px;padding:0;background:transparent;")
+        _s.themed_ss(header, "color:{TEXT_MUTED};font-size:10px;padding:0;background:transparent;")
         row.addWidget(header)
 
-        t1, self._m4_chip_24   = _chip(GREEN,        "2.4 GHz clients")
-        t2, self._m4_chip_5    = _chip(ACCENT,        "5 GHz clients")
-        t3, self._m4_chip_6    = _chip(CHART_PURPLE,  "6 GHz clients")
-        t4, self._m4_chip_wired = _chip(TEXT_SECONDARY, "Wired clients")
+        t1, self._m4_chip_24   = _chip("GREEN",          "2.4 GHz clients")
+        t2, self._m4_chip_5    = _chip("ACCENT",         "5 GHz clients")
+        t3, self._m4_chip_6    = _chip("CHART_PURPLE",   "6 GHz clients")
+        t4, self._m4_chip_wired = _chip("TEXT_SECONDARY", "Wired clients")
         for t in (t1, t2, t3, t4):
             row.addWidget(t, 1)
         row.addStretch()
@@ -703,7 +694,7 @@ class _ScanTabsMixin:
         )
         em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        _s.themed_ss(em_desc, "color:{TEXT_SECONDARY}; font-size:12px;")
         em_btn = QPushButton("Start Monitoring")
         em_btn.setObjectName("btnScan")
         em_btn.setFixedWidth(180)
@@ -723,7 +714,7 @@ class _ScanTabsMixin:
             "Continuous RTT/DNS monitoring — latency graph, outage detection, STP correlation"
         ))
         self._m5_status = QLabel("Not yet scanned.")
-        self._m5_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        _s.themed_ss(self._m5_status, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m5_status)
         self._graph = LiveGraphWidget()
         self._graph.setMinimumHeight(80)

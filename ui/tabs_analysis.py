@@ -16,15 +16,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.npcap_banner import NpcapMissingBanner
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_CARD, BG_HOVER, BORDER, BORDER_MED,
-    CARD_RADIUS, BLUE,
-    GRADE_A_BG, GRADE_B_BG, GRADE_B_FG, GRADE_C_BG,
-    GRADE_D_BG, GRADE_F_BG, GRADE_F_FG, GREEN,
-    RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
 from ui.tabs_helpers import _page_header, _table
+from ui import styles as _s
 
 
 class _AnalysisTabsMixin:
@@ -46,7 +39,7 @@ class _AnalysisTabsMixin:
         top = QHBoxLayout()
         title = QLabel("🔷  IPv6 Devices")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         self._btn_ipv6_scan = QPushButton("▶  Scan IPv6")
@@ -59,7 +52,7 @@ class _AnalysisTabsMixin:
         self._ipv6_status = QLabel(
             "Reads the OS IPv6 neighbour cache, then actively pings fe80::/8 on each interface."
         )
-        self._ipv6_status.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._ipv6_status, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(self._ipv6_status)
 
         self._ipv6_table = _table(["IPv6 Address", "MAC Address", "State", "Source"])
@@ -102,7 +95,7 @@ class _AnalysisTabsMixin:
         top = QHBoxLayout()
         title = QLabel("☁  Cloud Metadata Detection")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        _s.themed_ss(title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         self._btn_cloud_scan = QPushButton("▶  Run Check")
@@ -117,24 +110,22 @@ class _AnalysisTabsMixin:
             "Also checks network devices for SSRF metadata-proxy exposure."
         )
         self._cloud_status.setWordWrap(True)
-        self._cloud_status.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        _s.themed_ss(self._cloud_status, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(self._cloud_status)
 
         # Local IMDS result card
         self._cloud_local_box = QTextEdit()
         self._cloud_local_box.setReadOnly(True)
         self._cloud_local_box.setMaximumHeight(180)
-        self._cloud_local_box.setStyleSheet(
-            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
-            f"border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; padding:6px;"
-        )
+        _s.themed_ss(self._cloud_local_box, "background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
+            "border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; padding:6px;")
         self._cloud_local_box.setPlaceholderText(
             "IMDS probe result will appear here — runs in < 1 second per provider."
         )
         lay.addWidget(self._cloud_local_box)
 
         net_lbl = QLabel("  Network SSRF Exposure  (devices that proxy 169.254.169.254):")
-        net_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
+        _s.themed_ss(net_lbl, "color:{TEXT_SECONDARY}; font-size:11px; padding-top:4px;")
         lay.addWidget(net_lbl)
         self._cloud_network_table = _table(
             ["Device IP", "MAC", "Hostname", "Exposed?", "Risk", "Finding"]
@@ -218,19 +209,17 @@ class _AnalysisTabsMixin:
             "Run at least one scan first, then click Analyse."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
         self._corr_status = QLabel("No analysis yet — run scans first, then click Analyse.")
-        self._corr_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._corr_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._corr_status.setWordWrap(True)
 
         # Verdict banner
         self._corr_verdict = QLabel("Run a scan to see the root cause summary.")
         self._corr_verdict.setWordWrap(True)
-        self._corr_verdict.setStyleSheet(
-            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:2px solid {BORDER}; "
-            "border-radius:4px; padding:10px 14px; font-size:13px; font-weight:bold;"
-        )
+        _s.themed_ss(self._corr_verdict, "background:{BG_CARD}; color:{TEXT_PRIMARY}; border:2px solid {BORDER}; "
+            "border-radius:4px; padding:10px 14px; font-size:13px; font-weight:bold;")
 
         ctrl = QHBoxLayout()
         btn_analyse = QPushButton("🧩  Analyse Root Cause Now")
@@ -292,12 +281,12 @@ class _AnalysisTabsMixin:
 
             # Update verdict banner colour
             sev_colors = {
-                "CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER,
-                "LOW": GREEN, "INFO": TEXT_SECONDARY,
+                "CRITICAL": _s.RED, "HIGH": _s.RED, "MEDIUM": _s.AMBER,
+                "LOW": _s.GREEN, "INFO": _s.TEXT_SECONDARY,
             }
-            banner_color = sev_colors.get(result.global_severity, TEXT_SECONDARY)
+            banner_color = sev_colors.get(result.global_severity, _s.TEXT_SECONDARY)
             self._corr_verdict.setStyleSheet(
-                f"background:{BG_CARD}; color:{banner_color}; "
+                f"background:{_s.BG_CARD}; color:{banner_color}; "
                 f"border:2px solid {banner_color}; border-radius:4px; "
                 "padding:10px 14px; font-size:13px; font-weight:bold;"
             )
@@ -308,7 +297,7 @@ class _AnalysisTabsMixin:
             for f in result.findings:
                 row = self._corr_table.rowCount()
                 self._corr_table.insertRow(row)
-                color = sev_colors.get(f.severity, TEXT_SECONDARY)
+                color = sev_colors.get(f.severity, _s.TEXT_SECONDARY)
                 for col, val in enumerate([
                     f.severity, f.category, f.source, f.headline, f.remediation
                 ]):
@@ -347,10 +336,10 @@ class _AnalysisTabsMixin:
             "Run a Devices scan first, then click Learn to capture a baseline."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
         self._iot_status = QLabel("No baseline loaded. Run 'Devices on Network' scan first.")
-        self._iot_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(self._iot_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._iot_status.setWordWrap(True)
 
         ctrl = QHBoxLayout()
@@ -398,7 +387,7 @@ class _AnalysisTabsMixin:
 
         # Live alert table
         alerts_lbl = QLabel("Live Anomaly Alerts")
-        alerts_lbl.setStyleSheet(f"color:{ACCENT_LITE};font-size:12px;font-weight:bold;padding:6px 0 2px 0;")
+        _s.themed_ss(alerts_lbl, "color:{ACCENT_LITE};font-size:12px;font-weight:bold;padding:6px 0 2px 0;")
         self._iot_alert_table = _table([
             "Time", "Device", "Alert Type", "Severity", "Detail", "Remediation", "Action"
         ])
@@ -498,7 +487,7 @@ class _AnalysisTabsMixin:
                         alert = self._iot_queue.get_nowait()
                         row = self._iot_alert_table.rowCount()
                         self._iot_alert_table.insertRow(row)
-                        sev_color = RED if alert.severity == "CRITICAL" else (AMBER if alert.severity == "HIGH" else BLUE)
+                        sev_color = _s.RED if alert.severity == "CRITICAL" else (_s.AMBER if alert.severity == "HIGH" else _s.BLUE)
                         for col, val in enumerate([
                             alert.timestamp[11:19], alert.device_label,
                             alert.alert_type.replace("_", " ").title(),
@@ -511,7 +500,7 @@ class _AnalysisTabsMixin:
                         target = _IOT_INVESTIGATE_TARGET.get(alert.alert_type, "Devices")
                         inv_btn = QPushButton("Investigate →")
                         inv_btn.setFlat(True)
-                        inv_btn.setStyleSheet(f"color:{ACCENT_LITE};font-size:11px;text-align:left;padding:2px 4px;")
+                        _s.themed_ss(inv_btn, "color:{ACCENT_LITE};font-size:11px;text-align:left;padding:2px 4px;")
                         inv_btn.clicked.connect(lambda _checked, t=target: self._nav_rail_go_to(t))
                         self._iot_alert_table.setCellWidget(row, 6, inv_btn)
                         self._iot_alert_table.scrollToBottom()
@@ -601,9 +590,7 @@ class _AnalysisTabsMixin:
 
         _icon_lbl = QLabel("◎")
         _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _icon_lbl.setStyleSheet(
-            f"font-size:48px; color:{BORDER_MED}; background:transparent; border:none;"
-        )
+        _s.themed_ss(_icon_lbl, "font-size:48px; color:{BORDER_MED}; background:transparent; border:none;")
         _desc_lbl = QLabel(
             "Grade your network across 8 health dimensions — Uptime, Latency, Jitter, "
             "DNS Speed, Download Speed, Device Safety, STP Health, and Broadcast Storm Level — "
@@ -611,9 +598,7 @@ class _AnalysisTabsMixin:
         )
         _desc_lbl.setWordWrap(True)
         _desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _desc_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none; max-width:520px;"
-        )
+        _s.themed_ss(_desc_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none; max-width:520px;")
         _btn_scan_grade = QPushButton("◎  Scan & Grade")
         _btn_scan_grade.setObjectName("btnScan")
         _btn_scan_grade.setFixedHeight(36)
@@ -637,26 +622,20 @@ class _AnalysisTabsMixin:
             "Device Safety, STP Health, and Broadcast Storm Level."
         )
         info.setWordWrap(True)
-        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
         # Grade display
         grade_row = QHBoxLayout()
         self._bm_grade_label = QLabel("—")
         self._bm_grade_label.setFixedSize(90, 90)
         self._bm_grade_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._bm_grade_label.setStyleSheet(
-            "font-size:40px; font-weight:bold; border-radius:45px; "
-            f"background:{BG_CARD}; border:3px solid {BORDER}; color:{TEXT_PRIMARY};"
-        )
+        _s.themed_ss(self._bm_grade_label, "font-size:40px; font-weight:bold; border-radius:45px; "
+            "background:{BG_CARD}; border:3px solid {BORDER}; color:{TEXT_PRIMARY};")
         self._bm_score_label = QLabel("Score: —")
-        self._bm_score_label.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:16px; font-weight:bold;"
-        )
+        _s.themed_ss(self._bm_score_label, "color:{TEXT_PRIMARY}; font-size:16px; font-weight:bold;")
         self._bm_verdict_label = QLabel("Click Grade My Network to score your connection.")
         self._bm_verdict_label.setWordWrap(True)
-        self._bm_verdict_label.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; max-width:500px;"
-        )
+        _s.themed_ss(self._bm_verdict_label, "color:{TEXT_SECONDARY}; font-size:11px; max-width:500px;")
         grade_text = QVBoxLayout()
         grade_text.addWidget(self._bm_score_label)
         grade_text.addWidget(self._bm_verdict_label)
@@ -721,28 +700,24 @@ class _AnalysisTabsMixin:
         network grade improves versus the previous run (Feature 3b)."""
         card = QFrame()
         card.setObjectName("gradeShareCard")
-        card.setStyleSheet(
-            f"QFrame#gradeShareCard {{ background:{BG_HOVER}; border:1px solid {ACCENT};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
+        _s.themed_ss(card, "QFrame#gradeShareCard {{ background:{BG_HOVER}; border:1px solid {ACCENT};"
+            " border-radius:{CARD_RADIUS}; }}")
         row = QHBoxLayout(card)
         row.setContentsMargins(12, 6, 12, 6)
         row.setSpacing(10)
 
         self._grade_share_lbl = QLabel("Your grade improved — share it")
-        self._grade_share_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:600; border:none;"
-            f" background:transparent;"
-        )
+        _s.themed_ss(self._grade_share_lbl, "color:{TEXT_PRIMARY}; font-size:12px; font-weight:600; border:none;"
+            " background:transparent;")
         row.addWidget(self._grade_share_lbl)
         row.addStretch()
 
         _btn_qss = (
-            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid {ACCENT}; padding:4px 12px; font-size:11px;"
+            f"QPushButton {{ background:{_s.BG_CARD}; color:{_s.ACCENT};"
+            f" border:1px solid {_s.ACCENT}; padding:4px 12px; font-size:11px;"
             f" border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:hover {{ background:{_s.ACCENT}; color:{_s.WHITE}; }}"
+            f"QPushButton:pressed {{ background:{_s.ACCENT_DARK}; color:{_s.WHITE}; }}"
         )
         self._grade_share_img_btn = QPushButton("Copy as image")
         self._grade_share_img_btn.setStyleSheet(_btn_qss)
@@ -839,14 +814,14 @@ class _AnalysisTabsMixin:
 
             # Update grade circle
             grade_styles = {
-                "A": (GREEN,       GRADE_A_BG),
-                "B": (GRADE_B_FG,  GRADE_B_BG),
-                "C": (AMBER,       GRADE_C_BG),
-                "D": (RED,         GRADE_D_BG),
-                "F": (GRADE_F_FG,  GRADE_F_BG),
-                "N/A": (TEXT_SECONDARY, BG_CARD),
+                "A": (_s.GREEN,       _s.GRADE_A_BG),
+                "B": (_s.GRADE_B_FG,  _s.GRADE_B_BG),
+                "C": (_s.AMBER,       _s.GRADE_C_BG),
+                "D": (_s.RED,         _s.GRADE_D_BG),
+                "F": (_s.GRADE_F_FG,  _s.GRADE_F_BG),
+                "N/A": (_s.TEXT_SECONDARY, _s.BG_CARD),
             }
-            fg, bg = grade_styles.get(result.overall_grade, (TEXT_SECONDARY, BG_CARD))
+            fg, bg = grade_styles.get(result.overall_grade, (_s.TEXT_SECONDARY, _s.BG_CARD))
             self._bm_grade_label.setText(result.overall_grade)
             self._bm_grade_label.setStyleSheet(
                 f"font-size:40px; font-weight:bold; border-radius:45px; "
@@ -905,8 +880,8 @@ class _AnalysisTabsMixin:
                 row = self._bm_table.rowCount()
                 self._bm_table.insertRow(row)
                 grade_color = {
-                    "A": GREEN, "B": GRADE_B_FG, "C": AMBER, "D": RED, "F": GRADE_F_FG
-                }.get(d.grade, TEXT_SECONDARY)
+                    "A": _s.GREEN, "B": _s.GRADE_B_FG, "C": _s.AMBER, "D": _s.RED, "F": _s.GRADE_F_FG
+                }.get(d.grade, _s.TEXT_SECONDARY)
                 for col, val in enumerate([
                     d.name, d.grade, d.value_label, d.ideal_label, d.verdict, d.tip
                 ]):
@@ -920,12 +895,10 @@ class _AnalysisTabsMixin:
                         fix_btn = QPushButton(f"Fix this →")
                         fix_btn.setFlat(True)
                         fix_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                        fix_btn.setStyleSheet(
-                            f"QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
-                            f"border:none;text-align:left;padding:0 4px;}}"
-                            f"QPushButton:hover{{color:{ACCENT_DARK};}}"
-                            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-                        )
+                        _s.themed_ss(fix_btn, "QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
+                            "border:none;text-align:left;padding:0 4px;}}"
+                            "QPushButton:hover{{color:{ACCENT_DARK};}}"
+                            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
                         fix_btn.clicked.connect(
                             lambda _checked, t=target: self._nav_rail_go_to(t)
                         )

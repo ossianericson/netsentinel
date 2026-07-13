@@ -38,9 +38,9 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 from ui.styles import (
-    ACCENT_DARK, CANVAS_AMBER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
-    OVERLAY_BLUE2, OVERLAY_FG2, STATUS_OFFLINE, WHITE,
+    CANVAS_AMBER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_FG2,
 )
+from ui import styles as _s
 
 _AUTO_DISMISS_MS = 12_000   # dismiss automatically after 12 s of inactivity
 
@@ -171,10 +171,8 @@ class CoachMarkOverlay(QWidget):
         title_lbl = QLabel(title, self)
         title_lbl.setGeometry(self._PADDING, self._PADDING,
                                self._W - 2 * self._PADDING - 28, 22)
-        title_lbl.setStyleSheet(
-            f"QLabel {{ background: transparent; border: none;"
-            f" color: {WHITE}; font-size: 13px; font-weight: 600; }}"
-        )
+        _s.themed_ss(title_lbl, "QLabel {{ background: transparent; border: none;"
+            " color: {WHITE}; font-size: 13px; font-weight: 600; }}")
 
         # Body
         body_lbl = QLabel(body, self)
@@ -189,24 +187,20 @@ class CoachMarkOverlay(QWidget):
         # × dismiss button
         close_btn = QPushButton("×", self)
         close_btn.setGeometry(self._W - 32, 4, 28, 28)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none;"
-            f" color: {STATUS_OFFLINE}; font-size: 17px; }}"
-            f"QPushButton:hover {{ color: {WHITE}; }}"
-            f"QPushButton:pressed {{ color: {WHITE}; }}"
-        )
+        _s.themed_ss(close_btn, "QPushButton {{ background: transparent; border: none;"
+            " color: {STATUS_OFFLINE}; font-size: 17px; }}"
+            "QPushButton:hover {{ color: {WHITE}; }}"
+            "QPushButton:pressed {{ color: {WHITE}; }}")
         close_btn.clicked.connect(self.dismissed)
 
         # Action button — use custom text if provided, otherwise default
         _btn_label = action_text or ("Got it" if is_last else "Next →")
         action_btn = QPushButton(_btn_label, self)
         action_btn.setGeometry(self._W - self._PADDING - 96, self._H - 40, 96, 28)
-        action_btn.setStyleSheet(
-            f"QPushButton {{ background: {OVERLAY_BLUE}; border: none; border-radius: 5px;"
-            f" color: {WHITE}; font-size: 11px; font-weight: 600; }}"
-            f"QPushButton:hover {{ background: {OVERLAY_BLUE2}; color: {WHITE}; }}"
-            f"QPushButton:pressed {{ background: {ACCENT_DARK}; color: {WHITE}; }}"
-        )
+        _s.themed_ss(action_btn, "QPushButton {{ background: {OVERLAY_BLUE}; border: none; border-radius: 5px;"
+            " color: {WHITE}; font-size: 11px; font-weight: 600; }}"
+            "QPushButton:hover {{ background: {OVERLAY_BLUE2}; color: {WHITE}; }}"
+            "QPushButton:pressed {{ background: {ACCENT_DARK}; color: {WHITE}; }}")
         action_btn.clicked.connect(self.dismissed if is_last else self.advanced)
 
         # Auto-dismiss timer — skipped when auto_dismiss_ms <= 0

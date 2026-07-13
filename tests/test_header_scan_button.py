@@ -25,8 +25,10 @@ def _read() -> str:
 
 def test_scan_button_does_not_use_ghost_icon_style():
     src = _read()
-    m = re.search(r"self\._header_scan_btn\.setStyleSheet\((\w+)\)", src)
-    assert m, "could not find _header_scan_btn.setStyleSheet(...) in header.py"
+    # After the live-theme conversion the button registers a live template via
+    # themed_ss(widget, <callable>) instead of setStyleSheet(<str>).
+    m = re.search(r"themed_ss\(\s*self\._header_scan_btn,\s*(\w+)\)", src)
+    assert m, "could not find themed_ss(self._header_scan_btn, ...) in header.py"
     assert m.group(1) != "_icon_btn_qss", (
         "header Scan button uses the transparent-at-rest icon style; it must use "
         "a dedicated solid primary style (see test docstring)."
@@ -35,10 +37,10 @@ def test_scan_button_does_not_use_ghost_icon_style():
 
 def test_scan_button_matches_ghost_chrome_at_rest():
     src = _read()
-    # Grab the _scan_btn_qss assignment (the f-string tuple) and confirm its base
-    # QToolButton rule is transparent at rest — matching the gear/time-picker
+    # Grab the _scan_btn_qss callable body (the f-string tuple) and confirm its
+    # base QToolButton rule is transparent at rest — matching the gear/time-picker
     # ghost buttons — and only fills solid ACCENT on :hover.
-    m = re.search(r"_scan_btn_qss\s*=\s*\((.*?)\)\n", src, re.S)
+    m = re.search(r"def _scan_btn_qss\(\):\s*return \((.*?)\)\n", src, re.S)
     assert m, "expected a _scan_btn_qss definition in header.py"
     body = m.group(1)
     base = body.split(":hover")[0]
@@ -46,11 +48,11 @@ def test_scan_button_matches_ghost_chrome_at_rest():
         "base QToolButton rule must be transparent at rest, matching the "
         "ghost chrome buttons beside it"
     )
-    assert "alpha(WHITE" in base, (
+    assert "alpha(_s.WHITE" in base, (
         "rest border must be a faint alpha(WHITE, ...) hairline like its neighbours"
     )
     hover = body.split(":hover", 1)[1]
-    assert "background:{ACCENT}" in hover, (
+    assert "background:{_s.ACCENT}" in hover, (
         "hover rule must fill solid {ACCENT} background"
     )
 
@@ -62,12 +64,12 @@ def test_secondary_header_controls_avoid_light_hex_border_on_dark_bar():
     # WHITE-alpha hairline that blends on the dark bar in both themes.
     src = _read()
     for name in ("_icon_btn_qss", "_time_combo_qss"):
-        m = re.search(rf"{name}\s*=\s*\((.*?)\)\n", src, re.S)
+        m = re.search(rf"def {name}\(\):\s*return \((.*?)\)\n", src, re.S)
         assert m, f"expected {name} in header.py"
         base = m.group(1).split(":hover")[0]
-        assert "border:1px solid {SIDEBAR_SECTION_BG}" not in base, (
+        assert "border:1px solid {_s.SIDEBAR_SECTION_BG}" not in base, (
             f"{name} uses a light-theme hex border on the dark header bar"
         )
-        assert "alpha(WHITE" in base, (
+        assert "alpha(_s.WHITE" in base, (
             f"{name} rest border must be a faint alpha(WHITE, ...) hairline"
         )

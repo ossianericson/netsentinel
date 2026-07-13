@@ -24,13 +24,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, RED, TABLE_ROW_BORDER,
-    TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TH_BG, TH_BORDER, TH_TEXT,
-    WHITE,
-)
+from ui import styles as _s
 from modules.automation_hooks import (
     AutomationEngine, AutomationRule, Trigger,
     template_wol, template_log_to_file, get_engine,
@@ -44,24 +38,18 @@ from ui.widgets.empty_state_card import EmptyStateCard
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setObjectName("card")
-    frame.setStyleSheet(
-        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(frame, "QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
     hdr = QFrame()
     hdr.setFixedHeight(32)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0px;"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; border-radius:0px;")
     hdr_lay = QHBoxLayout(hdr)
     hdr_lay.setContentsMargins(12, 0, 10, 0)
     t = QLabel(title.upper())
-    t.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
-        f" letter-spacing:0.5px; background:transparent; border:none;"
-    )
+    _s.themed_ss(t, "color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+        " letter-spacing:0.5px; background:transparent; border:none;")
     hdr_lay.addWidget(t)
     hdr_lay.addStretch()
     outer.addWidget(hdr)
@@ -74,16 +62,16 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
 
 def _table_style() -> str:
     return (
-        f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
+        f"QTableWidget {{ border:none; font-size:11px; color:{_s.TEXT_PRIMARY}; }}"
         f"QHeaderView::section {{"
-        f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+        f"  background:{_s.TH_BG}; color:{_s.TH_TEXT}; font-size:11px;"
         f"  font-weight:bold; padding:4px 5px; border:none;"
-        f"  border-right:1px solid {TH_BORDER};"
+        f"  border-right:1px solid {_s.TH_BORDER};"
         f"}}"
-        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-        f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
+        f"QTableWidget::item:selected {{ background:{_s.TABLE_SEL}; color:{_s.TEXT_PRIMARY}; }}"
+        f"QTableWidget::item:alternate {{ background:{_s.BG_ALT_ROW}; }}"
+        f"QTableWidget::item {{ border-bottom:1px solid {_s.TABLE_ROW_BORDER}; }}"
+        f"QTableWidget::item:hover {{ background:{_s.BG_HOVER}; }}"
     )
 
 
@@ -111,22 +99,22 @@ class RuleEditorDialog(QDialog):
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        _lbl_qss = f"color:{TEXT_PRIMARY}; font-size:11px;"
+        _lbl_qss = "color:{TEXT_PRIMARY}; font-size:11px;"
         _in_qss  = (
-            f"QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+            "QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         _cb_qss = (
-            f"QComboBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            "QComboBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}"
         )
 
         self._name = QLineEdit(self._rule.name)
-        self._name.setStyleSheet(_in_qss)
+        _s.themed_ss(self._name, _in_qss)
 
         self._trigger = QComboBox()
-        self._trigger.setStyleSheet(_cb_qss)
+        _s.themed_ss(self._trigger, _cb_qss)
         for val, lbl in _TRIGGER_LABELS.items():
             self._trigger.addItem(lbl, val)
         idx = self._trigger.findData(self._rule.trigger)
@@ -134,7 +122,7 @@ class RuleEditorDialog(QDialog):
             self._trigger.setCurrentIndex(idx)
 
         self._match_field = QComboBox()
-        self._match_field.setStyleSheet(_cb_qss)
+        _s.themed_ss(self._match_field, _cb_qss)
         for f in _MATCH_FIELDS:
             self._match_field.addItem(f)
         fi = self._match_field.findText(self._rule.match_field)
@@ -143,35 +131,33 @@ class RuleEditorDialog(QDialog):
 
         self._match_value = QLineEdit(self._rule.match_value)
         self._match_value.setPlaceholderText("* = any")
-        self._match_value.setStyleSheet(_in_qss)
+        _s.themed_ss(self._match_value, _in_qss)
 
         # Script path row with Browse button
         script_row = QHBoxLayout()
         self._script_path = QLineEdit(self._rule.script_path)
         self._script_path.setPlaceholderText("Path to .ps1 / .bat / .py / .sh")
-        self._script_path.setStyleSheet(_in_qss)
+        _s.themed_ss(self._script_path, _in_qss)
         btn_browse = QPushButton("Browse…")
         btn_browse.setFixedWidth(72)
-        btn_browse.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:2px; padding:3px 8px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(btn_browse, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:2px; padding:3px 8px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         btn_browse.clicked.connect(self._browse)
         script_row.addWidget(self._script_path, 1)
         script_row.addWidget(btn_browse)
 
         self._args = QLineEdit(self._rule.args)
         self._args.setPlaceholderText("e.g. -Target $MAC  (use $MAC, $IP, $HOSTNAME, $ALERT_LEVEL)")
-        self._args.setStyleSheet(_in_qss)
+        _s.themed_ss(self._args, _in_qss)
 
         self._description = QLineEdit(self._rule.description)
-        self._description.setStyleSheet(_in_qss)
+        _s.themed_ss(self._description, _in_qss)
 
         self._enabled = QCheckBox("Rule enabled")
         self._enabled.setChecked(self._rule.enabled)
-        self._enabled.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+        _s.themed_ss(self._enabled, "color:{TEXT_PRIMARY}; font-size:11px;")
 
         for label, widget in [
             ("Name:",        self._name),
@@ -184,7 +170,7 @@ class RuleEditorDialog(QDialog):
             ("",             self._enabled),
         ]:
             lbl = QLabel(label)
-            lbl.setStyleSheet(_lbl_qss)
+            _s.themed_ss(lbl, _lbl_qss)
             if label == "Script:":
                 w = QWidget()
                 w.setLayout(script_row)
@@ -289,12 +275,10 @@ class AutomationPage(QWidget):
         # Toolbar in card header
         btn_add = QPushButton("+ Add Rule")
         btn_add.setFixedHeight(22)
-        btn_add.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:2px; padding:0 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(btn_add, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:2px; padding:0 10px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         btn_add.clicked.connect(self._add_rule)
         self._btn_edit = QPushButton("Edit")
         self._btn_edit.setFixedHeight(22)
@@ -310,14 +294,12 @@ class AutomationPage(QWidget):
         self._btn_test.clicked.connect(self._test_rule)
 
         for btn in (self._btn_edit, self._btn_del, self._btn_test):
-            btn.setStyleSheet(
-                f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-                f" border:1px solid {BORDER}; border-radius:2px;"
-                f" padding:0 8px; font-size:11px; }}"
-                f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-                f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+                " border:1px solid {BORDER}; border-radius:2px;"
+                " padding:0 8px; font-size:11px; }}"
+                "QPushButton:hover {{ background:{BG_HOVER}; }}"
+                "QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+                "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         rules_hdr_lay.addWidget(btn_add)
         rules_hdr_lay.addSpacing(6)
         rules_hdr_lay.addWidget(self._btn_edit)
@@ -329,17 +311,15 @@ class AutomationPage(QWidget):
         tpl_row.setContentsMargins(8, 6, 8, 4)
         tpl_row.setSpacing(6)
         tpl_lbl = QLabel("Templates:")
-        tpl_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none; background:transparent;")
+        _s.themed_ss(tpl_lbl, "color:{TEXT_MUTED}; font-size:10px; border:none; background:transparent;")
         tpl_row.addWidget(tpl_lbl)
         for label, fn in [("WoL on Join", template_wol), ("Log to File", template_log_to_file)]:
             b = QPushButton(label)
             b.setFixedHeight(20)
-            b.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
-                f" border-radius:2px; padding:0 8px; font-size:10px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-            )
+            _s.themed_ss(b, "QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
+                " border-radius:2px; padding:0 8px; font-size:10px; }}"
+                "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
             b.clicked.connect(lambda _, f=fn: self._add_template(f))
             tpl_row.addWidget(b)
         tpl_row.addStretch()
@@ -361,7 +341,7 @@ class AutomationPage(QWidget):
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.verticalHeader().setVisible(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
-        self._table.setStyleSheet(_table_style())
+        _s.themed_ss(self._table, _table_style)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.doubleClicked.connect(self._edit_rule)
 
@@ -401,22 +381,18 @@ class AutomationPage(QWidget):
         log_frame, log_body, log_hdr_lay = _card("Automation Log")
         btn_clear = QPushButton("Clear")
         btn_clear.setFixedHeight(22)
-        btn_clear.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:2px; padding:0 8px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(btn_clear, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            " border-radius:2px; padding:0 8px; font-size:11px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         btn_clear.clicked.connect(self._clear_log)
         log_hdr_lay.addWidget(btn_clear)
 
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
         self._log.setFont(QFont("Consolas", 9))
-        self._log.setStyleSheet(
-            f"QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:none; padding:4px 8px; }}"
-        )
+        _s.themed_ss(self._log, "QPlainTextEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:none; padding:4px 8px; }}")
         self._log.setMaximumBlockCount(2000)
         self._log.appendPlainText("Ready. Use ▶ Test to run a rule with dummy event data.")
         log_body.addWidget(self._log)
@@ -464,8 +440,8 @@ class AutomationPage(QWidget):
         self._table.setItem(row, 0, QTableWidgetItem(rule.name))
 
         trig_item = QTableWidgetItem(_TRIGGER_LABELS.get(rule.trigger, rule.trigger))
-        trig_color = {"device_joined": GREEN, "device_left": AMBER, "alert_fired": RED}
-        trig_item.setForeground(QColor(trig_color.get(rule.trigger, TEXT_MUTED)))
+        trig_color = {"device_joined": _s.GREEN, "device_left": _s.AMBER, "alert_fired": _s.RED}
+        trig_item.setForeground(QColor(trig_color.get(rule.trigger, _s.TEXT_MUTED)))
         self._table.setItem(row, 1, trig_item)
 
         match_str = f"{rule.match_field}={rule.match_value}" if rule.match_field not in ("any", "") else "any"
@@ -473,12 +449,12 @@ class AutomationPage(QWidget):
         self._table.setItem(row, 3, QTableWidgetItem(rule.script_path))
 
         enabled_item = QTableWidgetItem("● Yes" if rule.enabled else "○ No")
-        enabled_item.setForeground(QColor(GREEN if rule.enabled else TEXT_MUTED))
+        enabled_item.setForeground(QColor(_s.GREEN if rule.enabled else _s.TEXT_MUTED))
         self._table.setItem(row, 4, enabled_item)
 
         # Store rule id in col 5
         id_item = QTableWidgetItem(rule.id)
-        id_item.setForeground(QColor(TEXT_MUTED))
+        id_item.setForeground(QColor(_s.TEXT_MUTED))
         self._table.setItem(row, 5, id_item)
 
     def _selected_rule_id(self) -> Optional[str]:

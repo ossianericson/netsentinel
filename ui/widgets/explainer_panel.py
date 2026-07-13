@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, BG_HOVER, WHITE
+from ui import styles as _s
 
 
 # ── Per-page content ──────────────────────────────────────────────────────────
@@ -78,10 +78,8 @@ class ExplainerPanel(QFrame):
         self._protocol = protocol
 
         self.setObjectName("explainerPanel")
-        self.setStyleSheet(
-            f"QFrame#explainerPanel {{ background:{BG_DARK}; border-top:1px solid {BORDER};"
-            " border-radius:0px; }"
-        )
+        _s.themed_ss(self, "QFrame#explainerPanel {{ background:{BG_DARK}; border-top:1px solid {BORDER};"
+            " border-radius:0px; }}")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         root = QVBoxLayout(self)
@@ -91,14 +89,12 @@ class ExplainerPanel(QFrame):
         # ── Toggle bar ────────────────────────────────────────────────────────
         self._toggle_btn = QPushButton("  ▸  What just happened, technically?")
         self._toggle_btn.setCheckable(True)
-        self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_DARK}; border:none; border-top:1px solid {BORDER};"
-            f" color:{TEXT_MUTED}; font-size:11px; font-weight:600;"
-            f" text-align:left; padding:6px 12px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
-            f"QPushButton:checked {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(self._toggle_btn, "QPushButton {{ background:{BG_DARK}; border:none; border-top:1px solid {BORDER};"
+            " color:{TEXT_MUTED}; font-size:11px; font-weight:600;"
+            " text-align:left; padding:6px 12px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
+            "QPushButton:checked {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle_btn.toggled.connect(self._on_toggle)
         root.addWidget(self._toggle_btn)
@@ -106,7 +102,7 @@ class ExplainerPanel(QFrame):
         # ── Expanded content ──────────────────────────────────────────────────
         self._body = QWidget()
         self._body.setVisible(False)
-        self._body.setStyleSheet(f"background:{BG_CARD}; border-top:1px solid {BORDER};")
+        _s.themed_ss(self._body, "background:{BG_CARD}; border-top:1px solid {BORDER};")
         body_lay = QVBoxLayout(self._body)
         body_lay.setContentsMargins(16, 12, 16, 12)
         body_lay.setSpacing(8)
@@ -114,9 +110,7 @@ class ExplainerPanel(QFrame):
         if content:
             text_lbl = QLabel(content)
             text_lbl.setWordWrap(True)
-            text_lbl.setStyleSheet(
-                f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(text_lbl, "font-size:12px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
             body_lay.addWidget(text_lbl)
 
         btn_row = QHBoxLayout()
@@ -125,13 +119,11 @@ class ExplainerPanel(QFrame):
         if protocol:
             viz_btn = QPushButton(f"▶  See {protocol} animated diagram")
             viz_btn.setFixedHeight(28)
-            viz_btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
-                f" color:{ACCENT}; border-radius:4px; font-size:11px; font-weight:600;"
-                f" padding:0 12px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            )
+            _s.themed_ss(viz_btn, "QPushButton {{ background:transparent; border:1px solid {ACCENT};"
+                " color:{ACCENT}; border-radius:4px; font-size:11px; font-weight:600;"
+                " padding:0 12px; }}"
+                "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
             viz_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             viz_btn.clicked.connect(lambda: self.navigate_to.emit("Protocol Visualizer"))
             btn_row.addWidget(viz_btn)

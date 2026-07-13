@@ -28,6 +28,14 @@ _GRADE_RANK = {"F": 0, "D": 1, "C": 2, "B": 3, "A": 4}
 # MESH_DEGRADED — dBm below this is considered a weak signal
 _MESH_WEAK_RSSI = -75.0
 
+# SERVICE_DOWN — consecutive failed checks required before the first CRITICAL
+# alert fires. Without this, a target that was never reachable (e.g. added by
+# mistake, or an automated fuzz/monkey-test click landing in the add-service
+# field) fires CRITICAL on its very first check and re-fires every cooldown
+# forever — indistinguishable from a real outage and a source of alert
+# fatigue that erodes trust in the app.
+_SERVICE_DOWN_MIN_CONSECUTIVE_FAILS = 3
+
 
 class _AlertChecksMixin:
     """Mixin for AlertEngine providing cert, service, and baseline check evaluation methods."""
@@ -57,6 +65,7 @@ class _AlertChecksMixin:
                     continue
 
                 if up:
+                    self._service_fail_streak.pop(key, None)
                     # ── S4-1: service came back — fire resolution if it was down ──
                     if key in self._service_down_since:
                         down_ts = self._service_down_since.pop(key)
@@ -87,6 +96,15 @@ class _AlertChecksMixin:
                             self._on_alert(resolution)
                     continue
 
+                # Track downtime start on the first observed failure (used for
+                # the resolution message's duration), independent of whether
+                # the grace period below has elapsed yet.
+                self._service_down_since.setdefault(key, now)
+                streak = self._service_fail_streak.get(key, 0) + 1
+                self._service_fail_streak[key] = streak
+                if streak < _SERVICE_DOWN_MIN_CONSECUTIVE_FAILS:
+                    continue
+
                 alert = self._fire_if_cooled(
                     rule, key, now,
                     message=(
@@ -98,7 +116,6 @@ class _AlertChecksMixin:
                     value=None,
                 )
                 if alert:
-                    self._service_down_since.setdefault(key, now)
                     fired.append(alert)
                     if self._on_alert:
                         self._on_alert(alert)

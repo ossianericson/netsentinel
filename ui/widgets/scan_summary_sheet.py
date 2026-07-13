@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, AMBER, BG_CARD, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
+from ui import styles as _s
 
 _HEIGHT = 240
 _DISMISS_S = 30
@@ -38,9 +38,7 @@ class ScanSummarySheet(QFrame):
     # ── Construction ─────────────────────────────────────────────────────────
 
     def _build(self) -> None:
-        self.setStyleSheet(
-            f"QFrame#scanSummarySheet {{ background:{BG_CARD}; border-top:2px solid {ACCENT}; }}"
-        )
+        _s.themed_ss(self, "QFrame#scanSummarySheet {{ background:{BG_CARD}; border-top:2px solid {ACCENT}; }}")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -51,17 +49,13 @@ class ScanSummarySheet(QFrame):
         self._progress.setFixedHeight(3)
         self._progress.setRange(0, _DISMISS_S)
         self._progress.setValue(_DISMISS_S)
-        self._progress.setStyleSheet(
-            f"QProgressBar {{ border:none; background:{BORDER}; border-radius:0; }}"
-            f"QProgressBar::chunk {{ background:{ACCENT}; border-radius:0; }}"
-        )
+        _s.themed_ss(self._progress, "QProgressBar {{ border:none; background:{BORDER}; border-radius:0; }}"
+            "QProgressBar::chunk {{ background:{ACCENT}; border-radius:0; }}")
         root.addWidget(self._progress)
 
         body = QWidget()
-        body.setStyleSheet(
-            f"QWidget {{ background:{BG_CARD}; }}"
-            f"QLabel {{ background:transparent; border:none; }}"
-        )
+        _s.themed_ss(body, "QWidget {{ background:{BG_CARD}; }}"
+            "QLabel {{ background:transparent; border:none; }}")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(20, 10, 20, 10)
         bl.setSpacing(10)
@@ -69,15 +63,13 @@ class ScanSummarySheet(QFrame):
         # Header
         hdr_row = QHBoxLayout()
         hdr_lbl = QLabel("Scan Complete")
-        hdr_lbl.setStyleSheet(f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};")
+        _s.themed_ss(hdr_lbl, "font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};")
         close_btn = QPushButton("×")
         close_btn.setFixedSize(26, 26)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:17px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:17px; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         close_btn.clicked.connect(self._dismiss)
         hdr_row.addWidget(hdr_lbl, 1)
         hdr_row.addWidget(close_btn)
@@ -113,12 +105,10 @@ class ScanSummarySheet(QFrame):
         dns_row = QHBoxLayout()
         dns_btn = QPushButton("Don't show after scans")
         dns_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        dns_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:10px; text-decoration:underline; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_SECONDARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
-        )
+        _s.themed_ss(dns_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            " font-size:10px; text-decoration:underline; padding:0; }}"
+            "QPushButton:hover {{ color:{TEXT_SECONDARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         dns_btn.clicked.connect(self._dont_show)
         dns_row.addStretch()
         dns_row.addWidget(dns_btn)
@@ -130,33 +120,27 @@ class ScanSummarySheet(QFrame):
     def _make_section(title: str) -> QFrame:
         f = QFrame()
         f.setObjectName("summarySection")
-        f.setStyleSheet(
-            f"QFrame#summarySection {{ border:1px solid {BORDER}; border-radius:6px;"
-            f" background:{BG_CARD}; min-width:130px; max-width:200px; }}"
-            f"QLabel {{ border:none; background:transparent; }}"
-        )
+        _s.themed_ss(f, "QFrame#summarySection {{ border:1px solid {BORDER}; border-radius:6px;"
+            " background:{BG_CARD}; min-width:130px; max-width:200px; }}"
+            "QLabel {{ border:none; background:transparent; }}")
         lay = QVBoxLayout(f)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(2)
         title_lbl = QLabel(title.upper())
-        title_lbl.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{TEXT_MUTED}; letter-spacing:1px;"
-        )
+        _s.themed_ss(title_lbl, "font-size:9px; font-weight:bold; color:{TEXT_MUTED}; letter-spacing:1px;")
         val_lbl = QLabel("—")
         val_lbl.setObjectName("secVal")
-        val_lbl.setStyleSheet(f"font-size:20px; font-weight:bold; color:{TEXT_MUTED};")
+        _s.themed_ss(val_lbl, "font-size:20px; font-weight:bold; color:{TEXT_MUTED};")
         sub_lbl = QLabel("")
         sub_lbl.setObjectName("secSub")
-        sub_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(sub_lbl, "font-size:10px; color:{TEXT_SECONDARY};")
         link_btn = QPushButton("View →")
         link_btn.setObjectName("secLink")
         link_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        link_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
-            f" font-size:10px; padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
+        _s.themed_ss(link_btn, "QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
+            " font-size:10px; padding:0; text-align:left; }}"
+            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         lay.addWidget(title_lbl)
         lay.addWidget(val_lbl)
         lay.addWidget(sub_lbl)
@@ -186,8 +170,8 @@ class ScanSummarySheet(QFrame):
 
         # Devices
         v, s = self._sec_val(self._sec_devices), self._sec_sub(self._sec_devices)
-        color = GREEN if total_devices > 0 else TEXT_MUTED
-        v.setStyleSheet(f"font-size:20px; font-weight:bold; color:{color};")
+        _s.themed_ss(v, lambda on=(total_devices > 0):
+                     f"font-size:20px; font-weight:bold; color:{_s.GREEN if on else _s.TEXT_MUTED};")
         v.setText(str(total_devices))
         parts = []
         if new_devices:
@@ -198,28 +182,28 @@ class ScanSummarySheet(QFrame):
 
         # Alerts
         v, s = self._sec_val(self._sec_alerts), self._sec_sub(self._sec_alerts)
-        color = AMBER if pending_alerts > 0 else GREEN
-        v.setStyleSheet(f"font-size:20px; font-weight:bold; color:{color};")
+        _s.themed_ss(v, lambda on=(pending_alerts > 0):
+                     f"font-size:20px; font-weight:bold; color:{_s.AMBER if on else _s.GREEN};")
         v.setText(str(pending_alerts))
         s.setText("pending" if pending_alerts > 0 else "all clear")
 
         # Baseline
         v, s = self._sec_val(self._sec_baseline), self._sec_sub(self._sec_baseline)
         if baseline_diffs > 0:
-            v.setStyleSheet(f"font-size:20px; font-weight:bold; color:{AMBER};")
+            _s.themed_ss(v, "font-size:20px; font-weight:bold; color:{AMBER};")
             v.setText(str(baseline_diffs))
             s.setText("change(s) detected")
             self._section_link(self._sec_baseline).setVisible(True)
         else:
-            v.setStyleSheet(f"font-size:20px; font-weight:bold; color:{GREEN};")
+            _s.themed_ss(v, "font-size:20px; font-weight:bold; color:{GREEN};")
             v.setText("—")
             s.setText("no drift")
             self._section_link(self._sec_baseline).setVisible(False)
 
         # CVEs
         v, s = self._sec_val(self._sec_cves), self._sec_sub(self._sec_cves)
-        color = RED if new_cves > 0 else TEXT_MUTED
-        v.setStyleSheet(f"font-size:20px; font-weight:bold; color:{color};")
+        _s.themed_ss(v, lambda on=(new_cves > 0):
+                     f"font-size:20px; font-weight:bold; color:{_s.RED if on else _s.TEXT_MUTED};")
         v.setText(str(new_cves))
         s.setText("new matches" if new_cves > 0 else "no new CVEs")
 

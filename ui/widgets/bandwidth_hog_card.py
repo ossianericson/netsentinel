@@ -15,10 +15,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, BG_CARD, BORDER,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-)
+from ui import styles as _s
 
 
 def _fmt_bytes(n: int) -> str:
@@ -47,10 +44,8 @@ class BandwidthHogCard(QWidget):
 
         self._frame = QFrame()
         self._frame.setObjectName("bandwidthHogFrame")
-        self._frame.setStyleSheet(
-            f"QFrame#bandwidthHogFrame {{ background:{BG_CARD};"
-            f" border:1px solid {BORDER}; border-radius:6px; }}"
-        )
+        _s.themed_ss(self._frame, "QFrame#bandwidthHogFrame {{ background:{BG_CARD};"
+            " border:1px solid {BORDER}; border-radius:6px; }}")
         frame_lay = QHBoxLayout(self._frame)
         frame_lay.setContentsMargins(14, 10, 14, 10)
         frame_lay.setSpacing(12)
@@ -58,27 +53,21 @@ class BandwidthHogCard(QWidget):
         self._icon_lbl = QLabel("◆")
         self._icon_lbl.setFixedWidth(28)
         self._icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icon_lbl.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_MUTED};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._icon_lbl, "font-size:18px; font-weight:bold; color:{TEXT_MUTED};"
+            " background:transparent; border:none;")
 
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
 
         self._headline_lbl = QLabel("Who's using my bandwidth right now?")
-        self._headline_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._headline_lbl, "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;")
         self._headline_lbl.setWordWrap(True)
 
         self._sub_lbl = QLabel(
             "Start App Traffic monitoring to see a live answer here."
         )
-        self._sub_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(self._sub_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._sub_lbl.setWordWrap(True)
 
         text_col.addWidget(self._headline_lbl)
@@ -88,12 +77,10 @@ class BandwidthHogCard(QWidget):
         self._cta_btn.setFixedHeight(28)
         self._cta_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cta_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self._cta_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" border-radius:4px; font-size:11px; padding:0 12px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
+        _s.themed_ss(self._cta_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:4px; font-size:11px; padding:0 12px; }}"
+            "QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
         self._cta_btn.clicked.connect(lambda: self.navigate_to.emit("App Traffic"))
 
         frame_lay.addWidget(self._icon_lbl)
@@ -110,10 +97,8 @@ class BandwidthHogCard(QWidget):
         bytes_total = int(payload.get("bytes_total", 0))
         window_s = float(payload.get("window_s", 10.0))
 
-        self._icon_lbl.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{ACCENT};"
-            " background:transparent; border:none;"
-        )
+        _s.themed_ss(self._icon_lbl, "font-size:18px; font-weight:bold; color:{ACCENT};"
+            " background:transparent; border:none;")
         self._headline_lbl.setText(
             f"Right now: {label} is using {pct:.0f}% of your bandwidth"
         )

@@ -52,14 +52,16 @@ def test_tile_count():
 
 
 def test_all_tiles_have_required_fields():
+    from ui import styles as _s
+
     for tile in _TILES:
-        label, desc, icon, action_type, action_arg, color = tile
+        label, desc, icon, action_type, action_arg, color_name = tile
         assert label, "label must not be empty"
         assert desc,  "desc must not be empty"
         assert icon,  "icon must not be empty"
         assert action_type in ("diagnose", "navigate"), f"unknown action_type: {action_type}"
         assert action_arg, "action_arg must not be empty"
-        assert color.startswith("#"), f"color must be a hex string: {color}"
+        assert hasattr(_s, color_name), f"color_name must name a ui.styles token: {color_name}"
 
 
 def test_diagnose_tiles_have_valid_symptom_keys():

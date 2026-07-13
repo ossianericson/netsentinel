@@ -29,54 +29,56 @@ from modules.cve_admin import (
     delete_cve_lifecycle, update_cve_state, upsert_cve_lifecycle,
 )
 from ui.expanding_table import ExpandingTable
-from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, CVE_CRITICAL_FG, GREEN, INPUT_PLACEHOLDER,
-    RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT, WHITE,
-)
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 from ui.widgets.jargon_tooltip import LearnMoreLink
+from ui import styles as _s
 
 # ── CVE state definitions ─────────────────────────────────────────────────────
 
 CVE_STATES = ["Open", "Acknowledged", "Accepted Risk", "Remediated"]
 
+# Values are theme-token NAMES resolved live via the helpers below, so a theme
+# switch restyles already-populated rows on the next repopulate.
 _STATE_COLORS = {
-    "Open":          RED,
-    "Acknowledged":  AMBER,
-    "Accepted Risk": TEXT_SECONDARY,
-    "Remediated":    GREEN,
+    "Open":          "RED",
+    "Acknowledged":  "AMBER",
+    "Accepted Risk": "TEXT_SECONDARY",
+    "Remediated":    "GREEN",
 }
 
 _SEVERITY_COLORS = {
-    "CRITICAL": CVE_CRITICAL_FG,
-    "HIGH":     RED,
-    "MEDIUM":   AMBER,
-    "LOW":      ACCENT,
-    "NONE":     TEXT_MUTED,
+    "CRITICAL": "CVE_CRITICAL_FG",
+    "HIGH":     "RED",
+    "MEDIUM":   "AMBER",
+    "LOW":      "ACCENT",
+    "NONE":     "TEXT_MUTED",
 }
+
+
+def _state_color(state: str, fallback: str = "TEXT_PRIMARY") -> str:
+    """Live theme hex for a CVE state (falls back to `fallback` token name)."""
+    return getattr(_s, _STATE_COLORS.get(state, fallback))
+
+
+def _severity_color(sev: str, fallback: str = "TEXT_PRIMARY") -> str:
+    """Live theme hex for a CVE severity (falls back to `fallback` token name)."""
+    return getattr(_s, _SEVERITY_COLORS.get(sev, fallback))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     outer = QWidget()
-    outer.setStyleSheet(
-        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
-    )
+    _s.themed_ss(outer, "QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
     ol = QVBoxLayout(outer)
     ol.setContentsMargins(0, 0, 0, 0)
     ol.setSpacing(0)
     hdr = QLabel(title)
-    hdr.setStyleSheet(
-        f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
-        f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-    )
+    _s.themed_ss(hdr, "background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
+        " padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
     ol.addWidget(hdr)
     body = QWidget()
-    body.setStyleSheet(f"background:{BG_CARD}; border:none;")
+    _s.themed_ss(body, "background:{BG_CARD}; border:none;")
     bl = QVBoxLayout(body)
     bl.setContentsMargins(12, 8, 12, 8)
     bl.setSpacing(6)
@@ -84,10 +86,10 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     return outer, bl
 
 
-def _kpi_tile(label: str, value: str = "0", accent: str = ACCENT) -> tuple[QWidget, QLabel]:
+def _kpi_tile(label: str, value: str = "0", accent: str = _s.ACCENT) -> tuple[QWidget, QLabel]:
     tile = QWidget()
     tile.setStyleSheet(
-        f"background:{BG_CARD}; border:1px solid {BORDER};"
+        f"background:{_s.BG_CARD}; border:1px solid {_s.BORDER};"
         f" border-left:3px solid {accent}; padding:4px 8px;"
     )
     tile.setMinimumWidth(110)
@@ -96,9 +98,9 @@ def _kpi_tile(label: str, value: str = "0", accent: str = ACCENT) -> tuple[QWidg
     lay.setContentsMargins(6, 4, 6, 4)
     lay.setSpacing(2)
     lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
+    _s.themed_ss(lbl, "font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
     val = QLabel(value)
-    val.setStyleSheet(f"font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
+    _s.themed_ss(val, "font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
     lay.addWidget(lbl)
     lay.addWidget(val)
     return tile, val
@@ -164,13 +166,13 @@ class _ImportDialog(QDialog):
             "Paste service version strings (one per line) or comma-separated.\n"
             "Example:  OpenSSH 8.9p1, Apache/2.4.54, nginx/1.18.0"
         )
-        info.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(info, "font-size:11px; color:{TEXT_SECONDARY};")
         info.setWordWrap(True)
         lay.addWidget(info)
 
         host_row = QHBoxLayout()
         host_lbl = QLabel("Host (optional):")
-        host_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        _s.themed_ss(host_lbl, "font-size:11px; color:{TEXT_PRIMARY};")
         self._host = QLineEdit()
         self._host.setPlaceholderText("192.168.1.100")
         host_row.addWidget(host_lbl)
@@ -230,7 +232,7 @@ class CvePage(QWidget):
 
     def _setup_ui(self) -> None:
         self.setObjectName("CvePage")
-        self.setStyleSheet(f"QWidget#CvePage {{ background:{BG_DARK}; }}")
+        _s.themed_ss(self, "QWidget#CvePage {{ background:{BG_DARK}; }}")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -275,20 +277,18 @@ class CvePage(QWidget):
             "Findings are populated by a full scan — click any row to review details "
             "and update the remediation status."
         )
-        _cve_sub.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
+        _s.themed_ss(_cve_sub, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         _p1_lay.addWidget(_cve_sub)
 
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
-        t1, self._kpi_total = _shared_kpi_tile("Total CVEs",    "0", ACCENT)
-        t2, self._kpi_open  = _shared_kpi_tile("Open",          "0", RED)
-        t3, self._kpi_ack   = _shared_kpi_tile("Acknowledged",  "0", AMBER)
-        t4, self._kpi_risk  = _shared_kpi_tile("Accepted Risk", "0", TEXT_SECONDARY)
-        t5, self._kpi_fixed = _shared_kpi_tile("Remediated",    "0", GREEN)
-        t6, self._kpi_crit  = _shared_kpi_tile("Critical/High", "0", CVE_CRITICAL_FG)
+        t1, self._kpi_total = _shared_kpi_tile("Total CVEs",    "0", "ACCENT")
+        t2, self._kpi_open  = _shared_kpi_tile("Open",          "0", "RED")
+        t3, self._kpi_ack   = _shared_kpi_tile("Acknowledged",  "0", "AMBER")
+        t4, self._kpi_risk  = _shared_kpi_tile("Accepted Risk", "0", "TEXT_SECONDARY")
+        t5, self._kpi_fixed = _shared_kpi_tile("Remediated",    "0", "GREEN")
+        t6, self._kpi_crit  = _shared_kpi_tile("Critical/High", "0", "CVE_CRITICAL_FG")
         for t in (t1, t2, t3, t4, t5, t6):
             kpi_row.addWidget(t)
         kpi_row.addStretch()
@@ -301,18 +301,14 @@ class CvePage(QWidget):
         self._filter_combo = QComboBox()
         self._filter_combo.addItems(["All States"] + CVE_STATES)
         self._filter_combo.setFixedWidth(150)
-        self._filter_combo.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
-        )
+        _s.themed_ss(self._filter_combo, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
         self._filter_combo.currentTextChanged.connect(self._refresh)
 
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Filter by CVE ID, service, host…")
         self._search_box.setFixedWidth(240)
-        self._search_box.setStyleSheet(
-            f"QLineEdit {{ font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px; }}"
-            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
-        )
+        _s.themed_ss(self._search_box, "QLineEdit {{ font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(200)
@@ -321,29 +317,23 @@ class CvePage(QWidget):
 
         self._btn_import = QPushButton("Import from Scan")
         self._btn_import.setFixedHeight(34)
-        self._btn_import.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{WHITE}; background:{ACCENT};"
-            f" border:none; padding:0 14px; border-radius:4px;"
-        )
+        _s.themed_ss(self._btn_import, "font-size:12px; font-weight:bold; color:{WHITE}; background:{ACCENT};"
+            " border:none; padding:0 14px; border-radius:4px;")
         self._btn_import.clicked.connect(self._import_dialog)
 
         btn_refresh = QPushButton("Refresh")
         btn_refresh.setFixedHeight(34)
-        btn_refresh.setStyleSheet(
-            f"font-size:12px; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" background:{BG_CARD}; padding:0 14px; border-radius:4px;"
-        )
+        _s.themed_ss(btn_refresh, "font-size:12px; color:{ACCENT}; border:1px solid {ACCENT};"
+            " background:{BG_CARD}; padding:0 14px; border-radius:4px;")
         btn_refresh.clicked.connect(self._refresh)
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY};")
 
         btn_export = QPushButton("↓ Export")
         btn_export.setFixedHeight(34)
-        btn_export.setStyleSheet(
-            f"font-size:12px; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
-            f" background:transparent; padding:0 12px; border-radius:4px;"
-        )
+        _s.themed_ss(btn_export, "font-size:12px; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+            " background:transparent; padding:0 12px; border-radius:4px;")
         btn_export.clicked.connect(self._export_csv)
 
         toolbar.addWidget(QLabel("Filter:"))
@@ -375,14 +365,12 @@ class CvePage(QWidget):
         self._table.verticalHeader().setVisible(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
         self._table.horizontalHeader().setStretchLastSection(True)
-        self._table.setStyleSheet(
-            f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:{TABLE_ROW_BORDER};"
-            f" alternate-background-color:{BG_ALT_ROW}; background:{BG_CARD}; border:none; }}"
-            f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-            f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-            f" font-weight:bold; padding:4px 5px; border:none; }}"
-        )
+        _s.themed_ss(self._table, "QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:{TABLE_ROW_BORDER};"
+            " alternate-background-color:{BG_ALT_ROW}; background:{BG_CARD}; border:none; }}"
+            "QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
+            "QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+            "QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            " font-weight:bold; padding:4px 5px; border:none; }}")
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 50)
         self._table.setColumnWidth(2, 75)
@@ -411,7 +399,7 @@ class CvePage(QWidget):
             "No CVEs tracked yet. Run the port scanner then use \"Import from Scan\" "
             "to import discovered service versions."
         )
-        self._lbl_empty.setStyleSheet(f"font-size:11px; color:{INPUT_PLACEHOLDER}; padding:16px;")
+        _s.themed_ss(self._lbl_empty, "font-size:11px; color:{INPUT_PLACEHOLDER}; padding:16px;")
         self._lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_lay.addWidget(self._lbl_empty)
 
@@ -491,15 +479,15 @@ class CvePage(QWidget):
             score_item = _item(f"{r['cvss_score']:.1f}")
             score_val = float(r["cvss_score"])
             if score_val >= 9.0:
-                score_item.setForeground(QColor(CVE_CRITICAL_FG))
+                score_item.setForeground(QColor(_s.CVE_CRITICAL_FG))
             elif score_val >= 7.0:
-                score_item.setForeground(QColor(RED))
+                score_item.setForeground(QColor(_s.RED))
             elif score_val >= 4.0:
-                score_item.setForeground(QColor(AMBER))
+                score_item.setForeground(QColor(_s.AMBER))
             self._table.setItem(row_idx, 1, score_item)
 
             sev_item = _item(severity)
-            sev_item.setForeground(QColor(_SEVERITY_COLORS.get(severity, TEXT_PRIMARY)))
+            sev_item.setForeground(QColor(_severity_color(severity)))
             self._table.setItem(row_idx, 2, sev_item)
 
             self._table.setItem(row_idx, 3, _item(r["service"]))
@@ -517,11 +505,11 @@ class CvePage(QWidget):
                     ]
                     if _matched:
                         _dev_item.setText(f"1 — {_host}")
-                        _dev_item.setForeground(QColor(ACCENT))
+                        _dev_item.setForeground(QColor(_s.ACCENT))
                         _dev_item.setToolTip("Click to open in Inventory Changes")
                     else:
                         _dev_item.setText("0 devices")
-                        _dev_item.setForeground(QColor(TEXT_MUTED))
+                        _dev_item.setForeground(QColor(_s.TEXT_MUTED))
                 except Exception:
                     _dev_item.setText("—")
             else:
@@ -529,16 +517,16 @@ class CvePage(QWidget):
             self._table.setItem(row_idx, 5, _dev_item)
 
             state_item = _item(state)
-            state_item.setForeground(QColor(_STATE_COLORS.get(state, TEXT_PRIMARY)))
+            state_item.setForeground(QColor(_state_color(state)))
             self._table.setItem(row_idx, 6, state_item)
 
             self._table.setItem(row_idx, 7, _item(r["owner"]))
 
             days_item = _item(str(days_open))
             if state != "Remediated" and days_open > 30:
-                days_item.setForeground(QColor(RED))
+                days_item.setForeground(QColor(_s.RED))
             elif state != "Remediated" and days_open > 7:
-                days_item.setForeground(QColor(AMBER))
+                days_item.setForeground(QColor(_s.AMBER))
             self._table.setItem(row_idx, 8, days_item)
 
             self._table.setItem(row_idx, 9, _item(r["description"]))
@@ -580,11 +568,9 @@ class CvePage(QWidget):
             return
         row = item_at.row() if item_at else -1
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; font-size:11px; }}"
-            f"QMenu::item {{ padding:4px 20px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        )
+        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; font-size:11px; }}"
+            "QMenu::item {{ padding:4px 20px; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         act_copy_cell = menu.addAction("Copy cell")
         act_copy_row  = menu.addAction("Copy row")
         menu.addSeparator()
@@ -690,20 +676,20 @@ class CvePage(QWidget):
             return QWidget()
         r = self._displayed_rows[logical_row]
         severity = (r["severity"] or "").upper()
-        border_color = _SEVERITY_COLORS.get(severity, BORDER)
+        border_color = _severity_color(severity, "BORDER")
         now = int(time.time())
         days_open = max(0, (now - r["opened_ts"]) // 86400)
 
         outer = QWidget()
         outer.setStyleSheet(
-            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f"QWidget {{ background:{_s.BG_HOVER}; border:none;"
             f" border-left:3px solid {border_color}; }}"
         )
         lay = QHBoxLayout(outer)
         lay.setContentsMargins(16, 10, 16, 10)
         lay.setSpacing(24)
 
-        def _lbl(text: str, color: str = TEXT_PRIMARY) -> QLabel:
+        def _lbl(text: str, color: str = _s.TEXT_PRIMARY) -> QLabel:
             l = QLabel(str(text))
             l.setStyleSheet(
                 f"font-size:11px; color:{color}; background:transparent; border:none;"
@@ -712,18 +698,16 @@ class CvePage(QWidget):
 
         def _hdr(text: str) -> QLabel:
             l = QLabel(text)
-            l.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
-                " background:transparent; border:none;"
-            )
+            _s.themed_ss(l, "font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
+                " background:transparent; border:none;")
             return l
 
-        state_color = _STATE_COLORS.get(r["state"], TEXT_PRIMARY)
+        state_color = _state_color(r["state"])
         score_val = float(r["cvss_score"])
         score_color = (
-            CVE_CRITICAL_FG if score_val >= 9.0 else
-            RED      if score_val >= 7.0 else
-            AMBER    if score_val >= 4.0 else TEXT_PRIMARY
+            _s.CVE_CRITICAL_FG if score_val >= 9.0 else
+            _s.RED      if score_val >= 7.0 else
+            _s.AMBER    if score_val >= 4.0 else _s.TEXT_PRIMARY
         )
 
         meta = QWidget()
@@ -756,35 +740,27 @@ class CvePage(QWidget):
         desc_col.addWidget(_hdr("Description"))
         desc_txt = QLabel(r["description"] or "No description available.")
         desc_txt.setWordWrap(True)
-        desc_txt.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
+        _s.themed_ss(desc_txt, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
         desc_col.addWidget(desc_txt)
         if r["notes"]:
             desc_col.addWidget(_hdr("Notes"))
             notes_txt = QLabel(r["notes"])
             notes_txt.setWordWrap(True)
-            notes_txt.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(notes_txt, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
             desc_col.addWidget(notes_txt)
         desc_col.addStretch()
         lay.addLayout(desc_col, 1)
 
         btn_state = QPushButton("Change State…")
         btn_state.setFixedHeight(28)
-        btn_state.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{WHITE}; background:{ACCENT};"
-            f" border:none; padding:0 12px; border-radius:4px;"
-        )
+        _s.themed_ss(btn_state, "font-size:11px; font-weight:bold; color:{WHITE}; background:{ACCENT};"
+            " border:none; padding:0 12px; border-radius:4px;")
         btn_state.clicked.connect(lambda: self._change_state(r))
 
         btn_nvd = QPushButton("Open in NVD")
         btn_nvd.setFixedHeight(28)
-        btn_nvd.setStyleSheet(
-            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" background:transparent; padding:0 12px; border-radius:4px;"
-        )
+        _s.themed_ss(btn_nvd, "font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            " background:transparent; padding:0 12px; border-radius:4px;")
         import webbrowser as _wb
         btn_nvd.clicked.connect(
             lambda: _wb.open(f"https://nvd.nist.gov/vuln/detail/{r['cve_id']}")
