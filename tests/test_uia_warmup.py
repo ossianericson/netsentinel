@@ -59,7 +59,7 @@ def test_constants_match_win32():
 
 def test_warm_up_sends_wm_getobject_to_the_given_hwnd(monkeypatch):
     """The helper must SendMessage WM_GETOBJECT/UIA_ROOT_OBJECT_ID, not something else."""
-    import ui.uia_warmup as mod
+    from ui import uia_warmup as mod
 
     sent: list[tuple] = []
 
@@ -80,7 +80,7 @@ def test_warm_up_reports_failure_when_qt_returns_no_provider(monkeypatch):
     Callers rely on the False to retry on a later window; silently latching here
     would leave the process cold and the fault would still fire.
     """
-    import ui.uia_warmup as mod
+    from ui import uia_warmup as mod
 
     mod._reset_for_tests()
     monkeypatch.setattr(mod._user32, "SendMessageW", lambda *a: 0)
@@ -89,7 +89,7 @@ def test_warm_up_reports_failure_when_qt_returns_no_provider(monkeypatch):
 
 def test_warm_up_is_idempotent_after_success(monkeypatch):
     """Only the first successful call does work; later calls are free no-ops."""
-    import ui.uia_warmup as mod
+    from ui import uia_warmup as mod
 
     calls = []
     mod._reset_for_tests()
@@ -103,7 +103,7 @@ def test_warm_up_is_idempotent_after_success(monkeypatch):
 
 def test_warm_up_never_raises(monkeypatch):
     """Startup must survive a warmup failure — it is an optimisation, not a feature."""
-    import ui.uia_warmup as mod
+    from ui import uia_warmup as mod
 
     mod._reset_for_tests()
 
