@@ -234,6 +234,7 @@ hiddenimports: list = [
     "ui.scan_wiring",
     "ui.scan_enrichment",
     "ui.header",
+    "ui.native_chrome",
     "ui.tabs",
     "ui.tabs_helpers",
     "ui.tabs_scan",

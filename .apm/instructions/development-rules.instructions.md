@@ -875,8 +875,18 @@ Required alternatives:
 
 Never reintroduce subprocess PIPE in `get_network_info()`, `get_dhcp_info()`, or `get_interface_details()`.
 
-### RULE-WIN2 (blocking): nativeEvent HTMAXBUTTON requires full NC message interception on frameless windows
-Returning `HTMAXBUTTON` from `nativeEvent(WM_NCHITTEST)` on a frameless window crashes via `STATUS_ACCESS_VIOLATION`. Must also intercept `WM_NCMOUSEMOVE`, `WM_NCLBUTTONDOWN`, `WM_NCLBUTTONUP` with `wParam==HTMAXBUTTON`. Do not re-add a partial implementation covering only `WM_NCHITTEST`.
+### RULE-WIN2 (blocking): Claiming HTMAXBUTTON means owning the full NC message set
+Returning `HTMAXBUTTON` from `WM_NCHITTEST` while leaving Windows to handle the button's
+mouse messages leaves it half-driving a caption button we draw ourselves. Intercept
+`WM_NCMOUSEMOVE`, `WM_NCLBUTTONDOWN` and `WM_NCLBUTTONUP` (`wParam == HTMAXBUTTON`) and
+`WM_NCMOUSELEAVE` too — never a partial implementation covering only `WM_NCHITTEST`.
+
+The window must also actually *have* a caption before you claim one (RULE-WIN9): on the
+frameless `WS_POPUP` this crashed with `STATUS_ACCESS_VIOLATION` / `0x8001010d`. The correct
+window shape is `ui/native_chrome.py`.
+
+Enforced by `tests/test_native_chrome.py` (handled-message-set completeness + an AST guard
+that the native callback touches zero Qt objects).
 
 ### RULE-WIN3 (blocking): Qt test files must never create QApplication at module level
 Creating `QApplication` at module import time (collection phase) bypasses conftest.py's session fixture and can cause cumulative C-level heap/stack corruption (`STATUS_STACK_BUFFER_OVERRUN`) that surfaces hundreds of tests later.
@@ -1627,6 +1637,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN8 → `test_command_palette_leak.py` (palette case only — no general AST guard yet)
 - RULE-CHAOS2 → `test_monkey_chrome_coverage.py` (blacklist invariants + chrome-action coverage)
 - RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
+- RULE-WIN2 → `test_native_chrome.py` (NC-message-set completeness + no-Qt-in-callback AST guard)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry

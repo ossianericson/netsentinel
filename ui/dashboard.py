@@ -106,7 +106,25 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._global_hours = 24.0
         self.setWindowTitle("NetSentinel  —  Network Security Scanner & Monitor")
         self.setMinimumSize(900, 600)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
+        # ── Window chrome (RULE-EXP1 / RULE-WIN9) ─────────────────────────────
+        # experimental/native_chrome: when True the window keeps its REAL Win32
+        # style (caption, sysmenu, thick frame, min/max box) and ui/native_chrome.py
+        # merely stops Windows painting the frame via WM_NCCALCSIZE — which is what
+        # makes Aero Snap, Snap Layouts, shake and native resize work at all.
+        # FramelessWindowHint produces a bare WS_POPUP that Windows does not
+        # consider maximizable or snappable (docs/spikes/window-snap-subclass.md).
+        # Default False ⇒ the previously-verified frameless path is untouched until
+        # a clean multi-hour chaos soak has run with the flag on.
+        import sys as _sys_plat
+        self._native_chrome = bool(
+            QSettings("NetSentinel", "NetSentinel").value(
+                "experimental/native_chrome", False, type=bool
+            )
+        ) and _sys_plat.platform == "win32"
+        if self._native_chrome:
+            self.setWindowFlags(Qt.WindowType.Window)
+        else:
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setStyleSheet(MAIN_STYLE)
         from ui.styles import get_theme_manager as _gtm
         _gtm().theme_changed.connect(self._on_theme_changed)
@@ -412,8 +430,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._start_update_check()
         # Restore full settings (mode, scan hosts, etc.) after UI is built
         self._restore_settings()
-        # Install resize grips for all 8 edges/corners (frameless window)
-        self._install_edge_grips()
+        # Install resize grips for all 8 edges/corners (frameless window only —
+        # native chrome keeps the real WS_THICKFRAME, so Windows resizes for us).
+        if not self._native_chrome:
+            self._install_edge_grips()
 
     def _build_mode_bar(self) -> QWidget:
         """Mode-switcher pill — now built inline inside the sidebar in _build_tabs().
