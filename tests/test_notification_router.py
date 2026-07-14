@@ -20,6 +20,7 @@ from modules.alert_engine import AlertFired
 from modules.notification_router import (
     EmailChannel,
     NotificationRouter,
+    PushoverChannel,
     ToastChannel,
     WebhookChannel,
     _matches_channel,
@@ -188,6 +189,45 @@ class TestRouterDispatch(unittest.TestCase):
         for _ in range(10):
             r.dispatch(_alert("INFO"))
         assert len(r.get_delivery_log()) == 5
+
+
+class TestDispatchEscalation(unittest.TestCase):
+    """F-21: check_escalations() re-delivery via dispatch_escalation()."""
+
+    def test_unknown_channel_name_returns_false(self):
+        r = NotificationRouter()
+        assert r.dispatch_escalation(_alert("INFO"), "Carrier Pigeon") is False
+
+    def test_no_configured_channel_of_that_type_returns_false(self):
+        r = NotificationRouter()
+        r.set_channels([ToastChannel(enabled=True)])
+        assert r.dispatch_escalation(_alert("INFO"), "Email") is False
+
+    def test_disabled_channel_of_matching_type_returns_false(self):
+        r = NotificationRouter()
+        r.set_channels([EmailChannel(enabled=False, smtp_host="smtp.x.com", to_addrs=["a@b.com"])])
+        assert r.dispatch_escalation(_alert("INFO"), "Email") is False
+
+    def test_bypasses_severity_gate(self):
+        """Escalation must fire even for an INFO alert against a channel whose
+        min_severity is CRITICAL — that's the whole point of escalating."""
+        r = NotificationRouter()
+        r.set_channels([PushoverChannel(
+            enabled=True, api_token="t", user_key="u", min_severity="CRITICAL",
+        )])
+        with patch("modules.notification_router._deliver_pushover_tracked"):
+            delivered = r.dispatch_escalation(_alert("INFO"), "Pushover")
+        assert delivered is True
+        log = r.get_delivery_log()
+        assert len(log) == 1
+        assert log[0]["channel_type"] == "PUSHOVER"
+
+    def test_delivers_via_configured_email_channel(self):
+        r = NotificationRouter()
+        r.set_channels([EmailChannel(enabled=True, smtp_host="smtp.x.com", to_addrs=["a@b.com"])])
+        with patch("modules.notification_router._deliver_email_tracked"):
+            delivered = r.dispatch_escalation(_alert("INFO"), "Email")
+        assert delivered is True
 
 
 class TestSetGetChannels(unittest.TestCase):

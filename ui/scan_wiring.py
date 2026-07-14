@@ -37,9 +37,10 @@ class _VendorBatchWorker(QThread):
 
     vendor_resolved = pyqtSignal(str, str)  # (normalised_mac, vendor_name)
 
-    def __init__(self, macs: list[str], parent=None) -> None:
+    def __init__(self, macs: list[str], parent=None, *, allow_online: bool = True) -> None:
         super().__init__(parent)
         self._macs = macs
+        self._allow_online = allow_online
         self._stop_event = threading.Event()
 
     def stop(self) -> None:
@@ -56,7 +57,7 @@ class _VendorBatchWorker(QThread):
                     break
                 if not mac:
                     continue
-                vendor = lookup_vendor(mac)
+                vendor = lookup_vendor(mac, allow_online=self._allow_online)
                 if vendor:
                     self.vendor_resolved.emit(mac.lower(), vendor)
         except Exception:
@@ -111,8 +112,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # non-fatal
         if hasattr(self, "_compute_suggestions"):
             self._compute_suggestions()
-        # Auto-run risk scorer with M1 device list
-        if hasattr(self, "_run_risk_scorer") and self._m1_result.get("devices"):
+        # Auto-run risk scorer with M1 device list (_run_risk_scorer() itself
+        # no-ops safely if M1 hasn't run yet — self._m1_result may be None)
+        if hasattr(self, "_run_risk_scorer"):
             try:
                 self._run_risk_scorer()
             except Exception:
@@ -132,20 +134,33 @@ class ScanResultMixin(ScanEnrichmentMixin):
 
     def _on_ipv6_result(self, devices: list):
         from PyQt6.QtGui import QColor
+
+        def _norm(m: str) -> str:
+            return (m or "").lower().replace("-", "").replace(":", "")
+
+        mac_to_ipv4 = {}
+        if self._m1_result:
+            for d in self._m1_result.get("devices", []):
+                d_mac = (d.mac if not isinstance(d, dict) else d.get("mac", "")) or ""
+                d_ip  = (d.ip if not isinstance(d, dict) else d.get("ip", "")) or ""
+                if d_mac and d_ip:
+                    mac_to_ipv4[_norm(d_mac)] = d_ip
+
         self._ipv6_table.setRowCount(0)
         for d in devices:
             row = self._ipv6_table.rowCount()
             self._ipv6_table.insertRow(row)
             source_color = _s.ACCENT_LITE if d.get("source") == "active" else _s.TEXT_SECONDARY
             state_color  = _s.GREEN if d.get("state", "").upper() == "REACHABLE" else _s.TEXT_SECONDARY
+            ipv4 = mac_to_ipv4.get(_norm(d.get("mac", "")), "—")
             for col, val in enumerate([
-                d.get("ip6", ""), d.get("mac", ""),
+                d.get("ip6", ""), d.get("mac", ""), ipv4,
                 d.get("state", ""), d.get("source", ""),
             ]):
                 item = QTableWidgetItem(str(val))
-                if col == 2:
+                if col == 3:
                     item.setForeground(QColor(state_color))
-                elif col == 3:
+                elif col == 4:
                     item.setForeground(QColor(source_color))
                 else:
                     item.setForeground(QColor(_s.TEXT_PRIMARY))
@@ -345,6 +360,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
             )
         except Exception:
             pass  # non-fatal
+        # Auto-refresh Device Risk Score with this scan's findings (F-47).
+        # _run_risk_scorer() itself no-ops safely if M1 hasn't run yet.
+        if hasattr(self, "_run_risk_scorer"):
+            try:
+                self._run_risk_scorer()
+            except Exception:
+                pass  # non-fatal — risk scorer may fail on limited M1 data
         if getattr(self, "_pending_security_tools", []):
             self._advance_security_audit()
 
@@ -473,7 +495,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
             existing.stop()
             existing.wait(200)
 
-        worker = _VendorBatchWorker(pending, self)
+        allow_online = QSettings("NetSentinel", "NetSentinel").value(
+            "privacy/mac_vendor_online_lookup", True, type=bool
+        )
+        worker = _VendorBatchWorker(pending, self, allow_online=allow_online)
         worker.vendor_resolved.connect(self._on_vendor_resolved)
         self._vendor_batch_worker = worker
         worker.start()
@@ -638,12 +663,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     except Exception:
                         pass  # non-fatal — audit trail is best-effort
             vendor  = d.vendor   if not isinstance(d, dict) else d.get("vendor", "Unknown")
+            model   = d.model    if not isinstance(d, dict) else d.get("model", "")
+            vendor_d = f"{vendor} — {model}" if model else vendor
             dtype   = d.device_type if not isinstance(d, dict) else d.get("device_type", "")
             # Fall back to connection_type when device_type is blank
             if not dtype:
                 dtype = d.connection_type if not isinstance(d, dict) else d.get("connection_type", "Unknown Device")
             verdict = d.verdict  if not isinstance(d, dict) else d.get("verdict", "")
-            _add_row(self._m1_table, [ip, host or "—", mac, vendor, level, dtype, "", "", verdict], level)
+            _add_row(self._m1_table, [ip, host or "—", mac, vendor_d, level, dtype, "", "", verdict], level)
             # Vendor tooltip — explain why vendor may be unknown
             _row_idx = self._m1_table.rowCount() - 1
             _v_item = self._m1_table.item(_row_idx, 3)

@@ -961,6 +961,16 @@ class InventoryPage(QWidget):
         )
         _back_btn.clicked.connect(self._exit_compare_mode)
         _cb_lay.addWidget(_back_btn)
+        _export_diff_btn = QPushButton("⬇ Export Diff as CSV")
+        _export_diff_btn.setFixedHeight(24)
+        _export_diff_btn.setStyleSheet(
+            f"QPushButton {{ font-size:11px; color:{_s.ACCENT}; background:transparent;"
+            f" border:1px solid {_s.ACCENT}; border-radius:3px; padding:0 10px; }}"
+            f"QPushButton:hover {{ background:{alpha(_s.ACCENT, 0x22)}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
+        )
+        _export_diff_btn.clicked.connect(self._export_diff_csv)
+        _cb_lay.addWidget(_export_diff_btn)
         cl.addWidget(self._compare_banner)
 
         kpi_row = QHBoxLayout()
@@ -2194,6 +2204,33 @@ class InventoryPage(QWidget):
                     dt_str = _dt2.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
                     w.writerow([dt_str, evt.event_type, evt.ip or "—",
                                 evt.mac or "—", vendor or "—", evt.detail or ""])
+            import os
+            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
+        except Exception as exc:
+            ToastManager.show(f"Export failed: {exc}", "error")
+
+    def _export_diff_csv(self) -> None:
+        """Export the scan-comparison diff table (_cmp_table) as CSV — the
+        added/removed/unchanged device list built by _start_compare_mode()."""
+        import csv as _csv
+        from PyQt6.QtWidgets import QFileDialog
+        from ui.widgets.toast import ToastManager
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Diff as CSV", "inventory_diff.csv", "CSV files (*.csv)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+        cols = ["Status", "IP / Host", "MAC", "Vendor", "First Seen"]
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f)
+                w.writerow(cols)
+                for row in range(self._cmp_table.rowCount()):
+                    w.writerow([
+                        (self._cmp_table.item(row, col).text() if self._cmp_table.item(row, col) else "")
+                        for col in range(1, 6)
+                    ])
             import os
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
         except Exception as exc:

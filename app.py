@@ -363,7 +363,12 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._home_page.on_cycle_done)
 
+    window._cert_worker = cert_worker
     cert_worker.check_done.connect(window._cert_page.on_check_done)
+    cert_worker.check_done.connect(window._on_tls_check_done)
+    cert_worker.error.connect(
+        lambda msg: window._nav_set_scan_state("TLS & Exposure", "error", error=msg)
+    )
     _cert_targets = window._cert_page._load_targets()
     if _cert_targets:
         from modules.cert_monitor import CertTarget as _CertTarget
@@ -492,6 +497,37 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     _baseline_timer.setInterval(3600_000)
     _baseline_timer.timeout.connect(_refresh_baselines)
     _baseline_timer.start()
+
+    # ── Alert Escalation (F-21) — re-deliver alerts unacknowledged past their
+    # configured wait threshold via the escalation channel. Policies are kept
+    # current by NotificationsPage._apply_to_engine(); this timer just checks
+    # for due escalations and dispatches/marks them.
+    def _check_escalations() -> None:
+        try:
+            due = alerts.check_escalations(store)
+        except Exception:
+            return
+        for item in due:
+            row, policy = item["alert_row"], item["policy"]
+            escalation = AlertFired(
+                rule_name=row.get("rule_name", ""),
+                rule_type=row.get("rule_type", "") or "",
+                host=row.get("host", "") or "",
+                message=f"[ESCALATED] {row.get('message', '')}",
+                severity=row.get("severity", "WARNING") or "WARNING",
+                ts=int(row.get("ts", 0) or 0),
+            )
+            delivered = any(
+                notif_router.dispatch_escalation(escalation, ch_name)
+                for ch_name in policy.notify_channels
+            )
+            if delivered:
+                store.mark_alert_escalated(row["id"])
+
+    _escalation_timer = _QTimer(window)
+    _escalation_timer.setInterval(60_000)
+    _escalation_timer.timeout.connect(_check_escalations)
+    _escalation_timer.start()
 
     def _on_cycle(result_dict: dict) -> None:
         fired = alerts.evaluate_cycle(result_dict)
@@ -757,8 +793,12 @@ def _wire_cross_page(window):
             window._advance_security_audit()
         window._nav_set_scan_state("Threat Intel", "fresh")
 
+    def _on_threat_intel_scan_error(msg: str) -> None:
+        window._nav_set_scan_state("Threat Intel", "error", error=msg)
+
     window._cert_page.scan_complete.connect(_on_cert_scan_complete)
     window._threat_intel_page.scan_complete.connect(_on_threat_intel_scan_complete)
+    window._threat_intel_page.scan_error.connect(_on_threat_intel_scan_error)
     window._service_diagnostics_page.scan_started.connect(
         lambda: window._nav_set_scan_state("Service Diagnostics", "running")
     )
@@ -784,6 +824,12 @@ def _wire_scan_ctas(window):
         window._protocol_viz_page.select_protocol(proto_key)
 
     window._lab_mode_page.explore_protocol.connect(_on_explore_protocol)
+    for _explainer_panel in (
+        window._m1_explainer, window._m2_explainer,
+        window._m3_explainer, window._m5_explainer,
+        window._arp_explainer,
+    ):
+        _explainer_panel.explore_protocol.connect(_on_explore_protocol)
     window._trigger_page.scan_requested.connect(window._start_full_scan)
     window._diagnosis_page.scan_requested.connect(window._start_full_scan)
     window._cve_page.scan_requested.connect(window._start_full_scan)
@@ -888,7 +934,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.30")
+    app.setApplicationVersion("2.1.31")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1031,7 +1077,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.30")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.31")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1149,7 +1195,18 @@ def main():
 
     from modules.notification_router import NotificationRouter
     notif_router = NotificationRouter()
-    alerts.set_on_alert(notif_router.dispatch)
+
+    def _dispatch_alert(alert) -> None:
+        notif_router.dispatch(alert)
+        # Fan the same alert into Automation Hooks — the engine already
+        # persists its own rule store and is safe to call from any thread.
+        try:
+            from modules.automation_hooks import automation_event_from_alert, get_engine
+            get_engine().evaluate(*automation_event_from_alert(alert))
+        except Exception:
+            pass  # non-fatal — automation dispatch must never block alert delivery
+
+    alerts.set_on_alert(_dispatch_alert)
 
     from modules.maintenance_window import MaintenanceWindowManager
     maint_manager = MaintenanceWindowManager()

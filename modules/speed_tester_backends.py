@@ -297,11 +297,28 @@ def _run_speedtest_cli(
         best = client.get_best_server()
         _cb("ping", f"Ping: {best.get('latency', 0):.0f} ms → {best.get('sponsor', '')} ({best.get('name', '')})")
 
+        # One TRUE sample per phase, at phase completion — never a synthesised curve.
+        #
+        # The gauge is driven solely by on_sample(mbps, phase); without these calls it
+        # stays frozen at zero for the whole test, which is what every user without the
+        # Ookla CLI saw (speedtest-cli is bundled, the Ookla CLI deliberately is not —
+        # RULE-R3 — so this backend is the DEFAULT path on a fresh install).
+        #
+        # A live intra-phase curve is not possible here: speedtest-cli's callback is
+        # only ever invoked as callback(index, request_count, start=True|end=True) and
+        # carries no byte counts (verified against 2.1.3), so there is nothing truthful
+        # to derive a running Mbps from. Tier 1 (Ookla) and tier 3 (pure-Python) stream
+        # real throughput samples and do animate. Do NOT fabricate a curve to make the
+        # needle move — a made-up number on a speed gauge is worse than a still one.
         _cb("download", "Measuring download speed (8 streams)…")
         dl_bps = client.download(threads=8)
+        if on_sample and dl_bps > 0:
+            on_sample(dl_bps / 1_000_000, "download")
 
         _cb("upload", "Measuring upload speed (4 streams)…")
         ul_bps = client.upload(threads=4, pre_allocate=False)
+        if on_sample and ul_bps > 0:
+            on_sample(ul_bps / 1_000_000, "upload")
 
         _cb("done", "Test complete")
 

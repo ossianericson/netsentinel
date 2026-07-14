@@ -505,11 +505,6 @@ class GeoMapPage(QWidget):
         self._detail_location.setWordWrap(True)
         self._detail_location.setVisible(False)
 
-        self._detail_org = QLabel("")
-        _s.themed_ss(self._detail_org, "color:{TEXT_SECONDARY}; font-size:10px;")
-        self._detail_org.setWordWrap(True)
-        self._detail_org.setVisible(False)
-
         self._detail_cat = QLabel("")
         self._detail_cat.setStyleSheet(f"font-size:10px;")
         self._detail_cat.setVisible(False)
@@ -552,7 +547,7 @@ class GeoMapPage(QWidget):
         self._detail_links.setWordWrap(True)
 
         for w in (self._detail_ip, self._detail_body,
-                  self._detail_location, self._detail_org,
+                  self._detail_location,
                   self._detail_cat, self._detail_risk,
                   self._detail_sep,
                   self._detail_ti_hdr, self._detail_ti_text,
@@ -798,14 +793,6 @@ class GeoMapPage(QWidget):
             loc += f"  ·  {result.city}"
         self._detail_location.setText(loc)
         self._detail_location.setVisible(True)
-
-        # -- Org / ASN ---
-        org_parts = [p for p in (result.asn, result.org) if p]
-        if org_parts:
-            self._detail_org.setText("  ·  ".join(org_parts))
-            self._detail_org.setVisible(True)
-        else:
-            self._detail_org.setVisible(False)
 
         # -- Category chip ---
         cat_color_name = _MARKER_COLOR_NAMES.get(category, "ACCENT")
@@ -1066,7 +1053,7 @@ class GeoMapPage(QWidget):
         self._detail_body.setText("Click a dot on the map to see details.")
         self._detail_body.setVisible(True)
         self._detail_links.setText("")
-        for w in (self._detail_location, self._detail_org, self._detail_cat,
+        for w in (self._detail_location, self._detail_cat,
                   self._detail_risk, self._detail_sep, self._detail_ti_hdr,
                   self._detail_ti_text, self._detail_view_ti, self._detail_alerts):
             w.setVisible(False)

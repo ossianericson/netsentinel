@@ -117,7 +117,7 @@ class _HomeDataMixin:
             port = int(qs.value("rest_api/port", 8765))
             self._dashboard_url = f"http://localhost:{port}/dashboard"
             self._ds_text.setText(
-                f"REST API running at localhost:{port} — browser dashboard + 7 endpoints "
+                f"REST API running at localhost:{port} — browser dashboard + 9 endpoints "
                 f"(devices, alerts, uptime, grade…). Open Settings to see the full list."
             )
             self._dashboard_strip.setVisible(True)
@@ -443,7 +443,6 @@ class _HomeDataMixin:
             else:
                 time_str = f"{elapsed // 3600}h ago"
 
-            dot_color  = _s.RED if severity == "CRITICAL" else _s.AMBER
             label_text = f"{rule} · {msg[:50]}" if msg else rule
 
             row_w = QWidget()
@@ -454,34 +453,36 @@ class _HomeDataMixin:
 
             dot = QLabel("●")
             dot.setFixedWidth(12)
-            dot.setStyleSheet(
-                f"font-size:8px; color:{dot_color}; background:transparent; border:none;"
-            )
+            _s.themed_ss(dot, lambda sev=severity: (
+                f"font-size:8px; color:{_s.RED if sev == 'CRITICAL' else _s.AMBER};"
+                " background:transparent; border:none;"
+            ))
 
             msg_lbl = QLabel(label_text)
-            msg_lbl.setStyleSheet(
-                f"font-size:11px; color:{_s.TEXT_PRIMARY}; background:transparent; border:none;"
-            )
+            _s.themed_ss(msg_lbl, lambda: (
+                f"QLabel {{ font-size:11px; color:{_s.TEXT_PRIMARY};"
+                " background:transparent; border:none; }}"
+            ))
             msg_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             msg_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
             msg_lbl.setToolTip("Click to view in Notifications")
             msg_lbl.mousePressEvent = lambda _e, a=alert: self.alert_view_requested.emit(a)
 
             time_lbl = QLabel(time_str)
-            time_lbl.setStyleSheet(
+            _s.themed_ss(time_lbl, lambda: (
                 f"font-size:10px; color:{_s.TEXT_MUTED}; background:transparent; border:none;"
-            )
+            ))
 
             ack_btn = QPushButton("✓")
             ack_btn.setFixedSize(22, 18)
             ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             ack_btn.setToolTip("Acknowledge this alert")
-            ack_btn.setStyleSheet(
+            _s.themed_ss(ack_btn, lambda: (
                 f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED};"
                 f" border:1px solid {_s.BORDER}; border-radius:3px; font-size:10px; }}"
                 f"QPushButton:hover {{ color:{_s.GREEN}; border-color:{_s.GREEN}; }}"
                 f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
-            )
+            ))
             ack_btn.clicked.connect(lambda _=False, aid=alert_id, w=row_w: self._ack_alert_row(aid, w))
 
             row_lay.addWidget(dot)
@@ -1316,7 +1317,7 @@ class _HomeDataMixin:
             registry = {}
 
         _SEC_LABELS = [
-            "Port Scan (TCP)", "CVE Lookup", "OS Detection",
+            "Port Scan (TCP)", "Port Scan (UDP)", "CVE Lookup", "OS Detection",
             "Login Test", "Threat Intel", "TLS & Exposure",
             "Exposed to Internet", "Full Device Discovery",
         ]

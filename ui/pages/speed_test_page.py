@@ -1600,12 +1600,12 @@ class SpeedTestPage(QWidget):
                     rsrp_str,
                     lte_sinr_str,
                     nr5_sinr_str,
-                    "OK",
+                    "Recorded",
                 ]
                 clrs = [None, None, None, None,
                         _s.GREEN if p.download_mbps >= 25 else _s.AMBER,
                         _s.GREEN if p.upload_mbps >= 5  else _s.AMBER,
-                        None, _rsrp_color(rsrp), lte_sinr_color, nr5_sinr_color, _s.GREEN]
+                        None, _rsrp_color(rsrp), lte_sinr_color, nr5_sinr_color, _s.TEXT_SECONDARY]
                 for col, (val, col_color) in enumerate(zip(cells, clrs)):
                     item = QTableWidgetItem(str(val))
                     if col_color:

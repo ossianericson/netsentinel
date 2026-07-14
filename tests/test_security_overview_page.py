@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 try:
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QTableWidgetItem
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
@@ -370,6 +370,99 @@ def test_scan_table_shows_tls_finding(page_with_store):
     assert page._scan_table.rowCount() == 1
     assert page._scan_table.item(0, 0).text() == "TLS"
     assert "expired" in page._scan_table.item(0, 3).text().lower()
+
+
+# ── F-41: grade ring ─────────────────────────────────────────────────────────────
+
+def test_grade_card_exists(page):
+    assert page._grade_ring is not None
+    assert page._grade_verdict_lbl.text() == "Run a security scan to see your grade."
+
+
+def test_grade_stays_idle_with_no_scans_run(page):
+    page._update_security_grade()
+    assert page._grade_ring._grade == "–"
+    assert page._grade_verdict_lbl.text() == "Run a security scan to see your grade."
+
+
+def test_grade_is_a_with_zero_findings_after_scan(page):
+    page._port_scan_done = True
+    page._port_findings = []
+    page._update_security_grade()
+    assert page._grade_ring._grade == "A"
+    assert "No findings" in page._grade_verdict_lbl.text()
+
+
+def test_grade_drops_with_high_risk_ports(page):
+    page._port_scan_done = True
+    page._port_findings = [{"host": "1.2.3.4", "port": 3389, "service": "RDP"}] * 3
+    page._update_security_grade()
+    # 3 findings * 10 = 30 (capped at 30) deducted -> score 70 -> grade C
+    assert page._grade_ring._grade == "C"
+    assert "3 finding(s)" in page._grade_verdict_lbl.text()
+
+
+def test_grade_updates_automatically_after_port_scan_result(page):
+    """F-41: the grade must update as part of the existing scan pipeline, not
+    require a separate manual trigger."""
+    result = _PortScanResult(
+        host="192.168.1.5",
+        open_ports=[_PortResult(port=3389, name="RDP", risk="HIGH")],
+    )
+    page.on_port_scan_result(result)
+    assert page._grade_ring._grade != "–"
+
+
+# ── F-42: click-to-navigate on findings tables ──────────────────────────────────
+
+def test_click_port_row_navigates_to_port_scan(page):
+    result = _PortScanResult(
+        host="192.168.1.5",
+        open_ports=[_PortResult(port=3389, name="RDP", risk="HIGH")],
+    )
+    page.on_port_scan_result(result)
+    navigated = []
+    page.navigate_to.connect(navigated.append)
+    page._scan_table.cellClicked.emit(0, 3)
+    assert navigated == ["Port Scan (TCP)"]
+
+
+def test_click_cve_row_navigates_to_cve_lookup(page_with_store):
+    page, store = page_with_store
+    store.list_cve_lifecycles.return_value = [
+        {"cve_id": "CVE-2024-9999", "host": "192.168.1.3",
+         "severity": "Critical", "cvss_score": 9.8, "state": "Open"},
+    ]
+    page._load_metricstore_data()
+    page._update_scan_table()
+    navigated = []
+    page.navigate_to.connect(navigated.append)
+    page._scan_table.cellClicked.emit(0, 0)
+    assert navigated == ["CVE Lookup"]
+
+
+def test_click_tls_row_navigates_to_tls_exposure(page_with_store):
+    page, store = page_with_store
+    cert = MagicMock()
+    cert.is_expired, cert.is_self_signed, cert.days_remaining = True, False, None
+    cert.host, cert.port = "secure.example.com", 443
+    store.query_cert_status.return_value = [cert]
+    page._load_metricstore_data()
+    page._update_scan_table()
+    navigated = []
+    page.navigate_to.connect(navigated.append)
+    page._scan_table.cellClicked.emit(0, 2)
+    assert navigated == ["TLS & Exposure"]
+
+
+def test_click_threat_intel_row_navigates_to_threat_intel(page):
+    page._findings_table.setRowCount(1)
+    for col in range(5):
+        page._findings_table.setItem(0, col, QTableWidgetItem("x"))
+    navigated = []
+    page.navigate_to.connect(navigated.append)
+    page._findings_table.cellClicked.emit(0, 1)
+    assert navigated == ["Threat Intel"]
 
 
 # ── notify_scan_complete ────────────────────────────────────────────────────────

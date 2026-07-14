@@ -173,9 +173,6 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     "widgets/home_session_widgets.py": 1013,  # actual 813 + 200 margin (Sprint 17 new file)
 
     # ── Sprint 13 new files ────────────────────────────────────────────────────
-    # _PAGE_HELP dict — all page help strings for the tip bar.
-    "pages/help_content.py": 688,  # actual 488 + 200 margin (Sprint 13 new file)
-
     # _HomeSuggestionsMixin — 'What to do next' strip logic.
     "pages/home_suggestions.py": 283,  # actual 83 + 200 margin (Sprint 13 new file)
 

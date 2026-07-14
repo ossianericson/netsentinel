@@ -208,6 +208,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._diag_result = None
         self._last_scan_devices: list = []    # for NetworkDocPage port_data accumulation
         self._port_data_cache:   dict = {}    # {ip: [port_dict, ...]} across scan types
+        self._cred_access_hosts: set  = set()  # hosts where Login Test confirmed working creds (F-46)
         self._auto_report_pending:   bool = False  # True while full-report run is in progress
         self._auto_report_scan_done: bool = False
         self._auto_report_diag_done: bool = False
@@ -1234,8 +1235,48 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._start_syn_scan()
         elif label == L.EXPOSED_TO_INTERNET:
             self._start_exposure_check()
+        elif label == L.THREAT_INTEL:
+            self._threat_intel_page._run_refresh()
+        elif label == L.DEVICE_RISK_SCORE:
+            # Synchronous — scores off the already-populated device scan result,
+            # no async worker to wait on, so advance the queue immediately.
+            self._run_risk_scorer()
+            self._advance_security_audit()
+        elif label == L.CVE_LOOKUP:
+            # _start_cve_lookup() advances the queue itself, on both the
+            # no-versions-found path and via _on_cve_finished() (F-02).
+            self._start_cve_lookup()
+        elif label == L.TLS_EXPOSURE:
+            if not getattr(self, "_cert_worker", None):
+                self._advance_security_audit()
+                return
+            self._nav_set_scan_state(L.TLS_EXPOSURE, "running")
+            self._awaiting_tls_check = True
+            self._cert_worker.run_now()
         else:
             # Unrecognised label — skip silently
+            self._advance_security_audit()
+
+    def _on_tls_check_done(self, results: list) -> None:
+        """Update the TLS & Exposure scan-registry row (F-02: this label previously
+        had zero producers anywhere, so the Scan Status card always showed
+        "Never run" regardless of the hourly background CertWorker checks).
+        Also advances the security-audit queue if a dispatch is pending."""
+        import time as _time
+        expired  = sum(1 for r in results if r.get("is_expired"))
+        expiring = sum(
+            1 for r in results
+            if not r.get("is_expired") and (r.get("days_remaining") if r.get("days_remaining") is not None else 999) < 30
+        )
+        if not results:
+            verdict = "no hosts monitored"
+        elif expired or expiring:
+            verdict = f"{expired} expired, {expiring} expiring soon"
+        else:
+            verdict = f"{len(results)} cert(s) OK"
+        self._nav_set_scan_state(L.TLS_EXPOSURE, "fresh", ts=_time.time(), verdict=verdict)
+        if getattr(self, "_awaiting_tls_check", False):
+            self._awaiting_tls_check = False
             self._advance_security_audit()
 
     @pyqtSlot()

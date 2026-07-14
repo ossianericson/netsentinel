@@ -1809,7 +1809,7 @@ class _ScanStatusTile(_BaseTile):
             registry = {}
 
         _SEC = [
-            "Port Scan (TCP)", "CVE Lookup", "OS Detection",
+            "Port Scan (TCP)", "Port Scan (UDP)", "CVE Lookup", "OS Detection",
             "Login Test", "Threat Intel", "TLS & Exposure",
             "Exposed to Internet", "Full Device Discovery",
         ]
@@ -1830,7 +1830,13 @@ class _ScanStatusTile(_BaseTile):
             if reg_key == "_security_aggregate":
                 state, ts = _sec_state, _sec_ts
             elif reg_key == "_logger":
-                state, ts = "never", 0.0
+                # Network Logger is a continuous monitor, not a one-shot scan —
+                # "running" is a genuine live state here, not an interrupted
+                # scan, so (unlike the generic branch below) it must not be
+                # downgraded to "never".
+                e = registry.get("Network Logger", {})
+                state = e.get("state", "never")
+                ts = e.get("ts", 0.0) or 0.0
             else:
                 e = registry.get(reg_key, {})
                 state, ts = e.get("state", "never"), e.get("ts", 0.0) or 0.0

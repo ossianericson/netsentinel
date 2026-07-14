@@ -62,6 +62,7 @@ class AutomationRule:
     # Execution
     script_path: str   = ""
     args:        str   = ""       # extra CLI arguments (space-separated or with $VARS)
+    webhook_url: str   = ""       # optional — POSTs a JSON payload here (Slack/Discord compatible)
     enabled:     bool  = True
     # Metadata
     description: str   = ""
@@ -190,7 +191,7 @@ class AutomationEngine:
         event_data: Dict,
         on_log: Optional[Callable[[str, str, str], None]],
     ) -> None:
-        """Execute a rule's script in a subprocess, streaming output."""
+        """Fire a rule's configured actions: webhook POST and/or script execution."""
         def _log(stream: str, text: str) -> None:
             if on_log:
                 try:
@@ -199,8 +200,16 @@ class AutomationEngine:
                     pass  # non-fatal
 
         script = rule.script_path.strip()
+        webhook_url = rule.webhook_url.strip()
+
+        if not script and not webhook_url:
+            _log("system", f"[Rule '{rule.name}'] No script or webhook configured — skipped")
+            return
+
+        if webhook_url:
+            self._send_webhook(rule, event_data, webhook_url, _log)
+
         if not script:
-            _log("system", f"[Rule '{rule.name}'] No script configured — skipped")
             return
 
         # Expand environment placeholders in args
@@ -247,6 +256,43 @@ class AutomationEngine:
         proc.wait(timeout=120)
         t_out.join(timeout=5); t_err.join(timeout=5)
         _log("system", f"[Rule '{rule.name}'] Exit code: {proc.returncode}")
+
+    def _send_webhook(
+        self,
+        rule: AutomationRule,
+        event_data: Dict,
+        url: str,
+        _log: Callable[[str, str], None],
+    ) -> None:
+        """POST event_data to a user-configured webhook URL (F-37).
+
+        Includes both "text" and "content" keys so the same payload works
+        as-is against Slack's and Discord's incoming-webhook formats
+        (matches the pattern already used in modules/notification_channels.py).
+        """
+        import json as _json
+        import urllib.error
+        import urllib.request
+
+        summary = (
+            event_data.get("message")
+            or event_data.get("mac")
+            or event_data.get("ip")
+            or "event fired"
+        )
+        message = f"NetSentinel: {rule.name} — {summary}"
+        payload = {"text": message, "content": message, "rule": rule.name, **event_data}
+        try:
+            req = urllib.request.Request(
+                url,
+                data=_json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                _log("system", f"[Rule '{rule.name}'] Webhook → {resp.status}")
+        except (urllib.error.URLError, OSError) as exc:
+            _log("system", f"[Rule '{rule.name}'] Webhook error: {exc}")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -322,6 +368,36 @@ def template_log_to_file(log_path: str = "") -> AutomationRule:
         args=args,
         description=f"Append device join event to {log_path}.",
     )
+
+
+# ── AlertEngine bridge ──────────────────────────────────────────────────────
+
+_MAC_RE = re.compile(r"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$")
+
+_RULE_TYPE_TRIGGERS = {
+    "NEW_DEVICE":  Trigger.DEVICE_JOINED.value,
+    "DEVICE_GONE": Trigger.DEVICE_LEFT.value,
+}
+
+
+def automation_event_from_alert(alert) -> tuple[str, Dict]:
+    """
+    Map an AlertEngine `AlertFired` object to an (trigger, event_data) pair
+    for AutomationEngine.evaluate(). NEW_DEVICE/DEVICE_GONE map to their
+    dedicated triggers; every other rule_type (device-down, high-RTT, etc.)
+    maps to the generic "alert_fired" trigger.
+    """
+    rule_type = getattr(alert, "rule_type", "") or ""
+    trigger = _RULE_TYPE_TRIGGERS.get(rule_type, Trigger.ALERT_FIRED.value)
+    host = getattr(alert, "host", "") or ""
+    is_mac = bool(_MAC_RE.match(host))
+    event_data = {
+        "mac": host if is_mac else "",
+        "ip": host if not is_mac else "",
+        "alert_level": getattr(alert, "severity", ""),
+        "message": getattr(alert, "message", ""),
+    }
+    return trigger, event_data
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

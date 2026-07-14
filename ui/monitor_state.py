@@ -532,11 +532,14 @@ class _MonitorStateMixin:
                     self._home_page.set_pending_alert_rows(unacked)
                 except Exception:
                     pass  # non-fatal
-        # Flyout item dots — always reflect current state
+        # Flyout item dots — always reflect current state.
+        # Network Logger is NOT set here (F-57): its dot is exclusively owned by
+        # the scan registry (_nav_set_scan_state(L.NETWORK_LOGGER, ...), called
+        # from ui/tabs_logger.py on real start/stop) so it can show
+        # running/fresh/stale/error, not just this binary checkbox-derived on/off.
         self._set_flyout_dot("ARP Spoof Watch",    _s.GREEN if arp    else "")
         self._set_flyout_dot("DHCP Rogue Monitor", _s.GREEN if dhcp   else "")
         self._set_flyout_dot("Broadcast Storm",    _s.GREEN if storm  else "")
-        self._set_flyout_dot("Network Logger",     _s.GREEN if logger else "")
         # AUTO-1/2: Automation dot and tile — green if any rule fired in last 24h
         try:
             from modules.automation_hooks import get_engine as _get_ae
@@ -559,16 +562,20 @@ class _MonitorStateMixin:
                     getattr(self, "_bandwidth_worker", None)
                     and self._bandwidth_worker.isRunning()
                 )
-                sched_running = bool(
+                scan_sched_running = bool(
+                    getattr(self, "_sched_worker", None)
+                    and self._sched_worker.isRunning()
+                )
+                report_sched_running = bool(
                     getattr(self, "_report_scheduler_worker", None)
                     and self._report_scheduler_worker.isRunning()
                 )
                 db_ok = self._store is not None
                 self._settings_page.refresh_health_status({
-                    "Scheduler":           ("Running" if sched_running else "Stopped", sched_running),
+                    "Scheduler":           ("Running" if scan_sched_running else "Stopped", scan_sched_running),
                     "ARP Monitor":         ("Running" if arp           else "Stopped", arp),
                     "Bandwidth Monitor":   ("Running" if bw_running     else "Stopped", bw_running),
-                    "Report Scheduler":    ("Running" if sched_running  else "Stopped", sched_running),
+                    "Report Scheduler":    ("Running" if report_sched_running else "Stopped", report_sched_running),
                     "Database":            ("OK"      if db_ok          else "Error",   db_ok),
                     "Logger":              ("Active"  if logger          else "Inactive", logger),
                 })

@@ -1,7 +1,9 @@
 """
 Tests for modules/risk_scorer.py — pure logic, no network calls.
 """
-from modules.risk_scorer import score_device, RiskAssessment, _band, CRITICAL, HIGH, MEDIUM, LOW, INFO
+from modules.risk_scorer import (
+    score_device, score_devices, RiskAssessment, _band, CRITICAL, HIGH, MEDIUM, LOW, INFO,
+)
 
 
 # ── Band function ──────────────────────────────────────────────────────────────
@@ -185,3 +187,55 @@ class TestScoreDeviceSeverity:
         assert result.os_family == "Linux"
         assert result.device_type == "IP Camera"
         assert len(result.findings) >= 2  # port + device type
+
+
+# ── score_device — credential_access (F-46: Login Test -> Device Risk Score) ──
+
+class TestScoreDeviceCredentialAccess:
+    def test_default_no_credential_finding(self):
+        result = score_device("192.168.1.1")
+        cred_findings = [f for f in result.findings if "credentials" in f.title.lower()]
+        assert cred_findings == []
+
+    def test_credential_access_adds_finding_and_score(self):
+        clean = score_device("192.168.1.1")
+        flagged = score_device("192.168.1.1", credential_access=True)
+        assert flagged.total_score > clean.total_score
+        cred_findings = [f for f in flagged.findings if "credentials" in f.title.lower()]
+        assert len(cred_findings) == 1
+        assert cred_findings[0].score_contribution == 35
+
+    def test_credential_access_pushes_severity_up(self):
+        result = score_device("192.168.1.1", credential_access=True)
+        assert result.severity in (MEDIUM, HIGH, CRITICAL)
+
+
+# ── score_devices — credential_hosts wiring ────────────────────────────────────
+
+class TestScoreDevicesCredentialHosts:
+    def test_matching_ip_gets_credential_finding(self):
+        devices = [{"ip": "192.168.1.50"}, {"ip": "192.168.1.51"}]
+        results = {a.ip: a for a in score_devices(devices, credential_hosts={"192.168.1.50"})}
+        cred_findings_50 = [f for f in results["192.168.1.50"].findings if "credentials" in f.title.lower()]
+        cred_findings_51 = [f for f in results["192.168.1.51"].findings if "credentials" in f.title.lower()]
+        assert len(cred_findings_50) == 1
+        assert len(cred_findings_51) == 0
+
+    def test_no_credential_hosts_no_findings(self):
+        devices = [{"ip": "192.168.1.50"}]
+        results = score_devices(devices)
+        cred_findings = [f for f in results[0].findings if "credentials" in f.title.lower()]
+        assert cred_findings == []
+
+    def test_object_style_devices_also_matched(self):
+        class _Dev:
+            def __init__(self, ip):
+                self.ip = ip
+                self.mac = self.hostname = self.vendor = self.device_type = self.os_family = ""
+                self.open_ports = []
+                self.risk_level = ""
+                self.known_issues = []
+
+        results = {a.ip: a for a in score_devices([_Dev("10.0.0.5")], credential_hosts={"10.0.0.5"})}
+        cred_findings = [f for f in results["10.0.0.5"].findings if "credentials" in f.title.lower()]
+        assert len(cred_findings) == 1

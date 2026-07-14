@@ -168,3 +168,43 @@ def test_gateway_consumer_hostname_is_cleared(tmp_path, monkeypatch):
     assert len(devices) == 1
     assert devices[0].hostname == ""
     assert devices[0].device_type == "Router / Gateway"
+
+
+def test_device_info_has_model_field_default_empty():
+    """F-51: DeviceInfo had no 'model' field at all -- the OUI registry's
+    model string was computed by name_resolver but had nowhere to land."""
+    d = DeviceInfo(ip="10.0.0.5", mac="aa:bb:cc:dd:ee:ff")
+    assert d.model == ""
+
+
+def test_scan_copies_model_from_name_resolver_onto_device_info(tmp_path, monkeypatch):
+    """F-51: modules.name_resolver.resolve_batch() already computes .model
+    from the OUI registry (mac_registry.model_from_mac) -- scan() must copy
+    it onto DeviceInfo.model instead of discarding it."""
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    dev_ip = "192.168.1.50"
+    dev_mac = "b0:34:95:11:22:33"
+
+    from unittest.mock import MagicMock
+    fake_name_info = MagicMock()
+    fake_name_info.hostname = "kitchen-echo"
+    fake_name_info.vendor = "Amazon Technologies Inc."
+    fake_name_info.device_type = ""
+    fake_name_info.model = "Echo Dot"
+
+    monkeypatch.setattr("modules.rogue_device._get_arp_table", lambda: [(dev_ip, dev_mac)])
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: "192.168.1.1")
+    monkeypatch.setattr("modules.rogue_device._resolve_name", lambda ip: fake_name_info)
+    monkeypatch.setattr("modules.rogue_device._mac_registry_lookup", None)
+    monkeypatch.setattr(
+        "modules.name_resolver.resolve_batch",
+        lambda entries, **kw: {dev_ip: fake_name_info},
+    )
+
+    result = scan(offenders_path=offenders)
+    devices = result["devices"]
+    assert len(devices) == 1
+    assert devices[0].model == "Echo Dot"
+    assert devices[0].vendor == "Amazon Technologies Inc."

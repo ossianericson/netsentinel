@@ -99,11 +99,15 @@ def score_device(
     open_ports: Optional[List[int]] = None,
     m1_risk_level: str = "",
     known_issues: Optional[List[str]] = None,
+    credential_access: bool = False,
 ) -> RiskAssessment:
     """
     Produce a RiskAssessment for a single device.
 
     Parameters mirror the DeviceInfo fields from Module 1 plus the port scanner.
+    credential_access: True when Login Test successfully authenticated to this
+        host with the supplied credentials (modules/credentialed_scan.py) —
+        proof the device is reachable and loggable-into over the network.
     """
     open_ports   = set(open_ports or [])
     known_issues = known_issues or []
@@ -156,6 +160,18 @@ def score_device(
         ))
         total += 15
 
+    # ── 5. Confirmed working login credentials (Login Test) ──────────────
+    if credential_access:
+        findings.append(RiskFinding(
+            title="Working login credentials confirmed (Login Test)",
+            score_contribution=35,
+            impact="A Login Test scan successfully authenticated to this device — it is reachable "
+                   "and loggable-into over the network with the credentials that were tried.",
+            remediation="Rotate this device's password immediately and restrict remote login access "
+                        "to trusted management hosts.",
+        ))
+        total += 35
+
     # Cap at 100
     total = min(total, 100)
     severity = _band(total)
@@ -182,16 +198,21 @@ def score_device(
     )
 
 
-def score_devices(devices: list) -> List[RiskAssessment]:
+def score_devices(devices: list, credential_hosts: Optional[set] = None) -> List[RiskAssessment]:
     """
     Score a list of DeviceInfo objects (or dicts) from Module 1.
+
+    credential_hosts: IPs where Login Test confirmed working credentials
+        (see score_device's credential_access parameter).
     Returns assessments sorted by total_score descending.
     """
+    credential_hosts = credential_hosts or set()
     assessments = []
     for d in devices:
         if isinstance(d, dict):
+            ip = d.get("ip", "")
             assessments.append(score_device(
-                ip=d.get("ip", ""),
+                ip=ip,
                 mac=d.get("mac", ""),
                 hostname=d.get("hostname", ""),
                 vendor=d.get("vendor", ""),
@@ -200,10 +221,12 @@ def score_devices(devices: list) -> List[RiskAssessment]:
                 open_ports=d.get("open_ports", []),
                 m1_risk_level=d.get("risk_level", ""),
                 known_issues=d.get("known_issues", []),
+                credential_access=ip in credential_hosts,
             ))
         else:
+            ip = getattr(d, "ip", "")
             assessments.append(score_device(
-                ip=getattr(d, "ip", ""),
+                ip=ip,
                 mac=getattr(d, "mac", ""),
                 hostname=getattr(d, "hostname", ""),
                 vendor=getattr(d, "vendor", ""),
@@ -212,6 +235,7 @@ def score_devices(devices: list) -> List[RiskAssessment]:
                 open_ports=getattr(d, "open_ports", []) or [],
                 m1_risk_level=getattr(d, "risk_level", ""),
                 known_issues=getattr(d, "known_issues", []) or [],
+                credential_access=ip in credential_hosts,
             ))
     return sorted(assessments, key=lambda a: a.total_score, reverse=True)
 

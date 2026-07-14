@@ -77,6 +77,27 @@ def test_vendor_batch_worker_stop_skips_remaining_macs(monkeypatch):
     _cleanup(w)
 
 
+def test_vendor_batch_worker_respects_allow_online_false(monkeypatch):
+    """F-60: constructing with allow_online=False must pass that through to
+    lookup_vendor() on every call, so a silent background scan never hits
+    the network when the user has opted out."""
+    from ui.scan_wiring import _VendorBatchWorker
+    import modules.mac_lookup as mac_lookup
+
+    calls = []
+    monkeypatch.setattr(
+        mac_lookup, "lookup_vendor",
+        lambda mac, allow_online=True: calls.append(allow_online) or "Test Vendor",
+    )
+
+    w = _VendorBatchWorker(["aa:bb:cc:11:22:33"], allow_online=False)
+    w.start()
+    w.wait(5000)
+
+    assert calls == [False]
+    _cleanup(w)
+
+
 def test_start_vendor_lookups_stops_existing_worker_cooperatively(monkeypatch):
     """_start_vendor_lookups must call stop(), not terminate(), on a running worker."""
     from ui.scan_wiring import ScanResultMixin
@@ -105,9 +126,10 @@ def test_start_vendor_lookups_stops_existing_worker_cooperatively(monkeypatch):
             self.disconnect_called = True
 
     class _FakeNewWorker:
-        def __init__(self, macs, parent=None):
+        def __init__(self, macs, parent=None, *, allow_online=True):
             self.macs = macs
             self.parent = parent
+            self.allow_online = allow_online
             self.vendor_resolved = types.SimpleNamespace(connect=lambda *_a: None)
             self.started = False
 

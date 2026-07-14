@@ -253,9 +253,18 @@ class MaintenanceWindowManager:
     # ── Convenience: expire old (past-end) windows ────────────────────────────
 
     def purge_expired(self, older_than_days: int = 7) -> int:
-        """Remove windows that ended more than `older_than_days` days ago."""
+        """Remove windows that ended more than `older_than_days` days ago.
+
+        Recurring windows (daily_start_hour/daily_end_hour set) are never
+        purged by this -- their start_ts/end_ts are dummy placeholders from
+        creation time, not a real expiry; a recurring window is "expired"
+        only when the user disables or deletes it.
+        """
         cutoff = int(time.time()) - older_than_days * 86400
         with self._lock:
             before = len(self._windows)
-            self._windows = [w for w in self._windows if w.end_ts >= cutoff]
+            self._windows = [
+                w for w in self._windows
+                if w.daily_start_hour is not None or w.end_ts >= cutoff
+            ]
             return before - len(self._windows)

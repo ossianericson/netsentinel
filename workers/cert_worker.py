@@ -20,7 +20,7 @@ Usage
 
 from __future__ import annotations
 
-import time
+import threading
 from typing import List, Optional
 
 from PyQt6.QtCore import pyqtSignal
@@ -45,11 +45,16 @@ class CertWorker(BaseWorker):
         super().__init__(parent)
         self._interval_s = interval_s
         self._monitor    = CertMonitor(store=store, targets=targets or [])
+        self._run_now_event = threading.Event()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_targets(self, targets: List[CertTarget]) -> None:
         self._monitor.set_targets(targets)
+
+    def run_now(self) -> None:
+        """Interrupt the interval sleep and run a check immediately (F-02)."""
+        self._run_now_event.set()
 
     # ── Thread body ───────────────────────────────────────────────────────────
 
@@ -75,8 +80,12 @@ class CertWorker(BaseWorker):
             except Exception as exc:  # noqa: BLE001 — one failed check must not kill the monitor loop
                 self.error.emit(str(exc))
 
-            # Interruptible sleep — checks stop flag every second
+            # Interruptible sleep — checks stop flag every second, and wakes
+            # immediately (without waiting out the full interval) if run_now()
+            # is called (F-02: on-demand trigger from the Security Scan panel).
             elapsed = 0
             while elapsed < self._interval_s and not self._should_stop():
-                time.sleep(1)
+                if self._run_now_event.wait(timeout=1):
+                    self._run_now_event.clear()
+                    break
                 elapsed += 1

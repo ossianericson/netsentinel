@@ -406,6 +406,17 @@ def _classify(result: ServiceDiagnosticResult, ref_reachable: bool) -> None:
     _assign_layer(result, ref_reachable)
 
 
+def _gateway_reachable() -> bool:
+    """Ping the local default gateway to tell a device-level failure (this
+    machine can't reach even its own LAN) apart from a local_network failure
+    (the gateway responds; the fault is the router/LAN beyond it)."""
+    from modules.utils_net import get_network_info
+    gateway = get_network_info().get("gateway")
+    if not gateway:
+        return True  # unknown gateway — don't misclassify as device-level
+    return icmp_probe(gateway, count=2).loss_pct < 100.0
+
+
 def _assign_layer(result: ServiceDiagnosticResult, ref_reachable: bool) -> None:
     """Determine root cause layer and write the plain-English diagnosis summary."""
     name = result.service_name
@@ -442,13 +453,22 @@ def _assign_layer(result: ServiceDiagnosticResult, ref_reachable: bool) -> None:
     if not result.reachability.passed:
         if not ref_reachable:
             if icmp and icmp.loss_pct >= 99.0:
-                result.failure_layer = "local_network"
-                result.summary = (
-                    f"{name} is unreachable and reference hosts do not respond. "
-                    "Complete packet loss suggests a local network or device problem — "
-                    "check your router and network adapter."
-                )
-                result.confidence = 80
+                if _gateway_reachable():
+                    result.failure_layer = "local_network"
+                    result.summary = (
+                        f"{name} is unreachable and reference hosts do not respond. "
+                        "This device can reach its own gateway, but nothing beyond it — "
+                        "check your router and internet connection."
+                    )
+                    result.confidence = 80
+                else:
+                    result.failure_layer = "device"
+                    result.summary = (
+                        f"{name} is unreachable and reference hosts do not respond. "
+                        "This device cannot even reach its own network gateway — "
+                        "check the network adapter, Wi-Fi connection, or cable on this machine."
+                    )
+                    result.confidence = 80
             else:
                 result.failure_layer = "isp"
                 result.summary = (

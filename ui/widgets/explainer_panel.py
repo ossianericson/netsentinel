@@ -71,6 +71,7 @@ class ExplainerPanel(QFrame):
     """Collapsible 'What just happened, technically?' strip for detection pages."""
 
     navigate_to = pyqtSignal(str)  # emit page label when user clicks "See diagram"
+    explore_protocol = pyqtSignal(str)  # emit protocol key so the target page can pre-select it
 
     def __init__(self, page_id: str, parent=None):
         super().__init__(parent)
@@ -125,7 +126,7 @@ class ExplainerPanel(QFrame):
                 "QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
                 "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
             viz_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            viz_btn.clicked.connect(lambda: self.navigate_to.emit("Protocol Visualizer"))
+            viz_btn.clicked.connect(self._on_see_diagram_clicked)
             btn_row.addWidget(viz_btn)
 
         btn_row.addStretch()
@@ -135,6 +136,10 @@ class ExplainerPanel(QFrame):
         # Hide the whole panel if no content is configured for this page
         if not content:
             self.hide()
+
+    def _on_see_diagram_clicked(self) -> None:
+        self.navigate_to.emit("Protocol Visualizer")
+        self.explore_protocol.emit(self._protocol)
 
     def _on_toggle(self, checked: bool) -> None:
         self._toggle_btn.setText(

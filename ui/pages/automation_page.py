@@ -152,6 +152,10 @@ class RuleEditorDialog(QDialog):
         self._args.setPlaceholderText("e.g. -Target $MAC  (use $MAC, $IP, $HOSTNAME, $ALERT_LEVEL)")
         _s.themed_ss(self._args, _in_qss)
 
+        self._webhook_url = QLineEdit(self._rule.webhook_url)
+        self._webhook_url.setPlaceholderText("https://hooks.slack.com/... (optional)")
+        _s.themed_ss(self._webhook_url, _in_qss)
+
         self._description = QLineEdit(self._rule.description)
         _s.themed_ss(self._description, _in_qss)
 
@@ -166,6 +170,7 @@ class RuleEditorDialog(QDialog):
             ("Match value:", self._match_value),
             ("Script:",      None),
             ("Args:",        self._args),
+            ("Webhook URL:", self._webhook_url),
             ("Notes:",       self._description),
             ("",             self._enabled),
         ]:
@@ -203,6 +208,7 @@ class RuleEditorDialog(QDialog):
         self._rule.match_value = self._match_value.text().strip() or "*"
         self._rule.script_path = self._script_path.text().strip()
         self._rule.args        = self._args.text().strip()
+        self._rule.webhook_url = self._webhook_url.text().strip()
         self._rule.description = self._description.text().strip()
         self._rule.enabled     = self._enabled.isChecked()
         self.accept()

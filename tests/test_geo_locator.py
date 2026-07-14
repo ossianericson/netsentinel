@@ -77,6 +77,15 @@ def test_georesult_bogon_flag():
     assert r.is_bogon is True
 
 
+def test_georesult_has_no_dead_asn_org_fields():
+    """F-06: asn/org were declared but never assigned by any producer -- deleted
+    rather than left permanently hidden and unpopulated."""
+    import dataclasses
+    field_names = {f.name for f in dataclasses.fields(GeoResult)}
+    assert "asn" not in field_names
+    assert "org" not in field_names
+
+
 # ── GeoLocator: no .mmdb present ─────────────────────────────────────────────
 
 def test_locator_no_db_is_not_available(tmp_path):

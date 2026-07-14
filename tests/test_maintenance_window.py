@@ -333,6 +333,25 @@ class TestPurgeExpired(unittest.TestCase):
         self.assertEqual(removed, 1)
         self.assertEqual(len(mgr.get_windows()), 1)
 
+    def test_recurring_window_survives_purge_despite_stale_dummy_end_ts(self):
+        """Regression (F-40 claims-audit): a recurring window's start_ts/end_ts
+        are dummy placeholders set at creation time (is_currently_active()
+        ignores them entirely for recurring windows). purge_expired() must not
+        delete a still-recurring window just because its old dummy end_ts has
+        aged past the cutoff -- that would silently delete a user's nightly
+        quiet-hours window after a week."""
+        mgr = MaintenanceWindowManager()
+        recurring = MaintenanceWindow(
+            label="Nightly quiet hours",
+            start_ts=int(time.time()) - 10 * 86400 - 3600,
+            end_ts=int(time.time()) - 10 * 86400,
+            daily_start_hour=22, daily_end_hour=6,
+        )
+        mgr.add_window(recurring)
+        removed = mgr.purge_expired(older_than_days=7)
+        self.assertEqual(removed, 0)
+        self.assertEqual(len(mgr.get_windows()), 1)
+
 
 class TestAlertEngineIntegration(unittest.TestCase):
     def test_maintenance_checker_suppresses_alert(self):

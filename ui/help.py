@@ -12,7 +12,7 @@ _PAGE_HELP: dict[str, dict] = {
     "Home": {
         "what": "Your network at a glance — live status, device count, speed, and stability.",
         "hidden": [
-            "The 'What to do next' strip surfaces features you haven't tried yet — it updates as you explore.",
+            "The 'What to do next' strip mostly surfaces findings to act on (open ports, unknown devices, a low grade) — it occasionally nudges an untried feature too.",
             "When the logger detects something interesting, an amber card appears here. Click 'Investigate →' to open a live Lab exercise.",
             "Click the mini cards (Speed, Stability, Devices) to jump directly to those pages.",
         ],
@@ -27,14 +27,14 @@ _PAGE_HELP: dict[str, dict] = {
     "Speed Test": {
         "what": "Measures your actual download speed using Ookla CLI, speedtest-cli, or a built-in pure-Python fallback.",
         "hidden": [
-            "Results are logged to the Network Logger so you can track speed changes over days or weeks.",
+            "Results are saved to Network Timeline and feed Trend Forecasts, so you can track speed changes over days or weeks.",
             "The three-tier engine falls through automatically — if Ookla is not installed, speedtest-cli is tried, then the built-in fallback.",
         ],
     },
     "DNS & Stability": {
         "what": "Measures DNS resolver latency over time and detects outages as short as one ping interval.",
         "hidden": [
-            "The 'Explain This' strip explains DNS and why slow DNS makes everything feel slow even on a fast connection.",
+            "The 'What just happened, technically?' strip explains DNS and why slow DNS makes everything feel slow even on a fast connection.",
             "Outage timestamps are recorded even when the logger is running in the background with no visible indicator.",
             "Switch to the 'DNS Benchmark' tab to compare Cloudflare, Google, and Quad9 against your system resolver side-by-side.",
         ],
@@ -58,16 +58,16 @@ _PAGE_HELP: dict[str, dict] = {
     "Devices": {
         "what": "Every device on your subnet with IP, MAC, vendor, hostname, and risk level.",
         "hidden": [
-            "Right-click any row for quick actions: How to Fix, block from network, view availability history.",
-            "The 'Explain This' strip at the bottom explains how ARP works and what a rogue device is.",
+            "Right-click any row for quick actions: Port Scan, Geolocation Map, AbuseIPDB check, Wake-on-LAN, CVE Tracker, How to Fix, Copy.",
+            "The 'What just happened, technically?' strip at the bottom explains how ARP works and what a rogue device is.",
             "Click the column headers to sort by IP, risk level, or vendor.",
-            "Vendor and model are resolved offline using the OUI database — no internet call needed.",
+            "Vendor and model are resolved offline first (OUI database); an online api.macvendors.com lookup only fires for unmatched MACs — turn it off in Settings → Network Scanning for fully offline resolution.",
         ],
     },
     "WiFi Networks": {
         "what": "Scans visible SSIDs for hidden networks, rogue APs, WPS-enabled routers, and co-channel interference.",
         "hidden": [
-            "Hidden SSIDs appear as '<hidden>' — a rogue AP advertising no SSID is still listed here.",
+            "Hidden SSIDs appear as '[HIDDEN]' — a rogue AP advertising no SSID is still listed here.",
             "WPS-enabled networks are flagged because WPS PIN attacks can bypass WPA2 in minutes.",
             "Co-channel interference is flagged when two strong APs on the same channel are detected — switch one to a non-overlapping channel.",
         ],
@@ -84,13 +84,13 @@ _PAGE_HELP: dict[str, dict] = {
         "what": "Auto-generated topology diagram showing how discovered devices relate to each other.",
         "hidden": [
             "The topology is rebuilt after every scan — devices are positioned based on ARP and gateway relationships.",
-            "Click any node to jump to that device's row in the Devices page.",
+            "Click any node to open a drawer with that device's details, right on this page — no need to navigate away.",
         ],
     },
     "DHCP Leases": {
-        "what": "Live view of all active DHCP leases on your network — flags unexpected or rogue DHCP servers.",
+        "what": "Live view of all active DHCP leases on your network, read from the OS lease table.",
         "hidden": [
-            "A rogue DHCP server flag means two devices are handing out IP addresses — this can cause connection failures across the whole network.",
+            "This page lists leases only — it doesn't compare or flag them. For real-time rogue DHCP server detection, see DHCP Rogue Monitor in Security Audit.",
             "Lease data is read from the OS lease table — no packet capture needed, works without Npcap.",
             "For real-time detection of rogue DHCP OFFER packets on the wire, see DHCP Rogue Monitor in Security Audit — that requires Npcap and catches attacks that don't complete a full lease.",
         ],
@@ -106,8 +106,8 @@ _PAGE_HELP: dict[str, dict] = {
     "Home Automation": {
         "what": "Device join/leave events, alerts, and per-device uptime states forwarded to Home Assistant or an MQTT broker.",
         "hidden": [
-            "Set up the MQTT broker address in Settings first — the page will show 'not connected' until that is done.",
-            "Device presence events arrive within seconds of a device appearing or disappearing on the network.",
+            "Until a network scan finds matching smart-home devices, the page shows an empty state with a shortcut to configure MQTT / Home Assistant.",
+            "Device presence is fed by the same background availability poll used elsewhere (about every 60 seconds by default), not a sub-second push.",
         ],
     },
     # ── Monitor ────────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ _PAGE_HELP: dict[str, dict] = {
         "what": "Per-device bandwidth usage collected during packet capture sessions.",
         "hidden": [
             "Packet capture requires Npcap on Windows — install it from npcap.com for this tab to populate.",
-            "Click a row to see the breakdown of protocols that device is using.",
+            "For a per-protocol breakdown of a device's traffic, see App Traffic (also in this section).",
             "The top-talker list shows which device is consuming the most bandwidth — useful for finding rogue downloaders.",
             "For a real-time per-interface chart without Npcap, see Live Bandwidth (also in this section).",
         ],
@@ -143,14 +143,14 @@ _PAGE_HELP: dict[str, dict] = {
         "what": "Process-to-socket map showing which app owns each open connection — one-click firewall block per process.",
         "hidden": [
             "Click 'Block' on any process to add a Windows Firewall outbound rule — you can unblock it from the same row.",
-            "Processes with many connections to non-local IPs are worth investigating — click the destination IP to run a WHOIS.",
-            "The list refreshes every few seconds automatically — watch for processes that appear briefly and disappear.",
+            "Right-click a remote IP for cross-page lookups: Threat Intel, Geo Map, Inventory, and Device Info.",
+            "Check 'Auto (5s)' to refresh automatically — off by default, so watch for processes that appear briefly and disappear once it's on.",
         ],
     },
     "Availability History": {
         "what": "RTT and UP/DEGRADED/DOWN state charts per device — 1 h / 12 h / 24 h / 7 d zoom.",
         "hidden": [
-            "Data accumulates as long as the Network Logger is running — start it early and leave it on for evidence-grade output.",
+            "This data accumulates automatically in the background regardless of whether Network Logger is running.",
             "Use the 7-day view to find patterns: if a device drops every night at 2 AM, that is a strong clue about what is rebooting it.",
         ],
     },
@@ -176,9 +176,9 @@ _PAGE_HELP: dict[str, dict] = {
         ],
     },
     "Uptime & SLA": {
-        "what": "Per-device uptime percentages over 24 h, 7 d, and 30 d windows, derived from Network Logger ping history.",
+        "what": "Per-device uptime percentages over 24 h, 7 d, and 30 d windows, derived from an always-on background availability poll.",
         "hidden": [
-            "Data accumulates from the Network Logger — run it continuously for meaningful SLA percentages.",
+            "This data accumulates automatically in the background — you don't need to run Network Logger for meaningful SLA percentages.",
             "Devices below 99% uptime over 7 days are worth investigating — check Availability History for the exact outage timestamps.",
             "Use the 30-day view for SLA reporting — export the table as CSV for compliance records.",
         ],
@@ -203,14 +203,14 @@ _PAGE_HELP: dict[str, dict] = {
         "what": "Reverse-chronological unified event feed — device joins/leaves, fired alerts, CVE discoveries, and speed tests in a single scrollable view. Filter by source with one click.",
         "hidden": [
             "Use the source filter to isolate a specific event type — e.g. show only CVE discoveries or only speed test results.",
-            "Click any row to expand full event details including timestamps, IP, and MAC address.",
+            "Clicking a row navigates to the page that produced it (e.g. a CVE event opens CVE Tracker) — nothing expands in place here.",
         ],
     },
     "Network Logger": {
         "what": "'Log Sources' tab: configure what gets recorded (ping, DNS, modem, mesh, ARP, Syslog, SNMP) and start/stop logging. 'Activity Log' tab: unified chronological viewer for all sources.",
         "hidden": [
             "The logger runs even when the app window is minimised — check the status bar dot to confirm it is active.",
-            "CSV files are saved to the logs/ folder in the app data directory — you can open them in Excel for custom analysis.",
+            "CSV files are saved to Documents\\NetSentinel\\logs\\ (not the app data directory) — you can open them in Excel for custom analysis.",
             "Enable 'Auto-start on launch' so logging begins the moment the app opens without any manual step.",
             "Any row with an ARP event shows a '▶ ARP' button — click it to jump to the Protocol Visualizer pre-loaded with that event.",
             "Filter the Activity Log by hostname using the filter box — useful on busy networks.",
@@ -242,22 +242,22 @@ _PAGE_HELP: dict[str, dict] = {
     "Network Grade": {
         "what": "Scores your network A–F across speed, latency, DNS, packet loss, device security, and STP health.",
         "hidden": [
-            "Each grade dimension has an actionable 'Fix tip' — expand the row to see what to do.",
+            "Each grade dimension shows an actionable 'Fix tip' directly in its row — nothing to expand.",
             "Run 'Grade My Network' after making changes to see whether they improved the score.",
         ],
     },
     "Network Health Report": {
-        "what": "Generates a standalone HTML report with MTR hop table, packet-loss %, DNS latency, and timestamped outage log. Great for ISP support tickets.",
+        "what": "Generates a standalone HTML report with device uptime, TLS certificate status, service heartbeat status, and recent device events (last 24h). Good for a periodic fleet-health snapshot.",
         "hidden": [
             "The report is a single self-contained HTML file — email it or attach it to a support ticket with no extra files needed.",
-            "Run the Network Logger for at least an hour before generating the report so the outage log has enough data.",
+            "For an ISP support ticket instead, use the separate 'Copy ISP Complaint' / export tools on the Network Grade page — that report covers traceroute, DNS latency, and the outage log.",
         ],
     },
     "Network Doc": {
         "what": "Auto-assembled network documentation page — device list, cert inventory, topology diagram, and accumulated port scan results.",
         "hidden": [
-            "Export as PDF or HTML to hand to an IT consultant or keep as a record before making network changes.",
-            "The device count and cert status update automatically after every scan — you don't need to regenerate manually.",
+            "Export as HTML to hand to an IT consultant or keep as a record before making network changes.",
+            "The device count and cert status tiles update automatically after every scan — but the generated HTML/Markdown document itself only refreshes when you click 'Generate' again.",
         ],
     },
     "IP Calculator": {
@@ -270,7 +270,7 @@ _PAGE_HELP: dict[str, dict] = {
     "Notifications": {
         "what": "Configure where alerts go — desktop notifications, webhook URLs, and email targets.",
         "hidden": [
-            "Webhooks can point to Slack, Discord, or any service with an incoming webhook URL — no plugin needed.",
+            "Webhooks POST a generic JSON payload — works with custom scripts or Zapier/IFTTT-style catchers, but isn't natively shaped for Slack's or Discord's incoming-webhook schema without a small relay in between.",
             "Test the webhook before relying on it — use the 'Send Test' button to confirm delivery.",
         ],
     },
@@ -285,13 +285,13 @@ _PAGE_HELP: dict[str, dict] = {
     "ARP Spoof Watch": {
         "what": "Watches for MAC address conflicts that indicate a man-in-the-middle attack on the local segment.",
         "hidden": [
-            "The 'Explain This' strip shows a step-by-step ARP spoofing diagram — useful for understanding how the attack works.",
+            "The 'What just happened, technically?' strip shows a step-by-step ARP spoofing diagram — useful for understanding how the attack works.",
             "Requires Npcap on Windows and admin rights — the tab shows a banner if these are missing.",
             "For an aggregate view of all security monitors including this one, see Security Overview in the Security Audit section.",
         ],
     },
     "SNMP Device Info": {
-        "what": "Queries routers and switches via SNMP for port stats, CPU load, and uptime.",
+        "what": "Queries routers and switches via SNMP for system description, interface/port stats, and uptime.",
         "hidden": [
             "Most home routers have SNMP disabled by default — enable it in the router admin panel first.",
             "Use SNMPv2c with the 'public' community string to start — change this if your router uses a custom community.",
@@ -313,28 +313,28 @@ _PAGE_HELP: dict[str, dict] = {
     "Geolocation Map": {
         "what": "Offline world map showing where internet-facing IPs are located — no API key, no external calls.",
         "hidden": [
-            "Uses the MaxMind GeoLite2-City database bundled with the app — all lookups are local.",
+            "Uses the MaxMind GeoLite2-City database — download it once (free, no account required) and all lookups after that are local, with no external calls.",
             "IPs that map to unexpected countries may indicate traffic going through a VPN exit node or a compromised proxy.",
         ],
     },
     "Broadcast Storm": {
         "what": "Listens for abnormal broadcast traffic and identifies the source device or loop.",
         "hidden": [
-            "The 'Explain This' strip explains what causes a broadcast storm and how STP is supposed to prevent them.",
-            "Storm level SAFE / WARNING / CRITICAL is shown with the broadcast packets-per-second rate.",
+            "The 'What just happened, technically?' strip explains what causes a broadcast storm and how STP is supposed to prevent them.",
+            "Storm level CLEAN / WARNING / STORM is shown with the broadcast packets-per-second rate.",
         ],
     },
     "Rogue Bridge (STP)": {
         "what": "Captures BPDU frames and alerts when an unexpected switch claims the STP root election.",
         "hidden": [
-            "The 'Explain This' strip explains STP, what a root election is, and why rogue bridges cause 30-second periodic outages.",
+            "The 'What just happened, technically?' strip explains STP, what a root election is, and why rogue bridges cause 30-second periodic outages.",
             "Mesh Wi-Fi nodes connected via Ethernet cable are a common source of rogue bridge events.",
         ],
     },
     "IoT Behaviour": {
         "what": "Learns normal traffic per device — IoT or otherwise — and alerts on port scans, new destinations, and traffic rate spikes.",
         "hidden": [
-            "Run the baseline for at least 24 hours before expecting accurate alerts — the model needs time to learn normal behaviour.",
+            "The baseline learning window is 30 seconds to 10 minutes (default 60s) — longer windows capture more of each device's normal traffic pattern before the anomaly monitor starts alerting.",
             "Alerts fire when a device contacts a destination it has never used before — common after firmware updates.",
         ],
     },
@@ -356,7 +356,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Enable 'Include traceroute' to see every network hop between you and the service — useful when your ISP routes traffic unexpectedly.",
             "The failure layer badge tells you in plain English who is responsible: 'Device problem', 'ISP issue', 'Remote outage', etc.",
-            "Confidence % reflects how many independent probes agreed — 80%+ is conclusive, below 50% means mixed signals.",
+            "Confidence % is a fixed value per diagnosis scenario, reflecting how diagnostic that failure pattern typically is — it isn't computed from how many probes agreed at runtime.",
         ],
     },
     "Root Cause Correlator": {
@@ -364,7 +364,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Run a full scan first — the correlator works from the most recent scan results.",
             "The top-ranked finding is the single most impactful problem detected — fix that before looking at the rest.",
-            "Findings are grouped by category (connectivity, security, performance) so you can tackle a whole category at once.",
+            "Findings are a flat list sorted by severity — the Category column shows the specific problem type (e.g. 'Rogue Network Bridge'), not a broad bucket.",
         ],
     },
     # ── Automation ─────────────────────────────────────────────────────────────
@@ -376,27 +376,27 @@ _PAGE_HELP: dict[str, dict] = {
         ],
     },
     "Scheduled Scans": {
-        "what": "Run discovery and port scans on a repeating schedule — useful for overnight audits or compliance snapshots.",
+        "what": "Run device discovery on a repeating schedule — useful for overnight audits or compliance snapshots.",
         "hidden": [
-            "Scheduled scans run even when the main window is not visible — the background service handles them.",
+            "Scheduled scans run even when the main window is minimized — a background thread inside the app handles them, so NetSentinel itself must stay running (this is not a separate Windows service).",
             "Combine with Config Snapshots to automatically save the state after each scheduled scan.",
         ],
     },
     "Custom Triggers": {
         "what": "Build your own event rules: if RTT exceeds a threshold for N consecutive pings, fire an action.",
         "hidden": [
-            "Triggers can call webhooks, run scripts, or send desktop notifications — the same actions as Automation Hooks.",
+            "Enabled triggers are checked automatically every minute and fire a desktop notification when true — for webhooks or scripts, use Automation Hooks instead.",
         ],
     },
     "MQTT / Home Assistant": {
         "what": "Publishes device presence, uptime, and alerts to an MQTT broker for Home Assistant integration.",
         "hidden": [
-            "Set the MQTT broker address and port in Settings — the page will show connection status once configured.",
+            "Set the MQTT broker address and port right on this page's Broker Configuration card — the page will show connection status once configured.",
             "Each device gets its own Home Assistant entity — ideal for automations like 'if the kids' tablet leaves the network, run a script'.",
         ],
     },
     "REST API": {
-        "what": "Read-only HTTP API (default port 8765) — exposes /devices, /alerts, /uptime, /grade, /speed-history, /dashboard, and /health.",
+        "what": "Read-only HTTP API (default port 8765) — exposes /devices, /alerts, /uptime/<ip>, /grade, /speed-history, /dashboard, /health, /service-catalog, and /service-diagnostics/<service_id>.",
         "hidden": [
             "The API key is stored in the OS keychain — copy it from the REST API page to use in your scripts.",
             "Use the /dashboard endpoint to embed a live network summary in a Grafana panel or Home Assistant card.",
@@ -420,7 +420,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "The grade circle updates after every scan — run a full security scan to get your latest grade.",
             "Each finding in the top-15 table names the source page — click any row and navigate there directly to investigate.",
-            "For real-time ARP/DHCP/Storm monitors, use ARP Spoof Watch, DHCP Rogue Monitor, and Broadcast Storm in this section and in Analysis.",
+            "For real-time ARP/DHCP/Storm monitors, use DHCP Rogue Monitor here in Security Audit, and ARP Spoof Watch / Broadcast Storm over in Analysis.",
         ],
     },
     "Port Scan (TCP)": {
@@ -453,23 +453,23 @@ _PAGE_HELP: dict[str, dict] = {
         ],
     },
     "TLS & Exposure": {
-        "what": "Monitors TLS certificate expiry per host and checks for accidental internet exposure of internal services.",
+        "what": "Monitors TLS certificate expiry per host — internet-exposure checking is a separate page (see 'Exposed to Internet').",
         "hidden": [
             "Certificates are checked hourly — you will see an alert badge 30 days before any cert expires.",
-            "Exposure checks probe from the internet side — a result of 'exposed' means the port is reachable from outside your network.",
+            "For internet-exposure results, open the 'Exposed to Internet' page instead — it reads your router's UPnP port-mapping table rather than probing from outside.",
         ],
     },
     "Login Test": {
-        "what": "Tests common default credentials against discovered services — for authorised use on networks you own.",
+        "what": "Connects to a device via SSH using credentials you supply, and collects installed packages, running services, users, and patch level — for authorised use on networks you own.",
         "hidden": [
-            "This test only tries documented factory-default passwords, not brute-force lists — it is designed for auditing your own devices.",
-            "Results feed into Device Risk Score — a device with default credentials gets a critical risk flag.",
+            "This is a manual, single-host credentialed scan — you provide the username/password (or key) yourself; there is no default-credential or brute-force list.",
+            "Results feed into Device Risk Score — a device that a Login Test successfully authenticates to gets flagged, since it proves the device is remotely loggable-into with the credentials tried.",
         ],
     },
     "OS Detection": {
         "what": "Fingerprints device operating systems using TCP/IP stack analysis.",
         "hidden": [
-            "Accuracy improves when port scan data is available — run a TCP port scan first.",
+            "Fingerprinting always probes the same fixed port set (80, 443, 22, 8080) — it doesn't currently reuse results from a prior port scan.",
         ],
     },
     "Device Risk Score": {
@@ -482,14 +482,14 @@ _PAGE_HELP: dict[str, dict] = {
     "CVE Tracker": {
         "what": "Tracks active CVEs for your network devices over time — shows newly discovered vulnerabilities since last scan.",
         "hidden": [
-            "Newly discovered CVEs appear with a 'New' badge — these are the ones to prioritise for patching.",
+            "Newly discovered CVEs start in the 'Open' state — those are the ones to prioritise for patching.",
             "CVE Tracker needs data to track — run CVE Lookup first to discover vulnerabilities, then come back here to monitor remediation progress.",
         ],
     },
     "Exposed to Internet": {
-        "what": "Checks whether services on your network are reachable from the public internet via your external IP.",
+        "what": "Checks whether services on your network are reachable from the public internet, by reading your router's UPnP port-mapping table — no active probes are sent from outside your network.",
         "hidden": [
-            "A result of 'exposed' means someone outside your network could connect to that port — check your router's port-forwarding rules.",
+            "A result of 'exposed' means a UPnP mapping forwards that port from your public IP to a LAN device — check your router's port-forwarding rules.",
         ],
     },
     "Full Device Discovery": {
@@ -501,13 +501,13 @@ _PAGE_HELP: dict[str, dict] = {
     "Windows Shares (SMB)": {
         "what": "Enumerates accessible SMB shares on Windows devices on your network.",
         "hidden": [
-            "Shared folders that are visible without a password are flagged — these are a common data-exfiltration risk on home networks.",
+            "Any non-hidden disk share is flagged as a risk — the scanner doesn't currently distinguish password-protected shares from open ones.",
         ],
     },
     "Recon Plugins": {
         "what": "Custom port-scanner and enumeration scripts — not hardware driver plugins. Drop a .py plugin file into the plugins/ directory to add new scan capabilities.",
         "hidden": [
-            "See CONTRIBUTING.md for the plugin API — a plugin is a single Python class with a run() method.",
+            "See docs/plugin-authoring.md for the plugin API — a plugin is a Python module with a PLUGIN_META dict and a module-level run(devices, **kwargs) function, not a class.",
             "These are recon/scan scripts, not hardware integrations. For routers and modems, use the Hardware section.",
         ],
     },
@@ -535,9 +535,9 @@ _PAGE_HELP: dict[str, dict] = {
     "Protocol Visualizer": {
         "what": "Animated step-by-step diagrams of ARP, DNS, TCP, DHCP, and STP using your real device addresses.",
         "hidden": [
-            "Click any step in the step list to jump directly to it — you don't have to watch the full animation.",
+            "Use the ◀◀ / ▶ / ▶▶ step buttons to jump forward or backward through the animation without watching it play in real time.",
             "The '▸ Why this protocol matters' panel at the bottom links the animation to real threats NetSentinel detects.",
-            "The 'See diagram' button in any Explain This panel jumps here with the right protocol pre-selected.",
+            "The 'See diagram' button in any 'What just happened, technically?' panel jumps here with the right protocol pre-selected.",
         ],
     },
     "Lab Mode": {

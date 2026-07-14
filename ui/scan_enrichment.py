@@ -326,6 +326,7 @@ class ScanEnrichmentMixin:
             worst    = min(group, key=lambda x: _g(x, "signal_dbm", -100))
             rogue    = any(_g(x, "is_rogue_ssid",      False) for x in group)
             conflict = any(_g(x, "co_channel_conflict", False) for x in group)
+            wps      = any(_g(x, "wps_enabled",         False) for x in group)
             bssid    = _g(best, "bssid", "")
             # Build per-node tooltip: prefer Deco names, fall back to raw BSSIDs
             node_tips = []
@@ -336,7 +337,7 @@ class ScanEnrichmentMixin:
                 node_tips.append(f"{name or b}  {sig} dBm")
             display_rows.append((
                 best, ssid, bssid, len(group), node_tips,
-                rogue, conflict, False,
+                rogue, conflict, False, wps,
                 _g(best, "signal_dbm", 0), _g(worst, "signal_dbm", 0),
             ))
 
@@ -345,17 +346,18 @@ class ScanEnrichmentMixin:
             worst    = min(group, key=lambda x: _g(x, "signal_dbm", -100))
             rogue    = any(_g(x, "is_rogue_ssid",      False) for x in group)
             conflict = any(_g(x, "co_channel_conflict", False) for x in group)
+            wps      = any(_g(x, "wps_enabled",         False) for x in group)
             bssid    = _g(best, "bssid", "")
             backhaul = _is_backhaul(bssid)
             node_tips = [_g(x, "bssid", "") for x in group]
             display_rows.append((
                 best, None, bssid, len(group), node_tips,
-                rogue, conflict, backhaul,
+                rogue, conflict, backhaul, wps,
                 _g(best, "signal_dbm", 0), _g(worst, "signal_dbm", 0),
             ))
 
         from PyQt6.QtWidgets import QTableWidgetItem
-        for n, ssid, bssid, node_count, node_tips, rogue, conflict, backhaul, sig_best, sig_worst in display_rows:
+        for n, ssid, bssid, node_count, node_tips, rogue, conflict, backhaul, wps, sig_best, sig_worst in display_rows:
             ch   = _g(n, "channel", 0)
             band = _g(n, "band", "?")
             connected = bool(my_ssid and ssid and ssid == my_ssid)
@@ -400,6 +402,7 @@ class ScanEnrichmentMixin:
             sig_item  = QTableWidgetItem(sig_d)
             rogue_item = QTableWidgetItem("⚠ Yes" if rogue else "No")
             conf_item  = QTableWidgetItem("⚠ Yes" if conflict else "No")
+            wps_item   = QTableWidgetItem("⚠ Yes" if wps else "No")
             conn_item  = QTableWidgetItem("✓ Yes" if connected else "")
 
             from PyQt6.QtGui import QColor as _QC
@@ -407,13 +410,20 @@ class ScanEnrichmentMixin:
                 rogue_item.setForeground(_QC(_s.RED))
             if conflict:
                 conf_item.setForeground(_QC(_s.AMBER))
+            if wps:
+                wps_item.setForeground(_QC(_s.AMBER))
+                wps_item.setToolTip(
+                    "WPS (Wi-Fi Protected Setup) is enabled — its PIN method is "
+                    "vulnerable to brute-force attacks. Disable WPS in the router's "
+                    "admin panel if you don't need it."
+                )
             if connected:
                 conn_item.setForeground(_QC(_s.GREEN))
 
             for col, item in enumerate([
                 ssid_item, bssid_item, nodes_item,
                 QTableWidgetItem(str(ch)), QTableWidgetItem(band),
-                sig_item, rogue_item, conf_item, conn_item,
+                sig_item, rogue_item, conf_item, wps_item, conn_item,
             ]):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._m4_table.setItem(row_idx, col, item)
@@ -575,11 +585,21 @@ class ScanEnrichmentMixin:
         self._cred_status.setText("Credentialed scan complete.")
         self._nav_set_scan_state(L.LOGIN_TEST, "fresh", ts=time.time(), verdict=res.plain_verdict)
 
+        # Feed Device Risk Score: a successful login is a real risk signal
+        # (F-46). _run_risk_scorer() itself no-ops safely if M1 hasn't run yet.
+        if not res.error and res.host:
+            self._cred_access_hosts.add(res.host)
+        if hasattr(self, "_run_risk_scorer"):
+            try:
+                self._run_risk_scorer()
+            except Exception:
+                pass  # non-fatal — risk scorer may fail on limited M1 data
+
         # ── Device Info tab ───────────────────────────────────────────────
         info_rows = [
             ("OS",             res.patch_info.os_version or res.os_type),
             ("Kernel / Build", res.patch_info.kernel),
-            ("Last Update",    res.patch_info.last_update),
+            ("Last Update",    res.patch_info.last_update or "—"),
             ("Pending Updates",str(res.patch_info.pending_updates)),
             ("Serial Number",  res.serial_number or "—"),
             ("Failed Logins (24 h)", str(res.failed_logins)),
@@ -664,7 +684,7 @@ class ScanEnrichmentMixin:
         for u in res.users:
             r = self._recon_smb_users_table.rowCount()
             self._recon_smb_users_table.insertRow(r)
-            for c, v in enumerate([u.username, u.uid, u.full_name, u.last_logon]):
+            for c, v in enumerate([u.username, u.flags, u.full_name, u.last_logon]):
                 self._recon_smb_users_table.setItem(r, c, _TWI(v))
 
     # ── M1 table / mesh enrichment helpers (Sprint 18) ─────────────────────────

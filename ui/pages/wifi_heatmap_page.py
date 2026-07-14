@@ -404,7 +404,7 @@ class WifiHeatmapPage(QWidget):
 
         self._ax.pcolormesh(
             gx, gy, zz_masked,
-            cmap="RdYlGn",
+            cmap="RdYlBu_r",
             vmin=HEATMAP_VMIN,
             vmax=HEATMAP_VMAX,
             alpha=0.45,

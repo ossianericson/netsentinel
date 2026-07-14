@@ -932,6 +932,7 @@ class CVELookupWorker(QThread):
     """Queries NVD API v2 for CVEs matching detected service versions."""
     cve_result = pyqtSignal(str, object)  # (service_version, CVELookupResult)
     status     = pyqtSignal(str)
+    error      = pyqtSignal(str)
     finished_all = pyqtSignal()
 
     def __init__(self, service_versions: list, parent=None):
@@ -949,7 +950,9 @@ class CVELookupWorker(QThread):
                 self.cve_result.emit(sv, res)
             self.finished_all.emit()
         except Exception as exc:
-            self.status.emit(f"CVE lookup error: {exc}")
+            msg = f"CVE lookup error: {exc}"
+            self.status.emit(msg)
+            self.error.emit(msg)
             self.finished_all.emit()
 
 

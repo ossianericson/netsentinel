@@ -75,6 +75,7 @@ class NetBIOSInfo:
     machine_name: str = ""
     workgroup: str = ""
     mac: str = ""
+    is_domain_controller: bool = False
 
 
 @dataclass
@@ -117,7 +118,7 @@ class SMBEnumResult:
             f"{len(self.shares)} share(s)",
         ]
         if self.tier >= 2:
-            parts += [f"{len(self.users)} user(s)", f"{len(self.sessions)} session(s)"]
+            parts.append(f"{len(self.users)} user(s)")
         flags = self.risk_flags
         if flags:
             parts.append(f"⚠ {len(flags)} risk flag(s)")
@@ -182,6 +183,7 @@ def _netbios_name_query(host: str, timeout: float = 3.0) -> NetBIOSInfo:
                 info.workgroup = clean
             if ntype == 0x1C:                             # domain controller list
                 info.workgroup = clean
+                info.is_domain_controller = True
 
         # MAC address is the last 6 bytes of the name table
         if offset + 6 <= len(data):
@@ -414,6 +416,7 @@ def enumerate_smb(
             domain=netbios.workgroup,
             shares=shares,
             anonymous_login=anonymous_ok,
+            is_domain_controller=netbios.is_domain_controller,
             tier=1,
         )
         if progress_cb:
@@ -442,6 +445,7 @@ def enumerate_smb(
     if not result.os_version:
         result.os_version = os_version
     result.anonymous_login = result.anonymous_login or anonymous_ok
+    result.is_domain_controller = result.is_domain_controller or netbios.is_domain_controller
 
     if progress_cb:
         progress_cb(result.plain_verdict)

@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -143,9 +144,15 @@ def _btn(text: str, primary: bool = False, danger: bool = False) -> QPushButton:
 
 def _window_status(w: MaintenanceWindow) -> tuple[str, str]:
     """Return (status_text, color)."""
-    now = int(time.time())
     if not w.active:
         return "Disabled", _s.TEXT_SECONDARY
+    if w.daily_start_hour is not None and w.daily_end_hour is not None:
+        # Recurring window -- absolute start_ts/end_ts are dummy/ignored
+        # (see MaintenanceWindow.is_currently_active docstring); status can
+        # only ever be Active-now or Recurring (never Expired/Scheduled,
+        # which describe a one-off window that has passed or not begun yet).
+        return ("Active", _s.GREEN) if w.is_currently_active else ("Recurring", _s.AMBER)
+    now = int(time.time())
     if w.end_ts < now:
         return "Expired", _s.TEXT_SECONDARY
     if w.start_ts > now:
@@ -167,6 +174,7 @@ class _WindowDialog(QDialog):
         form = QFormLayout(self)
         form.setSpacing(10)
         form.setContentsMargins(16, 16, 16, 16)
+        self._form = form
 
         _lineedit_ss = (
             "QLineEdit{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
@@ -197,7 +205,29 @@ class _WindowDialog(QDialog):
         self._end = QDateTimeEdit(end_default)
         self._end.setDisplayFormat("yyyy-MM-dd HH:mm")
         self._end.setCalendarPopup(True)
-        form.addRow("End:", self._end)
+        self._end_row_label = QLabel("End:")
+        form.addRow(self._end_row_label, self._end)
+
+        is_recurring = bool(window and window.daily_start_hour is not None and window.daily_end_hour is not None)
+
+        self._recurring_chk = QCheckBox("Recurring daily window (e.g. nightly quiet hours)")
+        self._recurring_chk.setChecked(is_recurring)
+        self._recurring_chk.toggled.connect(self._on_recurring_toggled)
+        form.addRow("", self._recurring_chk)
+
+        self._recur_start_hour = QSpinBox()
+        self._recur_start_hour.setRange(0, 23)
+        self._recur_start_hour.setValue(window.daily_start_hour if is_recurring else 22)
+        self._recur_start_row_label = QLabel("Daily start hour (0-23):")
+        form.addRow(self._recur_start_row_label, self._recur_start_hour)
+
+        self._recur_end_hour = QSpinBox()
+        self._recur_end_hour.setRange(0, 23)
+        self._recur_end_hour.setValue(window.daily_end_hour if is_recurring else 7)
+        self._recur_end_row_label = QLabel("Daily end hour (0-23):")
+        form.addRow(self._recur_end_row_label, self._recur_end_hour)
+
+        self._on_recurring_toggled(is_recurring)
 
         self._active = QCheckBox("Enabled")
         self._active.setChecked(window.active if window else True)
@@ -210,11 +240,21 @@ class _WindowDialog(QDialog):
         btns.rejected.connect(self.reject)
         form.addRow(btns)
 
+    def _on_recurring_toggled(self, recurring: bool) -> None:
+        self._form.setRowVisible(self._start, not recurring)
+        self._form.setRowVisible(self._end, not recurring)
+        self._form.setRowVisible(self._recur_start_hour, recurring)
+        self._form.setRowVisible(self._recur_end_hour, recurring)
+
     def _validate(self):
         if not self._label.text().strip():
             QMessageBox.warning(self, "Validation", "Label is required.")
             return
-        if self._end.dateTime() <= self._start.dateTime():
+        if self._recurring_chk.isChecked():
+            if self._recur_start_hour.value() == self._recur_end_hour.value():
+                QMessageBox.warning(self, "Validation", "Daily start and end hour must differ.")
+                return
+        elif self._end.dateTime() <= self._start.dateTime():
             QMessageBox.warning(self, "Validation", "End time must be after start time.")
             return
         self.accept()
@@ -222,6 +262,7 @@ class _WindowDialog(QDialog):
     def get_window(self, existing_id: str = "") -> MaintenanceWindow:
         hosts_raw = self._hosts.text().strip()
         hosts = [h.strip() for h in hosts_raw.split(",") if h.strip()] if hosts_raw else []
+        recurring = self._recurring_chk.isChecked()
         return MaintenanceWindow(
             id=existing_id or "",
             label=self._label.text().strip(),
@@ -229,6 +270,8 @@ class _WindowDialog(QDialog):
             start_ts=self._start.dateTime().toSecsSinceEpoch(),
             end_ts=self._end.dateTime().toSecsSinceEpoch(),
             active=self._active.isChecked(),
+            daily_start_hour=self._recur_start_hour.value() if recurring else None,
+            daily_end_hour=self._recur_end_hour.value() if recurring else None,
         )
 
 
@@ -455,9 +498,15 @@ class MaintenancePage(QWidget):
             row = self._win_table.rowCount()
             self._win_table.insertRow(row)
             hosts_str  = ", ".join(w.hosts) if w.hosts else "(all hosts)"
-            start_str  = time.strftime("%Y-%m-%d %H:%M", time.localtime(w.start_ts))
-            end_str    = time.strftime("%Y-%m-%d %H:%M", time.localtime(w.end_ts))
-            dur_str    = f"{w.duration_minutes} min"
+            if w.daily_start_hour is not None and w.daily_end_hour is not None:
+                start_str = f"Daily {w.daily_start_hour:02d}:00"
+                end_str   = f"Daily {w.daily_end_hour:02d}:00"
+                span_h    = (w.daily_end_hour - w.daily_start_hour) % 24
+                dur_str   = f"{span_h} h/day"
+            else:
+                start_str  = time.strftime("%Y-%m-%d %H:%M", time.localtime(w.start_ts))
+                end_str    = time.strftime("%Y-%m-%d %H:%M", time.localtime(w.end_ts))
+                dur_str    = f"{w.duration_minutes} min"
             status, color = _window_status(w)
             for col, val in enumerate([w.label, hosts_str, start_str, end_str, dur_str, status]):
                 item = QTableWidgetItem(val)

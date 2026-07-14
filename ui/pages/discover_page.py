@@ -27,6 +27,15 @@ _REQUIRES_COLOR_NAME = {
     "admin": "RED",
 }
 
+_REQUIRES_TOOLTIP = {
+    "Npcap": "Requires the Npcap packet-capture driver — install it from npcap.com, "
+             "or via the WinGet task offered during setup.",
+    "admin": "Requires running NetSentinel as Administrator — right-click the app "
+             "and choose 'Run as administrator'.",
+    "Npcap + Admin": "Requires both the Npcap packet-capture driver (npcap.com) and "
+             "running NetSentinel as Administrator.",
+}
+
 
 # ── Widget ─────────────────────────────────────────────────────────────────────
 
@@ -180,6 +189,9 @@ class FeatureGuidePage(QWidget):
                 f" background:transparent; border:1px solid {req_color};"
                 f" border-radius:3px; padding:0 4px;"
             )
+            req_lbl.setToolTip(_REQUIRES_TOOLTIP.get(
+                feat["requires"], f"Requires: {feat['requires']}"
+            ))
             name_row.addWidget(req_lbl)
 
         badge = feat.get("badge")

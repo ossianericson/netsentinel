@@ -23,7 +23,7 @@ Complete list of all NetSentinel pages and features, organised by navigation sec
 | **Devices** | Full device inventory with IP, MAC, hostname, vendor, type, and risk level. Segment filter pills (colour-coded /24 subnets). Persistent device map — pinned and recently-seen offline devices stay visible. Right-click: Port Scan, Wake-on-LAN, How to Fix, Label Device. | — | `ui/pages/inventory_page.py` |
 | **Network Map** | Cytoscape.js interactive topology map with drag-to-reposition, lock layout, and classic matplotlib fallback. Mesh-aware: Deco node assignment shown when credentials are configured. | — | `ui/pages/network_map_page.py` |
 | **Wi-Fi** | 802.11 network enumeration: hidden SSIDs, rogue APs, WPS-enabled networks, co-channel interference, signal levels, connected client list. | — | `modules/wifi_scanner.py` |
-| **DHCP Leases** | Parses the OS DHCP lease table; flags any rogue DHCP server on the segment. | — | `modules/dhcp_lease_scanner.py` |
+| **DHCP Leases** | Parses the OS DHCP lease table into a live view of active leases. (Rogue-server detection is a separate feature — see DHCP Rogue under Security Audit.) | — | `modules/dhcp_lease_scanner.py` |
 | **DNS Zone Map** | DNS zone enumeration via AXFR and mDNS. | — | `modules/dns_zone_scanner.py` |
 | **Home Automation** | Home Assistant device state display via REST API integration. | — | `ui/pages/home_automation_page.py` |
 
@@ -108,16 +108,16 @@ All features in this section require running as Administrator / `sudo`. Most als
 | **CVE Lookup** | Cross-references discovered OS and service versions against the NVD database; per-device CVE lifecycle tracking. | `modules/cve_lookup.py` |
 | **Threat Intelligence** | ThreatIntelDB: Feodo Tracker, Emerging Threats, URLhaus blocklists; AbuseIPDB v2 lookup (consent-gated, requires own API key). | `modules/threat_intel.py` |
 | **TLS Certificates** | Hourly expiry checks per host; 30-day pre-expiry alerts; OK / EXPIRING / EXPIRED badges. | `modules/tls_checker.py` |
-| **Login Test** | Credentialed scan: tests SSH, SMB, FTP, Telnet with provided credentials. | `modules/credentialed_scan.py` |
+| **Login Test** | Credentialed scan: tests SSH with provided credentials. | `modules/credentialed_scan.py` |
 | **OS Detection** | Active OS fingerprinting from TCP/IP stack behaviour. | `modules/os_fingerprint.py` |
 | **Risk Score** | Per-device risk scoring across open ports, OS age, CVE count, and OUI flags. | `modules/risk_scorer.py` |
 | **Internet Exposure** | RFC 1918 boundary exposure checker; detects services bound to WAN-facing interfaces. | `modules/internet_exposure.py` |
-| **Full Discovery** | Parallel ARP + ICMP + TCP SYN + mDNS + passive SSDP/mDNS sweep for maximum census accuracy. | `modules/combined_discovery.py` |
+| **Full Discovery** | Parallel ARP + ICMP + TCP SYN + mDNS sweep for maximum census accuracy. | `modules/combined_discovery.py` |
 | **SMB Enumeration** | SMB/Windows Share enumeration; flags accessible shares. | `modules/smb_enumerator.py` |
-| **Scan Plugins** | Custom Python security checks against the device list. Drop `.py` into `plugins/`; runs in sandbox. | `modules/plugin_system.py` |
+| **Scan Plugins** | Custom Python security checks against the device list. Drop `.py` into `plugins/`; runs in-process. | `modules/plugin_system.py` |
 | **Private Endpoint** | Checks for RFC 1918 services inadvertently exposed to the broader network segment. | `modules/private_endpoint_checker.py` |
 | **Cloud Metadata** | Probes AWS/Azure/GCP IMDS endpoints (`169.254.169.254`, etc.) to detect exposed cloud metadata APIs. | `modules/cloud_metadata.py` |
-| **DHCP Rogue** | Passive detection of unauthorized DHCP servers on the segment via DHCP fingerprinting. | `modules/dhcp_fingerprint.py` |
+| **DHCP Rogue** | Active detection of unauthorized DHCP servers on the segment via a crafted DHCPDISCOVER broadcast. | `modules/dhcp_detector.py` |
 
 ---
 
@@ -137,5 +137,5 @@ All features in this section require running as Administrator / `sudo`. Most als
 | Feature | What it does | Key module |
 |---|---|---|
 | **Hardware Hub** | Central hub for hardware integration plugins. Import, configure, and monitor any plugin. Hub cards with health tracking, circuit breaker, credential management, and plugin log console. | `ui/pages/hardware_integration_page.py` |
-| **12 bundled plugins** | TP-Link Deco, ZTE 5G modem, FRITZ!Box, UniFi, OpenWrt, MikroTik, Netgear, ASUS, Synology, Home Assistant. All signed and hash-verified. | `modules/deco_client.py`, `modules/zte_client.py`, etc. |
+| **10 bundled plugins** | TP-Link Deco, ZTE 5G modem, FRITZ!Box, UniFi, OpenWrt, MikroTik, Netgear, ASUS, Synology, Home Assistant. All signed and hash-verified. | `modules/deco_client.py`, `modules/zte_client.py`, etc. |
 | **Plugin authoring** | In-app Write a Plugin tab: API discovery guide, template wizard ("⬡ New Plugin"), AI-ready prompts, validator CLI, community Browse tab, `.nspkg` import. | `ui/pages/plugin_wizard_mixin.py` |

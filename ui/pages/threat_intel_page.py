@@ -150,6 +150,7 @@ class ThreatIntelPage(QWidget):
     scan_requested      = pyqtSignal()      # emitted by empty-state CTA to trigger feed refresh
     show_in_connections = pyqtSignal(str)   # IP → navigate to Connections + filter
     scan_complete       = pyqtSignal()      # emitted when a feed load cycle finishes
+    scan_error          = pyqtSignal(str)   # emitted when a feed refresh fails (F-80)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -576,6 +577,7 @@ class ThreatIntelPage(QWidget):
         self._refresh_btn.setText("Update Feeds")
         self._cache_btn.setEnabled(True)
         self._status_lbl.setText(f"Feed refresh failed: {msg}")
+        self.scan_error.emit(msg)
 
     def _on_db_ready(self, db: ThreatIntelDB, from_cache: bool = False) -> None:
         self._db = db

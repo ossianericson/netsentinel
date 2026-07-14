@@ -342,6 +342,31 @@ def _dns_leak_test() -> DnsLeakResult:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def run_dns_benchmark(domain: str = "google.com", stop_event=None) -> List[DnsResult]:
+    """Compare DNS resolver latency: System / Cloudflare / Google / Quad9.
+
+    Extracted from scan()'s DNS section (F-23) so the DNS & Stability page's
+    "DNS Benchmark" tab can run just this check on demand, without the full
+    ping/HTTP/traceroute/speed-test suite scan() performs.
+    """
+    results: List[DnsResult] = []
+    for server_name, server_ip in _DNS_SERVERS:
+        if stop_event is not None and stop_event.is_set():
+            break
+        latency, resolved = _dns_latency(domain, server_ip)
+        status = "FAIL" if latency < 0 else ("SLOW" if latency > 200 else "OK")
+        results.append(
+            DnsResult(
+                server=server_name,
+                domain=domain,
+                latency_ms=latency,
+                resolved_ip=resolved,
+                status=status,
+            )
+        )
+    return results
+
+
 def scan(
     gateway_ip: Optional[str] = None,
     progress_cb=None,
@@ -380,21 +405,7 @@ def scan(
 
     # 2. DNS speed tests
     _cb("Testing DNS server latency…")
-    domain = "google.com"
-    for server_name, server_ip in _DNS_SERVERS:
-        if _stopped():
-            break
-        latency, resolved = _dns_latency(domain, server_ip)
-        status = "FAIL" if latency < 0 else ("SLOW" if latency > 200 else "OK")
-        result.dns_results.append(
-            DnsResult(
-                server=server_name,
-                domain=domain,
-                latency_ms=latency,
-                resolved_ip=resolved,
-                status=status,
-            )
-        )
+    result.dns_results = run_dns_benchmark(stop_event=stop_event)
 
     # 3. HTTP connectivity
     _cb("Checking internet connectivity…")

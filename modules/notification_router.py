@@ -131,6 +131,16 @@ class TelegramChannel:
 # Union type alias
 Channel = ToastChannel | WebhookChannel | EmailChannel | PushoverChannel | NtfyChannel | TelegramChannel
 
+# Maps the "Escalate via channel" combo box text (ui/pages/notif_extra_channels.py)
+# to the channel dataclass it should force-deliver through.
+_ESCALATION_CHANNEL_TYPES: Dict[str, type] = {
+    "Email":    EmailChannel,
+    "Webhook":  WebhookChannel,
+    "Pushover": PushoverChannel,
+    "ntfy":     NtfyChannel,
+    "Telegram": TelegramChannel,
+}
+
 
 def _matches_channel(alert: AlertFired, min_severity: str, rule_types: List[str]) -> bool:
     """Return True if the alert should be dispatched to a channel with these filters."""
@@ -273,68 +283,90 @@ class NotificationRouter:
         for ch in channels:
             if not ch.enabled:
                 continue
-
             if not _matches_channel(alert, ch.min_severity, ch.rule_types):
                 continue
+            self._deliver(ch, alert)
 
-            if isinstance(ch, ToastChannel):
-                entry = self._log_delivery(ch.name, "TOAST", alert)
-                if self._toast_cb:
-                    try:
-                        self._toast_cb(alert)
-                    except Exception as exc:
-                        self._mark_failed(entry, str(exc))
-                    else:
-                        self._mark_delivered(entry)
+    def dispatch_escalation(self, alert: AlertFired, channel_name: str) -> bool:
+        """
+        Force-deliver alert through the channel matching channel_name (one of
+        _ESCALATION_CHANNEL_TYPES' keys), bypassing the severity/rule_types
+        gate — escalation is an explicit override of normal routing, used by
+        AlertEngine.check_escalations() for alerts unacknowledged past their
+        wait threshold. Returns True if a configured, enabled channel of that
+        type was found and delivery was attempted.
+        """
+        target_cls = _ESCALATION_CHANNEL_TYPES.get(channel_name)
+        if target_cls is None:
+            return False
+        with self._lock:
+            channels = list(self._channels)
+        for ch in channels:
+            if isinstance(ch, target_cls) and ch.enabled:
+                self._deliver(ch, alert)
+                return True
+        return False
+
+    def _deliver(self, ch: Channel, alert: AlertFired) -> None:
+        """Dispatch alert through one already-selected, enabled channel."""
+        if isinstance(ch, ToastChannel):
+            entry = self._log_delivery(ch.name, "TOAST", alert)
+            if self._toast_cb:
+                try:
+                    self._toast_cb(alert)
+                except Exception as exc:
+                    self._mark_failed(entry, str(exc))
                 else:
                     self._mark_delivered(entry)
+            else:
+                self._mark_delivered(entry)
 
-            elif isinstance(ch, WebhookChannel):
-                if ch.url:
-                    entry = self._log_delivery(ch.name, "WEBHOOK", alert)
-                    t = threading.Thread(
-                        target=_deliver_webhook_tracked,
-                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
-                        daemon=True,
-                    )
-                    t.start()
-
-            elif isinstance(ch, EmailChannel):
-                if ch.smtp_host and ch.to_addrs:
-                    entry = self._log_delivery(ch.name, "EMAIL", alert)
-                    t = threading.Thread(
-                        target=_deliver_email_tracked,
-                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
-                        daemon=True,
-                    )
-                    t.start()
-
-            elif isinstance(ch, PushoverChannel):
-                entry = self._log_delivery(ch.name, "PUSHOVER", alert)
+        elif isinstance(ch, WebhookChannel):
+            if ch.url:
+                entry = self._log_delivery(ch.name, "WEBHOOK", alert)
                 t = threading.Thread(
-                    target=_deliver_pushover_tracked,
+                    target=_deliver_webhook_tracked,
                     args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
                     daemon=True,
                 )
                 t.start()
 
-            elif isinstance(ch, NtfyChannel):
-                entry = self._log_delivery(ch.name, "NTFY", alert)
+        elif isinstance(ch, EmailChannel):
+            if ch.smtp_host and ch.to_addrs:
+                entry = self._log_delivery(ch.name, "EMAIL", alert)
                 t = threading.Thread(
-                    target=_deliver_ntfy_tracked,
+                    target=_deliver_email_tracked,
                     args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
                     daemon=True,
                 )
                 t.start()
 
-            elif isinstance(ch, TelegramChannel):
-                entry = self._log_delivery(ch.name, "TELEGRAM", alert)
-                t = threading.Thread(
-                    target=_deliver_telegram_tracked,
-                    args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
-                    daemon=True,
-                )
-                t.start()
+        elif isinstance(ch, PushoverChannel):
+            entry = self._log_delivery(ch.name, "PUSHOVER", alert)
+            t = threading.Thread(
+                target=_deliver_pushover_tracked,
+                args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                daemon=True,
+            )
+            t.start()
+
+        elif isinstance(ch, NtfyChannel):
+            entry = self._log_delivery(ch.name, "NTFY", alert)
+            t = threading.Thread(
+                target=_deliver_ntfy_tracked,
+                args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                daemon=True,
+            )
+            t.start()
+
+        elif isinstance(ch, TelegramChannel):
+            entry = self._log_delivery(ch.name, "TELEGRAM", alert)
+            t = threading.Thread(
+                target=_deliver_telegram_tracked,
+                args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                daemon=True,
+            )
+            t.start()
 
     # ── Delivery log ──────────────────────────────────────────────────────────
 
