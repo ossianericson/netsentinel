@@ -915,13 +915,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
 
         _kbd_shortcuts = [
             ("Ctrl+K",         "Command palette — find any page or feature"),
-            ("Ctrl+R",         "Run full network scan"),
-            ("Ctrl+E",         "Export last scan results"),
+            ("Ctrl+F",         "Focus sidebar search"),
             ("Ctrl+Q",         "Quit"),
-            ("F5",             "Refresh current page"),
             ("Escape",         "Close section panel"),
             ("Right-click",    "Context menu on any table row"),
-            ("Ctrl+Shift+M",   "Visual Diagnostic Overlay"),
+            ("Ctrl+Shift+H",   "Quick Check Window"),
         ]
         self._help_shortcuts_lbl = QLabel(
             "<b>Keyboard shortcuts:</b>  " +

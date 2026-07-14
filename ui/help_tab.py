@@ -206,7 +206,7 @@ def build_help_tab(window) -> QWidget:
         f"<div style='margin:12px 16px 12px 16px; font-size:11px; "
         f"color:{_s.TEXT_PRIMARY}; line-height:1.7;'>"
         f"<b style='color:{_s.ACCENT};'>Step 1 — See what's on your network</b><br>"
-        "Click <b>Run Scan</b> on the Home screen (or press Ctrl+R). NetSentinel sends "
+        "Click <b>Run Scan</b> on the Home screen. NetSentinel sends "
         "ARP requests to every address in your subnet and builds a full device list. "
         "Most home networks finish in under 15 seconds.<br>"
         "<i>What to look for:</i> any device you don't recognise. Note its MAC address "
@@ -220,13 +220,13 @@ def build_help_tab(window) -> QWidget:
         "device on your network is winning the STP Root Bridge election. "
         "See <i>Learn Networking</i> below for what that means.<br><br>"
 
-        f"<b style='color:{_s.ACCENT};'>Step 3 — Run the Health Check</b><br>"
-        "Open <b>Health Check</b> and click <b>Run Diagnostics</b>. This tests ping "
-        "to 5 targets, compares DNS speed across 4 resolvers, checks HTTP reachability, "
-        "and runs a traceroute to your gateway.<br>"
-        "<i>What to look for:</i> if the DNS comparison shows your ISP's resolver "
-        "is 3–5× slower than Cloudflare (1.1.1.1), switching DNS in your router settings "
-        "can noticeably speed up browsing.<br><br>"
+        f"<b style='color:{_s.ACCENT};'>Step 3 — Diagnose a specific problem</b><br>"
+        "Open <b>What's Wrong?</b>, pick the symptom that matches what you're seeing "
+        "(slow internet, dropping connection, can't connect, or a specific service being "
+        "unreachable), and NetSentinel runs the right sequence of ping, DNS, and traceroute "
+        "checks for that symptom automatically.<br>"
+        "<i>What to look for:</i> the plain-English verdict at the end tells you whether "
+        "the problem is on your network or upstream with your ISP.<br><br>"
 
         f"<b style='color:{_s.ACCENT};'>Step 4 — Get your Network Grade</b><br>"
         "Open <b>Network Grade</b>. The A–F score across 8 dimensions tells you "
@@ -267,22 +267,16 @@ def build_help_tab(window) -> QWidget:
         ("Alt + 4",            "Jump to What's Wrong?"),
         ("Alt + 5 / Ctrl+L",   "Jump to Network Logger"),
         ("Ctrl + ,",           "Open Settings"),
-        # Scanning
-        ("Ctrl + R",           "Run full scan"),
-        ("Ctrl + E",           "Export last scan results"),
+        ("Ctrl + S",           "Save inventory annotations (Devices/Inventory page)"),
         # Application
         ("Ctrl + Shift + H",   "Quick Check Window — compact floating health status"),
         ("Ctrl + Q",           "Quit application"),
-        ("F5",                 "Refresh current page"),
-        ("Ctrl + Shift + M",   "Visual Diagnostic Overlay (Matrix mode)"),
         # Tables & rows
         ("J / K",              "Next / previous row in any table"),
         ("Right-click row",    "Context menu: Copy IP / Copy MAC / How to Fix / Port Scan / WoL"),
         ("Click column header","Sort table by that column"),
         # macOS equivalents
         ("⌘ + K",             "Command palette (macOS)"),
-        ("⌘ + R",             "Run full scan (macOS)"),
-        ("⌘ + E",             "Export (macOS)"),
         ("⌘ + Q",             "Quit (macOS)"),
     ]))
 
@@ -293,8 +287,7 @@ def build_help_tab(window) -> QWidget:
         ("Broadcast Storm",      "Measures broadcast/multicast flood levels by source device"),
         ("WiFi Networks",        "Hidden SSIDs, rogue APs, co-channel interference, WPS flags"),
         ("DNS & Outages",        "Live ping + DNS latency graph with STP reconvergence detection"),
-        ("My Network Info",      "Local IPs, subnet, gateway, DNS servers, DHCP lease, adapter speeds"),
-        ("Health Check",         "On-demand ping, DNS speed test, traceroute, HTTP check, DNS leak test"),
+        ("What's Wrong?",        "Pick a symptom, get a sequenced scan and a plain-English verdict"),
         ("Stability Log",        "Long-term logger — timestamped outage evidence for ISP disputes"),
         ("Availability History", "Per-target uptime log with expandable incident detail per row"),
         ("Network Grade",        "A–F score across 8 dimensions with an exportable Network Health Report"),
@@ -544,7 +537,8 @@ def build_help_tab(window) -> QWidget:
         "Cloudflare (1.1.1.1) and Google (8.8.8.8) are typically under 10 ms from most locations. "
         "A <b>DNS leak</b> happens when your DNS queries bypass your VPN or privacy settings "
         "and go to your ISP instead — revealing every site you visit. "
-        "The Health Check tab benchmarks all resolvers side-by-side on your current connection.<br><br>"
+        "Running <b>What's Wrong?</b> with the \"slow internet\" symptom checks your current "
+        "DNS resolver as part of its sequenced scan.<br><br>"
 
         f"<b style='font-size:12px; color:{_s.ACCENT};'>Open ports — what they reveal</b><br>"
         "Every service on a device listens on a numbered <b>port</b>. "

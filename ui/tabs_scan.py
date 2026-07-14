@@ -7,6 +7,7 @@ tab builders plus their event handlers and filter helpers.
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -599,13 +600,14 @@ class _ScanTabsMixin:
         card, card_body = _make_card("Detected Networks")
         self._m4_table = _table([
             "SSID", "BSSID", "Nodes", "Channel", "Band", "Signal (dBm)",
-            "Rogue SSID?", "Co-Channel?", "Connected?",
+            "Rogue SSID?", "Co-Channel?", "WPS?", "Connected?",
         ])
         self._m4_table.setColumnWidth(0, 180)
         self._m4_table.setColumnWidth(1, 150)
         self._m4_table.setColumnWidth(2, 55)   # Nodes
         self._m4_table.setColumnWidth(5, 105)  # Signal range
-        self._m4_table.setColumnWidth(8, 95)   # Connected
+        self._m4_table.setColumnWidth(8, 60)   # WPS
+        self._m4_table.setColumnWidth(9, 95)   # Connected
         card_body.addWidget(self._m4_table)
         lay.addWidget(card, 1)
 
@@ -713,6 +715,29 @@ class _ScanTabsMixin:
             "DNS & Outage Monitor",
             "Continuous RTT/DNS monitoring — latency graph, outage detection, STP correlation"
         ))
+
+        from PyQt6.QtWidgets import QTabWidget
+        m5_tabs = QTabWidget()
+        _s.themed_ss(m5_tabs, "QTabWidget::pane {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            "QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            " padding:4px 14px; border:1px solid {BORDER}; border-bottom:none;"
+            " font-size:10px; }}"
+            "QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; font-weight:600;"
+            " border-top:2px solid {ACCENT}; }}")
+        m5_tabs.addTab(self._build_m5_live_monitor_tab(), "Live Monitor")
+        m5_tabs.addTab(self._build_m5_dns_benchmark_tab(), "DNS Benchmark")
+        lay.addWidget(m5_tabs, 1)
+
+        self._m5_stack = QStackedWidget()
+        self._m5_stack.addWidget(empty)
+        self._m5_stack.addWidget(content)
+        return self._m5_stack
+
+    def _build_m5_live_monitor_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 6, 0, 0)
+        lay.setSpacing(6)
         self._m5_status = QLabel("Not yet scanned.")
         _s.themed_ss(self._m5_status, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m5_status)
@@ -729,8 +754,65 @@ class _ScanTabsMixin:
         self._m5_explainer = ExplainerPanel("dns_stability")
         self._m5_explainer.navigate_to.connect(self._nav_rail_go_to)
         lay.addWidget(self._m5_explainer)
+        return w
 
-        self._m5_stack = QStackedWidget()
-        self._m5_stack.addWidget(empty)
-        self._m5_stack.addWidget(content)
-        return self._m5_stack
+    # ── F-23: DNS Benchmark tab ────────────────────────────────────────────────
+
+    def _build_m5_dns_benchmark_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 6, 0, 0)
+        lay.setSpacing(6)
+
+        desc = QLabel(
+            "Compares your system DNS resolver's latency against Cloudflare, "
+            "Google, and Quad9 side-by-side."
+        )
+        desc.setWordWrap(True)
+        _s.themed_ss(desc, "color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        lay.addWidget(desc)
+
+        ctrl = QHBoxLayout()
+        self._dns_bench_btn = QPushButton("Run DNS Benchmark")
+        self._dns_bench_btn.setObjectName("btnScan")
+        self._dns_bench_btn.clicked.connect(self._start_dns_benchmark)
+        self._dns_bench_status = QLabel("Not yet run.")
+        _s.themed_ss(self._dns_bench_status, "color:{TEXT_SECONDARY};font-size:11px;padding:0 8px;")
+        ctrl.addWidget(self._dns_bench_btn)
+        ctrl.addWidget(self._dns_bench_status, 1)
+        lay.addLayout(ctrl)
+
+        card, card_body = _make_card("Resolver Latency")
+        self._dns_bench_table = _table(["Resolver", "Latency", "Resolved IP", "Status"])
+        card_body.addWidget(self._dns_bench_table)
+        lay.addWidget(card, 1)
+        return w
+
+    def _start_dns_benchmark(self) -> None:
+        from workers.dns_benchmark_worker import DnsBenchmarkWorker
+        if getattr(self, "_dns_bench_worker", None) and self._dns_bench_worker.isRunning():
+            return
+        self._dns_bench_btn.setEnabled(False)
+        self._dns_bench_status.setText("Running…")
+        self._dns_bench_worker = DnsBenchmarkWorker()
+        self._dns_bench_worker.result.connect(self._on_dns_benchmark_result)
+        self._dns_bench_worker.error.connect(self._on_dns_benchmark_error)
+        self._dns_bench_worker.start()
+
+    def _on_dns_benchmark_result(self, results: list) -> None:
+        self._dns_bench_table.setRowCount(0)
+        for r in results:
+            row = self._dns_bench_table.rowCount()
+            self._dns_bench_table.insertRow(row)
+            lat_str = f"{r.latency_ms:.0f} ms" if r.latency_ms >= 0 else "failed"
+            color = _s.GREEN if r.status == "OK" else (_s.AMBER if r.status == "SLOW" else _s.RED)
+            for col, val in enumerate([r.server, lat_str, r.resolved_ip or "—", r.status]):
+                item = QTableWidgetItem(str(val))
+                item.setForeground(QColor(color if col == 3 else _s.TEXT_PRIMARY))
+                self._dns_bench_table.setItem(row, col, item)
+        self._dns_bench_status.setText("Done.")
+        self._dns_bench_btn.setEnabled(True)
+
+    def _on_dns_benchmark_error(self, msg: str) -> None:
+        self._dns_bench_status.setText(f"Error: {msg}")
+        self._dns_bench_btn.setEnabled(True)

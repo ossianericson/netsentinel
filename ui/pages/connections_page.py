@@ -190,6 +190,7 @@ class ConnectionsPage(QWidget):
         self._chk_auto = QCheckBox("Auto (5s)")
         _s.themed_ss(self._chk_auto, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._chk_auto.toggled.connect(self._on_auto_toggled)
+        self._chk_auto.setChecked(True)
 
         self._btn_group = QPushButton("⊞ Group by Process")
         self._btn_group.setCheckable(True)

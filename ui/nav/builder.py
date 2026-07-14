@@ -1509,7 +1509,7 @@ class _NavBuilderMixin:
             pass  # non-fatal — discover_data not importable
 
         actions = [
-            {"icon": "⟳", "label": "Run Full Scan",          "kind": "action", "shortcut": "Ctrl+R"},
+            {"icon": "⟳", "label": "Run Full Scan",          "kind": "action"},
             {"icon": "⚡", "label": "Start Speed Test",       "kind": "action", "shortcut": "Alt+3"},
             {"icon": "◈", "label": "Run Diagnosis",          "kind": "action", "shortcut": "Alt+4"},
             {"icon": "▣", "label": "Export Report",          "kind": "action"},
@@ -1571,9 +1571,9 @@ class _NavBuilderMixin:
             ("?",           "Show this reference"),
             ("Ctrl+K",      "Command palette"),
             ("Ctrl+F",      "Focus nav search"),
-            ("Ctrl+R",      "Run full scan"),
             ("Ctrl+,",      "Settings"),
             ("Ctrl+L",      "Network Logger"),
+            ("Ctrl+Shift+H","Quick Check Window"),
             ("Ctrl+Q",      "Quit"),
             ("Alt+1",       "Overview"),
             ("Alt+2",       "Devices"),

@@ -243,6 +243,28 @@ def test_block_confirmation_dialog_shows_ok_button(monkeypatch):
                 app.processEvents()
 
 
+def test_auto_refresh_checkbox_defaults_checked_and_starts_timer(monkeypatch):
+    """Regression (F-84 claims-audit): ui/help.py's Active Connections entry says
+    'The list refreshes every few seconds automatically', but QCheckBox("Auto (5s)")
+    was constructed with no setChecked(True) -- it defaulted unchecked, so nothing
+    auto-refreshed unless the user found and ticked the box themselves. Checking
+    the box must actually start _auto_timer, not just look checked."""
+    monkeypatch.setattr(ConnectionsPage, "_refresh", lambda self: None)
+    monkeypatch.setattr(ConnectionsPage, "_load_blocked_rules", lambda self: None)
+
+    page = ConnectionsPage()
+    try:
+        assert page._chk_auto.isChecked() is True
+        assert page._auto_timer.isActive() is True
+    finally:
+        page.deleteLater()
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
+
+
 def test_load_blocked_rules_end_to_end_does_not_block(monkeypatch):
     """Wires the fake's _run_fw_worker/_on_list_result to the real bound
     methods so the full _load_blocked_rules -> FirewallWorker ->

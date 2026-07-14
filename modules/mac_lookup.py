@@ -2,9 +2,12 @@
 MAC Vendor Lookup — resolves an unknown MAC OUI to a vendor name.
 
 Priority order:
-  1. Local mac_registry (already fast, no network)
-  2. Local offenders.json OUI table
-  3. Online: https://api.macvendors.com/<MAC>  (free, no key, rate-limited)
+  1. Local mac_registry — curated vendor/model table (no network)
+  2. Local offenders.json — curated rogue/problem-device OUI signatures
+  3. scapy's bundled manuf database — ~50,000 entries, offline (no network).
+     scapy is already a hard dependency (requirements.txt); this queries its
+     existing manuf DB, no new install.
+  4. Online: https://api.macvendors.com/<MAC>  (free, no key, rate-limited)
 
 Usage::
 
@@ -31,12 +34,13 @@ def lookup_vendor(
     mac: str,
     offenders_path: Optional[str] = None,
     timeout: int = 5,
+    allow_online: bool = True,
 ) -> Optional[str]:
     """
     Return the vendor name for a MAC address.
 
     Checks the local registries first (no network); only hits the API if
-    both local lookups fail and the caller has not suppressed online lookups.
+    all local lookups fail and the caller has not suppressed online lookups.
 
     Parameters
     ----------
@@ -46,6 +50,9 @@ def lookup_vendor(
         Path to offenders.json.  If None, uses the default search path.
     timeout : int
         HTTP timeout in seconds for the online lookup.
+    allow_online : bool
+        If False, tier 4 (api.macvendors.com) is skipped and this function
+        never makes a network call, even when the local tiers all miss.
 
     Returns None if all lookups fail.
     """
@@ -67,28 +74,38 @@ def lookup_vendor(
     except Exception:
         pass  # non-fatal
 
-    # 2 — offenders.json OUI table
+    oui_colon = ":".join(mac_clean[i:i + 2] for i in range(0, 6, 2))
+
+    # 2 — offenders.json: a LIST of rogue/problem-device signature records
+    # ({"vendor": ..., "ouis": [...]}), not an OUI->vendor dict.
     try:
         from modules.utils_platform import get_offenders_path
         import json
         path = offenders_path or get_offenders_path()
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
-        oui = mac_clean[:6].upper()
-        entry = data.get(oui) or data.get(oui.replace("", ":")[:-1])
-        if isinstance(entry, dict):
-            vendor = entry.get("vendor") or entry.get("company")
-        elif isinstance(entry, str):
-            vendor = entry
-        else:
-            vendor = None
-        if vendor:
-            _CACHE[cache_key] = vendor
-            return vendor
+        for entry in data:
+            if oui_colon in (o.lower() for o in entry.get("ouis", [])):
+                vendor = entry.get("vendor")
+                if vendor:
+                    _CACHE[cache_key] = vendor
+                    return vendor
     except Exception:
         pass  # non-fatal
 
-    # 3 — online API (rate-limited)
+    # 3 — scapy's bundled manuf database (offline, no network)
+    try:
+        from scapy.all import conf as _scapy_conf
+        vendor = _scapy_conf.manufdb._get_manuf(oui_colon)
+        if vendor and vendor != oui_colon:
+            _CACHE[cache_key] = vendor
+            return vendor
+    except Exception:
+        pass  # non-fatal -- scapy unavailable or manuf DB failed to load
+
+    # 4 — online API (rate-limited)
+    if not allow_online:
+        return None
     vendor = _api_lookup(mac_clean, timeout)
     _CACHE[cache_key] = vendor
     return vendor

@@ -169,6 +169,10 @@ class _ReconTabsMixin:
         self._syn_worker.result.connect(self._on_syn_result)
         self._syn_worker.status.connect(self._syn_status.setText)
         self._syn_worker.error.connect(lambda e: self._syn_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._syn_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.PORT_SCAN_TCP, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._syn_worker.start()
 
     @pyqtSlot()
@@ -275,6 +279,10 @@ class _ReconTabsMixin:
         self._udp_worker.result.connect(self._on_udp_result)
         self._udp_worker.status.connect(self._udp_status.setText)
         self._udp_worker.error.connect(lambda e: self._udp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._udp_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.PORT_SCAN_UDP, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._udp_worker.start()
 
     def _build_recon_os_tab(self) -> QWidget:
@@ -335,6 +343,10 @@ class _ReconTabsMixin:
         self._os_worker.result.connect(self._on_os_result)
         self._os_worker.status.connect(self._os_status.setText)
         self._os_worker.error.connect(lambda e: self._os_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._os_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.OS_DETECTION, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._os_worker.start()
 
     def _build_recon_risk_tab(self) -> QWidget:
@@ -357,6 +369,7 @@ class _ReconTabsMixin:
         self._recon_risk_table.setColumnWidth(2, 55)
         self._recon_risk_table.setColumnWidth(3, 80)
         self._recon_risk_table.setColumnWidth(4, 300)
+        self._recon_risk_table.cellClicked.connect(self._on_risk_cell_clicked)
         lay.addWidget(self._risk_status)
         lay.addLayout(ctrl)
         lay.addWidget(self._recon_risk_table, 1)
@@ -370,7 +383,11 @@ class _ReconTabsMixin:
             return
         try:
             from modules.risk_scorer import score_devices
-            assessments = score_devices(self._m1_result.get("devices", []))
+            assessments = score_devices(
+                self._m1_result.get("devices", []),
+                credential_hosts=getattr(self, "_cred_access_hosts", None),
+            )
+            self._risk_assessments = assessments
             self._recon_risk_table.setRowCount(0)
             for a in assessments:
                 row = self._recon_risk_table.rowCount()
@@ -393,6 +410,24 @@ class _ReconTabsMixin:
         except Exception as exc:
             self._risk_status.setText(f"⚠ Risk scoring failed: {exc}")
 
+    @pyqtSlot(int, int)
+    def _on_risk_cell_clicked(self, row: int, _col: int) -> None:
+        """F-73: show every contributing finding for the clicked device, not
+        just the single 'Primary Finding' column value."""
+        assessments = getattr(self, "_risk_assessments", None) or []
+        if row < 0 or row >= len(assessments):
+            return
+        a = assessments[row]
+        if not a.findings:
+            return
+        from PyQt6.QtWidgets import QMessageBox
+        lines = [
+            f"{a.ip} ({a.device_type or a.vendor}) — {a.severity}, score {a.total_score}\n"
+        ]
+        for f in sorted(a.findings, key=lambda f: f.score_contribution, reverse=True):
+            lines.append(f"• {f.title}  (+{f.score_contribution})\n   {f.impact}\n   Fix: {f.remediation}")
+        QMessageBox.information(self, "Contributing findings", "\n\n".join(lines))
+
     def _build_recon_cve_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
@@ -404,7 +439,7 @@ class _ReconTabsMixin:
         )
         info.setWordWrap(True)
         _s.themed_ss(info, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
-        self._cve_status = QLabel("CVE lookup idle. Run the port scanner first (Advanced Tools tab).")
+        self._cve_status = QLabel("CVE lookup idle. Run Port Scan (TCP) or the Port Scanner (Analysis) first.")
         _s.themed_ss(self._cve_status, "color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._cve_status.setWordWrap(True)
         ctrl = QHBoxLayout()
@@ -425,7 +460,7 @@ class _ReconTabsMixin:
         self._cve_stack = _SW()
         self._cve_stack.addWidget(_empty_state_widget(
             "🛡", "No results yet",
-            "CVE lookup reads service versions from the port scanner. Run a port scan first, then click Lookup CVEs.",
+            "CVE lookup reads service versions from Port Scan (TCP) or the Port Scanner. Run a port scan first, then click Lookup CVEs.",
             None, None,
         ))
         self._cve_stack.addWidget(self._recon_cve_table)
@@ -447,16 +482,24 @@ class _ReconTabsMixin:
         if manual:
             versions = [v.strip() for v in manual.split(",") if v.strip()]
         else:
-            # Pull from port scan results table
+            # Pull from both port scan results tables — the Analysis-section
+            # "Port Scanner" (_ps_table, Version col 2) and the Security Audit
+            # "Port Scan (TCP)" (_recon_syn_table, Version col 4). Either one
+            # having run is enough to feed CVE Lookup (F-43).
             ps_table = self._ps_table
-            version_col = 2  # Version column index in port scan table
             for row in range(ps_table.rowCount()):
-                item = ps_table.item(row, version_col)
+                item = ps_table.item(row, 2)
+                if item and item.text().strip():
+                    versions.append(item.text().strip())
+            for row in range(self._recon_syn_table.rowCount()):
+                item = self._recon_syn_table.item(row, 4)
                 if item and item.text().strip():
                     versions.append(item.text().strip())
 
         if not versions:
             self._cve_status.setText("No service versions found. Run a port scan first or enter versions manually.")
+            if getattr(self, "_pending_security_tools", []):
+                self._advance_security_audit()
             return
 
         self._recon_cve_table.setRowCount(0)
@@ -464,6 +507,10 @@ class _ReconTabsMixin:
         self._cve_worker = CVELookupWorker(service_versions=list(set(versions)))
         self._cve_worker.cve_result.connect(self._on_cve_result)
         self._cve_worker.status.connect(self._cve_status.setText)
+        self._cve_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.CVE_LOOKUP, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._cve_worker.finished_all.connect(lambda: self._cve_status.setText(
             self._cve_status.text() + "  ✓ Done."
         ), Qt.ConnectionType.QueuedConnection)
@@ -472,6 +519,12 @@ class _ReconTabsMixin:
 
     @pyqtSlot()
     def _on_cve_finished(self) -> None:
+        # Auto-refresh Device Risk Score now that CVE findings are in (F-47).
+        # _run_risk_scorer() itself no-ops safely if M1 hasn't run yet.
+        try:
+            self._run_risk_scorer()
+        except Exception:
+            pass  # non-fatal — risk scorer may fail on limited M1 data
         if getattr(self, "_pending_security_tools", []):
             self._advance_security_audit()
 
@@ -528,6 +581,10 @@ class _ReconTabsMixin:
         self._exposure_worker.result.connect(self._on_exposure_result)
         self._exposure_worker.status.connect(self._exposure_status.setText)
         self._exposure_worker.error.connect(lambda e: self._exposure_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._exposure_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.EXPOSED_TO_INTERNET, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._exposure_worker.start()
 
 
@@ -640,6 +697,10 @@ class _ReconTabsMixin:
         self._cred_worker.result.connect(self._on_cred_result)
         self._cred_worker.status.connect(self._cred_status.setText)
         self._cred_worker.error.connect(lambda e: self._cred_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._cred_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.LOGIN_TEST, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._nav_set_scan_state(L.LOGIN_TEST, "running")
         self._cred_worker.start()
 
@@ -706,6 +767,10 @@ class _ReconTabsMixin:
         self._discovery_worker.result.connect(self._on_discovery_result)
         self._discovery_worker.status.connect(self._disc_status.setText)
         self._discovery_worker.error.connect(lambda e: self._disc_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._discovery_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.FULL_DEVICE_DISCOVERY, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._nav_set_scan_state(L.FULL_DEVICE_DISCOVERY, "running")
         self._discovery_worker.start()
 
@@ -759,7 +824,7 @@ class _ReconTabsMixin:
         self._smb_verdict.hide()
 
         self._recon_smb_shares_table = _table(["Share", "Type", "Comment", "Risk"])
-        self._recon_smb_users_table  = _table(["Username", "SID / UID", "Full Name", "Last Logon"])
+        self._recon_smb_users_table  = _table(["Username", "Flags", "Full Name", "Last Logon"])
 
         inner_tabs = _TW()
         inner_tabs.addTab(self._recon_smb_shares_table, "📁 Shares")

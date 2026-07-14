@@ -149,6 +149,68 @@ class TestAlertEngineWiring:
 
 
 # ---------------------------------------------------------------------------
+# Escalation policy wiring (F-21)
+# ---------------------------------------------------------------------------
+
+class TestEscalationWiring:
+    """AlertEngine.set_escalation_policies()/check_escalations() previously had
+    zero callers — _apply_to_engine() must build real EscalationPolicy objects
+    from the Escalation card's controls."""
+
+    def setup_method(self, _method) -> None:
+        # QSettings persists to the real OS store across process runs (not
+        # just within this test session) — start every test from a clean slate.
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        for key in ("notif/escalation_enabled", "notif/escalation_wait",
+                    "notif/escalation_channel", "notif/escalation_rules"):
+            qs.remove(key)
+        qs.sync()
+
+    def _make_engine(self):
+        from modules.alert_engine import AlertEngine, _default_rules
+        return AlertEngine(store=None, rules=_default_rules())
+
+    def test_disabled_by_default_produces_no_enabled_policies(self):
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+        assert all(not p.enabled for p in eng.get_escalation_policies())
+
+    def test_explicit_rule_list_builds_matching_policies(self):
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+
+        page._chk_escalation.setChecked(True)
+        page._spin_escalation_wait.setValue(30)
+        page._combo_escalation_channel.setCurrentText("Webhook")
+        page._txt_escalation_rules.setText("Host Down, High RTT")
+        page._save()
+
+        policies = {p.rule_name: p for p in eng.get_escalation_policies()}
+        assert set(policies) == {"Host Down", "High RTT"}
+        for p in policies.values():
+            assert p.enabled is True
+            assert p.wait_minutes == 30
+            assert p.notify_channels == ["Webhook"]
+
+    def test_blank_rules_field_means_all_currently_enabled_rules(self):
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+
+        page._rule_checkboxes["Host Down"].setChecked(True)
+        page._chk_escalation.setChecked(True)
+        page._txt_escalation_rules.setText("")
+        page._save()
+
+        policy_names = {p.rule_name for p in eng.get_escalation_policies()}
+        assert "Host Down" in policy_names
+        assert "New Device" not in policy_names  # never enabled in this test
+
+
+# ---------------------------------------------------------------------------
 # Router injection
 # ---------------------------------------------------------------------------
 

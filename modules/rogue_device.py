@@ -46,6 +46,7 @@ class DeviceInfo:
     ip: str
     mac: str
     vendor: str = "Unknown"
+    model: str = ""             # e.g. "iPhone 14", "Echo Dot" — from mac_registry OUI lookup
     hostname: str = ""
     known_issues: List[str] = field(default_factory=list)
     risk_level: str = "UNKNOWN"  # HIGH / MEDIUM / LOW / CLEAN / UNKNOWN
@@ -264,10 +265,13 @@ def scan(offenders_path: Path) -> dict:
         if name_info:
             _ni_vendor = getattr(name_info, "vendor", "") or ""
             _ni_dtype  = getattr(name_info, "device_type", "") or ""
+            _ni_model  = getattr(name_info, "model", "") or ""
             if _ni_vendor:
                 info.vendor = _ni_vendor
             if _ni_dtype and not info.device_type:
                 info.device_type = _ni_dtype
+            if _ni_model:
+                info.model = _ni_model
 
         # --- Link-local detection (rogue DHCP indicator) ---
         if ip.startswith("169.254."):

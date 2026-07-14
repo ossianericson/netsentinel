@@ -111,3 +111,61 @@ def test_find_ookla_cli_type():
 def test_http_ua_string():
     from modules.speed_tester_backends import _HTTP_UA
     assert "speedtest" in _HTTP_UA.lower()
+
+
+# ── tier 2 (speedtest-cli) live samples ──────────────────────────────────────
+
+class _FakeSpeedtestClient:
+    """Mimics speedtest.Speedtest just enough to drive _run_speedtest_cli.
+
+    Mirrors the real 2.1.3 API: download()/upload() take a `callback` that is only
+    ever called as callback(index, request_count, start=True|end=True) — it carries
+    NO byte counts, which is precisely why a live intra-phase throughput curve is
+    impossible on this backend.
+    """
+
+    def __init__(self, *_a, **_kw):
+        self.results = type("R", (), {"ping": 12.0, "server": {}})()
+
+    def get_servers(self, *_a):
+        return {}
+
+    def get_best_server(self):
+        return {"latency": 12.0, "sponsor": "Acme", "name": "Springfield",
+                "id": "1", "host": "spr.example.com:8080"}
+
+    def download(self, threads=None, callback=None):
+        return 120_000_000.0          # 120 Mbps
+
+    def upload(self, threads=None, pre_allocate=True, callback=None):
+        return 40_000_000.0           # 40 Mbps
+
+
+def test_speedtest_cli_backend_emits_a_sample_per_phase(monkeypatch):
+    """RULE-T3 regression: tier 2 accepted an on_sample callback and never called it.
+
+    The gauge is driven purely by speed_sample(mbps, phase), so anyone who fell back
+    to speedtest-cli got a gauge frozen at zero for the whole test — by construction,
+    not by accident. The Ookla (tier 1) and pure-Python (tier 3) backends both emit.
+
+    speedtest-cli cannot give a live curve (its callback carries no byte counts), so
+    the contract for this backend is one TRUE sample per phase, at phase completion.
+    Never a synthesised curve — a fabricated number on a speed gauge is worse than a
+    still needle.
+    """
+    import sys
+    import types
+
+    from modules import speed_tester_backends as m
+
+    fake = types.ModuleType("speedtest")
+    fake.Speedtest = _FakeSpeedtestClient
+    monkeypatch.setitem(sys.modules, "speedtest", fake)
+
+    samples: list[tuple[float, str]] = []
+    m._run_speedtest_cli(None, None, on_sample=lambda mbps, phase: samples.append((mbps, phase)))
+
+    assert samples == [(120.0, "download"), (40.0, "upload")], (
+        "tier 2 must emit one real sample per phase; got "
+        f"{samples!r}. An empty list means on_sample is accepted and dropped."
+    )

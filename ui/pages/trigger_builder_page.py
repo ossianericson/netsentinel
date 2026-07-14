@@ -22,9 +22,10 @@ no data exists, the test fires with NaN values and shows a "no data" message.
 from __future__ import annotations
 
 import math
+import time
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -296,8 +297,32 @@ class TriggerBuilderPage(QWidget):
         self._store = store
         self._rules: List[TriggerRule] = load_rules()
         self._eval_worker: Optional[_EvalWorker] = None
+        self._last_fired: dict[str, float] = {}
         self._build_ui()
         self._refresh_table()
+
+        # F-39: evaluate_all() previously had exactly one caller repo-wide (the
+        # manual "▶ Test" button) despite its own docstring claiming "Called by
+        # dashboard on each monitoring cycle" -- this timer makes that true.
+        self._auto_eval_timer = QTimer(self)
+        self._auto_eval_timer.setInterval(60_000)
+        self._auto_eval_timer.timeout.connect(self._auto_evaluate)
+        self._auto_eval_timer.start()
+
+    def _auto_evaluate(self) -> None:
+        if self._store is None:
+            return
+        for tf in self.evaluate_all():
+            self._dispatch_fired(tf)
+
+    def _dispatch_fired(self, tf: TriggerFired) -> None:
+        """Desktop-notification dispatch only (F-39). Webhook/script actions
+        per-trigger remain Automation Hooks' job — see the narrowed help text."""
+        from ui.widgets.toast import ToastManager
+        kind = "error" if tf.severity == "CRITICAL" else ("warning" if tf.severity == "WARNING" else "info")
+        ToastManager.show(f"{tf.rule_name}: {tf.message}", kind)
+        if hasattr(self, "_log"):
+            self._log.appendPlainText(f"[AUTO] {tf.message}")
 
     def set_store(self, store: object) -> None:
         """Inject / replace MetricStore after construction."""
@@ -643,24 +668,29 @@ class TriggerBuilderPage(QWidget):
     def evaluate_all(self) -> List[TriggerFired]:
         """
         Called by dashboard on each monitoring cycle.
-        Returns a list of TriggerFired for any triggered rules.
+        Returns a list of TriggerFired for any triggered rules whose cooldown_s
+        (F-39: previously declared but never enforced -- a persistently-true
+        condition would have fired every single cycle) has elapsed.
         """
         fired: List[TriggerFired] = []
+        now = time.time()
         for rule in self._rules:
             if not rule.enabled:
                 continue
+            last = self._last_fired.get(rule.id, 0.0)
+            if now - last < rule.cooldown_s:
+                continue
             triggered, lhs, error = evaluate(rule, self._store)
             if triggered and not error:
+                lhs_str = "no data" if math.isnan(lhs) else f"{lhs:.2f}"
                 tf = TriggerFired(
                     rule_id=rule.id,
                     rule_name=rule.name,
                     severity=rule.severity,
                     expression=rule.expression,
                     result_value=lhs,
-                    message=(
-                        f"Trigger fired: {rule.name}  "
-                        f"({lhs:.2f if not math.isnan(lhs) else 'no data'})"
-                    ),
+                    message=f"Trigger fired: {rule.name}  ({lhs_str})",
                 )
                 fired.append(tf)
+                self._last_fired[rule.id] = now
         return fired

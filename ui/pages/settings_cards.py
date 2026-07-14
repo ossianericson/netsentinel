@@ -586,10 +586,29 @@ class _SettingsCardsMixin:
         note.setWordWrap(True)
         _styles.themed_ss(note, lambda: _styles.qss_muted_label(10))
         bl.addWidget(note)
+
+        self._chk_vendor_online = QCheckBox(
+            "Allow online MAC vendor lookups (api.macvendors.com) when local data misses"
+        )
+        _styles.themed_ss(self._chk_vendor_online, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
+        self._chk_vendor_online.setChecked(qs.value("privacy/mac_vendor_online_lookup", True, type=bool))
+        self._chk_vendor_online.toggled.connect(self._on_vendor_lookup_toggled)
+        bl.addWidget(self._chk_vendor_online)
+        vendor_note = QLabel(
+            "Vendor/model is resolved offline first (curated tables + scapy's manuf database). "
+            "Only unmatched MACs trigger an online lookup — turn this off for fully offline resolution."
+        )
+        vendor_note.setWordWrap(True)
+        _styles.themed_ss(vendor_note, lambda: _styles.qss_muted_label(10))
+        bl.addWidget(vendor_note)
         return card
 
     def _on_auto_snap_toggled(self, checked: bool) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("baseline/auto_snapshot", checked)
+        self._mark_dirty()
+
+    def _on_vendor_lookup_toggled(self, checked: bool) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("privacy/mac_vendor_online_lookup", checked)
         self._mark_dirty()
 
     # ── Scheduled scan ────────────────────────────────────────────────────────
@@ -1008,13 +1027,10 @@ class _SettingsCardsMixin:
             ("Ctrl + K",           "Open command palette — fuzzy-search any page or action"),
             ("Ctrl + F",           "Focus sidebar search"),
             ("Escape",             "Close flyout panel / dismiss command palette"),
-            # Scanning & data
-            ("Ctrl + R",           "Run full scan"),
-            ("Ctrl + E",           "Export last scan results"),
+            ("Ctrl + S",           "Save inventory annotations (Devices/Inventory page)"),
             # Application
             ("Ctrl + Q",           "Quit application"),
-            ("F5",                 "Refresh current page"),
-            ("Ctrl + Shift + M",   "Visual Diagnostic Overlay (Matrix mode)"),
+            ("Ctrl + Shift + H",   "Quick Check Window — compact floating health status"),
             # Tables
             ("Right-click row",    "Context menu: Copy IP / Copy MAC / How to Fix / Port Scan / WoL"),
             ("Click column header","Sort table by that column"),

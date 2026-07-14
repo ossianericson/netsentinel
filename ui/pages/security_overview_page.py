@@ -220,6 +220,9 @@ class SecurityOverviewPage(QWidget):
         _s.themed_ss(subtitle, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
         root.addWidget(subtitle)
 
+        # F-41: grade ring — updates after every scan (_update_scan_kpis())
+        root.addWidget(self._build_grade_card())
+
         # Admin/Npcap requirement banner — auto-hides if Npcap is installed
         try:
             from ui.npcap_banner import NpcapMissingBanner
@@ -474,6 +477,70 @@ class SecurityOverviewPage(QWidget):
         # Exact-fit height — no internal scrollbar, all rows always visible.
         t.setFixedHeight(t.horizontalHeader().height() + t.verticalHeader().length() + 2)
 
+    # ── F-41: grade ring ───────────────────────────────────────────────────────
+
+    def _build_grade_card(self) -> QWidget:
+        card, lay = _card()
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        from ui.widgets.home_widgets import _GradeRing
+        self._grade_ring = _GradeRing()
+        row.addWidget(self._grade_ring)
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        hdr = QLabel("Security Grade")
+        hdr.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        _s.themed_ss(hdr, "color:{TEXT_PRIMARY}; background:transparent;")
+        self._grade_verdict_lbl = QLabel("Run a security scan to see your grade.")
+        self._grade_verdict_lbl.setWordWrap(True)
+        _s.themed_ss(self._grade_verdict_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
+        text_col.addWidget(hdr)
+        text_col.addWidget(self._grade_verdict_lbl)
+        row.addLayout(text_col, 1)
+        lay.addLayout(row)
+        return card
+
+    def _update_security_grade(self) -> None:
+        """Lightweight heuristic distinct from the Network Grade page's 8-dimension
+        model: 100 pts minus 10/finding (capped 30) per KPI dimension that has
+        actually run. Idle (nothing scanned yet) leaves the ring in its
+        constructed neutral state rather than forcing a misleading grade."""
+        dims: list[int] = []
+        if self._port_scan_done:
+            dims.append(len(self._port_findings))
+        if self._store is not None:
+            dims.append(len(set(e.get("host", "") for e in self._cve_entries if e.get("host"))))
+            dims.append(len(self._tls_issues))
+        if self._cred_scan_done:
+            dims.append(len(self._cred_flags))
+
+        if not dims:
+            self._grade_verdict_lbl.setText("Run a security scan to see your grade.")
+            return
+
+        score = 100.0
+        for n in dims:
+            score -= min(30, n * 10)
+        score = max(0.0, score)
+
+        if score >= 90:
+            letter = "A"
+        elif score >= 75:
+            letter = "B"
+        elif score >= 60:
+            letter = "C"
+        elif score >= 40:
+            letter = "D"
+        else:
+            letter = "F"
+        self._grade_ring.set_grade(letter, score)
+
+        total = sum(dims)
+        self._grade_verdict_lbl.setText(
+            "No findings across completed scans." if total == 0
+            else f"{total} finding(s) across completed scans."
+        )
+
     # ── Security Scan KPI row ──────────────────────────────────────────────────
 
     def _build_scan_kpi_row(self) -> QHBoxLayout:
@@ -587,6 +654,7 @@ class SecurityOverviewPage(QWidget):
             ("separator",    None),
             ("View details", _scan_view_details),
         ])
+        self._scan_table.cellClicked.connect(self._on_scan_row_clicked)
 
         self._scan_empty = QLabel(
             "No security findings yet.\n\n"
@@ -654,8 +722,27 @@ class SecurityOverviewPage(QWidget):
         threat_lay.addWidget(self._findings_table)
         threat_lay.addWidget(self._empty_widget)
         self._findings_tabs.addTab(threat_tab, "Threat Intel")
+        self._findings_table.cellClicked.connect(
+            lambda _r, _c: self.navigate_to.emit("Threat Intel")
+        )
 
         return self._findings_tabs
+
+    # ── F-42: click-to-navigate on findings tables ────────────────────────────
+
+    _SCAN_TYPE_NAV_TARGETS: dict = {
+        "Port": "Port Scan (TCP)",
+        "CVE":  "CVE Lookup",
+        "TLS":  "TLS & Exposure",
+    }
+
+    def _on_scan_row_clicked(self, row: int, _col: int) -> None:
+        type_item = self._scan_table.item(row, 0)
+        if type_item is None:
+            return
+        target = self._SCAN_TYPE_NAV_TARGETS.get(type_item.text())
+        if target:
+            self.navigate_to.emit(target)
 
     # ── Data loading ───────────────────────────────────────────────────────────
 
@@ -727,6 +814,7 @@ class SecurityOverviewPage(QWidget):
         ))
         self._tile_ports._hint_btn.setVisible(not self._port_scan_done)
         self._tile_cred._hint_btn.setVisible(not self._cred_scan_done)
+        self._update_security_grade()
 
     def _update_threat_kpis(self) -> None:
         entries = self._entries

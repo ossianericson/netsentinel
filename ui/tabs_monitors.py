@@ -127,6 +127,11 @@ class _MonitorTabsMixin:
         lay.addWidget(self._arp_status)
         lay.addLayout(btn_row)
         lay.addWidget(self._arp_stack, 1)
+
+        from ui.widgets.explainer_panel import ExplainerPanel
+        self._arp_explainer = ExplainerPanel("rogue_device")
+        self._arp_explainer.navigate_to.connect(self._nav_rail_go_to)
+        lay.addWidget(self._arp_explainer)
         return w
 
     @pyqtSlot()
@@ -367,6 +372,7 @@ class _MonitorTabsMixin:
         self._sched_worker.status.connect(self._on_sched_status)
         self._sched_worker.alert.connect(lambda t, m: self._sched_log.append(f"🔔 {t}: {m}"), Qt.ConnectionType.QueuedConnection)
         self._sched_worker.error.connect(lambda e: self._sched_log.append(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._sched_worker.scan_result.connect(self._on_sched_scan_result, Qt.ConnectionType.QueuedConnection)
         self._sched_worker.start()
         self._save_monitor_state("scheduler", True)
 
@@ -381,6 +387,14 @@ class _MonitorTabsMixin:
     def _on_sched_status(self, msg: str):
         self._sched_status.setText(msg)
         self._sched_log.append(msg)
+
+    @pyqtSlot(object)
+    def _on_sched_scan_result(self, result) -> None:
+        # Feeds the same auto-baseline path as Full Device Discovery (ui/scan_wiring.py),
+        # so "combine with Config Snapshots" (ui/help.py) is true for scheduled scans too.
+        scan_data = getattr(result, "scan_data", None)
+        if scan_data:
+            self._m1_auto_snapshot_baseline(scan_data)
 
     # ── SNMP tab ──────────────────────────────────────────────────────────────
 

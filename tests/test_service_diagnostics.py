@@ -261,14 +261,32 @@ def test_classify_filtered_icmp_ok_tcp_blocked():
     assert "ping" in r.summary.lower() or "firewall" in r.summary.lower()
 
 
-def test_classify_local_network_failure():
-    """Nothing reachable + 100% packet loss → local network."""
+def test_classify_local_network_failure(monkeypatch):
+    """Nothing reachable + 100% packet loss, but the gateway IS reachable →
+    local network (the router/LAN is the problem, not this device)."""
+    from modules import service_diagnostics
     from modules.service_diagnostics import _classify
     from modules.service_diagnostics_probes import IcmpProbeResult
+    monkeypatch.setattr(service_diagnostics, "_gateway_reachable", lambda: True)
     r = _make_result_with_probes(dns_ok=True, tcp_ok=False, https_ok=False)
     r.icmp_result = IcmpProbeResult(host="example.com", loss_pct=100.0, avg_ms=-1.0)
     _classify(r, ref_reachable=False)
     assert r.failure_layer == "local_network"
+
+
+def test_classify_device_failure(monkeypatch):
+    """Nothing reachable + 100% packet loss + the gateway itself is
+    unreachable → device (F-53): this machine can't even reach its own LAN,
+    which is a narrower/more local fault than 'local_network'."""
+    from modules import service_diagnostics
+    from modules.service_diagnostics import _classify
+    from modules.service_diagnostics_probes import IcmpProbeResult
+    monkeypatch.setattr(service_diagnostics, "_gateway_reachable", lambda: False)
+    r = _make_result_with_probes(dns_ok=True, tcp_ok=False, https_ok=False)
+    r.icmp_result = IcmpProbeResult(host="example.com", loss_pct=100.0, avg_ms=-1.0)
+    _classify(r, ref_reachable=False)
+    assert r.failure_layer == "device"
+    assert r.confidence >= 70
 
 
 def test_classify_isp_failure():

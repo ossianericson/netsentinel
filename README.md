@@ -92,9 +92,9 @@ Layer 2 features (STP detection, ARP monitor, broadcast storm analysis) require 
 
 ### No admin required
 
-- **Device discovery** — every device's IP, MAC, hostname, vendor, model, and risk level; OUI database with 60,000+ entries
+- **Device discovery** — every device's IP, MAC, hostname, vendor, model, and risk level; vendor lookup via a curated local table, scapy's bundled ~50,000-entry OUI database, and a live API fallback
 - **Network grade A–F** — benchmark across uptime, latency, jitter, DNS speed, download speed, STP health, storm level, and device safety; compared to a "perfect home network" baseline
-- **ISP Accountability Report** — MTR hop table, packet-loss %, DNS latency, and timestamped outage log as a standalone HTML file for support escalation
+- **ISP Accountability Report** — traceroute hop table, DNS latency, and timestamped outage log as a standalone HTML file for support escalation
 - **Background stability logger** — continuous ping/RTT/jitter/DNS logging; timestamped CSV evidence; unattended for hours or days
 - **Availability history** — persistent UP/DEGRADED/DOWN charts per device with 1 h / 12 h / 24 h / 7 d zoom
 - **DNS benchmarking** — compares your system resolver against Cloudflare, Google, and Quad9 simultaneously; includes DNS leak test
@@ -106,7 +106,7 @@ Layer 2 features (STP detection, ARP monitor, broadcast storm analysis) require 
 - **Wi-Fi scan** — hidden SSIDs, rogue APs, WPS-enabled networks, co-channel interference, signal levels
 - **IoT behaviour baseline** — learns normal traffic per IoT device; alerts on port scans, new destinations, and traffic rate spikes
 - **Service diagnostics** — DNS/TCP/HTTPS/ICMP/traceroute probes for streaming/gaming services or any custom hostname; failure-layer classification (device → local_network → dns → isp → routing → remote_outage → filtered)
-- **DHCP lease inventory** — lists active leases; flags any rogue DHCP server on the segment
+- **DHCP lease inventory** — lists active leases from the OS lease table (for rogue-server detection, see DHCP Rogue Monitor under Security Audit)
 - **Network topology map** — interactive Cytoscape.js diagram; upgrades to a mesh tree when Deco credentials are configured
 - **REST API** — read-only local HTTP API at `http://127.0.0.1:8765`; query devices, alerts, and uptime from Home Assistant or scripts
 - **MQTT / Home Assistant** — Discovery payloads, configurable broker, OS-keychain credentials
@@ -114,17 +114,17 @@ Layer 2 features (STP detection, ARP monitor, broadcast storm analysis) require 
 
 ### Requires admin + Npcap / libpcap
 
-- **STP root bridge detection** — captures BPDUs; identifies which device claims root and which ports it forces offline
+- **STP root bridge detection** — captures BPDUs; identifies which device claims the root bridge election on your segment
 - **Broadcast storm detection** — measures flood levels; pinpoints the source device
 - **ARP spoofing detection** — watches for IP–MAC conflicts that indicate an active MITM attack
 - **Per-device bandwidth** — exact rx/tx bps per device via live packet capture
 - **SYN stealth port scanner** — half-open TCP scan; faster and quieter than a connect scan
-- **Full device discovery** — parallel ARP + ICMP + TCP SYN + mDNS + passive SSDP sweep
-- **802.11 monitor mode** — passive frame capture: probe requests, association frames, EAPOL
+- **Full device discovery** — parallel ARP + ICMP + TCP SYN + mDNS sweep
+- **802.11 monitor mode** — passive frame capture: probe requests, association frames, deauth frames
 
 ### Hardware integrations
 
-12 bundled plugins cover TP-Link Deco, Ubiquiti UniFi, AVM FRITZ!Box, ZTE 5G modem, MikroTik, OpenWrt, Netgear, ASUS, Synology, and Home Assistant. Any Python script that implements `get_info()` and `get_status()` becomes a first-class integration — with a Hub card, health tracking, circuit breaker, plugin log console, and sandboxed execution.
+10 bundled plugins cover TP-Link Deco, Ubiquiti UniFi, AVM FRITZ!Box, ZTE 5G modem, MikroTik, OpenWrt, Netgear, ASUS, Synology, and Home Assistant. Any Python script that implements `get_info()` and `get_status()` becomes a first-class integration — with a Hub card, health tracking, circuit breaker, plugin log console, and sandboxed execution.
 
 → **[Hardware integrations reference](docs/hardware-plugins.md)**
 
@@ -138,7 +138,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 - **STP** — Rogue Bridge tab captures BPDUs; identifies root bridge, port roles, and reconvergence timing
 - **DNS** — DNS & Connectivity graphs resolver latency live; DNS leak test shows which resolver handles your queries
 - **TCP** — Port Scanner and Active Connections show handshake outcomes and live socket states per process
-- **DHCP** — DHCP Lease Inventory parses the OS lease table and flags unauthorized DHCP servers
+- **DHCP** — DHCP Lease Inventory parses the OS lease table; DHCP Rogue Monitor separately flags unauthorized DHCP servers on the wire
 - **ICMP** — Stability Logger and Availability History plot RTT and packet loss across days or weeks
 
 <p align="center">

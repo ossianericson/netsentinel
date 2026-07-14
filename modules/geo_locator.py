@@ -67,8 +67,6 @@ class GeoResult:
     city: str = ""
     latitude: float = 0.0
     longitude: float = 0.0
-    asn: str = ""              # e.g. "AS13335"
-    org: str = ""              # e.g. "Cloudflare, Inc."
     is_bogon: bool = False     # RFC 1918 / loopback / link-local / CGNAT
 
 

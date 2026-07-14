@@ -150,6 +150,24 @@ class TestSettingsPage:
             self.page._on_monthly_cap_changed(500.0)
         mock_qs.setValue.assert_called_once_with("traffic/monthly_cap_gb", 500.0)
 
+    def test_vendor_lookup_checkbox_exists(self):
+        """F-60: Devices page help text claims vendor resolution needs 'no
+        internet call needed', but there was no way to actually suppress the
+        online macvendors.com fallback. Settings must expose a real toggle."""
+        assert self.page._chk_vendor_online is not None
+
+    def test_vendor_lookup_checkbox_defaults_checked(self):
+        """Default True preserves today's behaviour (RULE-EXP1) -- the
+        online fallback stays on unless the user opts out."""
+        assert self.page._chk_vendor_online.isChecked() is True
+
+    def test_vendor_lookup_persists(self):
+        with patch("ui.pages.settings_cards.QSettings") as mock_qs_cls:
+            mock_qs = MagicMock()
+            mock_qs_cls.return_value = mock_qs
+            self.page._on_vendor_lookup_toggled(False)
+        mock_qs.setValue.assert_called_once_with("privacy/mac_vendor_online_lookup", False)
+
     def test_refresh_theme_does_not_raise(self):
         """Regression: refresh_theme() called _refresh_theme_buttons(), a method
         that does not exist — reachable today via the accent live-apply path

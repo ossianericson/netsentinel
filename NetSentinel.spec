@@ -274,7 +274,6 @@ hiddenimports: list = [
     "ui.pages.dhcp_lease_page",
     "ui.pages.discover_page",
     "ui.pages.discover_data",
-    "ui.pages.help_content",
     "ui.pages.home_suggestions",
     "ui.pages.home_data_mixin",
     "ui.pages.notif_extra_channels",

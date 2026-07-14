@@ -103,28 +103,30 @@ _FEATURES: list[dict] = [
     {
         "group": "New in this version",
         "icon": "★",
-        "name": "Plain-English page subtitles",
+        "name": "Native window chrome — Aero Snap, Snap Layouts, drag-to-snap",
         "desc": (
-            "Broadcast Storm, Rogue Bridge, and IoT Behaviour pages now open with a "
-            "plain-English explanation of what the feature does and why it matters — "
-            "so you always know what you are looking at before data appears. v1.9.97."
+            "The window is now a real Win32 window with only the title bar's paint "
+            "suppressed, instead of a frameless popup Windows never treated as snappable. "
+            "Aero Snap, Snap Layouts, Win+arrow, drag-to-snap, shake, and native edge-resize "
+            "all work now, and screen readers can attach cleanly from the moment the app "
+            "launches. v2.1.30."
         ),
-        "page": "Broadcast Storm",
+        "page": None,
         "requires": None,
-        "tags": ["new", "plain english", "explainer", "broadcast storm", "iot", "stp"],
+        "tags": ["new", "window", "snap layouts", "aero snap", "accessibility", "screen reader"],
     },
     {
         "group": "New in this version",
         "icon": "★",
-        "name": "Automation group in Feature Guide",
+        "name": "Instant theme switching",
         "desc": (
-            "The Feature Guide now has a dedicated Automation group covering hooks, "
-            "scheduled scans, MQTT, REST API, custom triggers, and maintenance windows — "
-            "making it easy to discover everything the scheduler can do. v1.9.97."
+            "Clicking a theme swatch in Settings now restyles the whole running app "
+            "immediately — no restart needed to switch between Arctic Clean and "
+            "Midnight Pro. v2.1.29."
         ),
-        "page": "Feature Guide",
+        "page": None,
         "requires": None,
-        "tags": ["new", "automation", "feature guide", "hooks", "scheduler", "mqtt"],
+        "tags": ["new", "theme", "dark mode", "settings", "arctic clean", "midnight pro"],
     },
     # ── Monitoring ─────────────────────────────────────────────────────────────
     {
@@ -279,8 +281,8 @@ _FEATURES: list[dict] = [
             "satellite each device is connected to and its wireless band (2.4G / 5G / 6G / Wired). "
             "Hover the Band cell for real-time upload / download KB/s from the router's own counters. "
             "Save your credentials once and the scan runs silently on every subsequent app start. "
-            "TP-Link Deco is fully supported. The worker architecture accepts additional providers "
-            "(Eero, Google Nest, Asus ZenWiFi, Netgear Orbi) via a single provider key."
+            "TP-Link Deco is fully supported natively; Asus ZenWiFi and Netgear Orbi are supported "
+            "through the Hardware Hub plugin system, feeding the same Node/Band columns."
         ),
         "page": "Hardware",
         "requires": None,
@@ -672,7 +674,8 @@ _FEATURES: list[dict] = [
             "Live status dashboard for all integrated hardware — routers, modems, APs. "
             "Each imported plugin shows real-time signal metrics, node topology, and "
             "connected clients, with a full detail panel per device. Plugins auto-refresh "
-            "every 5 minutes and enrich the Devices table with hostnames and mesh node data. "
+            "every 30-300 seconds depending on device type (modems fastest, switches slowest) "
+            "and enrich the Devices table with hostnames and mesh node data. "
             "A built-in guide and template walk you through writing and importing a plugin."
         ),
         "page": "Hardware",
@@ -778,8 +781,9 @@ _FEATURES: list[dict] = [
         "icon": "🌐",
         "name": "REST API",
         "desc": (
-            "Read-only HTTP API (default port 8765) exposing 7 endpoints: /devices, /alerts, "
-            "/uptime, /grade, /speed-history, /dashboard, /health. "
+            "Read-only HTTP API (default port 8765) exposing 9 endpoints: /devices, /alerts, "
+            "/uptime/<ip>, /grade, /speed-history, /dashboard, /health, /service-catalog, "
+            "/service-diagnostics/<service_id>. "
             "Use it with Grafana, Home Assistant, custom scripts, or any HTTP client. "
             "Enable and configure in Tools → REST API."
         ),

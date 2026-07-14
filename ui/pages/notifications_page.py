@@ -352,3 +352,21 @@ class NotificationsPage(
             if chk is not None:
                 rule.enabled = chk.isChecked()
         self._alert_engine.set_rules(rules)
+
+        from modules.alert_suppressor import EscalationPolicy
+        wait_minutes = self._spin_escalation_wait.value()
+        channel = self._combo_escalation_channel.currentText()
+        enabled = self._chk_escalation.isChecked()
+        rules_text = self._txt_escalation_rules.text().strip()
+        if rules_text:
+            rule_names = [r.strip() for r in rules_text.split(",") if r.strip()]
+        else:
+            rule_names = [r.name for r in rules if r.enabled]
+        policies = [
+            EscalationPolicy(
+                rule_name=name, wait_minutes=wait_minutes,
+                notify_channels=[channel], enabled=enabled,
+            )
+            for name in rule_names
+        ]
+        self._alert_engine.set_escalation_policies(policies)

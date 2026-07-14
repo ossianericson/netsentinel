@@ -120,5 +120,5 @@ def test_troubleshoot_features_entry_has_symptom_tags():
 # ── Help content ──────────────────────────────────────────────────────────────
 
 def test_troubleshoot_in_page_help():
-    from ui.pages.help_content import _PAGE_HELP
+    from ui.help import _PAGE_HELP
     assert "Troubleshoot" in _PAGE_HELP

@@ -55,11 +55,12 @@ class _AnalysisTabsMixin:
         _s.themed_ss(self._ipv6_status, "color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(self._ipv6_status)
 
-        self._ipv6_table = _table(["IPv6 Address", "MAC Address", "State", "Source"])
+        self._ipv6_table = _table(["IPv6 Address", "MAC Address", "IPv4 Address", "State", "Source"])
         self._ipv6_table.setColumnWidth(0, 340)
         self._ipv6_table.setColumnWidth(1, 150)
-        self._ipv6_table.setColumnWidth(2, 110)
-        self._ipv6_table.setColumnWidth(3, 80)
+        self._ipv6_table.setColumnWidth(2, 120)
+        self._ipv6_table.setColumnWidth(3, 110)
+        self._ipv6_table.setColumnWidth(4, 80)
         lay.addWidget(self._ipv6_table, 1)
         return w
 

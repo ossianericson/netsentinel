@@ -99,6 +99,31 @@ class TestUsedBadge:
         _cleanup(page)
 
 
+class TestRequiresBadgeTooltip:
+    """F-89: the Npcap/admin requirement badge previously had no tooltip at all,
+    contradicting help.py's Feature Guide claim to 'hover the badge for details'."""
+
+    def test_npcap_badge_has_explanatory_tooltip(self, fresh_settings):
+        page = _make_page(fresh_settings)
+        from ui.pages.discover_data import _FEATURES
+        feat = next(f for f in _FEATURES if f.get("requires") == "Npcap")
+        card = page._make_card(feat)
+        badge = next(c for c in card.findChildren(QLabel) if c.text() == "Npcap")
+        assert badge.toolTip(), "Npcap badge must have a non-empty tooltip"
+        assert "npcap" in badge.toolTip().lower()
+        _cleanup(page)
+
+    def test_admin_badge_has_explanatory_tooltip(self, fresh_settings):
+        page = _make_page(fresh_settings)
+        from ui.pages.discover_data import _FEATURES
+        feat = next(f for f in _FEATURES if f.get("requires") == "admin")
+        card = page._make_card(feat)
+        badge = next(c for c in card.findChildren(QLabel) if c.text() == "admin")
+        assert badge.toolTip(), "admin badge must have a non-empty tooltip"
+        assert "administrator" in badge.toolTip().lower()
+        _cleanup(page)
+
+
 class TestSearchHidesRecommendations:
     def test_search_query_renders_without_recommended_header(self, fresh_settings):
         page = _make_page(fresh_settings)

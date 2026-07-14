@@ -809,11 +809,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._lc_text = QLabel("")
         self._lc_text.setWordWrap(True)
         _s.themed_ss(self._lc_text, lambda: _s.qss_label(_s.TEXT_PRIMARY, 11))
-        _lc_diagnose = QPushButton("Diagnose now →")
-        _lc_diagnose.setFixedHeight(24)
-        _lc_diagnose.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._lc_diagnose = QPushButton("Investigate →")
+        self._lc_diagnose.setFixedHeight(24)
+        self._lc_diagnose.setCursor(Qt.CursorShape.PointingHandCursor)
         _s.themed_ss(
-            _lc_diagnose,
+            self._lc_diagnose,
             lambda: f"QPushButton {{ background:transparent; color:{_s.AMBER}; font-size:11px;"
             f" border:1px solid {_s.alpha(_s.AMBER, 0x88)}; border-radius:3px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{_s.alpha(_s.AMBER, 0x22)}; color:{_s.AMBER}; }}"
@@ -823,11 +823,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _lc_dismiss.setFixedSize(20, 20)
         _lc_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _s.themed_ss(_lc_dismiss, lambda: _s.qss_dismiss_button(14, fg=_s.TEXT_MUTED, padding="0", press_bg=_s.BG_HOVER))
-        _lc_diagnose.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
+        self._lc_diagnose.clicked.connect(lambda: self.investigate_live_requested.emit())
         _lc_dismiss.clicked.connect(lambda: self._live_challenge_banner.setVisible(False))
         _lc_lay.addWidget(_lc_icon)
         _lc_lay.addWidget(self._lc_text, 1)
-        _lc_lay.addWidget(_lc_diagnose)
+        _lc_lay.addWidget(self._lc_diagnose)
         _lc_lay.addWidget(_lc_dismiss)
         lay.addWidget(self._live_challenge_banner)
 

@@ -69,6 +69,29 @@ def _make_page(store=None):
     return page
 
 
+class TestLiveChallengeBanner:
+    """F-22: the live-event banner's button must open Lab Mode (via
+    investigate_live_requested), not silently go to What's Wrong? instead."""
+
+    def test_button_label_matches_help_text(self):
+        page = _make_page()
+        assert page._lc_diagnose.text() == "Investigate →"
+
+    def test_click_emits_investigate_live_requested_not_navigate_to(self):
+        page = _make_page()
+        page.on_live_challenge(SimpleNamespace(title="New device detected"))
+
+        investigate_calls = []
+        navigate_calls = []
+        page.investigate_live_requested.connect(lambda: investigate_calls.append(1))
+        page.navigate_to.connect(navigate_calls.append)
+
+        page._lc_diagnose.click()
+
+        assert investigate_calls == [1]
+        assert navigate_calls == []
+
+
 def _make_alert(severity: str = "WARNING", message: str = "Test alert"):
     return SimpleNamespace(severity=severity, message=message)
 
