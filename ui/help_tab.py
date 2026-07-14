@@ -341,10 +341,8 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Windows Snap works", "Aero Snap, Snap Layouts, Win+arrow, drag-to-snap and native edge-resize now all behave like any other Windows app."),
-        ("Screen reader support", "Narrator, NVDA and other accessibility tools can now attach cleanly at startup — a Windows UI Automation fault was preventing it."),
-        ("Maximize behaves", "The maximize button docks to the work area instead of covering the taskbar."),
-        ("Window position sticks", "The window no longer reopens a title-bar's height below where you left it."),
+        ("Test-count figures refreshed", "The README and architecture docs now report the current suite size — 5,243 tests across 398 files."),
+        ("Overnight chaos soak logged", "A 9,729-interaction overnight chaos run completed clean — zero crashes, zero exceptions, flat memory — and is now recorded in the project's test history."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

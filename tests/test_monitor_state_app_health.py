@@ -40,7 +40,7 @@ class _FakeHost(_MonitorStateMixin):
 def _health_dict(sched_running: bool, report_sched_running: bool) -> dict:
     host = _FakeHost(sched_running, report_sched_running)
     host._push_monitor_pills()
-    (health,), _kwargs = host._settings_page.refresh_health_status.call_args
+    (health,), _unused_kwargs = host._settings_page.refresh_health_status.call_args
     return health
 
 

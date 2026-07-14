@@ -43,7 +43,7 @@ def test_ipv6_table_has_ipv4_column_header():
     from ui.tabs_analysis import _AnalysisTabsMixin
 
     host = types.SimpleNamespace(_start_ipv6_scan=lambda: None)
-    tab_widget = _AnalysisTabsMixin._build_ipv6_tab(host)  # noqa: F841 -- keeps QWidget (and its child table) alive
+    _unused_tab_widget = _AnalysisTabsMixin._build_ipv6_tab(host)  # keeps QWidget (and its child table) alive
     headers = [host._ipv6_table.horizontalHeaderItem(c).text()
                for c in range(host._ipv6_table.columnCount())]
     assert "IPv4 Address" in headers

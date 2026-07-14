@@ -4,6 +4,16 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.31
+
+Documentation-accuracy release. No user-facing features or settings changed.
+
+**Changed**
+- Refreshed stale test-count figures in `README.md` and `docs/architecture.md` (suite had grown to 5,243 tests across 398 files; docs still read 4,890/344 and 5,109/370 respectively)
+- Logged the 2026-07-13/14 overnight chaos soak in `project-vision.instructions.md` — 9,729 UIA interactions across mild/moderate/wild laps (1,291 / 3,397 / 5,041), zero crash-log growth, zero exceptions, flat peak RSS (674 → 775 → 750 MB)
+
+---
+
 ### v2.1.30
 
 Window and accessibility fixes. The headline is a long-standing UI Automation fault at startup: NetSentinel is now correctly readable by screen readers (Narrator, NVDA) from the moment it launches.
