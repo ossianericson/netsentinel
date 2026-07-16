@@ -1,6 +1,9 @@
 """Tests for modules/speed_tester_servers.py (S20-7b split)."""
 import importlib
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse, parse_qs
+
+import pytest
 
 
 def test_import():
@@ -8,6 +11,8 @@ def test_import():
     assert hasattr(mod, "_fetch_client_coords")
     assert hasattr(mod, "_fetch_servers_python")
     assert hasattr(mod, "_geolite2_coords")
+    assert hasattr(mod, "_fetch_servers_by_query")
+    assert hasattr(mod, "_probe_and_rank")
 
 
 def test_geolite2_coords_no_db():
@@ -166,3 +171,99 @@ def test_servers_cache_corrupt_returns_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "get_app_data_dir", lambda: tmp_path)
     (tmp_path / "speedtest_servers_cache.json").write_text("not valid json", encoding="utf-8")
     assert m._load_servers_cache() == []
+
+
+# ── Location search (bypasses IP geolocation entirely) ─────────────────────────
+
+def test_probe_and_rank_sorts_by_measured_latency(monkeypatch):
+    """_probe_and_rank must probe each server and return them sorted fastest-first."""
+    import modules.speed_tester_servers as m
+    from modules.speed_tester_backends import SpeedServer
+
+    servers = [
+        SpeedServer(id="1", name="Slow", city="A", country="X", host="slow.example:8080", latency_ms=0.0),
+        SpeedServer(id="2", name="Fast", city="B", country="Y", host="fast.example:8080", latency_ms=0.0),
+    ]
+
+    def _fake_tcp_probe(hostname, port, timeout=2):
+        rtt = 5.0 if hostname == "fast.example" else 50.0
+        return True, rtt, None
+
+    monkeypatch.setattr(m, "tcp_probe", _fake_tcp_probe)
+
+    ranked = m._probe_and_rank(servers)
+
+    assert [s.id for s in ranked] == ["2", "1"]
+    assert ranked[0].latency_ms == pytest.approx(5.0)
+
+
+def test_probe_and_rank_calls_on_status(monkeypatch):
+    import modules.speed_tester_servers as m
+    from modules.speed_tester_backends import SpeedServer
+
+    monkeypatch.setattr(m, "tcp_probe", lambda hostname, port, timeout=2: (True, 10.0, None))
+
+    messages = []
+    m._probe_and_rank(
+        [SpeedServer(id="1", name="A", city="B", country="X", host="h:8080", latency_ms=0.0)],
+        on_status=messages.append,
+    )
+    assert any("latency" in msg.lower() for msg in messages)
+
+
+def test_fetch_servers_by_query_uses_search_param_not_coordinates(monkeypatch):
+    """The location-search fetch must never touch lat/lon or client coordinate lookup —
+    it sidesteps IP geolocation entirely (RULE-T3 regression coverage for the wrong-country
+    server-list bug)."""
+    import json
+    import modules.speed_tester_servers as m
+
+    captured_urls = []
+
+    def _fake_http_get(url, timeout=10):
+        captured_urls.append(url)
+        servers = [
+            {"id": "42", "sponsor": "Telia", "name": "Stockholm",
+             "country": "Sweden", "host": "stockholm.example.com:8080"},
+        ]
+        return json.dumps(servers).encode()
+
+    monkeypatch.setattr(m, "_http_get", _fake_http_get)
+    monkeypatch.setattr(m, "_probe_and_rank", lambda servers, on_status=None: servers)
+
+    def _fail_if_called():
+        raise AssertionError("_fetch_servers_by_query must not call _fetch_client_coords")
+
+    monkeypatch.setattr(m, "_fetch_client_coords", _fail_if_called)
+
+    result = m._fetch_servers_by_query("Stockholm, Sweden", limit=30)
+
+    assert len(captured_urls) == 1
+    parsed = urlparse(captured_urls[0])
+    qs = parse_qs(parsed.query)
+    assert qs.get("search") == ["Stockholm, Sweden"]
+    assert "lat" not in qs
+    assert "lon" not in qs
+    assert parsed.hostname == "www.speedtest.net"
+
+    assert len(result) == 1
+    assert result[0].id == "42"
+    assert result[0].country == "Sweden"
+
+
+def test_fetch_servers_by_query_calls_on_status(monkeypatch):
+    import json
+    import modules.speed_tester_servers as m
+
+    def _fake_http_get(url, timeout=10):
+        return json.dumps([
+            {"id": "1", "sponsor": "Test", "name": "Stockholm",
+             "country": "Sweden", "host": "test.example.com:8080"}
+        ]).encode()
+
+    monkeypatch.setattr(m, "_http_get", _fake_http_get)
+    monkeypatch.setattr(m, "_probe_and_rank", lambda servers, on_status=None: servers)
+
+    messages = []
+    m._fetch_servers_by_query("Sweden", limit=10, on_status=messages.append)
+    assert any("server" in msg.lower() for msg in messages)

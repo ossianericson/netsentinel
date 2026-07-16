@@ -694,7 +694,7 @@ class NetworkGradeTile(_BaseTile):
         if grade:
             self._sub_lbl.setText(f"Score: {score:.0f} / 100" if score else "")
             _s.themed_ss(self._sub_lbl, "QPushButton {{ font-size:10px; color:{TEXT_SECONDARY}; border:none;"
-                " background:transparent; padding:0; cursor:default; }}"
+                " background:transparent; padding:0; }}"
                 "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
             self._sub_lbl.setEnabled(False)
         else:

@@ -16,8 +16,8 @@ _IP_RE = _re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from modules.protocol_animator import (
@@ -280,6 +280,7 @@ class ProtocolVizPage(QWidget):
         self._diag_result: Any        = None
         self._m2_result:  Optional[dict] = None
         self._active_key: str         = "ARP"
+        self._syncing_step_list: bool = False
 
         self._build_ui()
         self._select_protocol("ARP")
@@ -459,6 +460,34 @@ class ProtocolVizPage(QWidget):
         canvas_lay.addWidget(ctrl_bar)
         bl.addWidget(canvas_card)
 
+        # Steps card — clickable step list (F-48)
+        self._step_card = _card_frame()
+        step_card_lay = QVBoxLayout(self._step_card)
+        step_card_lay.setContentsMargins(16, 12, 16, 12)
+        step_card_lay.setSpacing(6)
+        step_card_lay.addWidget(_label("Steps", 11, "TEXT_SECONDARY"))
+        step_card_lay.addWidget(_label("Click a step to jump to it", 10, "TEXT_MUTED"))
+
+        self._step_list = QListWidget()
+        self._step_list.setObjectName("stepList")
+        self._step_list.setMaximumHeight(170)
+        _s.themed_ss(self._step_list, "QListWidget#stepList {{"
+            "  background:{BG_CARD}; border:1px solid {BORDER};"
+            "  font-size:11px; color:{TEXT_PRIMARY}; outline:none;"
+            "}}"
+            "QListWidget#stepList::item {{"
+            "  padding:5px 8px; border-bottom:1px solid {BORDER};"
+            "}}"
+            "QListWidget#stepList::item:selected {{"
+            "  background:{TABLE_SEL}; color:{TEXT_PRIMARY};"
+            "}}"
+            "QListWidget#stepList::item:hover:!selected {{"
+            "  background:{BG_HOVER};"
+            "}}")
+        self._step_list.currentRowChanged.connect(self._on_step_row_activated)
+        step_card_lay.addWidget(self._step_list)
+        bl.addWidget(self._step_card)
+
         # Description panel
         desc_card = _card_frame()
         desc_lay  = QVBoxLayout(desc_card)
@@ -539,6 +568,8 @@ class ProtocolVizPage(QWidget):
             self._step_explanation.setText("")
             self._step_detail.setText("")
             self._step_label.setText("")
+            self._step_list.clear()
+            self._step_card.setVisible(False)
             return
 
         self._placeholder.setVisible(False)
@@ -546,6 +577,8 @@ class ProtocolVizPage(QWidget):
         self._canvas_title.setText(scene.title)
         self._canvas_subtitle.setText(scene.subtitle)
         self._canvas.set_scene(scene)
+        self._populate_step_list(scene)
+        self._step_card.setVisible(True)
         self._show_step(0, scene)
 
         # Auto-play
@@ -655,6 +688,7 @@ class ProtocolVizPage(QWidget):
         scene = self._canvas._scene
         if scene:
             self._show_step(idx, scene)
+        self._sync_step_list_selection(idx)
 
     def _show_step(self, idx: int, scene: ProtocolSceneData) -> None:
         total = len(scene.steps)
@@ -666,3 +700,34 @@ class ProtocolVizPage(QWidget):
         self._step_index.setText(f"Step {idx + 1} / {total}")
         self._step_detail.setText(step.frame_detail)
         self._step_explanation.setText(step.explanation)
+
+    # ── Step list (F-48 clickable step list) ───────────────────────────────────
+
+    def _populate_step_list(self, scene: ProtocolSceneData) -> None:
+        self._syncing_step_list = True
+        try:
+            self._step_list.clear()
+            for i, step in enumerate(scene.steps):
+                item = QListWidgetItem(f"{i + 1}.  {step.packet_label}")
+                item.setToolTip(step.frame_detail or step.packet_label)
+                self._step_list.addItem(item)
+            if scene.steps:
+                self._step_list.setCurrentRow(0)
+        finally:
+            self._syncing_step_list = False
+
+    def _on_step_row_activated(self, row: int) -> None:
+        if self._syncing_step_list or row < 0:
+            return
+        self._canvas.go_to_step(row)
+        self._btn_play.setText("▶  Play")   # jump pauses playback
+
+    def _sync_step_list_selection(self, idx: int) -> None:
+        if not hasattr(self, "_step_list"):
+            return
+        if 0 <= idx < self._step_list.count() and self._step_list.currentRow() != idx:
+            self._syncing_step_list = True
+            try:
+                self._step_list.setCurrentRow(idx)
+            finally:
+                self._syncing_step_list = False

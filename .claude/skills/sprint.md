@@ -39,10 +39,10 @@ Do not start by reading `CLAUDE.md`, source files, or the plan document before c
 ### Step 2 — Find the active plan document
 
 Look for files that contain a sprint queue or implementation-order table. Common names:
-- `BACKLOG.md`
 - `PLAN.md`
 - `SPRINT.md`
 - Any `.md` file in the project root that contains `Sprint` or `TODO` headings
+- `docs/internal/claims-audit.md` for deferred/considered-but-not-built items (BACKLOG.md was retired in v2.1.33; its remaining items now live here)
 
 Do not assume a filename — search. If multiple candidates exist, open the one with the most
 recent modification date.

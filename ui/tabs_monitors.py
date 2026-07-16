@@ -427,7 +427,7 @@ class _MonitorTabsMixin:
         ctrl_row.addWidget(self._snmp_community)
         ctrl_row.addWidget(btn_poll)
         ctrl_row.addStretch()
-        self._snmp_table = _table(["Host", "Name", "Description", "Uptime", "Interfaces", "Contact"])
+        self._snmp_table = _table(["Host", "Name", "Description", "Uptime", "Interfaces", "CPU Load", "Contact"])
         self._snmp_table.setColumnWidth(0, 120)
         self._snmp_table.setColumnWidth(2, 350)
         self._snmp_table.itemSelectionChanged.connect(self._on_snmp_table_selection)

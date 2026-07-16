@@ -371,3 +371,45 @@ def test_first_render_of_session_uses_real_scan_id_not_default(qt_app, tmp_layou
     page.deleteLater()
     for _ in range(3):
         qt_app.processEvents()
+
+
+# ── Mesh-only client parity between Interactive and Classic views ────────────
+#
+# Bug: a mesh Wi-Fi client (e.g. the scanning PC itself) never answers ARP, so
+# it is absent from the scanned `devices` list but present in `mesh_enrichment`.
+# The Classic (matplotlib) map synthesized a stub node for it; the Interactive
+# (Cytoscape) map did not, so the local PC (and any other mesh-only client)
+# was invisible on the Interactive tab only. Fix: render() now augments
+# `devices` once via synthesize_mesh_only_clients() before either view
+# consumes it, so both always show the identical device set.
+
+def test_mesh_only_client_appears_in_both_interactive_and_classic_views(page):
+    mesh_units = [
+        SimpleNamespace(role="master", name="Kontor", mac="aa:bb:cc:dd:ee:f0"),
+        SimpleNamespace(role="satellite", name="Kitchen", mac="aa:bb:cc:dd:ee:f1"),
+    ]
+    mc = SimpleNamespace(mac="11:22:33:44:55:66", ip="192.168.68.50",
+                          name="MyPC", unit_name="Kitchen")
+    mesh_enrichment = {"11:22:33:44:55:66": mc}
+
+    page.render(
+        devices=_devices(),
+        gateway_ip="192.168.68.1",
+        mesh_units=mesh_units,
+        mesh_enrichment=mesh_enrichment,
+    )
+
+    # Interactive: the augmented device list (what feeds Cytoscape) must
+    # include the mesh-only client.
+    interactive_macs = {
+        d.get("mac") if isinstance(d, dict) else getattr(d, "mac", "")
+        for d in page._last_render_kwargs["devices"]
+    }
+    assert "11:22:33:44:55:66" in interactive_macs, (
+        "Mesh-only client missing from the list that feeds the Interactive view"
+    )
+
+    # Classic: TopologyWidget must have drawn a node for the same client.
+    assert "11:22:33:44:55:66" in page._classic_widget._pos_map, (
+        "Mesh-only client missing from the Classic view"
+    )

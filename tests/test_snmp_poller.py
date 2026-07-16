@@ -1,4 +1,6 @@
 """Tests for modules/snmp_poller.py — raw SNMP GET poller."""
+from unittest.mock import patch
+
 from modules.snmp_poller import (
     _encode_oid, _ber_length, _ber_tlv, _build_snmp_get,
     SNMPResult, poll,
@@ -62,3 +64,64 @@ def test_poll_unreachable_returns_result():
     result = poll("240.0.0.1", timeout=0.2)
     assert isinstance(result, SNMPResult)
     assert result.reachable is False
+
+
+def test_snmp_result_cpu_load_default_empty():
+    r = SNMPResult(host="192.168.1.1")
+    assert r.cpu_load == ""
+
+
+def test_poll_cpu_load_primary_oid_hit():
+    from modules.snmp_poller import _poll_cpu_load
+
+    def fake_get(host, oid, community, timeout):
+        if oid == "1.3.6.1.2.1.25.3.3.1.2.1":
+            return "17"
+        return "<error: not found>"
+
+    with patch("modules.snmp_poller._snmp_get_single", side_effect=fake_get):
+        assert _poll_cpu_load("192.168.1.1", "public", 2.0) == "17%"
+
+
+def test_poll_cpu_load_falls_back_to_vendor_oid_when_primary_misses():
+    from modules.snmp_poller import _poll_cpu_load
+
+    def fake_get(host, oid, community, timeout):
+        if oid == "1.3.6.1.2.1.25.3.3.1.2.1":
+            return "<error: not found>"
+        if oid == "1.3.6.1.4.1.9.9.109.1.1.1.1.8.1":
+            return "42"
+        return "<error: not found>"
+
+    with patch("modules.snmp_poller._snmp_get_single", side_effect=fake_get):
+        assert _poll_cpu_load("192.168.1.1", "public", 2.0) == "42%"
+
+
+def test_poll_cpu_load_both_miss_returns_empty_string():
+    from modules.snmp_poller import _poll_cpu_load
+
+    def fake_get(host, oid, community, timeout):
+        return "<error: not found>"
+
+    with patch("modules.snmp_poller._snmp_get_single", side_effect=fake_get):
+        assert _poll_cpu_load("192.168.1.1", "public", 2.0) == ""
+
+
+def test_poll_populates_cpu_load_field():
+    responses = {
+        "1.3.6.1.2.1.1.1.0": "Linux router",
+        "1.3.6.1.2.1.1.3.0": "12345",
+        "1.3.6.1.2.1.1.5.0": "router1",
+        "1.3.6.1.2.1.1.4.0": "admin",
+        "1.3.6.1.2.1.2.1.0": "4",
+        "1.3.6.1.2.1.25.3.3.1.2.1": "9",
+    }
+
+    def fake_get(host, oid, community, timeout):
+        return responses.get(oid, "<error: not found>")
+
+    with patch("modules.snmp_poller._snmp_get_single", side_effect=fake_get):
+        result = poll("192.168.1.1")
+
+    assert result.cpu_load == "9%"
+    assert result.reachable is True

@@ -5,6 +5,7 @@ Responsibilities:
   - GeoLite2 offline coordinate lookup (_geolite2_coords)
   - Client coordinate resolution with multi-source cascade + session cache (_fetch_client_coords)
   - Ookla server list fetch + parallel TCP latency probe (_fetch_servers_python)
+  - Free-text location search, independent of IP geolocation (_fetch_servers_by_query)
 
 Imported by modules/speed_tester.py via the public fetch_servers() function.
 Download/upload/ping test backends stay in speed_tester_backends.py.
@@ -15,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import time
+import urllib.parse
 from typing import List
 
 from modules.speed_tester_backends import SpeedServer, _http_get, _HTTP_UA
@@ -119,6 +121,50 @@ def _fetch_client_coords() -> tuple:
     return None, None
 
 
+def _probe_and_rank(
+    servers: List[SpeedServer],
+    on_status: object = None,
+) -> List[SpeedServer]:
+    """Parallel TCP-latency-probe a candidate list and return it sorted fastest-first.
+
+    Shared by both fetch paths: the geo-guess cascade (_fetch_servers_python) and the
+    location-search cascade (_fetch_servers_by_query) — probing is identical once a
+    candidate list exists, regardless of how that list was discovered.
+    """
+    _s = on_status if callable(on_status) else (lambda _: None)
+    _s("Measuring server latency…")
+
+    def _ping(server: SpeedServer) -> None:
+        hostname = server.host.split(":")[0]
+        port = int(server.host.split(":")[1]) if ":" in server.host else 8080
+        times: list = []
+        for _ in range(2):  # 2 attempts at 2 s each; parallel across servers
+            ok, rtt, _ = tcp_probe(hostname, port, timeout=2)
+            if ok:
+                times.append(rtt)
+            time.sleep(0.02)
+        server.latency_ms = round(sum(times) / len(times), 1) if times else 9999.0
+
+    parallel_map(_ping, servers, workers=10)
+
+    return sorted(servers, key=lambda s: s.latency_ms)
+
+
+def _parse_server_list(data: list, limit: int) -> List[SpeedServer]:
+    """Convert Ookla's raw JSON server entries into SpeedServer objects (latency unprobed)."""
+    return [
+        SpeedServer(
+            id=str(s.get("id", "")),
+            name=s.get("sponsor") or s.get("name") or "Unknown",
+            city=s.get("name") or "",
+            country=s.get("country") or "",
+            host=s.get("host") or "",
+            latency_ms=0.0,
+        )
+        for s in data[:limit]
+    ]
+
+
 def _fetch_servers_python(
     limit: int = 10,
     on_status: object = None,
@@ -145,33 +191,42 @@ def _fetch_servers_python(
     except Exception as exc:
         raise RuntimeError(f"Cannot reach Speedtest server list: {exc}") from exc
 
-    servers: List[SpeedServer] = []
-    for s in data[:limit]:
-        servers.append(SpeedServer(
-            id=str(s.get("id", "")),
-            name=s.get("sponsor") or s.get("name") or "Unknown",
-            city=s.get("name") or "",
-            country=s.get("country") or "",
-            host=s.get("host") or "",
-            latency_ms=0.0,
-        ))
+    servers = _parse_server_list(data, limit)
+    return _probe_and_rank(servers, on_status=_s)
 
-    _s("Measuring server latency…")
 
-    def _ping(server: SpeedServer) -> None:
-        hostname = server.host.split(":")[0]
-        port = int(server.host.split(":")[1]) if ":" in server.host else 8080
-        times: list = []
-        for _ in range(2):  # 2 attempts at 2 s each; parallel across servers
-            ok, rtt, _ = tcp_probe(hostname, port, timeout=2)
-            if ok:
-                times.append(rtt)
-            time.sleep(0.02)
-        server.latency_ms = round(sum(times) / len(times), 1) if times else 9999.0
+def _fetch_servers_by_query(
+    query: str,
+    limit: int = 30,
+    on_status: object = None,
+) -> List[SpeedServer]:
+    """Fetch Ookla servers by a free-text location search (city/country/sponsor name),
+    completely independent of IP geolocation.
 
-    parallel_map(_ping, servers, workers=10)
+    Ookla's public server-list endpoint (the same one used by _fetch_servers_python)
+    also accepts a `search=` query that text-matches server name/city/country/sponsor.
+    This is the fix for the case where IP-based geolocation resolves to the wrong
+    country entirely, so the user's actual country never appears among the
+    distance-sorted candidates — a text search against a typed location (e.g.
+    "Stockholm, Sweden") finds the right servers regardless of what the IP-geolocation
+    cascade thinks the user's coordinates are.
+    """
+    _s = on_status if callable(on_status) else (lambda _: None)
 
-    return sorted(servers, key=lambda s: s.latency_ms)
+    _s(f"Searching servers for “{query}”…")
+    encoded_query = urllib.parse.quote(query)
+    url = (
+        f"https://www.speedtest.net/api/js/servers"
+        f"?engine=js&https_functional=true&limit={limit}&search={encoded_query}"
+    )
+
+    try:
+        data = json.loads(_http_get(url, timeout=15))
+    except Exception as exc:
+        raise RuntimeError(f"Cannot reach Speedtest server list: {exc}") from exc
+
+    servers = _parse_server_list(data, limit)
+    return _probe_and_rank(servers, on_status=_s)
 
 
 def _save_servers_cache(servers: List[SpeedServer]) -> None:

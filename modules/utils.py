@@ -85,6 +85,14 @@ def is_store_app() -> bool:
     return result
 
 
+MS_STORE_PRODUCT_ID = "9NZ124C7HJWS"   # apps.microsoft.com/detail/9NZ124C7HJWS (matches README)
+
+
+def store_update_url() -> str:
+    """Deep link that opens this app's Microsoft Store page (Update button appears there)."""
+    return f"ms-windows-store://pdp/?productid={MS_STORE_PRODUCT_ID}"
+
+
 # ── Npcap / libpcap detection ─────────────────────────────────────────────────
 
 def is_npcap_available() -> bool:

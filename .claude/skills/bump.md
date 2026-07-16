@@ -90,7 +90,30 @@ If `bump_version.py` exits non-zero: fix the reported failures before continuing
 
 `bump_version.py` handles every tracked version file (RULE 11) — don't hand-edit any of them.
 
-### Step 6 — Get a clean 30-minute monkey test from the user (RULE-CHAOS1)
+### Step 6 — Squash everything into one release commit
+
+The user works with many small local WIP commits between releases and never pushes them
+individually — `origin/main` must only ever receive **one commit per release**. `bump_version.py`
+(Step 5) also auto-commits separately (`chore: bump version to vX.Y.Z`), so by this point there
+are almost always ≥2 local commits ahead of `origin/main`.
+
+Check how many:
+```powershell
+git log origin/main..HEAD --oneline
+```
+
+If more than one commit — or the single commit isn't already named `release: vX.Y.Z` — squash
+everything ahead of `origin/main` into one commit:
+```powershell
+git reset --soft origin/main
+git commit -m "release: vX.Y.Z"
+```
+
+`--soft` keeps every file change staged, so nothing is lost — it only rewrites local history,
+never anything already pushed. Do this **before** the monkey test so the build that gets tested
+is byte-for-byte what will be pushed.
+
+### Step 7 — Get a clean 30-minute monkey test from the user (RULE-CHAOS1)
 
 Version bumps require a clean monkey session before the tag push. **The agent does not launch
 the session** — ask the user to run it themselves and paste the results:
@@ -104,9 +127,9 @@ python tools/monkey_test.py --source --seed 99 --duration 1800
 If the pasted results show crashes or hangs: fix them, re-run Steps 1–5, then ask the user to
 re-run the monkey test. If clean: proceed to Step 7.
 
-Do NOT skip this step and do NOT proceed to Step 7 until the user has pasted a clean result.
+Do NOT skip this step and do NOT proceed to Step 8 until the user has pasted a clean result.
 
-### Step 7 — Push branch and tag
+### Step 8 — Push branch and tag
 
 `bump_version.py` auto-commits, so only push and tag remain:
 
@@ -130,11 +153,12 @@ Before presenting the result to the user, confirm every box:
 - [ ] README.md `## Changelog` block updated with 3–5 bullet summary
 - [ ] "What's New" in `ui/help_tab.py` matches the changelog
 - [ ] `bump_version.py X.Y.Z` exited 0; consistency test passed
+- [ ] Exactly one commit ahead of `origin/main`, named `release: vX.Y.Z`
 - [ ] User pasted a clean 30-minute monkey test result (seed 99)
 - [ ] `git push origin main` completed before tag push
 - [ ] `git tag vX.Y.Z` and `git push origin vX.Y.Z` completed
 
-If BACKLOG.md and architecture docs need updating (new modules, new pages), do those before
+If architecture docs need updating (new modules, new pages), do those before
 Step 5 so the bump commit includes everything.
 
 ---
@@ -178,3 +202,4 @@ tag at the just-committed HEAD.
 | "Monkey test takes too long, I'll skip it" | Every version bump requires it. Fix crashes before shipping |
 | "I'll push the tag first, branch after" | Branch push must come first — CI won't run on tag-only push |
 | "README is close enough, I'll fix it later" | The bump commit is the canonical record. Fix it now |
+| "The WIP commits don't matter, I'll leave them" | `origin/main` gets exactly one commit per release — squash in Step 6, always |

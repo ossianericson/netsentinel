@@ -92,6 +92,52 @@ def test_run_scheduled_speed_test_handles_no_modem_data():
     assert result.prior_sinr == []
 
 
+def test_run_scheduled_speed_test_forwards_server_id():
+    """A resolved server_id (pinned server or location-search result) must reach
+    speed_tester.run_test(), so scheduled/background tests benefit from the same
+    location correction manual tests do — not silently ignore it (the original bug:
+    scheduled tests always called run_test() with no server_id)."""
+    from modules.scheduled_speed_test import run_scheduled_speed_test
+
+    store = MagicMock()
+    store.query_speed_test_history.return_value = []
+    store.query_modem_signal_log.return_value = []
+    fake_result = SpeedTestResult(
+        download_mbps=94.0, upload_mbps=40.0, ping_ms=12.0,
+        server_name="Telia", server_city="Stockholm", server_country="Sweden",
+        backend="test",
+    )
+
+    with patch(
+        "modules.scheduled_speed_test.speed_tester.run_test", return_value=fake_result
+    ) as mock_run_test:
+        run_scheduled_speed_test(store, server_id="42")
+
+    mock_run_test.assert_called_once_with(server_id="42")
+
+
+def test_run_scheduled_speed_test_server_id_defaults_to_none():
+    """No server_id passed → run_test() still receives None (today's fully-automatic
+    behavior) — no regression for callers that don't pass a preference."""
+    from modules.scheduled_speed_test import run_scheduled_speed_test
+
+    store = MagicMock()
+    store.query_speed_test_history.return_value = []
+    store.query_modem_signal_log.return_value = []
+    fake_result = SpeedTestResult(
+        download_mbps=10.0, upload_mbps=5.0, ping_ms=20.0,
+        server_name="", server_city="", server_country="",
+        backend="test",
+    )
+
+    with patch(
+        "modules.scheduled_speed_test.speed_tester.run_test", return_value=fake_result
+    ) as mock_run_test:
+        run_scheduled_speed_test(store)
+
+    mock_run_test.assert_called_once_with(server_id=None)
+
+
 def test_prior_downloads_queried_before_persisting():
     """Prior history must not include the just-run test (order matters)."""
     from modules.scheduled_speed_test import run_scheduled_speed_test

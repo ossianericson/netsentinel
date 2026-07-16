@@ -424,3 +424,113 @@ class TestMeshEdgeRouting:
         assert client_edge["data"]["source"] == "192.168.1.1", (
             "Unassigned device must stay connected to gateway (gw_id = gateway_ip)"
         )
+
+
+# ── synthesize_mesh_only_clients() ────────────────────────────────────────────
+# Part A fix: a mesh Wi-Fi client (e.g. the scanning PC itself) never answers
+# ARP, so it is absent from `devices` but present in `mesh_enrichment`. Both
+# map builders must consume the same synthesized stub list so they can never
+# show a different device set (mirrors the Classic proof in
+# tests/test_topology_widget.py:41-82).
+
+class TestSynthesizeMeshOnlyClients:
+
+    def _make_units(self):
+        from types import SimpleNamespace
+        master = SimpleNamespace(name="MasterDeco", role="master", mac="aa:bb:cc:00:00:01")
+        sat    = SimpleNamespace(name="SatDeco",    role="slave",  mac="aa:bb:cc:00:00:02")
+        return [master, sat]
+
+    def _mesh_client(self, mac, ip, name, unit_name):
+        from types import SimpleNamespace
+        return SimpleNamespace(mac=mac, ip=ip, name=name, unit_name=unit_name)
+
+    def test_mesh_only_client_is_appended(self):
+        from modules.topology_cytoscape import synthesize_mesh_only_clients
+        devices = [_make_device("192.168.1.100", mac="bb:cc:dd:ee:ff:01")]
+        mesh_enrichment = {
+            "11:22:33:44:55:66": self._mesh_client(
+                "11:22:33:44:55:66", "192.168.1.50", "MyPC", "SatDeco"
+            ),
+        }
+        out = synthesize_mesh_only_clients(devices, mesh_enrichment, self._make_units())
+        stub = next(
+            (d for d in out if isinstance(d, dict) and d.get("mac") == "11:22:33:44:55:66"),
+            None,
+        )
+        assert stub is not None, "Mesh-only client was not synthesized"
+        assert stub["hostname"] == "MyPC"
+        assert stub["mesh_unit"] == "SatDeco"
+
+    def test_already_covered_mac_not_duplicated(self):
+        from modules.topology_cytoscape import synthesize_mesh_only_clients
+        devices = [_make_device("192.168.1.50", mac="11:22:33:44:55:66")]
+        mesh_enrichment = {
+            "11:22:33:44:55:66": self._mesh_client(
+                "11:22:33:44:55:66", "192.168.1.50", "MyPC", "SatDeco"
+            ),
+        }
+        out = synthesize_mesh_only_clients(devices, mesh_enrichment, self._make_units())
+        assert len(out) == 1, "ARP-visible device must not get a duplicate stub"
+
+    def test_infra_mac_not_synthesized_as_client(self):
+        """A mesh unit's own MAC appearing in mesh_enrichment (satellite
+        reporting itself) must never become a synthesized client node."""
+        from modules.topology_cytoscape import synthesize_mesh_only_clients
+        devices = [_make_device("192.168.1.100", mac="bb:cc:dd:ee:ff:01")]
+        mesh_enrichment = {
+            "aa:bb:cc:00:00:02": self._mesh_client(
+                "aa:bb:cc:00:00:02", "192.168.1.2", "SatDeco", "SatDeco"
+            ),
+        }
+        out = synthesize_mesh_only_clients(devices, mesh_enrichment, self._make_units())
+        assert len(out) == 1
+
+    def test_returns_input_unchanged_without_mesh_data(self):
+        from modules.topology_cytoscape import synthesize_mesh_only_clients
+        devices = [_make_device("192.168.1.100", mac="bb:cc:dd:ee:ff:01")]
+        assert synthesize_mesh_only_clients(devices, {}, []) is devices
+        assert synthesize_mesh_only_clients(devices, None, None) is devices
+        assert synthesize_mesh_only_clients(devices, {"x": object()}, None) is devices
+
+
+class TestSynthesizedClientFeedsCytoscapeElements:
+    """Confirms the augmented list produced by synthesize_mesh_only_clients()
+    flows correctly through build_cytoscape_elements(): a real node + an edge
+    to the correct satellite parent, exactly like an ARP-discovered device."""
+
+    def test_mesh_only_client_becomes_node_with_satellite_edge(self):
+        from modules.topology_cytoscape import (
+            build_cytoscape_elements,
+            synthesize_mesh_only_clients,
+        )
+        from types import SimpleNamespace
+
+        master = SimpleNamespace(name="MasterDeco", role="master", mac="aa:bb:cc:00:00:01")
+        sat    = SimpleNamespace(name="SatDeco",    role="slave",  mac="aa:bb:cc:00:00:02")
+        mesh_units = [master, sat]
+        mc = SimpleNamespace(mac="11:22:33:44:55:66", ip="192.168.1.50",
+                              name="MyPC", unit_name="SatDeco")
+        mesh_enrichment = {"11:22:33:44:55:66": mc}
+        devices = [_make_device("192.168.1.100", mac="bb:cc:dd:ee:ff:01")]
+
+        augmented = synthesize_mesh_only_clients(devices, mesh_enrichment, mesh_units)
+        result = build_cytoscape_elements(
+            devices=augmented,
+            gateway_ip="192.168.1.1",
+            gateway_mac="aa:bb:cc:00:00:01",
+            mesh_units=mesh_units,
+            mesh_enrichment=mesh_enrichment,
+        )
+
+        node_ids = {el["data"]["id"] for el in result["elements"] if el.get("group") == "nodes"}
+        assert "11:22:33:44:55:66" in node_ids, "Mesh-only client is missing a node"
+
+        edges = [el for el in result["elements"] if el.get("group") == "edges"]
+        client_edge = next(
+            (e for e in edges if e["data"].get("target") == "11:22:33:44:55:66"), None
+        )
+        assert client_edge is not None, "Mesh-only client has no edge"
+        assert client_edge["data"]["source"] == "aa:bb:cc:00:00:02", (
+            "Mesh-only client must attach to its satellite, not the gateway"
+        )

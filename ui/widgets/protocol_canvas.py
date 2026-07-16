@@ -137,6 +137,19 @@ class ProtocolCanvas(QWidget):
     def is_playing(self) -> bool:
         return self._playing
 
+    def go_to_step(self, idx: int) -> None:
+        """Jump directly to an absolute step index (manual control — pauses playback)."""
+        if not self._scene or not self._scene.steps:
+            return
+        idx = max(0, min(idx, len(self._scene.steps) - 1))
+        self._timer.stop()
+        self._playing  = False
+        self._step     = idx
+        self._phase    = "hold"
+        self._phase_ms = 0.0
+        self.update()
+        self.step_changed.emit(idx, len(self._scene.steps))
+
     # ── Timer tick ─────────────────────────────────────────────────────────────
 
     def _tick(self) -> None:

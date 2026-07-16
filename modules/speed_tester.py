@@ -40,13 +40,13 @@ from modules.speed_tester_backends import (
     _run_python_test,
 )
 from modules.speed_tester_servers import (
-    _fetch_servers_python, _load_servers_cache, _save_servers_cache,
+    _fetch_servers_python, _fetch_servers_by_query, _load_servers_cache, _save_servers_cache,
 )
 
 # Re-export all public names so existing callers continue to work.
 __all__ = [
     "SpeedServer", "SpeedTestResult",
-    "fetch_servers", "run_test", "speed_to_fraction",
+    "fetch_servers", "run_test", "resolve_server_id", "speed_to_fraction",
 ]
 
 # Retry policy for fetch_servers(): both backends in the cascade are transient
@@ -72,6 +72,7 @@ def speed_to_fraction(speed_mbps: float, max_mbps: float = 1000.0) -> float:
 def fetch_servers(
     limit: int = 20,
     on_status: Optional[Callable[[str], None]] = None,
+    preferred_location: Optional[str] = None,
 ) -> List[SpeedServer]:
     """
     Fetch nearby Ookla-compatible servers sorted by latency.
@@ -80,6 +81,11 @@ def fetch_servers(
     before falling back to the last-known-good cached list. Raises RuntimeError
     only if every attempt fails and no cache exists.
     on_status: optional callback(msg) for progress messages.
+    preferred_location: optional free-text city/country (e.g. "Stockholm, Sweden").
+        When given, this replaces IP-geolocation entirely as the source of the
+        candidate list — a text search against Ookla's server list, so servers in
+        the user's actual country are found even when IP geolocation resolves to
+        the wrong country (see modules/speed_tester_servers.py:_fetch_servers_by_query).
     """
     from modules.firewall_rules import ensure_app_rules
     ensure_app_rules()
@@ -97,7 +103,7 @@ def fetch_servers(
             _status(f"Retrying server list (attempt {attempt}/{_FETCH_MAX_ATTEMPTS})…")
             time.sleep(_FETCH_BACKOFF_SECONDS[attempt - 2])
         try:
-            servers = _fetch_servers_cascade(limit, _status)
+            servers = _fetch_servers_cascade(limit, _status, preferred_location=preferred_location)
         except Exception as exc:
             last_exc = exc
             continue
@@ -115,8 +121,12 @@ def fetch_servers(
 def _fetch_servers_cascade(
     limit: int,
     _status: Callable[[str], None],
+    preferred_location: Optional[str] = None,
 ) -> List[SpeedServer]:
     """One attempt through the CLI-then-Python backend cascade (RULE 24 order)."""
+    if preferred_location:
+        return _fetch_servers_by_query(preferred_location, limit=limit, on_status=_status)
+
     try:
         import speedtest as _st  # noqa: F401
         _patch_ssl_for_312()
@@ -201,3 +211,33 @@ def run_test(
 
     return _run_python_test(server_id=server_id, on_progress=on_progress,
                             on_sample=on_sample)
+
+
+def resolve_server_id(
+    preferred_server_id: Optional[str] = None,
+    preferred_location: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Resolve which Ookla server ID a manual or scheduled/background test should
+    target, so both paths apply the same location-correction logic instead of
+    scheduled tests silently falling back to auto-best (see RULE-DW / the
+    Speed Test wrong-country server bug fix).
+
+    Priority:
+      1. An explicit pinned server ID — trusted as-is. If it has since gone stale
+         (Ookla retired/renumbered it), each backend's own "not found in candidate
+         list" fallback handles that; this function doesn't re-validate it.
+      2. A saved preferred_location — resolved to the fastest server from a fresh
+         location-text search (bypasses IP geolocation entirely).
+      3. Neither set → None, today's fully-automatic behavior.
+    """
+    if preferred_server_id:
+        return preferred_server_id
+    if preferred_location:
+        try:
+            servers = fetch_servers(limit=10, preferred_location=preferred_location)
+        except Exception:
+            return None  # non-fatal — caller falls back to auto-best
+        if servers:
+            return servers[0].id
+    return None

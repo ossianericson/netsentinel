@@ -234,7 +234,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._snmp_table.insertRow(row)
         for col, val in enumerate([
             result.host, result.sys_name, result.sys_descr[:80],
-            result.sys_uptime, result.if_count, result.sys_contact,
+            result.sys_uptime, result.if_count, result.cpu_load, result.sys_contact,
         ]):
             self._snmp_table.setItem(row, col, QTableWidgetItem(str(val)))
 

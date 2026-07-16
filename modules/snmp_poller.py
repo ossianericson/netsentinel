@@ -167,6 +167,7 @@ class SNMPResult:
     sys_uptime: str = ""
     sys_contact: str = ""
     if_count: str = ""
+    cpu_load: str = ""
     community: str = "public"
     error: str = ""
     plain_verdict: str = ""
@@ -199,6 +200,8 @@ def poll(
         if "<error" not in val:
             result.reachable = True
         setattr(result, field_name, val)
+
+    result.cpu_load = _poll_cpu_load(host, community, timeout)
 
     if result.reachable:
         result.plain_verdict = (
@@ -234,6 +237,22 @@ def _snmp_get_int(host: str, oid: str, community: str, timeout: float) -> Option
         return int(raw.replace(",", "").strip())
     except ValueError:
         return None
+
+
+# CPU load: HOST-RESOURCES-MIB hrProcessorLoad.1, falling back to the
+# Cisco-specific cpmCPUTotal5minRev.1 for devices that don't expose the
+# standard MIB.
+_CPU_LOAD_PRIMARY_OID  = "1.3.6.1.2.1.25.3.3.1.2.1"
+_CPU_LOAD_FALLBACK_OID = "1.3.6.1.4.1.9.9.109.1.1.1.1.8.1"
+
+
+def _poll_cpu_load(host: str, community: str, timeout: float) -> str:
+    """Try the standard hrProcessorLoad OID first, then the Cisco vendor OID.
+    Returns a formatted percentage string, or "" if neither OID responds."""
+    val = _snmp_get_int(host, _CPU_LOAD_PRIMARY_OID, community, timeout)
+    if val is None:
+        val = _snmp_get_int(host, _CPU_LOAD_FALLBACK_OID, community, timeout)
+    return f"{val}%" if val is not None else ""
 
 
 @dataclass

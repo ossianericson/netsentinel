@@ -106,6 +106,42 @@ def _bw_label(bps: float) -> str:
     return f"{bps / 1000:.0f} Kbps"
 
 
+def synthesize_mesh_only_clients(
+    devices: list,
+    mesh_enrichment: Optional[dict],
+    mesh_units: Optional[list],
+    gateway_ip: Optional[str] = None,
+) -> list:
+    """Return devices + stub dicts for mesh clients the ARP scan never saw.
+
+    A mesh Wi-Fi client (e.g. the scanning PC itself) does not answer ARP, so it
+    is absent from `devices` but present in `mesh_enrichment`. This makes it a
+    real device node in BOTH map builders. Returns `devices` unchanged when there
+    is no mesh data.
+    """
+    if not mesh_enrichment or not mesh_units:
+        return devices
+    try:
+        from modules.deco_client import _norm_mac  # type: ignore[attr-defined]
+    except ImportError:
+        def _norm_mac(mac: str) -> str:
+            return mac.lower().replace("-", ":").strip()
+
+    infra_macs = {_norm_mac(getattr(u, "mac", "") or "") for u in mesh_units}
+    covered = {_norm_mac(_attr(d, "mac", "") or "") for d in devices}
+    out = list(devices)
+    for mc in mesh_enrichment.values():
+        m = _norm_mac(mc.mac)
+        if not m or m in covered or m in infra_macs:
+            continue
+        out.append({
+            "mac": mc.mac, "ip": mc.ip or "", "hostname": mc.name,
+            "risk_level": "CLEAN", "mesh_unit": mc.unit_name,
+        })
+        covered.add(m)
+    return out
+
+
 def build_cytoscape_elements(
     devices: list,
     edges: Optional[list] = None,                  # list[TopologyEdge]

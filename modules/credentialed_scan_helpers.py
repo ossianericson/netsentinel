@@ -251,6 +251,8 @@ _LINUX_CMDS: List[str] = [
     "grep -r NOPASSWD /etc/sudoers /etc/sudoers.d/ 2>/dev/null",
     "apt-get -s upgrade 2>/dev/null | grep '^Inst' | wc -l",
     "yum check-update --quiet 2>/dev/null | grep -v '^$' | wc -l",
+    "tail -n1 /var/log/dpkg.log 2>/dev/null",
+    "rpm -qa --last 2>/dev/null | head -1",
 ]
 
 
@@ -343,6 +345,20 @@ def _parse_linux(outputs: dict[str, str]) -> CredScanResult:
                 if n > 0:
                     result.patch_info.pending_updates = max(result.patch_info.pending_updates, n)
 
+    for key in outputs:
+        if "dpkg.log" in key:
+            m = re.match(r'^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', outputs[key].strip())
+            if m:
+                result.patch_info.last_update = m.group(1)
+            break
+    if not result.patch_info.last_update:
+        for key in outputs:
+            if "rpm -qa --last" in key:
+                m = re.match(r'^\S+\s+(.+)$', outputs[key].strip())
+                if m:
+                    result.patch_info.last_update = m.group(1).strip()
+                break
+
     return result
 
 
@@ -358,6 +374,7 @@ _WINDOWS_CMDS: List[str] = [
     "netstat -ano | findstr LISTENING",
     'powershell -NoProfile -Command "(New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher().Search(\'IsInstalled=0\').Updates | Select-Object -ExpandProperty Title | Measure-Object -Line | Select-Object -ExpandProperty Lines"',
     "powershell -NoProfile -Command \"Get-WinEvent -FilterHashtable @{LogName='Security';Id=4625;StartTime=(Get-Date).AddHours(-24)} -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count\"",
+    "powershell -NoProfile -Command \"Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 1 -ExpandProperty InstalledOn\"",
 ]
 
 
@@ -463,5 +480,12 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
         if "4625" in key:
             with contextlib.suppress(ValueError):
                 result.failed_logins = int(outputs[key].strip() or "0")
+
+    for key in outputs:
+        if "Get-HotFix" in key:
+            txt = outputs[key].strip()
+            if txt:
+                result.patch_info.last_update = txt.splitlines()[0].strip()
+            break
 
     return result

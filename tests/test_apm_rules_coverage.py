@@ -44,7 +44,7 @@ def test_package_in_architecture_layout(pkg: str, token: str):
         f"Package '{pkg}' (expected token {token!r}) is missing from "
         f".apm/instructions/architecture.instructions.md.\n"
         f"The layout map is directory-level by design — add the package to the "
-        f"map, then run: apm install --target all && apm compile --all.\n"
+        f"map, then run: apm install --target claude && apm compile --target claude --clean.\n"
         f"Per-file descriptions belong in each file's module docstring, not here "
         f"(RULE-GARDEN1)."
     )

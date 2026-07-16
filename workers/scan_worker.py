@@ -912,9 +912,10 @@ class OSFingerprintWorker(QThread):
     status = pyqtSignal(str)
     error  = pyqtSignal(str)
 
-    def __init__(self, ips: list, parent=None):
+    def __init__(self, ips: list, port_map: Optional[dict] = None, parent=None):
         super().__init__(parent)
         self.ips = ips
+        self.port_map = port_map
 
     def run(self):
         try:
@@ -922,6 +923,7 @@ class OSFingerprintWorker(QThread):
             results = fingerprint_hosts(
                 self.ips,
                 progress_cb=lambda m: self.status.emit(m),
+                port_map=self.port_map,
             )
             self.result.emit({"guesses": list(results.values())})
         except Exception as exc:

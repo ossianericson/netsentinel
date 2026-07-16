@@ -27,6 +27,13 @@ class _HelpTabsMixin:
 
     def _check_for_updates(self):
         """Manual update check from the Help tab button."""
+        from modules.utils import is_store_app  # noqa: PLC0415
+        if is_store_app():
+            self._update_lbl.setText(
+                "Updates are managed by the Microsoft Store and install automatically."
+            )
+            return
+
         import urllib.request, json as _json
         from PyQt6.QtWidgets import QApplication
         current = QApplication.applicationVersion()

@@ -689,7 +689,7 @@ for f in Path('ui').rglob('*.py'):
 Wrap in `try/except ImportError` inside the function that needs them. Never at module level.
 
 ### RULE-AH5 (blocking): User-visible names in code must match the names used in docs and UI
-Theme names, page labels, feature names must be identical in code, docstrings, README, BACKLOG, and apm.yml.
+Theme names, page labels, feature names must be identical in code, docstrings, README, and apm.yml.
 
 ---
 
