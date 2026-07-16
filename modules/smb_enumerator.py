@@ -267,7 +267,7 @@ def _net_view_shares(host: str) -> List[SMBShare]:
     if platform.system() != "Windows":
         return shares
     try:
-        extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
+        extra = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
         raw = subprocess.check_output(
             ["net", "view", f"\\\\{host}", "/all"],
             text=True, timeout=15, stderr=subprocess.DEVNULL, **extra
@@ -347,7 +347,7 @@ def _impacket_enum(
 def _net_exe_enum(host: str, username: str, password: str, domain: str,
                   progress: ProgressCB) -> SMBEnumResult:
     result = SMBEnumResult(host=host, tier=2)
-    extra = {"creationflags": subprocess.CREATE_NO_WINDOW} if platform.system() == "Windows" else {}
+    extra = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if platform.system() == "Windows" else {}
 
     def _run(cmd: List[str]) -> str:
         try:
