@@ -199,10 +199,10 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.31 (current)
+### v2.1.32 (current)
 
-- Refreshed the test-count figures in this README and `docs/architecture.md` — the suite has grown to 5,243 tests across 398 files
-- Logged the latest overnight chaos soak (9,729 interactions, zero crashes, flat memory) in the project's internal test history
+- Fixed a rare crash or hang when quitting NetSentinel — background monitors (syslog, SNMP-trap, passive discovery, scheduled scans) are now shut down cleanly before the app exits
+- The syslog and SNMP-trap receivers now stop instantly on quit instead of waiting out a socket timeout
 
 ---
 

@@ -89,6 +89,49 @@ from ui.export_mixin import _ExportMixin
 
 
 
+def _register_external_worker(workers: list, worker) -> None:
+    """Append *worker* to *workers* if it is real and not already present.
+
+    Free function (not a Dashboard method) so it is unit-testable without
+    constructing a Dashboard (RULE-TP4-DASH). ``worker`` may be None —
+    rest_api_worker is None unless the REST API is enabled.
+    """
+    if worker is not None and worker not in workers:
+        workers.append(worker)
+
+
+def _drain_external_workers(workers: list) -> None:
+    """Signal-stop then bounded-wait every always-on background worker.
+
+    NEVER calls terminate(). These workers can be inside a raw ``recvfrom()``
+    (SNMP-trap / syslog / passive observer) or an Npcap capture (posture
+    probes); TerminateThread on such a thread leaves WinSock / Npcap OS locks
+    held, which is exactly what corrupts the DLL_PROCESS_DETACH teardown that
+    os._exit(0) triggers — the shutdown ACCESS_VIOLATION / hang this replaces.
+
+    The socket workers' stop() closes their socket, so a blocked recvfrom()
+    returns at once; the 1500 ms wait is a safety margin above the receivers'
+    1 s socket timeout. A worker still mid-probe after the wait is left as-is
+    (a daemon-style best effort) rather than terminate()d — strictly safer than
+    the previous behaviour, which never stopped these workers at all.
+
+    Free function (not a Dashboard method) so it is unit-testable without
+    constructing a Dashboard (RULE-TP4-DASH).
+    """
+    for w in list(workers):
+        try:
+            if w.isRunning() and hasattr(w, "stop"):
+                w.stop()
+        except RuntimeError:
+            pass  # underlying C++ QThread already gone
+    for w in list(workers):
+        try:
+            if w.isRunning():
+                w.wait(1500)   # > 1 s socket timeout; deliberately no terminate()
+        except RuntimeError:
+            pass  # underlying C++ QThread already gone
+
+
 class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                _NavBuilderMixin, _LazyPageMixin, _MonitorStateMixin, _PluginPageMixin,
                _ExportMixin, QMainWindow):
@@ -194,6 +237,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._prescan_worker = None
         self._diag_worker = None
         self._logger_worker = None
+        # Always-on background workers created in app.py (availability, cert,
+        # syslog/SNMP-trap receivers, passive observer, posture probes, …).
+        # Registered here so closeEvent() drains them before os._exit(0); see
+        # register_external_worker() / _drain_external_workers().
+        self._external_workers: list = []
 
         # Scan watchdog (G5): guards against a hung pre-scan/module worker
         # leaving the UI stuck on "Scanning…" forever. Parented QTimer per
@@ -572,6 +620,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     # ── Window lifecycle ──────────────────────────────────────────────────────
 
+    def register_external_worker(self, worker) -> None:
+        """Register an always-on background worker (created in app.py) so that
+        closeEvent() stops it before os._exit(0). Tolerates None and duplicates.
+        """
+        _register_external_worker(self._external_workers, worker)
+
     def _quit_app(self):
         """Unconditional quit — bypasses minimize-to-tray logic."""
         self._tray_quit = True
@@ -636,6 +690,22 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             if w.isRunning():
                 w.terminate()
                 w.wait(2000)   # wait after terminate before object destruction
+
+        # Always-on background workers created in app.py (raw-socket receivers,
+        # posture probes, …). Stopped WITHOUT terminate() — see the mechanism
+        # note on _drain_external_workers(). Previously these were only stopped
+        # in a post-app.exec() block that os._exit(0) made unreachable, leaving
+        # them mid-syscall during process teardown (the shutdown crash/hang).
+        _drain_external_workers(self._external_workers)
+
+        # Hardware-integration poll workers (USB/serial/GPIO). Same story — their
+        # cleanup lived only in the now-removed dead post-app.exec() block.
+        _hw = getattr(self, "_hardware_integration_page", None)
+        if _hw is not None:
+            try:
+                _hw.closedown()
+            except Exception:
+                pass  # non-fatal — best-effort during hard shutdown
 
         super().closeEvent(event)
         # Stability Sprint 1 (G7): os._exit(0) below bypasses Python's normal

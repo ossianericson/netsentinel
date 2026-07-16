@@ -934,7 +934,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.31")
+    app.setApplicationVersion("2.1.32")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1077,7 +1077,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.31")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.32")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1390,6 +1390,20 @@ def main():
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
                        maint_manager=maint_manager)
 
+    # Register every always-on background worker with the Dashboard so that
+    # closeEvent() stops them before its os._exit(0). These are created above as
+    # locals; without registration nothing ever calls .stop() on them (the
+    # post-app.exec() cleanup below is dead code — os._exit(0) fires first), so
+    # raw-socket receivers could be mid recvfrom() during ExitProcess() teardown
+    # -> STATUS_ACCESS_VIOLATION / hang. rest_api_worker may be None (guarded).
+    for _bg_worker in (avail_worker, cert_worker, svc_worker, report_worker,
+                       snmp_trap_worker, syslog_worker, passive_observer_worker,
+                       health_worker, trend_worker, prune_worker,
+                       scheduled_speedtest_worker, port_sweep_worker,
+                       cve_recheck_worker, exposure_watch_worker,
+                       arp_watch_worker, dhcp_watch_worker, rest_api_worker):
+        window.register_external_worker(_bg_worker)
+
     _wire_logging(window, passive_observer_worker, snmp_trap_worker, syslog_worker)
     _wire_notifications(window, alerts, notif_router, maint_manager, report_worker)
     _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router, store)
@@ -1676,30 +1690,11 @@ def main():
     # ─────────────────────────────────────────────────────────────────────────
 
     ret = app.exec()
-    avail_worker.stop()
-    avail_worker.wait(5000)
-    cert_worker.stop()
-    cert_worker.wait(5000)
-    svc_worker.stop()
-    svc_worker.wait(5000)
-    report_worker.stop()
-    report_worker.wait(5000)
-    snmp_trap_worker.stop()
-    snmp_trap_worker.wait(5000)
-    syslog_worker.stop()
-    syslog_worker.wait(5000)
-    health_worker.stop()
-    health_worker.wait(3000)
-    if scheduled_speedtest_worker.isRunning():
-        scheduled_speedtest_worker.stop()
-        scheduled_speedtest_worker.wait(5000)
-    if rest_api_worker is not None:
-        rest_api_worker.stop()
-        rest_api_worker.wait(3000)
-    window._hardware_integration_page.closedown()
-    if _instance_server is not None:
-        _instance_server.close()
-    store.close()
+    # On every real quit, Dashboard.closeEvent() drains all background workers
+    # (register_external_worker) and hard-exits via os._exit(0) BEFORE app.exec()
+    # can return — so worker/hardware/store cleanup lives there, not here. This
+    # line is reached only if the Qt event loop ever exits without going through
+    # that path; keep a clean process exit for that case.
     sys.exit(ret)
 
 

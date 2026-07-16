@@ -36,19 +36,30 @@ class SnmpTrapWorker(QThread):
         self._port         = port
         self._bind_address = bind_address
         self._running      = False
+        self._receiver: SnmpTrapReceiver | None = None
 
     def stop(self) -> None:
+        # Flip the flag first, THEN close the socket. Closing it unblocks a
+        # recvfrom() in run() immediately (main thread -> worker socket), so
+        # shutdown does not depend on the 1 s socket timeout expiring. Without
+        # this, closeEvent's bounded wait would fall through to terminate()
+        # (TerminateThread), which corrupts WinSock teardown on a blocked socket.
         self._running = False
+        receiver = self._receiver
+        if receiver is not None:
+            receiver.close()
 
     def run(self) -> None:
         self._running = True
         receiver = SnmpTrapReceiver(port=self._port, bind_address=self._bind_address)
+        self._receiver = receiver
         try:
             actual_port = receiver.open()
             self.status.emit(f"Listening on UDP :{actual_port}")
         except OSError as exc:
             self.error.emit(f"Cannot bind UDP port {self._port}: {exc}")
             self._running = False
+            self._receiver = None
             return
 
         try:
@@ -57,9 +68,14 @@ class SnmpTrapWorker(QThread):
                 if trap is not None:
                     self.trap_received.emit(_trap_to_dict(trap))
         except Exception as exc:
-            self.error.emit(str(exc))
+            if self._running:
+                # A genuine runtime error. When stop() closed the socket, _running
+                # is already False and recvfrom's error is the expected wake-up —
+                # do not surface it as a scan error during shutdown.
+                self.error.emit(str(exc))
         finally:
             receiver.close()
+            self._receiver = None
 
 
 def _trap_to_dict(trap: SnmpTrap) -> dict:
