@@ -341,8 +341,7 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Test-count figures refreshed", "The README and architecture docs now report the current suite size — 5,243 tests across 398 files."),
-        ("Overnight chaos soak logged", "A 9,729-interaction overnight chaos run completed clean — zero crashes, zero exceptions, flat memory — and is now recorded in the project's test history."),
+        ("Cleaner, safer shutdown", "Background monitors (syslog, SNMP-trap, passive discovery, and scheduled scans) are now shut down properly when you quit — fixing a rare crash or hang on exit."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

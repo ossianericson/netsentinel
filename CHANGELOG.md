@@ -4,6 +4,17 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.32
+
+Shutdown-stability fix. No user-facing features or settings changed.
+
+**Fixed**
+- Always-on background monitors (`syslog` / `SNMP-trap` receivers, the passive SSDP/mDNS observer, and scheduled posture probes) are now stopped when the app quits, before the hard `os._exit(0)`. They were created in `app.py` but never registered with `Dashboard.closeEvent()`, so a raw-socket receiver could be mid `recvfrom()` during process teardown and crash with `STATUS_ACCESS_VIOLATION` — or hang — on exit
+- `SnmpTrapWorker`/`SyslogWorker` now close their socket in `stop()` to interrupt the blocking read immediately, and `closeEvent` drains these workers without `terminate()` — calling `TerminateThread` on a thread inside a raw socket / Npcap call is what corrupted the teardown
+- Removed the dead post-`app.exec()` cleanup block in `app.py` (unreachable because `closeEvent` hard-exits first); relocated the hardware-integration poll-worker `closedown()` into `closeEvent`
+
+---
+
 ### v2.1.31
 
 Documentation-accuracy release. No user-facing features or settings changed.

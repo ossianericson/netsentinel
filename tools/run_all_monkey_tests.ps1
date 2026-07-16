@@ -59,6 +59,24 @@
     Print the resolved cycle/phase plan and exit. Launches nothing, does not
     touch console Quick Edit / sleep settings.
 
+.PARAMETER Store
+    Target the installed Microsoft Store package instead of `python app.py`.
+    Every phase launches the Store app via normal shell activation
+    (`explorer.exe shell:AppsFolder\<AUMID>`) and drives it with `--connect`
+    instead of `--source`.
+
+    This matters because a raw exe-path launch (`monkey_test.py <path-to-
+    WindowsApps-exe>`) bypasses the MSIX activation broker and reliably
+    triggers a false-positive native fault (0x8001010d, RULE-WIN10) that real
+    Store users - who always launch via Start Menu/search/taskbar - never
+    hit. Shell activation + --connect reproduces the real launch path and was
+    confirmed clean in a live A/B test (2026-07-15).
+
+    Soak phases run without --tracemalloc (that instrumentation only works
+    with --source - there is no way to inject it into a packaged exe you
+    don't control the launch of). Requires the Store build to already be
+    installed; resolved once via Get-StartApps at startup.
+
 .EXAMPLE
     .\tools\run_all_monkey_tests.ps1
     Run cycles until you press Ctrl+C.
@@ -81,6 +99,14 @@
 .EXAMPLE
     .\tools\run_all_monkey_tests.ps1 20h -PlanOnly
     Preview the cycle/phase plan for a 20-hour run without launching anything.
+
+.EXAMPLE
+    .\tools\run_all_monkey_tests.ps1 1h -Store
+    One coverage cycle against the Microsoft Store package.
+
+.EXAMPLE
+    .\tools\run_all_monkey_tests.ps1 8h -Soak -Store
+    Long-haul soak against the Store package (no tracemalloc).
 #>
 [CmdletBinding()]
 param(
@@ -88,7 +114,8 @@ param(
     [string]$Duration = "",
 
     [switch]$Soak,
-    [switch]$PlanOnly
+    [switch]$PlanOnly,
+    [switch]$Store
 )
 
 # Repo root is the parent of tools\ (this script's dir).
@@ -354,6 +381,85 @@ function Get-PhaseHealth {
     return $h
 }
 
+function Resolve-StoreApp {
+    # Resolves the Store package's AUMID once via Get-StartApps (the same
+    # index Start Menu search uses) - not a hardcoded PackageFamilyName,
+    # which changes per-publisher/per-machine. Hard-errors if not found:
+    # -Store has nothing to launch without an installed Store build.
+    $app = Get-StartApps | Where-Object { $_.Name -eq "NetSentinel" } | Select-Object -First 1
+    if (-not $app) {
+        Write-Host "ERROR: -Store requires the Microsoft Store build of NetSentinel to be installed (not found via Get-StartApps)." -ForegroundColor Red
+        exit 1
+    }
+    $script:StoreAumid = $app.AppID
+    $pfn = ($app.AppID -split '!')[0]
+    $pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq $pfn } | Select-Object -First 1
+    if ($pkg) { $script:StorePackageLabel = "$($pkg.Name) $($pkg.Version) ($($pkg.PackageFullName))" }
+    else { $script:StorePackageLabel = $app.AppID }
+    Write-Host "[setup] Store target: $script:StorePackageLabel" -ForegroundColor Gray
+}
+
+function Start-StoreApp {
+    # Kills any stale NetSentinel process, then launches the Store package via
+    # normal shell activation - NOT a raw exe-path Popen. Direct exe-path
+    # launch bypasses the MSIX activation broker (ApplicationActivationManager)
+    # and reliably reproduces a false-positive 0x8001010d UIA fault
+    # (RULE-WIN10) that real Store users never see, because they always
+    # launch via Start Menu/search/taskbar, which goes through the broker.
+    # Proved 2026-07-15: identical exe, --connect after shell activation =
+    # clean 20/20 iterations; monkey_test.py <exe_path> direct launch =
+    # crash on iteration 0.
+    Get-Process -Name "NetSentinel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+    Start-Process "explorer.exe" -ArgumentList "shell:AppsFolder\$script:StoreAumid"
+
+    # --connect mode in monkey_test.py/systematic_test.py/etc. is a ONE-SHOT
+    # window check (_attach()) - unlike --source/exe launch, it does NOT poll
+    # for up to 60s. A cold Store-app launch takes ~15-20s to render its main
+    # window (measured 2026-07-15), so this wrapper must own the wait instead
+    # or every phase's _attach() fires before the window exists.
+    #
+    # Must match "*Dashboard*" specifically, not just a non-empty title: the
+    # splash screen's own window title is literally "NetSentinel" (matches a
+    # bare non-empty check) and is visible for ~10s before the real Dashboard
+    # window replaces it (traced 2026-07-15 - splash title holds t=5s..t=12s,
+    # "NetSentinel — Dashboard" only appears at t=13s). Matching on the splash
+    # would return early and hand _attach() a window that's about to close.
+    $deadline = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $deadline) {
+        $p = Get-Process -Name "NetSentinel" -ErrorAction SilentlyContinue |
+             Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like "*Dashboard*" } |
+             Select-Object -First 1
+        if ($p) { Start-Sleep -Milliseconds 1500; return }   # brief settle so UIA has a stable tree before --connect's one-shot check
+        Start-Sleep -Milliseconds 1000
+    }
+    Write-Host "[warn] Store app window did not appear within 60s - next phase's --connect will likely fail." -ForegroundColor Yellow
+}
+
+function Get-LaunchModeArgs {
+    # Central switch between the two ways a phase can reach the app: normal
+    # dev loop launches fresh `python app.py` per phase (--source); -Store
+    # mode instead relies on the caller having already started the app via
+    # Start-StoreApp and just attaches (--connect).
+    #
+    # -SupportsMaxRestarts scripts (monkey_test.py, monkey_mouse_test.py,
+    # scan_navigate_test.py) get an explicit --max-restarts 0 in Store mode:
+    # their built-in crash-recovery calls _launch_exe(), which uses
+    # self.cfg.exe_path - always None in --connect mode - so a real in-phase
+    # crash would fail to relaunch anyway. The wrapper's own per-phase fresh
+    # relaunch (Start-StoreApp before every Invoke-Phase call) already
+    # provides equivalent recovery at the cycle level; this just avoids a
+    # confusing "relaunch failed" line in the log for a restart path that was
+    # never going to work.
+    param([switch]$SupportsMaxRestarts)
+    if ($Store) {
+        $a = @("--connect")
+        if ($SupportsMaxRestarts) { $a += @("--max-restarts", "0") }
+        return $a
+    }
+    return @("--source")
+}
+
 function Format-HealthCell {
     param($Health)
     if ($null -eq $Health) { return "-" }
@@ -399,6 +505,7 @@ function Write-AiReport {
         [void]$sb.AppendLine("- Status: IN PROGRESS (this file is rewritten after every phase)")
     }
     [void]$sb.AppendLine("- Budget: $($Meta.BudgetLabel)")
+    if ($Meta.Target) { [void]$sb.AppendLine("- Target: $($Meta.Target)") }
     [void]$sb.AppendLine("- Cycles completed: $($Meta.CyclesCompleted)")
     [void]$sb.AppendLine("- Output root: $($Meta.OutRoot)")
     [void]$sb.AppendLine("- Runner: tools/run_all_monkey_tests.ps1")
@@ -628,6 +735,11 @@ if ($PlanOnly) {
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host "NetSentinel chaos test PLAN (preview only - nothing launched)" -ForegroundColor Cyan
     Write-Host ("  budget: {0}" -f $budgetLabel)
+    if ($Store) {
+        Write-Host "  target: Microsoft Store package (shell activation + --connect per phase)"
+    } else {
+        Write-Host "  target: python app.py (--source per phase)"
+    }
     Write-Host "============================================================" -ForegroundColor Cyan
 
     $elapsed = 0.0
@@ -646,7 +758,8 @@ if ($PlanOnly) {
             exit 1
         }
         Write-Host ""
-        Write-Host "[soak mode -Soak] straight into long-haul soak from the start - mild/moderate/wild only, continuous (--tracemalloc on), no restarts:" -ForegroundColor DarkCyan
+        $tmLabel = if ($Store) { "no tracemalloc (Store build)" } else { "--tracemalloc on" }
+        Write-Host "[soak mode -Soak] straight into long-haul soak from the start - mild/moderate/wild only, continuous ($tmLabel), no restarts:" -ForegroundColor DarkCyan
         Write-Host ("    {0,-28} planned {1}" -f "Monkey mild (soak)", (Format-Secs $soakDurations.mild))
         Write-Host ("    {0,-28} planned {1}" -f "Monkey moderate (soak)", (Format-Secs $soakDurations.moderate))
         Write-Host ("    {0,-28} planned {1}" -f "Monkey wild (soak)", (Format-Secs $soakDurations.wild))
@@ -698,7 +811,8 @@ if ($PlanOnly) {
             $soakDurations = Get-SoakDurations -RemainingSecs $remainingAfterCycle1
             if ($soakDurations) {
                 Write-Host ""
-                Write-Host "[soak mode] long-haul tail after hour 1 - mild/moderate/wild only, continuous (--tracemalloc on), no restarts:" -ForegroundColor DarkCyan
+                $tmLabel = if ($Store) { "no tracemalloc (Store build)" } else { "--tracemalloc on" }
+                Write-Host "[soak mode] long-haul tail after hour 1 - mild/moderate/wild only, continuous ($tmLabel), no restarts:" -ForegroundColor DarkCyan
                 Write-Host ("    {0,-28} planned {1}" -f "Monkey mild (soak)", (Format-Secs $soakDurations.mild))
                 Write-Host ("    {0,-28} planned {1}" -f "Monkey moderate (soak)", (Format-Secs $soakDurations.moderate))
                 Write-Host ("    {0,-28} planned {1}" -f "Monkey wild (soak)", (Format-Secs $soakDurations.wild))
@@ -747,6 +861,10 @@ if ($venvActivate) {
     Write-Host "[setup] No venv found - using system Python" -ForegroundColor Gray
 }
 
+$script:StoreAumid = $null
+$script:StorePackageLabel = $null
+if ($Store) { Resolve-StoreApp }
+
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $outRoot = Join-Path $env:USERPROFILE ("Documents\NetSentinel\test_output\run_" + $stamp)
 New-Item -ItemType Directory -Force -Path $outRoot | Out-Null
@@ -764,6 +882,10 @@ Write-Host "============================================================" -Foreg
 Write-Host "NetSentinel - chaos/monkey test run" -ForegroundColor Cyan
 Write-Host ("  budget   : {0}" -f $budgetLabel)
 Write-Host ("  output   : {0}" -f $outRoot)
+if ($Store) {
+    Write-Host ("  target   : Microsoft Store package - {0}" -f $script:StorePackageLabel) -ForegroundColor Yellow
+    Write-Host "             (shell activation + --connect per phase, not python app.py)" -ForegroundColor Yellow
+}
 if ($Soak) {
     Write-Host "  mode     : -Soak (memory soak from the start, no coverage cycle)" -ForegroundColor Yellow
 } else {
@@ -780,11 +902,13 @@ $meta = [pscustomobject]@{
     BudgetLabel     = $budgetLabel
     CyclesCompleted = 0
     OutRoot         = $outRoot
+    Target          = if ($Store) { $script:StorePackageLabel } else { "python app.py (source)" }
 }
 
 try {
     # Initial coverage sweep
-    $sweepArgs = @("--source", "--pause", "0.4", "--focus-interval", "1.5")
+    $sweepArgs = @(Get-LaunchModeArgs) + @("--pause", "0.4", "--focus-interval", "1.5")
+    if ($Store) { Start-StoreApp }
     $r = Invoke-Phase -CycleNum 0 -Label "Systematic sweep (pre)" -Script "tools\systematic_test.py" `
         -ScriptArgs $sweepArgs -OutDir (Join-Path $outRoot (Get-OutSub "sweep" 0 "")) `
         -Chaos $null -Seed $null -PlannedSecs $SweepEstSecs
@@ -827,12 +951,13 @@ try {
             $secs = $unit * $def.Weight
             $outDir = Join-Path $outRoot (Get-OutSub "phase" $cycleNum $def.Key)
             $seed = $null
-            $scriptArgs = @("--source", "--duration", "$secs", "--focus-interval", "1.5")
+            $scriptArgs = @(Get-LaunchModeArgs -SupportsMaxRestarts) + @("--duration", "$secs", "--focus-interval", "1.5")
             if ($def.SeedBase) {
                 $seed = $def.SeedBase + $seedOffset
                 $scriptArgs += @("--chaos", $def.Chaos, "--seed", "$seed", "--mem-limit", "$($def.MemLimit)")
             }
 
+            if ($Store) { Start-StoreApp }
             $r = Invoke-Phase -CycleNum $cycleNum -Label $def.Label -Script $def.Script `
                 -ScriptArgs $scriptArgs -OutDir $outDir -Chaos $def.Chaos -Seed $seed -PlannedSecs $secs
             [void]$results.Add($r)
@@ -842,6 +967,7 @@ try {
         # Closing sweep for this cycle - also serves as the opening sweep for
         # the next cycle if the budget allows another one.
         $outDir = Join-Path $outRoot (Get-OutSub "sweep" $cycleNum "")
+        if ($Store) { Start-StoreApp }
         $r = Invoke-Phase -CycleNum $cycleNum -Label "Systematic sweep (post)" -Script "tools\systematic_test.py" `
             -ScriptArgs $sweepArgs -OutDir $outDir -Chaos $null -Seed $null -PlannedSecs $SweepEstSecs
         [void]$results.Add($r)
@@ -870,7 +996,8 @@ try {
         } else {
             Write-Host "[soak] entering long-haul mode after coverage cycle - mild/moderate/wild only," -ForegroundColor Cyan
         }
-        Write-Host "       continuous (--tracemalloc on), no restarts between phases" -ForegroundColor Cyan
+        $tmLabel = if ($Store) { "no tracemalloc (Store build)" } else { "--tracemalloc on" }
+        Write-Host "       continuous ($tmLabel), no restarts between phases" -ForegroundColor Cyan
         Write-Host "============================================================" -ForegroundColor Cyan
 
         # Report "Cycle" column: 1 when a coverage cycle preceded the soak, 0 for -Soak-from-start.
@@ -885,13 +1012,15 @@ try {
                 if ($secs -le 0) { continue }
                 $outDir = Join-Path $outRoot (Get-OutSub "soak" $lap $def.Key)
                 $seed = $def.SeedBase + $soakSeedOffset
-                $scriptArgs = @("--source", "--duration", "$secs", "--focus-interval", "1.5",
-                                 "--chaos", $def.Chaos, "--seed", "$seed", "--mem-limit", "$($def.MemLimit)",
-                                 "--tracemalloc")
+                $useTracemalloc = -not $Store
+                $scriptArgs = @(Get-LaunchModeArgs -SupportsMaxRestarts) + @("--duration", "$secs", "--focus-interval", "1.5",
+                                 "--chaos", $def.Chaos, "--seed", "$seed", "--mem-limit", "$($def.MemLimit)")
+                if ($useTracemalloc) { $scriptArgs += "--tracemalloc" }
 
+                if ($Store) { Start-StoreApp }
                 $r = Invoke-Phase -CycleNum $coverageCycles -Label "$($def.Label) [lap $lap]" -Script $def.Script `
                     -ScriptArgs $scriptArgs -OutDir $outDir -Chaos $def.Chaos -Seed $seed `
-                    -PlannedSecs $secs -Tracemalloc
+                    -PlannedSecs $secs -Tracemalloc:$useTracemalloc
                 [void]$results.Add($r)
                 $meta.CyclesCompleted = "$coverageCycles (+ soak lap $lap)"
                 Write-AiReport -ReportPath $reportPath -Meta $meta -Results $results
@@ -901,6 +1030,7 @@ try {
                 # Finite budget: the lap was sized to consume the rest of it -
                 # close out with one final sweep, same as the old .bat suites.
                 $outDir = Join-Path $outRoot (Get-OutSub "soaksweep" 0 "")
+                if ($Store) { Start-StoreApp }
                 $r = Invoke-Phase -CycleNum $coverageCycles -Label "Systematic sweep (post-soak)" -Script "tools\systematic_test.py" `
                     -ScriptArgs $sweepArgs -OutDir $outDir -Chaos $null -Seed $null -PlannedSecs $SweepEstSecs
                 [void]$results.Add($r)
