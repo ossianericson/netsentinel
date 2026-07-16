@@ -329,7 +329,6 @@ def test_ui_reads_only_existing_dataclass_fields():
 _PRODUCERLESS_FIELD_BASELINE: dict[tuple[str, str, str], bool] = {
     ("modules.geo_locator", "GeoResult", "asn"): True,       # True = confirmed producer-less
     ("modules.geo_locator", "GeoResult", "org"): True,
-    ("modules.credentialed_scan_helpers", "PatchInfo", "last_update"): True,
     ("modules.smb_enumerator", "SMBEnumResult", "sessions"): True,
     ("modules.smb_enumerator", "SMBEnumResult", "is_domain_controller"): True,
 }

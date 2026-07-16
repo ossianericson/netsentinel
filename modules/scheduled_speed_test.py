@@ -32,7 +32,9 @@ class ScheduledSpeedTestResult:
             self.prior_sinr = []
 
 
-def run_scheduled_speed_test(store: MetricStore) -> ScheduledSpeedTestResult:
+def run_scheduled_speed_test(
+    store: MetricStore, server_id: Optional[str] = None
+) -> ScheduledSpeedTestResult:
     """
     Run one speed test, persist it via MetricStore, and return the result
     plus prior download-speed history (for BASELINE_DROP evaluation).
@@ -45,6 +47,11 @@ def run_scheduled_speed_test(store: MetricStore) -> ScheduledSpeedTestResult:
     plugin is configured) so evaluate_baseline_metrics() can tell a radio
     problem apart from an ISP problem. Absent any modem plugin, this is
     simply an empty list and current_sinr stays None — no behavior change.
+
+    server_id: resolved by the caller via speed_tester.resolve_server_id() from
+    the user's pinned server / preferred location, if any — so scheduled tests
+    apply the same location correction manual tests do instead of always
+    falling back to auto-best (see the Speed Test wrong-country server fix).
     """
     prior_downloads = [
         p.download_mbps for p in store.query_speed_test_history(hours=1440.0, limit=400)
@@ -54,7 +61,7 @@ def run_scheduled_speed_test(store: MetricStore) -> ScheduledSpeedTestResult:
     current_sinr = modem_points[0].nr5g_sinr if modem_points else None
     prior_sinr = [p.nr5g_sinr for p in modem_points[1:] if p.nr5g_sinr is not None]
 
-    result = speed_tester.run_test()
+    result = speed_tester.run_test(server_id=server_id)
 
     store.record_speed_test(
         download_mbps=result.download_mbps,

@@ -49,7 +49,12 @@ class LiveGraphWidget(QWidget):
         layout.addWidget(self._canvas)
 
         self._style_axes()
-        self._fig.set_tight_layout({"pad": 1.0})  # applied once; avoids per-redraw accumulation
+        # Fixed margins instead of tight_layout. This small 8x3 figure cannot satisfy
+        # the tight-layout constraint (title + x/y labels + legend), so that engine
+        # re-warns "Tight layout not applied" on every draw_idle(). subplots_adjust is
+        # deterministic and silent — the same approach ui/topology_widget.py uses.
+        # Figure-level, so it survives ax.cla() in redraw()/reset().
+        self._fig.subplots_adjust(left=0.10, right=0.97, top=0.88, bottom=0.17)
 
     def _style_axes(self):
         ax = self._ax
@@ -102,13 +107,17 @@ class LiveGraphWidget(QWidget):
                     label="Timeout" if "Timeout" not in [l.get_label() for l in ax.lines] else "",
                 )
 
-        ax.legend(
-            loc="upper right",
-            fontsize=8,
-            facecolor=_s.BG_CARD,
-            edgecolor=_s.CHART_SPINE,
-            labelcolor=_s.TEXT_PRIMARY,
-        )
+        # Only draw a legend when something labelled was actually plotted — calling
+        # ax.legend() with no labelled artists warns "No artists with labels found
+        # for legend" on every empty redraw (before the first ping arrives).
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(
+                loc="upper right",
+                fontsize=8,
+                facecolor=_s.BG_CARD,
+                edgecolor=_s.CHART_SPINE,
+                labelcolor=_s.TEXT_PRIMARY,
+            )
         self._canvas.draw_idle()
 
     def refresh_theme(self):

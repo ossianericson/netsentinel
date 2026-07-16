@@ -522,6 +522,9 @@ class NetworkMapPage(QWidget):
         itself passes persist_cache=False so it never overwrites a good
         cache with derived/incomplete data.
         """
+        from modules.topology_cytoscape import synthesize_mesh_only_clients  # noqa: PLC0415
+        devices = synthesize_mesh_only_clients(devices, mesh_enrichment, mesh_units, gateway_ip)
+
         self._last_render_kwargs = dict(
             devices=devices,
             gateway_ip=gateway_ip,

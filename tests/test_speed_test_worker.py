@@ -124,6 +124,29 @@ def test_fetch_servers_worker_mocked_success():
         _cleanup(w)
 
 
+def test_fetch_servers_worker_forwards_preferred_location():
+    """FetchServersWorker must forward preferred_location straight into
+    fetch_servers() — this is what the UI's location-search box relies on to
+    bypass IP geolocation for the wrong-country server list bug."""
+    from workers.speed_test_worker import FetchServersWorker
+
+    captured = {}
+
+    def _fake_fetch_servers(limit, on_status=None, preferred_location=None):
+        captured["limit"] = limit
+        captured["preferred_location"] = preferred_location
+        return []
+
+    with patch("modules.speed_tester.fetch_servers", side_effect=_fake_fetch_servers):
+        w = FetchServersWorker(limit=3, preferred_location="Stockholm, Sweden")
+        w.start()
+        w.wait(3000)
+        _drain(w)
+        assert not w.isRunning()
+        assert captured["preferred_location"] == "Stockholm, Sweden"
+        _cleanup(w)
+
+
 def test_fetch_servers_worker_mocked_error():
     """FetchServersWorker emits error when backend raises."""
     from workers.speed_test_worker import FetchServersWorker

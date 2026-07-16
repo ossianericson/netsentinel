@@ -339,7 +339,17 @@ class _ReconTabsMixin:
             return
         self._recon_os_table.setRowCount(0)
         self._nav_set_scan_state(L.OS_DETECTION, "running")
-        self._os_worker = OSFingerprintWorker(ips=ips)
+        port_map: dict = {}
+        for ip, entries in getattr(self, "_port_data_cache", {}).items():
+            ports = []
+            for e in entries:
+                try:
+                    ports.append(int(e.get("port")))
+                except (TypeError, ValueError):
+                    continue
+            if ports:
+                port_map[ip] = ports
+        self._os_worker = OSFingerprintWorker(ips=ips, port_map=port_map)
         self._os_worker.result.connect(self._on_os_result)
         self._os_worker.status.connect(self._os_status.setText)
         self._os_worker.error.connect(lambda e: self._os_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)

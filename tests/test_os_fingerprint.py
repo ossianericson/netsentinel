@@ -55,3 +55,18 @@ def test_window_to_os_windows10():
 def test_window_to_os_linux():
     os_name, confidence = _window_to_os(29200, 64, [])
     assert "Linux" in os_name
+
+
+def test_merge_ports_known_first_then_fallback_deduped():
+    from modules.os_fingerprint import _merge_ports
+    assert _merge_ports([22, 443]) == [22, 443, 80, 8080]
+
+
+def test_merge_ports_none_falls_back_to_defaults():
+    from modules.os_fingerprint import _merge_ports
+    assert _merge_ports(None) == [80, 443, 22, 8080]
+
+
+def test_merge_ports_empty_list_falls_back_to_defaults():
+    from modules.os_fingerprint import _merge_ports
+    assert _merge_ports([]) == [80, 443, 22, 8080]

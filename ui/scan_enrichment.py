@@ -673,7 +673,8 @@ class ScanEnrichmentMixin:
         for share in res.shares:
             r = self._recon_smb_shares_table.rowCount()
             self._recon_smb_shares_table.insertRow(r)
-            risk = "HIGH" if (share.share_type in high_risk and not share.name.endswith("$")) else "—"
+            risk = "HIGH" if (share.share_type in high_risk and not share.name.endswith("$")
+                              and share.visible_anonymous) else "—"
             for c, v in enumerate([share.name, share.share_type, share.comment, risk]):
                 item = _TWI(v)
                 if risk == "HIGH":

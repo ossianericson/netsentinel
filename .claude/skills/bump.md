@@ -134,7 +134,7 @@ Before presenting the result to the user, confirm every box:
 - [ ] `git push origin main` completed before tag push
 - [ ] `git tag vX.Y.Z` and `git push origin vX.Y.Z` completed
 
-If BACKLOG.md and architecture docs need updating (new modules, new pages), do those before
+If architecture docs need updating (new modules, new pages), do those before
 Step 5 so the bump commit includes everything.
 
 ---

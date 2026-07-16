@@ -11,8 +11,8 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # Helpers re-used by build_help_tab()
 # ---------------------------------------------------------------------------
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QColor, QDesktopServices, QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -341,7 +341,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Cleaner, safer shutdown", "Background monitors (syslog, SNMP-trap, passive discovery, and scheduled scans) are now shut down properly when you quit — fixing a rare crash or hang on exit."),
+        ("Protocol Visualizer step list", "Click any step in the new Steps list to jump directly to it — stays in sync with playback."),
+        ("Consistent Network Map", "Devices that never answer ARP (like the scanning PC itself) now show on both the Classic and Interactive maps."),
+        ("Microsoft Store update fix", "Store installs now point to the Store's own update page instead of GitHub."),
+        ("Sharper Security Audit results", "OS Detection reuses your last port scan, SMB share risk flags are more accurate, and SNMP CPU/load polling was added."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
@@ -604,6 +607,8 @@ def build_help_tab(window) -> QWidget:
     bl.addWidget(appear_callout)
 
     # ── Check for updates ─────────────────────────────────────────────────
+    from modules.utils import is_store_app, store_update_url  # noqa: PLC0415
+    _store_build = is_store_app()
     update_card = QFrame()
     update_card.setObjectName("card")
     _s.themed_ss(update_card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
@@ -623,13 +628,26 @@ def build_help_tab(window) -> QWidget:
     ucl.addWidget(utb)
     ubody = QHBoxLayout()
     ubody.setContentsMargins(12, 8, 12, 10)
-    window._update_lbl = QLabel(f"Current version: v{app_ver}")
+    if _store_build:
+        window._update_lbl = QLabel(
+            "Updates are managed by the Microsoft Store and install automatically."
+        )
+    else:
+        window._update_lbl = QLabel(f"Current version: v{app_ver}")
     _s.themed_ss(window._update_lbl, "font-size:11px;color:{TEXT_PRIMARY};")
     ubody.addWidget(window._update_lbl, 1)
-    btn_update = QPushButton("Check for Updates")
-    btn_update.setObjectName("btnNetRefresh")
-    btn_update.setFixedWidth(140)
-    btn_update.clicked.connect(window._check_for_updates)
+    if _store_build:
+        btn_update = QPushButton("Open Microsoft Store")
+        btn_update.setObjectName("btnNetRefresh")
+        btn_update.setFixedWidth(160)
+        btn_update.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(store_update_url()))
+        )
+    else:
+        btn_update = QPushButton("Check for Updates")
+        btn_update.setObjectName("btnNetRefresh")
+        btn_update.setFixedWidth(140)
+        btn_update.clicked.connect(window._check_for_updates)
     ubody.addWidget(btn_update)
     ucl.addLayout(ubody)
     bl.addWidget(update_card)

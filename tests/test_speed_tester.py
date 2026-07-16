@@ -155,3 +155,94 @@ def test_fetch_servers_raises_after_exhausting_retries_with_no_cache(monkeypatch
 
     with pytest.raises(RuntimeError):
         st.fetch_servers(limit=3)
+
+
+# ── preferred_location: search-by-name bypass for wrong-country geolocation ─────
+
+def test_fetch_servers_uses_query_when_preferred_location_set(monkeypatch):
+    """When preferred_location is given, fetch_servers must use the location-search
+    path and must NOT touch the IP-geolocation cascade at all — this is the actual
+    fix for the wrong-country candidate list bug (RULE-T3 regression coverage)."""
+    st = importlib.import_module("modules.speed_tester")
+    from modules.speed_tester_backends import SpeedServer
+
+    calls = {"query": None}
+
+    def _fake_by_query(query, limit=30, on_status=None):
+        calls["query"] = query
+        return [SpeedServer(id="42", name="Telia", city="Stockholm",
+                            country="Sweden", host="h:8080", latency_ms=5.0)]
+
+    def _fail_if_called(*_a, **_kw):
+        raise AssertionError("geo-guess cascade must not run when preferred_location is set")
+
+    monkeypatch.setattr(st, "_fetch_servers_by_query", _fake_by_query)
+    monkeypatch.setattr(st, "_fetch_servers_python", _fail_if_called)
+
+    servers = st.fetch_servers(limit=10, preferred_location="Stockholm, Sweden")
+
+    assert calls["query"] == "Stockholm, Sweden"
+    assert len(servers) == 1
+    assert servers[0].country == "Sweden"
+
+
+def test_fetch_servers_default_behavior_unchanged_without_preferred_location(monkeypatch):
+    """Absent preferred_location must be byte-for-byte today's behavior — no regression
+    for users unaffected by the geolocation bug."""
+    st = importlib.import_module("modules.speed_tester")
+    from modules.speed_tester_backends import SpeedServer
+
+    monkeypatch.setitem(sys.modules, "speedtest", None)  # force pure-python path
+
+    def _fake_python(limit, on_status=None):
+        return [SpeedServer(id="1", name="X", city="Y", country="Z",
+                            host="h:8080", latency_ms=1.0)]
+
+    monkeypatch.setattr(st, "_fetch_servers_python", _fake_python)
+
+    servers = st.fetch_servers(limit=5)
+    assert len(servers) == 1
+    assert servers[0].id == "1"
+
+
+def test_resolve_server_id_prefers_pinned_id(monkeypatch):
+    """An explicit pinned server ID wins outright — no network call needed."""
+    st = importlib.import_module("modules.speed_tester")
+
+    def _fail(*_a, **_kw):
+        raise AssertionError("must not fetch servers when a pinned id is already given")
+
+    monkeypatch.setattr(st, "fetch_servers", _fail)
+    assert st.resolve_server_id(preferred_server_id="123", preferred_location="Sweden") == "123"
+
+
+def test_resolve_server_id_falls_back_to_location_search(monkeypatch):
+    """No pinned id, but a saved location → resolve to the fastest search result."""
+    st = importlib.import_module("modules.speed_tester")
+    from modules.speed_tester_backends import SpeedServer
+
+    monkeypatch.setattr(
+        st, "fetch_servers",
+        lambda limit=10, preferred_location=None: [
+            SpeedServer(id="99", name="A", city="B", country="Sweden",
+                        host="h:8080", latency_ms=1.0)
+        ],
+    )
+    assert st.resolve_server_id(preferred_server_id=None, preferred_location="Sweden") == "99"
+
+
+def test_resolve_server_id_returns_none_when_neither_set():
+    st = importlib.import_module("modules.speed_tester")
+    assert st.resolve_server_id(None, None) is None
+
+
+def test_resolve_server_id_location_search_failure_returns_none(monkeypatch):
+    """A failed location search must degrade to None (today's fully-automatic
+    behavior), never raise, so a scheduled background test isn't broken by it."""
+    st = importlib.import_module("modules.speed_tester")
+
+    def _fail(*_a, **_kw):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(st, "fetch_servers", _fail)
+    assert st.resolve_server_id(None, "Sweden") is None

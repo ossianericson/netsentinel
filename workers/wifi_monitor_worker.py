@@ -24,6 +24,24 @@ import time
 from PyQt6.QtCore import QThread, pyqtSignal
 
 
+def _classify(pkt) -> str:
+    from scapy.layers.dot11 import (
+        Dot11, Dot11Beacon, Dot11ProbeReq, Dot11ProbeResp,
+        Dot11Auth, Dot11AssoReq, Dot11AssoResp, Dot11Deauth,
+    )
+    from scapy.layers.eap import EAPOL
+    if pkt.haslayer(EAPOL):          return "EAPOL"
+    if pkt.haslayer(Dot11Beacon):    return "Beacon"
+    if pkt.haslayer(Dot11ProbeReq):  return "Probe Request"
+    if pkt.haslayer(Dot11ProbeResp): return "Probe Response"
+    if pkt.haslayer(Dot11Auth):      return "Auth"
+    if pkt.haslayer(Dot11AssoReq):   return "Association Req"
+    if pkt.haslayer(Dot11AssoResp):  return "Association Resp"
+    if pkt.haslayer(Dot11Deauth):    return "Deauth"
+    dot11 = pkt.getlayer(Dot11)
+    return f"Type {dot11.type}/{dot11.subtype}" if dot11 else "Unknown"
+
+
 class WiFiMonitorWorker(QThread):
     frame_captured = pyqtSignal(dict)
     error          = pyqtSignal(str)
@@ -42,10 +60,7 @@ class WiFiMonitorWorker(QThread):
         self._running = True
         try:
             import scapy.all as scapy
-            from scapy.layers.dot11 import (
-                Dot11, Dot11Beacon, Dot11ProbeReq, Dot11ProbeResp,
-                Dot11Auth, Dot11AssoReq, Dot11AssoResp, Dot11Deauth, Dot11Elt,
-            )
+            from scapy.layers.dot11 import Dot11, Dot11Elt
         except ImportError as exc:
             self.error.emit(f"scapy is not installed: {exc}")
             return
@@ -83,17 +98,6 @@ class WiFiMonitorWorker(QThread):
                 "dst":        dot11.addr1 or "—",
                 "ssid":       ssid,
             })
-
-        def _classify(pkt) -> str:
-            if pkt.haslayer(Dot11Beacon):    return "Beacon"
-            if pkt.haslayer(Dot11ProbeReq):  return "Probe Request"
-            if pkt.haslayer(Dot11ProbeResp): return "Probe Response"
-            if pkt.haslayer(Dot11Auth):      return "Auth"
-            if pkt.haslayer(Dot11AssoReq):   return "Association Req"
-            if pkt.haslayer(Dot11AssoResp):  return "Association Resp"
-            if pkt.haslayer(Dot11Deauth):    return "Deauth"
-            dot11 = pkt.getlayer(Dot11)
-            return f"Type {dot11.type}/{dot11.subtype}" if dot11 else "Unknown"
 
         try:
             scapy.sniff(

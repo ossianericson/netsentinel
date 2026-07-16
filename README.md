@@ -199,10 +199,13 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.32 (current)
+### v2.1.33 (current)
 
-- Fixed a rare crash or hang when quitting NetSentinel — background monitors (syslog, SNMP-trap, passive discovery, scheduled scans) are now shut down cleanly before the app exits
-- The syslog and SNMP-trap receivers now stop instantly on quit instead of waiting out a socket timeout
+- Protocol Visualizer now has a clickable Steps list — jump straight to any step in the animation
+- Network Map: devices that never answer ARP (like the scanning PC itself) now show consistently on both the Classic and Interactive maps
+- Microsoft Store users are now pointed at the Store's own update page instead of GitHub
+- OS Detection reuses your last port scan instead of re-scanning; SMB share risk flags are more accurate; SNMP CPU/load polling added
+- Fixed several stderr log warnings and a startup stylesheet-parse error on the Home page
 
 ---
 

@@ -934,7 +934,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.32")
+    app.setApplicationVersion("2.1.33")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1077,7 +1077,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.32")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.33")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1291,11 +1291,24 @@ def main():
     # rule, enabled independently under Notifications).
     from workers.proactive_probe_worker import ProactiveProbeWorker
     from modules.scheduled_speed_test import run_scheduled_speed_test
+    from modules.speed_tester import resolve_server_id
 
     _speedtest_qs = QSettings("NetSentinel", "NetSentinel")
     _speedtest_interval_h = int(_speedtest_qs.value("speedtest/scheduled_interval_hours", 6))
+
+    def _run_scheduled_speed_test_with_preference():
+        # Read fresh every run (not just once at wiring time) so a preference
+        # change made while the app is running takes effect on the next
+        # scheduled test, not only after a restart.
+        qs = QSettings("NetSentinel", "NetSentinel")
+        server_id = resolve_server_id(
+            preferred_server_id=qs.value("speed_test/preferred_server_id", "", type=str) or None,
+            preferred_location=qs.value("speed_test/preferred_location", "", type=str) or None,
+        )
+        return run_scheduled_speed_test(store, server_id=server_id)
+
     scheduled_speedtest_worker = ProactiveProbeWorker(
-        probe=lambda: run_scheduled_speed_test(store),
+        probe=_run_scheduled_speed_test_with_preference,
         interval_s=_speedtest_interval_h * 3600,
     )
     # Sprint 5 — respect maintenance windows / quiet hours for the "speedtest"

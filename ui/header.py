@@ -625,6 +625,10 @@ class AppHeaderMixin:
 
     def _start_update_check(self):
         """Kick off a background thread to check the GitHub releases API."""
+        from modules.utils import is_store_app  # noqa: PLC0415
+        if is_store_app():
+            return  # Store auto-updates; never show the GitHub/winget bar
+
         import threading
 
         def _check():
@@ -658,6 +662,10 @@ class AppHeaderMixin:
     @pyqtSlot(str)
     def _on_update_available(self, latest: str):
         """Runs on the UI thread — safe to touch widgets."""
+        from modules.utils import is_store_app  # noqa: PLC0415
+        if is_store_app():
+            return  # defensive — no code path should raise this bar in the Store build
+
         from PyQt6.QtWidgets import QApplication
         current = QApplication.applicationVersion()
         msg = (

@@ -70,9 +70,20 @@ def _banner_to_os(banner: str) -> Optional[str]:
 
 # ── TCP stack fingerprint (Scapy / admin) ─────────────────────────────────────
 
-def _tcp_stack_fingerprint(ip: str) -> dict:
+_DEFAULT_PROBE_PORTS: tuple[int, ...] = (80, 443, 22, 8080)
+
+
+def _merge_ports(known: Optional[List[int]]) -> List[int]:
+    """Known-open ports (from a prior port scan) first, then the fixed fallback
+    set, deduped — probing confirmed-open ports first finds a match faster and
+    more accurately, while still falling back if nothing was scanned yet."""
+    return list(dict.fromkeys(list(known or []) + list(_DEFAULT_PROBE_PORTS)))
+
+
+def _tcp_stack_fingerprint(ip: str, ports: Optional[List[int]] = None) -> dict:
     """
-    Send a SYN to port 80 (fallback 443/22) and read back TCP/IP fields.
+    Send a SYN to each candidate port (known-open ports first, then the fixed
+    80/443/22/8080 fallback) and read back TCP/IP fields.
     Returns dict with keys: window, options_order, df_bit, ttl_ip.
     Returns {} if Scapy is unavailable or insufficient privileges.
     """
@@ -82,7 +93,7 @@ def _tcp_stack_fingerprint(ip: str) -> dict:
     except ImportError:
         return {}
 
-    for port in (80, 443, 22, 8080):
+    for port in _merge_ports(ports):
         try:
             pkt = IP(dst=ip) / TCP(dport=port, flags="S",
                                     options=[("MSS", 1460), ("SAckOK", b""),
@@ -188,8 +199,12 @@ def _grab_banner(ip: str) -> str:
     return ""
 
 
-def fingerprint_host(ip: str) -> OSGuess:
-    """Fingerprint a single host — combines TTL, banner, and TCP stack analysis."""
+def fingerprint_host(ip: str, ports: Optional[List[int]] = None) -> OSGuess:
+    """Fingerprint a single host — combines TTL, banner, and TCP stack analysis.
+
+    `ports`, when given (e.g. from a prior port scan), are probed before the
+    fixed 80/443/22/8080 fallback set (see `_merge_ports`).
+    """
     guess = OSGuess(ip=ip)
 
     # Tier 1: TTL via ping (no admin required)
@@ -209,7 +224,7 @@ def fingerprint_host(ip: str) -> OSGuess:
             guess.confidence = "High"
 
     # Tier 2: TCP stack fingerprint (requires admin + Scapy)
-    stack = _tcp_stack_fingerprint(ip)
+    stack = _tcp_stack_fingerprint(ip, ports=ports)
     if stack:
         window  = stack.get("window", 0)
         opts    = stack.get("options_order", [])
@@ -237,9 +252,12 @@ def fingerprint_hosts(
     ips: List[str],
     progress_cb=None,
     max_workers: int = 30,
+    port_map: Optional[dict] = None,
 ) -> dict:
     """
     Fingerprint a list of hosts concurrently.
+    `port_map`, when given, is {ip: [known-open ports]} from a prior port
+    scan — those ports are probed before the fixed fallback set per host.
     Returns {ip: OSGuess}.
     """
     results: dict = {}
@@ -247,7 +265,10 @@ def fingerprint_hosts(
     _cb(f"OS fingerprinting {len(ips)} host(s)…")
     done = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(fingerprint_host, ip): ip for ip in ips}
+        futures = {
+            pool.submit(fingerprint_host, ip, (port_map or {}).get(ip)): ip
+            for ip in ips
+        }
         for fut in concurrent.futures.as_completed(futures):
             ip = futures[fut]
             try:

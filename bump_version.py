@@ -129,15 +129,15 @@ def bump(ver: str) -> None:
          rf'(Current version:\s*\*\*v){_VER}(\*\*)',
          rf'\g<1>{ver}\g<2>')
 
-    # ── redeploy APM rules to all targets (RULE-APM1) ─────────────────────────
+    # ── redeploy APM rules to the claude target (RULE-APM1) ───────────────────
     import shutil
     _apm = shutil.which("apm") or shutil.which("apm.cmd")
     if _apm:
         print("\nDeploying APM rules…")
-        subprocess.run([_apm, "install", "--target", "all"], cwd=ROOT, check=False)
-        subprocess.run([_apm, "compile", "--all"], cwd=ROOT, check=False)
+        subprocess.run([_apm, "install", "--target", "claude"], cwd=ROOT, check=False)
+        subprocess.run([_apm, "compile", "--target", "claude", "--clean"], cwd=ROOT, check=False)
     else:
-        print("\n  WARN  apm CLI not found — run 'apm install --target all && apm compile --all' manually")
+        print("\n  WARN  apm CLI not found — run 'apm install --target claude && apm compile --target claude --clean' manually")
 
     # ── verify ────────────────────────────────────────────────────────────────
     print("\nRunning version consistency tests…")

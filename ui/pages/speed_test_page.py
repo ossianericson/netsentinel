@@ -507,7 +507,11 @@ class SpeedTestPage(QWidget):
         self._store = store  # MetricStore | None
         self._history_hours = 720.0  # 30-day default (FILTER-13)
         self._servers: List[dict] = []
-        self._selected_server_id: Optional[str] = None
+        _qs = QSettings("NetSentinel", "NetSentinel")
+        # Bypasses IP geolocation when set (speed_tester_servers._fetch_servers_by_query).
+        self._preferred_location: str = _qs.value("speed_test/preferred_location", "", type=str)
+        self._selected_server_id: Optional[str] = _qs.value("speed_test/preferred_server_id", "", type=str) or None
+        self._restoring_selection: bool = False  # guards persistence during programmatic selects
         self._fetch_worker  = None
         self._test_worker   = None
         self._last_fetch_ts: float = 0.0   # epoch; 0 = never
@@ -646,6 +650,30 @@ class SpeedTestPage(QWidget):
         srv_body.setContentsMargins(8, 8, 8, 8)
         srv_body.setSpacing(6)
 
+        # Location override — corrects the candidate list when IP geolocation guesses
+        # the wrong country (e.g. Nordic ISP ranges resolving to Finland/Denmark/Spain).
+        _link_btn_qss = ("QPushButton {{ background:transparent; color:{ACCENT};"
+            " border:none; font-size:11px; padding:2px 8px; }}"
+            "QPushButton:hover {{ text-decoration:underline; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
+        location_row = QHBoxLayout()
+        self._location_box = QLineEdit()
+        self._location_box.setPlaceholderText("Your city/country e.g. “Stockholm, Sweden” — blank = auto-detect")
+        self._location_box.setText(self._preferred_location)
+        self._location_box.setClearButtonEnabled(True)
+        _s.themed_ss(self._location_box, "QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:4px 8px; font-size:11px;"
+            " color:{TEXT_PRIMARY}; }}"
+            "QLineEdit:focus {{ border-color:{ACCENT}; }}")
+        self._location_box.returnPressed.connect(self._on_location_search)
+        location_row.addWidget(self._location_box, 1)
+
+        btn_location_search = QPushButton("Search")
+        _s.themed_ss(btn_location_search, _link_btn_qss)
+        btn_location_search.clicked.connect(self._on_location_search)
+        location_row.addWidget(btn_location_search)
+        srv_body.addLayout(location_row)
+
         # Search box
         search_row = QHBoxLayout()
         self._search_box = QLineEdit()
@@ -676,6 +704,11 @@ class SpeedTestPage(QWidget):
             "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         btn_refresh.clicked.connect(self._fetch_servers)
         footer_row.addWidget(btn_refresh)
+        btn_reset_location = QPushButton("↺  Auto-detect")
+        _s.themed_ss(btn_reset_location, _link_btn_qss)
+        btn_reset_location.setToolTip("Clear your saved location/server and go back to automatic detection")
+        btn_reset_location.clicked.connect(self._on_reset_location)
+        footer_row.addWidget(btn_reset_location)
         srv_body.addLayout(footer_row)
 
         top_row.addWidget(srv_card, 4)
@@ -1095,7 +1128,7 @@ class SpeedTestPage(QWidget):
         item.setForeground(QColor(_s.TEXT_MUTED))
         self._server_list.addItem(item)
 
-        self._fetch_worker = FetchServersWorker(limit=20, parent=self)
+        self._fetch_worker = FetchServersWorker(limit=20, preferred_location=self._preferred_location or None, parent=self)
         self._fetch_worker.servers_ready.connect(self._on_servers_ready)
         self._fetch_worker.status_changed.connect(self._on_fetch_status)
         self._fetch_worker.error.connect(self._on_fetch_error)
@@ -1138,9 +1171,21 @@ class SpeedTestPage(QWidget):
             f"{count} server{'s' if count != 1 else ''} nearby — "
             "auto-best selected if none chosen"
         )
-        # Pre-select the first (lowest latency)
-        if self._server_list.count() > 0:
-            self._server_list.setCurrentRow(0)
+        # Restore the saved preferred server if still present (self-healing to row 0
+        # otherwise); guarded so this programmatic pick doesn't re-persist below.
+        self._restoring_selection = True
+        try:
+            row = 0
+            if self._selected_server_id:
+                for i in range(self._server_list.count()):
+                    item = self._server_list.item(i)
+                    if item and item.data(Qt.ItemDataRole.UserRole) == self._selected_server_id:
+                        row = i
+                        break
+            if self._server_list.count() > 0:
+                self._server_list.setCurrentRow(row)
+        finally:
+            self._restoring_selection = False
 
     @pyqtSlot(str)
     def _on_fetch_status(self, msg: str) -> None:
@@ -1183,6 +1228,33 @@ class SpeedTestPage(QWidget):
         cur = self._server_list.currentItem()
         if cur:
             self._selected_server_id = cur.data(Qt.ItemDataRole.UserRole)
+            if not self._restoring_selection:
+                QSettings("NetSentinel", "NetSentinel").setValue(
+                    "speed_test/preferred_server_id", self._selected_server_id
+                )
+
+    @pyqtSlot()
+    def _on_location_search(self) -> None:
+        text = self._location_box.text().strip()
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if text:
+            qs.setValue("speed_test/preferred_location", text)
+        else:
+            qs.remove("speed_test/preferred_location")
+        qs.remove("speed_test/preferred_server_id")  # stale pin from a prior (different) search
+        self._preferred_location = text
+        self._selected_server_id = None
+        self._fetch_servers()
+
+    @pyqtSlot()
+    def _on_reset_location(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.remove("speed_test/preferred_location")
+        qs.remove("speed_test/preferred_server_id")
+        self._preferred_location = ""
+        self._selected_server_id = None
+        self._location_box.clear()
+        self._fetch_servers()
 
     # ── Engine badge ──────────────────────────────────────────────────────────
 

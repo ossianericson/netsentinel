@@ -48,11 +48,31 @@ All 89 findings from this audit have been closed. Findings that named a genuine 
 defect were fixed in place; findings where the claim described functionality that was
 never actually built were resolved by correcting the claim (README.md / `ui/help.py` /
 `docs/feature-reference.md`) to match what the code does today. Missing high-value
-functionality uncovered this way was moved to [`BACKLOG.md`](../../BACKLOG.md) rather
-than built under this pass — see that file for the deferred STP port-level detection,
-802.11 EAPOL capture, Protocol Visualizer step list, SMB session enumeration,
-Slack/Discord-native webhooks, SNMP CPU polling, CVE "New" badge, OS-Detection
-port-scan reuse, patch "last update" timestamps, and SMB share auth-awareness items.
+functionality uncovered this way was tracked in `BACKLOG.md` (since removed — its
+items are recorded below instead). Five items were subsequently built for real: 802.11
+EAPOL frame classification (F-16), a real "last update" timestamp for credentialed
+scans (F-78), OS Detection reusing prior port-scan results (F-72), SNMP CPU/load
+polling (F-69), and SMB share risk flags that require anonymous visibility, not just a
+non-hidden name (F-88). (The Protocol Visualizer step list was also subsequently built
+for real — F-48's original claim is accurate again.)
+
+The remaining four items were considered and explicitly deferred rather than built:
+
+- **STP port-level block identification** (F-14) — would need SNMP `dot1dStpPort` MIB
+  polling of the root/designated bridge, or LLDP/CDP MAC-to-port correlation; most
+  home/SMB switches expose neither, and the WHO (a rogue bridge was detected) already
+  works — WHERE is a nice-to-have with real implementation risk for a narrow audience.
+- **SMB session enumeration** (F-56) — needs a greenfield SRVSVC `NetrSessionEnum`
+  DCE/RPC call through `impacket`; no session-enumeration infrastructure exists
+  anywhere in the repo to build on, and it would need new mock scaffolding to test.
+  Confirmed by the user mid-sprint as a larger effort than originally scoped ("this was
+  planned to be a small effort"), so it stays deferred.
+- **Slack/Discord-native webhook payload** (F-68) — a per-channel "format" option in
+  `_build_payload()` (`modules/notification_channels.py`); small and contained, left
+  out of this pass by explicit user choice rather than for a technical reason.
+- **CVE Tracker "New" badge** (F-74) — purely cosmetic (a "first seen this
+  session/scan" flag per CVE); no functional or security value, and the underlying
+  claim (CVEs start as "Open") is already accurate.
 
 ---
 

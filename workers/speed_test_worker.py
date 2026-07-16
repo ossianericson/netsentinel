@@ -36,15 +36,17 @@ class FetchServersWorker(BaseWorker):
     servers_ready  = pyqtSignal(list)   # list[dict] — serialised SpeedServer
     status_changed = pyqtSignal(str)    # progress message for the UI
 
-    def __init__(self, limit: int = 20, parent=None):
+    def __init__(self, limit: int = 20, preferred_location: Optional[str] = None, parent=None):
         super().__init__(parent)
         self._limit = limit
+        self._preferred_location = preferred_location
 
     def work(self) -> None:
         from modules.speed_tester import fetch_servers
         servers = fetch_servers(
             self._limit,
             on_status=lambda msg: self.status_changed.emit(msg),
+            preferred_location=self._preferred_location,
         )
         self.servers_ready.emit([
             {

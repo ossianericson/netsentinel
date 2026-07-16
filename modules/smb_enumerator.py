@@ -50,6 +50,7 @@ class SMBShare:
     share_type: str = ""    # "DISK", "PRINTER", "IPC", "SPECIAL"
     comment: str = ""
     permissions: str = ""   # inferred: "READ", "READ/WRITE", "UNKNOWN"
+    visible_anonymous: bool = False   # reachable via a no-credentials/null session
 
 
 @dataclass
@@ -99,7 +100,8 @@ class SMBEnumResult:
         if self.anonymous_login:
             flags.append("Anonymous SMB session allowed (null session)")
         disk_shares = [s for s in self.shares if s.share_type == "DISK"
-                       and not s.name.upper().endswith("$")]
+                       and not s.name.upper().endswith("$")
+                       and s.visible_anonymous]
         if disk_shares:
             flags.append(f"{len(disk_shares)} non-hidden disk share(s) exposed: "
                          + ", ".join(s.name for s in disk_shares))
@@ -259,7 +261,8 @@ def _smb_anonymous_banner(host: str, timeout: float = 5.0) -> tuple:
 # ── Tier 1 — net view subprocess (Windows only, authenticated) ─────────────
 
 def _net_view_shares(host: str) -> List[SMBShare]:
-    """Use `net view` (Windows only) to list shares. No credentials needed for open shares."""
+    """Use `net view` (Windows only) to list shares. No credentials needed for open
+    shares — every share returned here is by definition anonymously visible."""
     shares: List[SMBShare] = []
     if platform.system() != "Windows":
         return shares
@@ -275,7 +278,8 @@ def _net_view_shares(host: str) -> List[SMBShare]:
                 shares.append(SMBShare(
                     name=m.group(1),
                     share_type=m.group(2).upper(),
-                    comment=m.group(3).strip()
+                    comment=m.group(3).strip(),
+                    visible_anonymous=True,
                 ))
     except Exception:
         pass  # non-fatal
@@ -314,14 +318,23 @@ def _impacket_enum(
                 comment=(share["shi1_remark"][:-1] if share["shi1_remark"] else ""),
             ))
 
-        # Anonymous check
+        # Anonymous check — also lists shares over the anonymous session so each
+        # authenticated share can be marked visible_anonymous (F-88).
+        anon_share_names: set = set()
         try:
             anon = SMBConnection(host, host, timeout=5)
             anon.login("", "")
             result.anonymous_login = True
+            try:
+                anon_share_names = {s["shi1_netname"][:-1] for s in anon.listShares()}
+            except Exception:
+                pass  # non-fatal — anonymous session may lack share-list rights
             anon.logoff()
         except Exception:
             result.anonymous_login = False
+
+        for share in result.shares:
+            share.visible_anonymous = share.name in anon_share_names
 
         conn.logoff()
     except Exception as exc:
@@ -376,6 +389,14 @@ def _net_exe_enum(host: str, username: str, password: str, domain: str,
 
     # Disconnect
     _run(["net", "use", f"\\\\{host}\\IPC$", "/delete"])
+
+    # Anonymous visibility check (F-88) — now that the authenticated session is
+    # torn down, a fresh credential-less net view probes what an unauthenticated
+    # client can actually see. Reuses the Tier-1 no-credentials helper rather
+    # than building separate anonymous-session logic for this path.
+    anon_share_names = {s.name for s in _net_view_shares(host)}
+    for share in result.shares:
+        share.visible_anonymous = share.name in anon_share_names
 
     return result
 

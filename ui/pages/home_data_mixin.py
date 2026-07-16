@@ -461,7 +461,7 @@ class _HomeDataMixin:
             msg_lbl = QLabel(label_text)
             _s.themed_ss(msg_lbl, lambda: (
                 f"QLabel {{ font-size:11px; color:{_s.TEXT_PRIMARY};"
-                " background:transparent; border:none; }}"
+                f" background:transparent; border:none; }}"
             ))
             msg_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             msg_lbl.setCursor(Qt.CursorShape.PointingHandCursor)

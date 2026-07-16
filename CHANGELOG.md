@@ -4,6 +4,28 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.33
+
+**Added**
+- `ui/pages/protocol_viz_page.py`: clickable "Steps" list on the Protocol Visualizer — click any step to jump directly to it, with two-way sync between playback and the highlighted row (closes claims-audit F-48)
+- 802.11 EAPOL frame classification in `workers/wifi_monitor_worker.py` (F-16)
+- SNMP CPU/load polling in `modules/snmp_poller.py` (F-69)
+
+**Changed**
+- Network Map: mesh-only Wi-Fi clients that never answer ARP (e.g. the scanning PC itself) are now synthesized once in `NetworkMapPage.render()`, so the Classic and Interactive (Cytoscape) maps always agree on the device set
+- Login Test now shows real last-update timestamps for credentialed scans instead of a placeholder (F-78)
+- OS Detection reuses prior port-scan results instead of re-scanning (F-72)
+- SMB share risk flags now require anonymous visibility, not just a non-hidden share name (F-88)
+- Microsoft Store builds now point users at the Store's own update page instead of GitHub/`winget upgrade`, which is disallowed for Store installs
+- `BACKLOG.md` retired — the four items left unbuilt (F-56, F-14, F-68, F-74) now carry "considered, deferred" notes directly in `docs/internal/claims-audit.md`
+
+**Fixed**
+- `ui/widgets/overview_tile.py`: dropped the unsupported QSS `cursor:default` property (Qt has no such property; it warned on every stylesheet apply) in favor of `setCursor()`
+- `ui/live_graph.py`: stopped repeated `ax.legend()` / `set_tight_layout` stderr warnings by only calling `legend()` when a labelled artist exists and using explicit `subplots_adjust` margins
+- Home page pending-alerts row label: a mixed f-string/non-f-string `themed_ss()` template left an unparseable QSS brace, logging "Could not parse stylesheet of object QLabel(...)" on every startup while restoring the last scan; guarded by `tests/test_themed_ss_callable_braces.py`
+
+---
+
 ### v2.1.32
 
 Shutdown-stability fix. No user-facing features or settings changed.
