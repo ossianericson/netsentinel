@@ -135,3 +135,48 @@ def test_all_scenes_have_non_empty_subtitles():
         assert scene.subtitle, f"{scene.protocol} subtitle should not be empty"
     scene = build_tls_scene(_NET_INFO, [])
     assert scene.subtitle, "TLS subtitle should not be empty"
+
+
+# ── Phase A2: every step must carry a real layered frame breakdown ─────────────
+
+def _assert_scene_steps_have_layers(scene) -> None:
+    for step in scene.steps:
+        assert len(step.layers) >= 2, (
+            f"{scene.protocol} step '{step.packet_label}' has only "
+            f"{len(step.layers)} layer(s), expected >= 2"
+        )
+        for layer in step.layers:
+            assert layer.fields, (
+                f"{scene.protocol} step '{step.packet_label}' layer '{layer.name}' "
+                f"has no fields"
+            )
+            for name, value in layer.fields:
+                assert name.strip(), f"{scene.protocol} layer '{layer.name}' has a blank field name"
+                assert str(value).strip(), (
+                    f"{scene.protocol} layer '{layer.name}' field '{name}' has a blank value"
+                )
+
+
+def test_build_ospf_scene_steps_have_frame_layers():
+    from modules.protocol_animator_extra import build_ospf_scene
+    _assert_scene_steps_have_layers(build_ospf_scene(_NET_INFO))
+
+
+def test_build_nat_scene_steps_have_frame_layers():
+    from modules.protocol_animator_extra import build_nat_scene
+    _assert_scene_steps_have_layers(build_nat_scene(_NET_INFO))
+
+
+def test_build_vlan_scene_steps_have_frame_layers():
+    from modules.protocol_animator_extra import build_vlan_scene
+    _assert_scene_steps_have_layers(build_vlan_scene({}))
+
+
+def test_build_tls_scene_steps_have_frame_layers():
+    from modules.protocol_animator_extra import build_tls_scene
+    _assert_scene_steps_have_layers(build_tls_scene(_NET_INFO, []))
+
+
+def test_build_icmp_scene_steps_have_frame_layers():
+    from modules.protocol_animator_extra import build_icmp_scene
+    _assert_scene_steps_have_layers(build_icmp_scene(_NET_INFO))

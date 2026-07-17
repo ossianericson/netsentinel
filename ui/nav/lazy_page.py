@@ -157,3 +157,20 @@ class _LazyPageMixin:
         """Force-build every remaining placeholder (for code that iterates all pages)."""
         for host in list(getattr(self, "_lazy_hosts", [])):
             self._materialize_host(host)
+
+    def _feed_protocol_viz_context(self, **kwargs) -> None:
+        """Route a ProtocolVizPage.set_context() call around lazy construction.
+
+        Unlike every other lazy page, Protocol Visualizer is fed by scan-result
+        handlers (tabs_network.py, scan_enrichment.py) that fire on every scan
+        regardless of nav state — there is no "navigate first" guard to rely on
+        for materialization. While the page is still a _LazyPageHost, buffer the
+        kwargs instead of calling set_context() on the placeholder (AttributeError);
+        the factory in tabs.py replays them once the real page is built, so the
+        first-ever visit still shows current data instead of an empty state.
+        """
+        page = self._protocol_viz_page
+        if isinstance(page, _LazyPageHost):
+            self._protocol_viz_pending_context = kwargs
+        else:
+            page.set_context(**kwargs)

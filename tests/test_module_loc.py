@@ -210,10 +210,6 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # _ModemSignalPanelMixin — modem signal panel builder/updater for SpeedTestPage.
     "widgets/modem_signal_panel.py": 422,  # actual 222 + 200 margin (Sprint 13 new file)
 
-    # Monitoring-domain tiles: LiveBandwidth, DnsStability, ModemSignal, TopTalkers, etc.
-    # If grows past 1,100, split by tile domain: overview_tile_network.py etc.
-    "widgets/overview_tile_monitor.py": 1007,  # actual 807 + 200 margin (Sprint 13 new file)
-
     # _NavBuilderMixin — all nav structure building + runtime + command palette + pin management.
     # Extracted from dashboard.py (Sprint 19). If grows past 1,500, split: nav_palette.py.
     "nav/builder.py": 1730,  # Sprint C: +106 lines (_FRESH_SECONDS, _restore_scan_registry, _start_staleness_timer, _check_and_stale_registry, QSettings persistence)
@@ -226,6 +222,18 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # _PluginPageMixin — plugin page lifecycle, HW auto-detect, integration banner, scan launch.
     # Extracted from dashboard.py (Sprint 19).
     "plugin_page_mixin.py": 480,  # actual ~280 + 200 margin (Sprint 19 new file)
+
+    # Protocol Visualizer page. Phase A2 (Frame Anatomy) + A3 (PNG/storyboard export)
+    # + A5 (Live Mode toggle + event log strip) additions. Natural split if it grows
+    # past budget: move the picker grid / _PROTOCOL_CONTEXT dict into a sibling
+    # ui/pages/protocol_viz_data.py (pure data move, flagged back in the A2 plan).
+    "pages/protocol_viz_page.py": 1266,  # actual 1,066 + 200 margin (Phase A5)
+
+    # ProtocolCanvas — QPainter widget. Phase A5 (Live Mode) added enter_live/pulse/
+    # exit_live plus parameterized _for() paint helpers shared with step mode.
+    # Natural split if it grows further: extract the Live Mode paint/tick methods
+    # and _LivePulse into a sibling protocol_canvas_live.py mixin.
+    "widgets/protocol_canvas.py": 946,  # actual 746 + 200 margin (Phase A5)
 }
 
 UI_DEFAULT_BUDGET = 1000  # stricter than modules for new UI files

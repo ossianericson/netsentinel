@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import sys
 import traceback
+from contextlib import contextmanager
 from pathlib import Path
 
 # Allow `from ui.dashboard import Dashboard` when run as a standalone script.
@@ -45,6 +46,7 @@ _DEFERRED = [
     ("REST API", "_rest_api_page"),
     ("Feature Guide", "_discover_page"),
     ("Help & Reference", "_help_tab_widget"),
+    ("Protocol Visualizer", "_protocol_viz_page"),  # Phase A4
 ]
 
 
@@ -63,6 +65,36 @@ def _ensure_app() -> QApplication:
     return _APP
 
 
+@contextmanager
+def _reset_nav_restore_state():
+    """Save/clear/restore NetSentinel.ini's [nav] last_section/last_page.
+
+    ui/nav/builder.py's startup restore (builder.py:426-437) auto-navigates to
+    whatever page was open when the app last closed — reading real NetSentinel.ini
+    on disk (ui.app_settings.settings_path(), NOT the hermetic-redirected
+    LOCALAPPDATA the QSettings("NetSentinel","NetSentinel") registry calls use).
+    On a dev machine where that was ever "Protocol Visualizer" (e.g. an earlier
+    RULE-T6 live walk), that auto-nav silently materializes the page during
+    Dashboard.__init__ before any test assertion runs, making "should still be a
+    host before nav" fail non-deterministically depending on local history —
+    not a product bug. Tests that assert pre-nav placeholder state must not
+    depend on whatever page a developer happened to have open last.
+    """
+    from ui.app_settings import settings_path
+    qs = QSettings(str(settings_path()), QSettings.Format.IniFormat)
+    saved_section = qs.value("nav/last_section", "")
+    saved_page = qs.value("nav/last_page", "")
+    qs.setValue("nav/last_section", "")
+    qs.setValue("nav/last_page", "")
+    qs.sync()
+    try:
+        yield
+    finally:
+        qs.setValue("nav/last_section", saved_section)
+        qs.setValue("nav/last_page", saved_page)
+        qs.sync()
+
+
 # ── Dashboard integration test bodies (verbatim assertions from test_lazy_pages) ──
 # On success each body ends with `dash.close()`: closeEvent() drains the background
 # worker QThreads (dashboard.py) and then calls os._exit(0), exiting the CHILD process
@@ -78,7 +110,8 @@ def test_deferred_pages_are_hosts_until_navigated() -> None:
 
     QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", True)
     try:
-        dash = Dashboard(store=None)
+        with _reset_nav_restore_state():
+            dash = Dashboard(store=None)
     finally:
         QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", False)
 
@@ -108,7 +141,8 @@ def test_materialize_all_drains_queue() -> None:
 
     QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", True)
     try:
-        dash = Dashboard(store=None)
+        with _reset_nav_restore_state():
+            dash = Dashboard(store=None)
     finally:
         QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", False)
 
@@ -136,10 +170,49 @@ def test_eager_path_builds_real_pages() -> None:
     dash.close()   # drain workers + os._exit(0) — clean child success exit
 
 
+def test_protocol_viz_pending_context_replayed_on_materialize() -> None:
+    """Scan-fed context buffered while the page is a placeholder must survive
+    to the real page on first navigation — Protocol Visualizer is fed by scan
+    handlers (tabs_network.py, scan_enrichment.py) regardless of nav state,
+    unlike every other lazy page, so it has no "navigate first" guard to rely on."""
+    _ensure_app()
+    from ui.dashboard import Dashboard
+    from ui.nav.lazy_page import _LazyPageHost
+
+    QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", True)
+    try:
+        with _reset_nav_restore_state():
+            dash = Dashboard(store=None)
+    finally:
+        QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", False)
+
+    assert isinstance(dash._protocol_viz_page, _LazyPageHost)
+    assert dash._protocol_viz_pending_context is None
+
+    # Simulate a scan result arriving before the user ever opens the page.
+    fed_net_info = {"gateway": "10.0.0.1"}
+    dash._feed_protocol_viz_context(
+        net_info=fed_net_info, devices=[], diag_result=None, m2_result=None,
+    )
+    assert isinstance(dash._protocol_viz_page, _LazyPageHost), "still a placeholder"
+    assert dash._protocol_viz_pending_context == {
+        "net_info": fed_net_info, "devices": [], "diag_result": None, "m2_result": None,
+    }
+
+    dash._nav_rail_go_to("Protocol Visualizer")
+    real = dash._protocol_viz_page
+    assert not isinstance(real, _LazyPageHost)
+    assert dash._protocol_viz_pending_context is None, "buffer must clear after replay"
+    assert real._net_info == fed_net_info, "buffered context must reach the real page"
+
+    dash.close()   # drain workers + os._exit(0) — clean child success exit
+
+
 _TESTS = {
     "test_deferred_pages_are_hosts_until_navigated": test_deferred_pages_are_hosts_until_navigated,
     "test_materialize_all_drains_queue": test_materialize_all_drains_queue,
     "test_eager_path_builds_real_pages": test_eager_path_builds_real_pages,
+    "test_protocol_viz_pending_context_replayed_on_materialize": test_protocol_viz_pending_context_replayed_on_materialize,
 }
 
 

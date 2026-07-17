@@ -10,17 +10,20 @@ Auto-plays on protocol selection with play/pause, reset, and manual step control
 from __future__ import annotations
 
 import re as _re
+import time
 from typing import Any, Dict, Optional
 
 _IP_RE = _re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QSettings, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+    QLabel, QListWidget, QListWidgetItem, QMenu, QPushButton, QScrollArea,
+    QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from modules.protocol_animator import (
+    AnimNode,
     ProtocolSceneData,
     build_arp_scene,
     build_dhcp_scene,
@@ -36,8 +39,23 @@ from modules.protocol_animator_extra import (
     build_vlan_scene,
 )
 from ui import styles as _s
+from ui.widgets.frame_anatomy_panel import FrameAnatomyPanel
 from ui.widgets.protocol_canvas import ProtocolCanvas
+from ui.widgets.protocol_storyboard import build_storyboard_pixmap
 from ui.widgets.jargon_tooltip import get_definition
+
+# ── Playback speed ──────────────────────────────────────────────────────────────
+
+_SPEED_KEY     = "protoviz/speed"
+_SPEED_OPTIONS = (0.5, 1.0, 2.0)
+_SPEED_DEFAULT = 1.0
+
+# ── Live Mode (Phase A5) ─────────────────────────────────────────────────────
+
+_LIVE_FLAG_KEY  = "experimental/protoviz_live"
+_LIVE_PROTOCOLS = {"ARP", "DNS"}   # only protocols modules/live_protocol_feed.py supports
+_MAX_LIVE_NODES = 8                # your device + gateway + up to 6 other talkers
+_LIVE_LOG_MAX   = 10
 
 # ── Protocol descriptors ───────────────────────────────────────────────────────
 
@@ -282,6 +300,12 @@ class ProtocolVizPage(QWidget):
         self._active_key: str         = "ARP"
         self._syncing_step_list: bool = False
 
+        # Live Mode (Phase A5) — QSettings("experimental/protoviz_live") gate (RULE-EXP1)
+        self._live_flag_on: bool = QSettings().value(_LIVE_FLAG_KEY, False, type=bool)
+        self._live_worker = None
+        self._live_nodes: dict  = {}   # ip -> AnimNode; dict order tracks recency (LRU-ish)
+        self._live_log:   list  = []   # last _LIVE_LOG_MAX event summary strings
+
         self._build_ui()
         self._select_protocol("ARP")
 
@@ -298,8 +322,11 @@ class ProtocolVizPage(QWidget):
         self._devices     = devices    or []
         self._diag_result = diag_result
         self._m2_result   = m2_result
-        # Refresh the currently displayed protocol
-        self._select_protocol(self._active_key)
+        # Refresh the currently displayed protocol — skipped while Live Mode is
+        # active so an incidental scan-context refresh doesn't interrupt the
+        # live view; the step scene picks up the fresh data once Live is stopped.
+        if not self._is_live():
+            self._select_protocol(self._active_key)
 
     def load_from_event(self, entry) -> None:
         """Pre-select a protocol based on a log entry's event type and switch to it."""
@@ -386,6 +413,32 @@ class ProtocolVizPage(QWidget):
         self._badge_row.setSpacing(4)
         tb_lay.addLayout(self._badge_row)
         tb_lay.addStretch()
+
+        self._btn_live = QPushButton("◉  Live")
+        self._btn_live.setCheckable(True)
+        self._btn_live.setFixedHeight(26)
+        self._btn_live.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_live.setToolTip(
+            "Animate real captured packets as they happen (ARP / DNS only)."
+        )
+        self._btn_live.setVisible(False)   # shown by _update_live_toggle_visibility()
+        self._btn_live.clicked.connect(self._toggle_live)
+        self._style_live_btn()
+        tb_lay.addWidget(self._btn_live)
+
+        self._btn_copy_img = QPushButton("Copy image")
+        self._btn_save_img = QPushButton("Save PNG…")
+        for btn in (self._btn_copy_img, self._btn_save_img):
+            btn.setFixedHeight(26)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            _s.themed_ss(btn, "QPushButton {{ background:transparent; border:1px solid {BORDER};"
+                " border-radius:4px; color:{TEXT_SECONDARY}; font-size:10px; padding:0 10px; }}"
+                "QPushButton:hover {{ background:{BORDER}; color:{TEXT_PRIMARY}; }}"
+                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
+            tb_lay.addWidget(btn)
+        self._btn_copy_img.clicked.connect(self._copy_canvas_image)
+        self._btn_save_img.clicked.connect(self._save_canvas_image)
+
         canvas_lay.addWidget(title_bar)
 
         # Empty state shown when scan data is missing for selected protocol
@@ -426,9 +479,10 @@ class ProtocolVizPage(QWidget):
 
         # The animation canvas
         self._canvas = ProtocolCanvas()
-        self._canvas.setMinimumHeight(120)
         self._canvas.step_changed.connect(self._on_step_changed)
         self._canvas.finished.connect(self._on_anim_finished)
+        self._canvas.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._canvas.customContextMenuRequested.connect(self._on_canvas_context_menu)
         canvas_lay.addWidget(self._canvas, 1)
 
         # Playback controls
@@ -442,6 +496,9 @@ class ProtocolVizPage(QWidget):
         self._btn_play  = self._ctrl_btn("▶  Play",  "Play / pause animation")
         self._btn_fwd   = self._ctrl_btn("▶▶", "Next step")
         self._btn_reset = self._ctrl_btn("↺  Reset", "Restart from step 1")
+        self._btn_storyboard = self._ctrl_btn(
+            "▤  Storyboard", "Export a filmstrip PNG of every step, with explanations"
+        )
 
         self._step_label = _label("Step 1 of 1", 11, "TEXT_MUTED")
 
@@ -449,6 +506,9 @@ class ProtocolVizPage(QWidget):
         ctrl_lay.addWidget(self._btn_play)
         ctrl_lay.addWidget(self._btn_fwd)
         ctrl_lay.addWidget(self._btn_reset)
+        ctrl_lay.addWidget(self._btn_storyboard)
+        ctrl_lay.addSpacing(4)
+        ctrl_lay.addLayout(self._build_speed_toggle())
         ctrl_lay.addStretch()
         ctrl_lay.addWidget(self._step_label)
 
@@ -456,9 +516,33 @@ class ProtocolVizPage(QWidget):
         self._btn_play.clicked.connect(self._toggle_play)
         self._btn_fwd.clicked.connect(self._canvas.step_forward)
         self._btn_reset.clicked.connect(self._on_reset)
+        self._btn_storyboard.clicked.connect(self._export_storyboard)
 
         canvas_lay.addWidget(ctrl_bar)
         bl.addWidget(canvas_card)
+
+        # Live event log strip (Phase A5) — last _LIVE_LOG_MAX captured packets,
+        # monospace, for the technical audience (RULE-A1). Hidden until Live is on.
+        self._live_log_card = _card_frame()
+        live_log_lay = QVBoxLayout(self._live_log_card)
+        live_log_lay.setContentsMargins(16, 10, 16, 10)
+        live_log_lay.setSpacing(4)
+        live_log_lay.addWidget(_label("Live capture log", 11, "TEXT_SECONDARY"))
+        self._live_log_list = QListWidget()
+        self._live_log_list.setObjectName("liveLogList")
+        self._live_log_list.setFixedHeight(140)
+        _s.themed_ss(self._live_log_list, "QListWidget#liveLogList {{"
+            "  background:{BG_CARD}; border:1px solid {BORDER};"
+            "  font-family:Consolas,monospace; font-size:10px; color:{TEXT_SECONDARY}; outline:none;"
+            "}}"
+            "QListWidget#liveLogList::item {{ padding:2px 6px; }}")
+        live_log_lay.addWidget(self._live_log_list)
+        self._live_log_card.setVisible(False)
+        bl.addWidget(self._live_log_card)
+
+        # Frame Anatomy inspector — layered frame breakdown for the current step
+        self._frame_panel = FrameAnatomyPanel()
+        bl.addWidget(self._frame_panel)
 
         # Steps card — clickable step list (F-48)
         self._step_card = _card_frame()
@@ -542,6 +626,53 @@ class ProtocolVizPage(QWidget):
             )
             btn.setChecked(active)
 
+    def _build_speed_toggle(self) -> QHBoxLayout:
+        """0.5x / 1x / 2x playback-speed segmented control, persisted via QSettings."""
+        saved = QSettings().value(_SPEED_KEY, _SPEED_DEFAULT, type=float)
+        if saved not in _SPEED_OPTIONS:
+            saved = _SPEED_DEFAULT
+
+        row = QHBoxLayout()
+        row.setSpacing(2)
+        self._speed_btns: dict[float, QPushButton] = {}
+        self._speed_group = QButtonGroup(self)
+        self._speed_group.setExclusive(True)
+        for value in _SPEED_OPTIONS:
+            label = f"{value:g}×"
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setFixedHeight(28)
+            btn.setFixedWidth(34)
+            btn.setToolTip(f"Play animation at {value:g}x speed")
+            btn.clicked.connect(lambda _checked, v=value: self._on_speed_clicked(v))
+            self._speed_group.addButton(btn)
+            self._speed_btns[value] = btn
+            row.addWidget(btn)
+
+        self._active_speed = saved
+        self._canvas.set_speed(saved)
+        self._style_speed_btns()
+        return row
+
+    def _style_speed_btns(self) -> None:
+        for value, btn in self._speed_btns.items():
+            active = (value == self._active_speed)
+            btn.setStyleSheet(
+                f"QPushButton {{ border-radius:4px; font-size:10px; font-weight:bold; padding:0;"
+                f" background:{_s.ACCENT if active else 'transparent'};"
+                f" color:{_s.WHITE if active else _s.TEXT_SECONDARY};"
+                f" border:1px solid {_s.ACCENT if active else _s.BORDER}; }}"
+                f"QPushButton:hover {{ background:{_s.ACCENT}; color:{_s.WHITE}; }}"
+                f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
+            )
+            btn.setChecked(active)
+
+    def _on_speed_clicked(self, value: float) -> None:
+        self._active_speed = value
+        QSettings().setValue(_SPEED_KEY, value)
+        self._canvas.set_speed(value)
+        self._style_speed_btns()
+
     # ── Protocol selection ─────────────────────────────────────────────────────
 
     def select_protocol(self, key: str) -> None:
@@ -549,8 +680,11 @@ class ProtocolVizPage(QWidget):
         self._select_protocol(key)
 
     def _select_protocol(self, key: str) -> None:
+        if self._is_live():
+            self._stop_live()   # explicit protocol switch always leaves Live Mode
         self._active_key = key
         self._style_proto_btns()
+        self._update_live_toggle_visibility()
         if hasattr(self, "_context_panel"):
             self._context_panel.set_protocol(key, self._on_context_navigate)
         # Refresh curriculum badges for selected protocol
@@ -570,6 +704,7 @@ class ProtocolVizPage(QWidget):
             self._step_label.setText("")
             self._step_list.clear()
             self._step_card.setVisible(False)
+            self._frame_panel.set_layers([])
             return
 
         self._placeholder.setVisible(False)
@@ -682,6 +817,202 @@ class ProtocolVizPage(QWidget):
     def _on_anim_finished(self) -> None:
         self._btn_play.setText("▶  Play")
 
+    # ── Live Mode (Phase A5) ────────────────────────────────────────────────────
+
+    def _is_live(self) -> bool:
+        return self._canvas.is_live()
+
+    def _style_live_btn(self) -> None:
+        on = self._btn_live.isChecked()
+        self._btn_live.setStyleSheet(
+            f"QPushButton {{ border-radius:4px; font-size:10px; font-weight:bold; padding:0 10px;"
+            f" background:{_s.RED if on else 'transparent'};"
+            f" color:{_s.WHITE if on else _s.TEXT_SECONDARY};"
+            f" border:1px solid {_s.RED if on else _s.BORDER}; }}"
+            f"QPushButton:hover {{ background:{_s.RED}; color:{_s.WHITE}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
+        )
+
+    def _update_live_toggle_visibility(self) -> None:
+        """Live toggle only ever appears behind the experimental flag, and only
+        for protocols modules/live_protocol_feed.py actually supports (RULE-EXP1:
+        with the flag off, this leaves the UI byte-identical to Phase A4)."""
+        self._btn_live.setVisible(
+            self._live_flag_on and self._active_key in _LIVE_PROTOCOLS
+        )
+
+    def _toggle_live(self) -> None:
+        if self._is_live():
+            self._stop_live()
+            self._select_protocol(self._active_key)   # restore the step-mode view
+        else:
+            self._start_live()
+
+    def _live_my_ip(self) -> str:
+        """Best-effort local IP from the last scan's net_info (mirrors the
+        private _local_ip() helper in modules/protocol_animator.py)."""
+        ips = self._net_info.get("local_ips", [])
+        if ips and isinstance(ips[0], dict):
+            return ips[0].get("ip", "")
+        return ips[0] if ips else ""
+
+    def _start_live(self) -> None:
+        if self._is_live() or self._active_key not in _LIVE_PROTOCOLS:
+            return
+        protocol = self._active_key
+        self._live_nodes = {}
+        self._live_log = []
+        self._live_log_list.clear()
+
+        gw_ip = self._net_info.get("gateway", "")
+        my_ip = self._live_my_ip()
+        if my_ip:
+            self._live_nodes[my_ip] = AnimNode(my_ip, f"Your device\n{my_ip}", "client", 0.15, 0.5)
+        if gw_ip:
+            self._live_nodes[gw_ip] = AnimNode(gw_ip, f"Gateway\n{gw_ip}", "gateway", 0.85, 0.5)
+
+        self._placeholder.setVisible(False)
+        self._canvas.setVisible(True)
+        self._canvas.enter_live(list(self._live_nodes.values()))
+        self._canvas_subtitle.setText(f"Live — waiting for {protocol} traffic…")
+
+        self._btn_live.setChecked(True)
+        self._btn_live.setText("◉  Live (on)")
+        self._style_live_btn()
+        for btn in (self._btn_back, self._btn_play, self._btn_fwd, self._btn_reset):
+            btn.setEnabled(False)
+        self._live_log_card.setVisible(True)
+
+        from workers.live_protocol_worker import LiveProtocolWorker
+        self._live_worker = LiveProtocolWorker(protocol=protocol, parent=None)
+        self._live_worker.frame_event.connect(self._on_live_frame_event)
+        self._live_worker.progress.connect(self._on_live_progress)
+        self._live_worker.error.connect(self._on_live_error)
+        self._live_worker.start()
+
+    def _stop_live(self) -> None:
+        """Pure teardown — worker + canvas only. Callers decide whether/what to
+        rebuild afterward (see _toggle_live() and _select_protocol())."""
+        if self._live_worker is not None:
+            self._live_worker.frame_event.disconnect(self._on_live_frame_event)
+            self._live_worker.progress.disconnect(self._on_live_progress)
+            self._live_worker.error.disconnect(self._on_live_error)
+            self._live_worker.stop()
+            self._live_worker.wait(2000)
+            self._live_worker = None
+        self._canvas.exit_live()
+        self._btn_live.setChecked(False)
+        self._btn_live.setText("◉  Live")
+        self._style_live_btn()
+        for btn in (self._btn_back, self._btn_play, self._btn_fwd, self._btn_reset):
+            btn.setEnabled(True)
+        self._live_log_card.setVisible(False)
+
+    def _live_node_id_for(self, ip: str) -> str:
+        """Map a captured packet's IP to a live node id, creating a new dynamic
+        node for previously-unseen talkers (up to _MAX_LIVE_NODES)."""
+        if ip in self._live_nodes:
+            node = self._live_nodes.pop(ip)   # move to the end -> most-recently-used
+            self._live_nodes[ip] = node
+            return ip
+        name_map = self._build_ip_name_map()
+        label = f"{name_map[ip]}\n{ip}" if ip in name_map else f"Unknown device\n{ip}"
+        idx = len(self._live_nodes)
+        node = AnimNode(ip, label, "broadcast", 0.5, 0.15 + 0.7 * ((idx % 6) / 5.0))
+        self._live_nodes[ip] = node
+        self._evict_stale_live_nodes()
+        return ip
+
+    def _evict_stale_live_nodes(self) -> None:
+        pinned = {self._net_info.get("gateway", ""), self._live_my_ip()}
+        while len(self._live_nodes) > _MAX_LIVE_NODES:
+            stalest = next((k for k in self._live_nodes if k not in pinned), None)
+            if stalest is None:
+                break   # everything left is pinned — nothing more to evict
+            del self._live_nodes[stalest]
+
+    def _on_live_frame_event(self, evt) -> None:
+        src_id = self._live_node_id_for(evt.src_ip)
+        dst_id = self._live_node_id_for(evt.dst_ip)
+        self._canvas.set_live_nodes(list(self._live_nodes.values()))
+        self._canvas.pulse(src_id, dst_id, evt.summary, evt.is_reply, evt.is_broadcast)
+
+        ts = time.strftime("%H:%M:%S", time.localtime(evt.ts))
+        self._live_log.insert(0, f"{ts}  {evt.summary}")
+        self._live_log = self._live_log[:_LIVE_LOG_MAX]
+        self._live_log_list.clear()
+        self._live_log_list.addItems(self._live_log)
+
+    def _on_live_progress(self, msg: str) -> None:
+        self._canvas_subtitle.setText(msg)
+
+    def _on_live_error(self, msg: str) -> None:
+        """RULE-A2 — the worker already translates capability gaps via progress();
+        error() is reserved for genuine capture failures, so surface it and stop.
+
+        Order matters: _select_protocol() rebuilds the step scene and overwrites
+        _canvas_subtitle with the scene's own subtitle, so the error message must
+        be set *after* the rebuild, not before — otherwise it flashes and is
+        immediately clobbered."""
+        was_live = self._is_live()
+        self._stop_live()
+        if was_live:
+            self._select_protocol(self._active_key)
+        self._canvas_subtitle.setText(f"⚠ {msg}")
+
+    # ── Export (Phase A3 — Copy / Save / Storyboard) ───────────────────────────
+
+    def _copy_canvas_image(self) -> None:
+        if not self._canvas.isVisibleTo(self):
+            return
+        self._canvas.repaint()
+        QApplication.clipboard().setPixmap(self._canvas.grab())
+        self._btn_copy_img.setText("Copied ✓")
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._btn_copy_img.setText("Copy image"))
+        _t.start(1500)
+
+    def _save_canvas_image(self) -> None:
+        if not self._canvas.isVisibleTo(self):
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Frame as PNG",
+            f"netsentinel_{self._active_key.lower()}_frame.png",
+            "PNG images (*.png)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+        self._canvas.repaint()
+        self._canvas.grab().save(path, "PNG")
+
+    def _export_storyboard(self) -> None:
+        if not self._canvas.isVisibleTo(self):
+            return
+        scene = self._canvas._scene
+        if not scene or not scene.steps:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Storyboard as PNG",
+            f"netsentinel_{self._active_key.lower()}_storyboard.png",
+            "PNG images (*.png)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+        build_storyboard_pixmap(self._canvas, scene).save(path, "PNG")
+
+    def _on_canvas_context_menu(self, pos) -> None:
+        self._build_canvas_menu().exec(self._canvas.mapToGlobal(pos))
+
+    def _build_canvas_menu(self) -> QMenu:
+        menu = QMenu(self)
+        menu.addAction("Copy image", self._copy_canvas_image)
+        menu.addAction("Save PNG…", self._save_canvas_image)
+        menu.addAction("Export storyboard…", self._export_storyboard)
+        return menu
+
     # ── Step description ───────────────────────────────────────────────────────
 
     def _on_step_changed(self, idx: int, total: int) -> None:
@@ -700,6 +1031,7 @@ class ProtocolVizPage(QWidget):
         self._step_index.setText(f"Step {idx + 1} / {total}")
         self._step_detail.setText(step.frame_detail)
         self._step_explanation.setText(step.explanation)
+        self._frame_panel.set_layers(step.layers)
 
     # ── Step list (F-48 clickable step list) ───────────────────────────────────
 

@@ -118,3 +118,7 @@ def test_materialize_all_drains_queue():
 
 def test_eager_path_builds_real_pages():
     _run_child("test_eager_path_builds_real_pages")
+
+
+def test_protocol_viz_pending_context_replayed_on_materialize():
+    _run_child("test_protocol_viz_pending_context_replayed_on_materialize")

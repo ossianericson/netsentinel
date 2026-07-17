@@ -85,8 +85,10 @@ def _extract_string_literals(source: str) -> list[str]:
 def _scan_file(path: Path) -> list[str]:
     """Return list of mojibake sequences found in string literals of *path*."""
     try:
-        source = path.read_text(encoding='utf-8', errors='replace')
-    except OSError:
+        # errors='strict', NOT 'replace' — 'replace' would manufacture U+FFFD from
+        # invalid bytes, which is exactly what _scan_replacement_chars() looks for.
+        source = path.read_text(encoding='utf-8')
+    except (OSError, UnicodeDecodeError):
         return []
     hits = []
     for literal in _extract_string_literals(source):
@@ -131,5 +133,74 @@ def test_no_mojibake_in_modules_string_literals():
 
     assert not offenders, (
         "Mojibake detected in modules/ string literals.\n"
+        + "\n".join(f"  {o}" for o in offenders)
+    )
+
+
+# ── Lossy mojibake: U+FFFD REPLACEMENT CHARACTER ──────────────────────────────
+# The tests above catch *reversible* double-encoding (â€", ðŸ...), where the
+# original bytes survive and leave a matchable signature.  They are structurally
+# blind to the *lossy* class: once a character has been replaced by U+FFFD the
+# original byte is destroyed, so there is no signature left to pattern-match.
+#
+# That blindness shipped three QPushButton("�") dismiss buttons on the Home
+# page for 20 releases (v2.1.13 -> v2.1.33) while this file passed green.  A
+# glyph-only, transparent, borderless button whose glyph is U+FFFD has no visual
+# affordance at all — and each sat on a setVisible(False) strip, so the UIA chaos
+# runs could never reach it either.  See RULE-ENC1.
+
+_REPLACEMENT_CHAR = "�"
+
+
+def _scan_replacement_chars(path: Path) -> list[str]:
+    """Return U+FFFD hits inside *string literals* of *path*.
+
+    Scoped to string literals (not comments) because only literals reach the UI.
+    Comment-level U+FFFD is cosmetic source rot — real, but not user-visible, and
+    gating on it would block commits on unrelated files.
+    """
+    try:
+        source = path.read_text(encoding='utf-8')
+    except (OSError, UnicodeDecodeError):
+        return []
+    hits = []
+    for literal in _extract_string_literals(source):
+        if _REPLACEMENT_CHAR in literal:
+            hits.append(f"{path.relative_to(ROOT)}  literal contains U+FFFD: {literal!r}")
+    return hits
+
+
+def test_no_replacement_char_in_ui_string_literals():
+    """No string literal in ui/**/*.py may contain U+FFFD (lossy mojibake)."""
+    offenders: list[str] = []
+    for path in sorted((ROOT / "ui").rglob("*.py")):
+        offenders.extend(_scan_replacement_chars(path))
+
+    assert not offenders, (
+        "U+FFFD REPLACEMENT CHARACTER found in ui/ string literals.\n\n"
+        "This is LOSSY mojibake: the original character was destroyed by an\n"
+        "encoding conversion that could not represent it. Unlike the â€\" class,\n"
+        "it is NOT recoverable — not from the file, and not from git if the file\n"
+        "was committed already corrupted.\n\n"
+        "A literal like QPushButton(\"\\ufffd\") renders as a tofu box. When the\n"
+        "button is styled via qss_dismiss_button() (transparent, no border), that\n"
+        "glyph is its ONLY affordance — the control is effectively unusable.\n\n"
+        "Offending literals:\n"
+        + "\n".join(f"  {o}" for o in offenders)
+        + "\n\nFix: restore the character from in-file convention (look at sibling\n"
+        "widgets; RULE-I4 for icon glyphs) and state in-session that the value is\n"
+        "an inference, not a recovery. Save UTF-8, no BOM (RULE-ENC3)."
+    )
+
+
+def test_no_replacement_char_in_modules_string_literals():
+    """No string literal in modules/**/*.py may contain U+FFFD."""
+    offenders: list[str] = []
+    for path in sorted((ROOT / "modules").rglob("*.py")):
+        offenders.extend(_scan_replacement_chars(path))
+
+    assert not offenders, (
+        "U+FFFD REPLACEMENT CHARACTER found in modules/ string literals "
+        "(lossy mojibake — see RULE-ENC1).\n"
         + "\n".join(f"  {o}" for o in offenders)
     )

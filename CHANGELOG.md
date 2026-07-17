@@ -4,6 +4,27 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.34
+
+**Added**
+- `ui/widgets/protocol_canvas.py`: cinematic rendering overhaul for the Protocol Visualizer — curved bezier packet paths with fading motion trails, arrival pulse rings, staggered broadcast rings, role glyphs, a backdrop dot-grid, a step-progress strip, and a 0.5x/1x/2x speed toggle
+- `ui/widgets/frame_anatomy_panel.py` + `modules/protocol_frames.py`: collapsible Frame Anatomy inspector on the Protocol Visualizer — real layered Ethernet/IP/UDP/TCP and per-protocol payload breakdowns across all 10 scene builders, using real scan data where available
+- `ui/widgets/protocol_storyboard.py`: "Copy image" / "Save PNG..." canvas export and a "Storyboard" filmstrip export (one panel per animation step) for the Protocol Visualizer, plus a right-click context menu exposing all three actions
+- `modules/live_protocol_feed.py` + `workers/live_protocol_worker.py`: LIVE MODE for the Protocol Visualizer (ARP/DNS) — watch real captured traffic animate on the canvas as it happens, behind `experimental/protoviz_live` (default off), gated by the same admin/Npcap capability pattern as `LldpWorker`
+
+**Changed**
+- Protocol Visualizer now defers construction behind `experimental/lazy_pages` like the other 10 deferred pages, buffering fed scan-context so the first-ever visit in a session still shows current data instead of an empty state
+- Restored `ProtocolCanvas`'s own built-in minimum height (240px) on the Protocol Viz page — the richer canvas visuals no longer feel cramped under the page's old 120px override
+- Removed two dead widget modules (`ui/widgets/overview_tile_monitor.py`, `ui/widgets/scan_summary_sheet.py`) that were bundled into the shipped exe via `NetSentinel.spec` but never imported anywhere — shrinks the installed exe, no behaviour change
+- Refreshed stale test-count figures in `README.md` and `docs/architecture.md` (suite had grown to 5,469 tests across 411 files; docs still read 5,243/398 and 5,291/405 respectively)
+
+**Fixed**
+- `ui/widgets/device_detail_pane.py`: device history drawer's close button (Network Map, Devices/Inventory) — a bare Unicode "x" glyph silently failed to paint on native Windows text rendering; replaced with a QPainter-painted icon via a shared `_wire_close_icon()` helper
+- `modules/smb_enumerator.py`: guarded `subprocess.CREATE_NO_WINDOW` (Windows-only) behind a `getattr(..., 0)` fallback in `_net_view_shares`/`_net_exe_enum`, matching the existing pattern in `service_diagnostics_probes.py`
+- `ui/pages/home_page.py`: three dismiss buttons (browser-dashboard strip, delta banner, post-scan sheet) rendered as invisible tofu (U+FFFD replacement character) on native Windows text rendering — the file's close-glyphs had been mojibake since v2.1.13; replaced with the same painted-icon pattern used for the device drawer close button
+
+---
+
 ### v2.1.33
 
 **Added**

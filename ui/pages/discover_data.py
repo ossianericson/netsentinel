@@ -645,12 +645,14 @@ _FEATURES: list[dict] = [
         "name": "Protocol Visualizer",
         "desc": (
             "Animated step-by-step diagrams of ARP, DNS, TCP, DHCP, and STP using "
-            "your real device addresses. Each step shows the exact packet contents. "
-            "Includes a 'Why this protocol matters' explainer panel."
+            "your real device addresses. Each step shows a layered Frame Anatomy "
+            "breakdown of the actual Ethernet/IP/protocol fields, and exports as a "
+            "PNG or a full storyboard filmstrip. Includes a 'Why this protocol "
+            "matters' explainer panel."
         ),
         "page": "Protocol Visualizer",
         "requires": None,
-        "tags": ["protocol", "animation", "arp", "dns", "tcp", "dhcp", "stp", "diagram", "learn", "visualize", "packet"],
+        "tags": ["protocol", "animation", "arp", "dns", "tcp", "dhcp", "stp", "diagram", "learn", "visualize", "packet", "frame anatomy", "storyboard", "export", "png"],
     },
     {
         "group": "Learning",
@@ -1216,6 +1218,20 @@ _FEATURES: list[dict] = [
         "page": "Help & Reference",
         "requires": None,
         "tags": ["help", "reference", "shortcut", "keyboard", "explain", "documentation", "?"],
+    },
+    {
+        "group": "Hidden features",
+        "icon": "▸",
+        "name": "Protocol Visualizer storyboard export",
+        "desc": (
+            "Right-click the Protocol Visualizer canvas — or use the title-bar "
+            "buttons — to copy the current frame as an image, save it as PNG, or "
+            "export a full storyboard filmstrip of every step in the animation. "
+            "Useful for posting to classmates or submitting as coursework evidence."
+        ),
+        "page": "Protocol Visualizer",
+        "requires": None,
+        "tags": ["storyboard", "export", "png", "screenshot", "protocol", "share", "coursework"],
     },
 ]
 

@@ -50,6 +50,7 @@ from modules.network_segments import upsert_segment
 from ui.widgets.inventory_dialogs import (
     _DeviceLabelDialog, _TypeOverrideDialog, _ScanCompareDialog, _SegmentEditorDialog,
 )
+from ui.widgets.device_detail_pane import _wire_close_icon
 from ui import styles as _s
 
 # ── Device history drawer (DEVICE-2) ─────────────────────────────────────────
@@ -83,12 +84,13 @@ class _DeviceDrawer(QFrame):
         hdr_row.setContentsMargins(14, 10, 10, 10)
         self._title_lbl = QLabel("Device")
         _s.themed_ss(self._title_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
-        close_btn = QPushButton("×")
+        close_btn = QPushButton()
         close_btn.setFixedSize(22, 22)
-        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            " font-size:15px; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
+        close_btn.setToolTip("Close")
+        _wire_close_icon(close_btn)
+        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; border:none; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; }}")
         close_btn.clicked.connect(self.close_drawer)
         hdr_row.addWidget(self._title_lbl, 1)
         hdr_row.addWidget(close_btn)

@@ -10,8 +10,10 @@ STP uses last STP scan BPDUs when available.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List, Optional
+
+from modules.protocol_frames import ethernet_layer, find_mac_for_ip, ipv4_layer, tcp_layer, udp_layer
 
 
 # ── Data contracts ─────────────────────────────────────────────────────────────
@@ -26,6 +28,12 @@ class AnimNode:
 
 
 @dataclass
+class FrameLayer:
+    name:   str                    # "Ethernet II", "IPv4", "UDP", "DHCP"
+    fields: List[tuple[str, str]]  # [("Src MAC", "AA:BB:…"), ("EtherType", "0x0806")]
+
+
+@dataclass
 class AnimStep:
     from_node:    str
     to_node:      str
@@ -34,6 +42,7 @@ class AnimStep:
     explanation:  str   # 2–3 sentences in the description panel below the canvas
     is_broadcast: bool = False   # dashed arrow
     is_reply:     bool = False   # green dot instead of blue
+    layers: List[FrameLayer] = field(default_factory=list)   # Frame Anatomy inspector (Phase A2)
 
 
 @dataclass
@@ -92,6 +101,8 @@ def build_arp_scene(net_info: dict, devices: list) -> ProtocolSceneData:
         AnimNode("gateway",   f"Gateway / Router\n{_short_ip(gw_ip)}",  "gateway",   0.9, 0.5),
     ]
 
+    my_mac = find_mac_for_ip(devices, my_ip)
+
     steps = [
         AnimStep(
             from_node="client", to_node="broadcast",
@@ -103,6 +114,16 @@ def build_arp_scene(net_info: dict, devices: list) -> ProtocolSceneData:
                 f"\"Who has {gw_ip}? Tell me your hardware address.\""
             ),
             is_broadcast=True,
+            layers=[
+                ethernet_layer(my_mac, "FF:FF:FF:FF:FF:FF", "0x0806", "ARP"),
+                FrameLayer("ARP", [
+                    ("Opcode", "1 (Request)"),
+                    ("Sender MAC", _short_mac(my_mac)),
+                    ("Sender IP", _short_ip(my_ip)),
+                    ("Target MAC", "00:00:00:00:00:00"),
+                    ("Target IP", _short_ip(gw_ip)),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="gateway", to_node="client",
@@ -114,6 +135,16 @@ def build_arp_scene(net_info: dict, devices: list) -> ProtocolSceneData:
                 f"Your device caches this mapping in its ARP table so future packets go directly."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer(gw_mac, my_mac, "0x0806", "ARP"),
+                FrameLayer("ARP", [
+                    ("Opcode", "2 (Reply)"),
+                    ("Sender MAC", _short_mac(gw_mac)),
+                    ("Sender IP", _short_ip(gw_ip)),
+                    ("Target MAC", _short_mac(my_mac)),
+                    ("Target IP", _short_ip(my_ip)),
+                ]),
+            ],
         ),
     ]
 
@@ -148,6 +179,9 @@ def build_dns_scene(net_info: dict, diag_result: Any) -> ProtocolSceneData:
         AnimNode("upstream", "Authoritative DNS\n(Internet)",    "server",  0.9, 0.5),
     ]
 
+    _CLIENT_PORT = 51820
+    _upstream_ip = "198.41.0.4"   # a.root-servers.net — RFC-representative root server
+
     steps = [
         AnimStep(
             from_node="client", to_node="resolver",
@@ -158,6 +192,16 @@ def build_dns_scene(net_info: dict, diag_result: Any) -> ProtocolSceneData:
                 f"to translate a domain name into an IP address. "
                 f"This uses UDP port 53 and takes only one round-trip if the resolver has a cached answer."
             ),
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(my_ip, resolver_ip, proto="17 (UDP)"),
+                udp_layer(_CLIENT_PORT, 53),
+                FrameLayer("DNS", [
+                    ("Transaction ID", "0x1a2b"),
+                    ("Flags", "Standard query"),
+                    ("Questions", "A example.com"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="resolver", to_node="upstream",
@@ -168,6 +212,16 @@ def build_dns_scene(net_info: dict, diag_result: Any) -> ProtocolSceneData:
                 "for the domain — first the root servers (.com), then the domain's own name servers. "
                 "This happens transparently; your device just waits for the resolver to come back."
             ),
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(resolver_ip, _upstream_ip, proto="17 (UDP)"),
+                udp_layer(53, 53),
+                FrameLayer("DNS", [
+                    ("Transaction ID", "0x3c9f"),
+                    ("Flags", "Standard query (recursion desired: 0)"),
+                    ("Questions", "A example.com"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="upstream", to_node="resolver",
@@ -179,6 +233,16 @@ def build_dns_scene(net_info: dict, diag_result: Any) -> ProtocolSceneData:
                 "A short TTL means the record changes often; a long TTL means it's stable."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(_upstream_ip, resolver_ip, proto="17 (UDP)"),
+                udp_layer(53, 53),
+                FrameLayer("DNS", [
+                    ("Transaction ID", "0x3c9f"),
+                    ("Flags", "Standard query response, No error"),
+                    ("Answers", "example.com A 93.184.216.34 TTL 3600"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="resolver", to_node="client",
@@ -190,6 +254,16 @@ def build_dns_scene(net_info: dict, diag_result: Any) -> ProtocolSceneData:
                 f"to 93.184.216.34 directly — the domain name is no longer needed."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(resolver_ip, my_ip, proto="17 (UDP)"),
+                udp_layer(53, _CLIENT_PORT),
+                FrameLayer("DNS", [
+                    ("Transaction ID", "0x1a2b"),
+                    ("Flags", "Standard query response, No error"),
+                    ("Answers", f"example.com A 93.184.216.34{latency_str}"),
+                ]),
+            ],
         ),
     ]
 
@@ -220,6 +294,10 @@ def build_tcp_scene(net_info: dict, devices: list) -> ProtocolSceneData:
         AnimNode("server", f"{target_name}\n{_short_ip(target_ip)}", "server", 0.9, 0.5),
     ]
 
+    my_mac     = find_mac_for_ip(devices, my_ip)
+    target_mac = find_mac_for_ip(devices, target_ip)
+    _CLIENT_PORT = 49152
+
     steps = [
         AnimStep(
             from_node="client", to_node="server",
@@ -230,6 +308,11 @@ def build_tcp_scene(net_info: dict, devices: list) -> ProtocolSceneData:
                 f"sequence number. This says: \"I want to connect, and my starting sequence number is X.\" "
                 f"The server must reply before any data can flow."
             ),
+            layers=[
+                ethernet_layer(my_mac, target_mac, "0x0800", "IPv4"),
+                ipv4_layer(my_ip, target_ip, proto="6 (TCP)"),
+                tcp_layer(_CLIENT_PORT, 443, "SYN", seq=0),
+            ],
         ),
         AnimStep(
             from_node="server", to_node="client",
@@ -241,6 +324,11 @@ def build_tcp_scene(net_info: dict, devices: list) -> ProtocolSceneData:
                 "This simultaneously confirms receipt and initiates the server's side of the connection."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer(target_mac, my_mac, "0x0800", "IPv4"),
+                ipv4_layer(target_ip, my_ip, proto="6 (TCP)"),
+                tcp_layer(443, _CLIENT_PORT, "SYN,ACK", seq=0, ack=1),
+            ],
         ),
         AnimStep(
             from_node="client", to_node="server",
@@ -251,6 +339,11 @@ def build_tcp_scene(net_info: dict, devices: list) -> ProtocolSceneData:
                 "The connection is established — data (HTTP request, TLS handshake, etc.) flows next. "
                 "This three-step process takes exactly one round-trip time (RTT) to complete."
             ),
+            layers=[
+                ethernet_layer(my_mac, target_mac, "0x0800", "IPv4"),
+                ipv4_layer(my_ip, target_ip, proto="6 (TCP)"),
+                tcp_layer(_CLIENT_PORT, 443, "ACK", seq=1, ack=1),
+            ],
         ),
     ]
 
@@ -276,6 +369,8 @@ def build_dhcp_scene(net_info: dict) -> ProtocolSceneData:
         AnimNode("dhcp_server", f"DHCP Server\n{_short_ip(gw_ip)}", "gateway",   0.9, 0.5),
     ]
 
+    _XID = "0x3903f326"   # illustrative DHCP transaction ID, held constant across the DORA exchange
+
     steps = [
         AnimStep(
             from_node="client", to_node="broadcast",
@@ -287,6 +382,17 @@ def build_dhcp_scene(net_info: dict) -> ProtocolSceneData:
                 "Any DHCP server that hears this will respond with an offer."
             ),
             is_broadcast=True,
+            layers=[
+                ethernet_layer("", "FF:FF:FF:FF:FF:FF", "0x0800", "IPv4"),
+                ipv4_layer("0.0.0.0", "255.255.255.255", proto="17 (UDP)"),
+                udp_layer(68, 67),
+                FrameLayer("DHCP", [
+                    ("Op", "1 (BOOTREQUEST)"),
+                    ("Transaction ID", _XID),
+                    ("Client MAC", _short_mac("")),
+                    ("Message Type", "53 = DHCPDISCOVER"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="dhcp_server", to_node="client",
@@ -298,6 +404,18 @@ def build_dhcp_scene(net_info: dict) -> ProtocolSceneData:
                 f"If multiple servers respond, the client uses the first offer received."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(gw_ip, "255.255.255.255", proto="17 (UDP)"),
+                udp_layer(67, 68),
+                FrameLayer("DHCP", [
+                    ("Op", "2 (BOOTREPLY)"),
+                    ("Transaction ID", _XID),
+                    ("Your IP", _short_ip(offered_ip)),
+                    ("Server IP", _short_ip(gw_ip)),
+                    ("Message Type", "2 = DHCPOFFER"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="client", to_node="broadcast",
@@ -309,6 +427,18 @@ def build_dhcp_scene(net_info: dict) -> ProtocolSceneData:
                 f"were declined, so they can release their reserved addresses."
             ),
             is_broadcast=True,
+            layers=[
+                ethernet_layer("", "FF:FF:FF:FF:FF:FF", "0x0800", "IPv4"),
+                ipv4_layer("0.0.0.0", "255.255.255.255", proto="17 (UDP)"),
+                udp_layer(68, 67),
+                FrameLayer("DHCP", [
+                    ("Op", "1 (BOOTREQUEST)"),
+                    ("Transaction ID", _XID),
+                    ("Requested IP", _short_ip(offered_ip)),
+                    ("Server Identifier", _short_ip(gw_ip)),
+                    ("Message Type", "53 = DHCPREQUEST"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="dhcp_server", to_node="client",
@@ -320,6 +450,18 @@ def build_dhcp_scene(net_info: dict) -> ProtocolSceneData:
                 f"at 50% of the lease time — typically without any disruption."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(gw_ip, offered_ip, proto="17 (UDP)"),
+                udp_layer(67, 68),
+                FrameLayer("DHCP", [
+                    ("Op", "2 (BOOTREPLY)"),
+                    ("Transaction ID", _XID),
+                    ("Your IP", _short_ip(offered_ip)),
+                    ("Lease Time", "86400 s (24 h)"),
+                    ("Message Type", "5 = DHCPACK"),
+                ]),
+            ],
         ),
     ]
 
@@ -360,6 +502,20 @@ def build_stp_scene(m2_result: Optional[dict]) -> ProtocolSceneData:
         AnimNode("sw_b",   f"Switch B\n{sw_b_mac.upper()}",                              "switch", 0.8,  0.7),
     ]
 
+    _SELF_CLAIM_PRIORITY = 32768   # default bridge priority before the root election settles
+
+    def _bpdu_layer(root_id_mac: str, root_id_priority: int, bridge_id_mac: str,
+                     bridge_id_priority: int, cost: int) -> FrameLayer:
+        return FrameLayer("802.1D BPDU", [
+            ("Root ID", f"{root_id_priority}.{root_id_mac.upper()}"),
+            ("Bridge ID", f"{bridge_id_priority}.{bridge_id_mac.upper()}"),
+            ("Root Path Cost", str(cost)),
+            ("Message Age", "0"),
+            ("Max Age", "20"),
+            ("Hello Time", "2"),
+            ("Forward Delay", "15"),
+        ])
+
     steps = [
         AnimStep(
             from_node="sw_a", to_node="root",
@@ -371,6 +527,10 @@ def build_stp_scene(m2_result: Optional[dict]) -> ProtocolSceneData:
                 "Every switch on the network does the same — the election begins."
             ),
             is_broadcast=True,
+            layers=[
+                ethernet_layer(sw_a_mac, "01:80:C2:00:00:00", "LLC 0x42/0x42", "STP BPDU"),
+                _bpdu_layer(sw_a_mac, _SELF_CLAIM_PRIORITY, sw_a_mac, _SELF_CLAIM_PRIORITY, 0),
+            ],
         ),
         AnimStep(
             from_node="sw_b", to_node="root",
@@ -382,6 +542,10 @@ def build_stp_scene(m2_result: Optional[dict]) -> ProtocolSceneData:
                 f"The root bridge here has priority {root_priority} — the lowest seen, so it wins."
             ),
             is_broadcast=True,
+            layers=[
+                ethernet_layer(sw_b_mac, "01:80:C2:00:00:00", "LLC 0x42/0x42", "STP BPDU"),
+                _bpdu_layer(sw_b_mac, _SELF_CLAIM_PRIORITY, sw_b_mac, _SELF_CLAIM_PRIORITY, 0),
+            ],
         ),
         AnimStep(
             from_node="root", to_node="sw_a",
@@ -393,6 +557,10 @@ def build_stp_scene(m2_result: Optional[dict]) -> ProtocolSceneData:
                 "and set their root port accordingly."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer(root_mac, "01:80:C2:00:00:00", "LLC 0x42/0x42", "STP BPDU"),
+                _bpdu_layer(root_mac, root_priority, root_mac, root_priority, 0),
+            ],
         ),
         AnimStep(
             from_node="root", to_node="sw_b",
@@ -404,6 +572,10 @@ def build_stp_scene(m2_result: Optional[dict]) -> ProtocolSceneData:
                 "traffic stops but BPDUs still flow so the topology can recover if a link fails."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer(root_mac, "01:80:C2:00:00:00", "LLC 0x42/0x42", "STP BPDU"),
+                _bpdu_layer(root_mac, root_priority, root_mac, root_priority, 0),
+            ],
         ),
     ]
 

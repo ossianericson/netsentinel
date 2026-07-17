@@ -296,9 +296,18 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         from ui.pages.lab_mode_page import LabModePage
         self._lab_mode_page = LabModePage(store=self._store, parent=None)
 
-        from ui.pages.protocol_viz_page import ProtocolVizPage
-        self._protocol_viz_page = ProtocolVizPage(parent=None)
-        self._protocol_viz_page.navigate_to.connect(self._nav_rail_go_to)
+        def _mk_protocol_viz_page():
+            from ui.pages.protocol_viz_page import ProtocolVizPage
+            self._protocol_viz_page = ProtocolVizPage(parent=None)
+            self._protocol_viz_page.navigate_to.connect(self._nav_rail_go_to)
+            # Replay context buffered by _feed_protocol_viz_context() while this
+            # page was still a placeholder (scan handlers feed it on every scan,
+            # independent of nav — see ui/nav/lazy_page.py).
+            if self._protocol_viz_pending_context is not None:
+                self._protocol_viz_page.set_context(**self._protocol_viz_pending_context)
+                self._protocol_viz_pending_context = None
+            return self._protocol_viz_page
+        self._lazy_or_build("_protocol_viz_page", L.PROTOCOL_VISUALIZER, _mk_protocol_viz_page)
 
         def _mk_discover_page():
             from ui.pages.discover_page import FeatureGuidePage

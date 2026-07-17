@@ -341,10 +341,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Protocol Visualizer step list", "Click any step in the new Steps list to jump directly to it — stays in sync with playback."),
-        ("Consistent Network Map", "Devices that never answer ARP (like the scanning PC itself) now show on both the Classic and Interactive maps."),
-        ("Microsoft Store update fix", "Store installs now point to the Store's own update page instead of GitHub."),
-        ("Sharper Security Audit results", "OS Detection reuses your last port scan, SMB share risk flags are more accurate, and SNMP CPU/load polling was added."),
+        ("Cinematic Protocol Visualizer", "Curved packet paths, motion trails, pulse rings, and a new Frame Anatomy inspector showing real Ethernet/IP/TCP layer breakdowns."),
+        ("Protocol Visualizer LIVE MODE", "Watch real captured ARP/DNS traffic animate on the canvas as it happens (admin/Npcap required)."),
+        ("PNG and storyboard export", "Copy or save the Protocol Visualizer canvas as an image, or export a full filmstrip of every animation step."),
+        ("Fixed invisible close buttons", "The device history drawer's close button and three Home page dismiss buttons were rendering invisibly on native Windows text rendering — now painted icons."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

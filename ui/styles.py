@@ -583,6 +583,10 @@ CANVAS_GREEN       = "#3FB950"   # canvas green — gateway / success / root bri
 CANVAS_AMBER       = "#E3B341"   # canvas amber — DNS / warning packets
 CANVAS_GRAY        = "#8B949E"   # canvas gray — server / switch nodes
 CANVAS_DIM         = "#484F58"   # canvas dim — broadcast / inactive border
+CANVAS_TRAIL       = "#79C0FF"   # canvas motion-trail dots behind the travelling packet
+CANVAS_PULSE       = "#F0F6FC"   # canvas arrival-pulse ring on packet delivery
+CANVAS_GRID        = "#161B22"   # canvas backdrop dot-grid (near-invisible on CANVAS_BG)
+CANVAS_NODE_FILL   = "#161B22"   # canvas node card base fill, under the per-role alpha tint
 
 # ── Colour-blind accessible status icons (S10-2) ──────────────────────────────
 # Used alongside colour in status cells so the state is conveyed by shape too.

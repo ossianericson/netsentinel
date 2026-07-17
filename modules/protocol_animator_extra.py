@@ -12,11 +12,13 @@ from __future__ import annotations
 from modules.protocol_animator import (
     AnimNode,
     AnimStep,
+    FrameLayer,
     ProtocolSceneData,
     _hostname,
     _local_ip,
     _short_ip,
 )
+from modules.protocol_frames import ethernet_layer, find_mac_for_ip, ipv4_layer, tcp_layer, udp_layer
 
 
 # ── OSPF Hello / LSA Flood ─────────────────────────────────────────────────────
@@ -43,6 +45,17 @@ def build_ospf_scene(net_info: dict) -> ProtocolSceneData:
                 f"a two-way relationship and begin the Database Exchange process."
             ),
             is_broadcast=True,
+            layers=[
+                ethernet_layer("", "01:00:5E:00:00:05", "0x0800", "IPv4"),
+                ipv4_layer(my_ip, "224.0.0.5", ttl=1, proto="89 (OSPF)"),
+                FrameLayer("OSPF", [
+                    ("Type", "1 (Hello)"),
+                    ("Router ID", _short_ip(my_ip)),
+                    ("Area ID", "0.0.0.0"),
+                    ("Hello Interval", "10 s"),
+                    ("Dead Interval", "40 s"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="router_b", to_node="router_a",
@@ -55,6 +68,15 @@ def build_ospf_scene(net_info: dict) -> ProtocolSceneData:
                 "missing or stale records via a Link-State Request (LSR)."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(gw_ip, my_ip, ttl=1, proto="89 (OSPF)"),
+                FrameLayer("OSPF", [
+                    ("Type", "2 (DBD)"),
+                    ("Sequence", "1"),
+                    ("Flags", "I=1 M=0 MS=1"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="router_b", to_node="lsdb",
@@ -66,6 +88,16 @@ def build_ospf_scene(net_info: dict) -> ProtocolSceneData:
                 "networks (type 2), and external routes (type 5). All routers acknowledge with LSAck "
                 "and store the LSAs — the Link-State Database converges when all copies match."
             ),
+            layers=[
+                ethernet_layer("", "01:00:5E:00:00:05", "0x0800", "IPv4"),
+                ipv4_layer(gw_ip, "224.0.0.5", ttl=1, proto="89 (OSPF)"),
+                FrameLayer("OSPF", [
+                    ("Type", "4 (LSU)"),
+                    ("LSA Type", "1 (Router LSA)"),
+                    ("LS Sequence", "0x80000001"),
+                    ("Age", "0 s"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="lsdb", to_node="router_a",
@@ -78,6 +110,16 @@ def build_ospf_scene(net_info: dict) -> ProtocolSceneData:
                 "entries — no routing loops and guaranteed convergence after any topology change."
             ),
             is_reply=True,
+            layers=[
+                FrameLayer("OSPF", [
+                    ("Type", "N/A — internal computation, not a captured frame"),
+                ]),
+                FrameLayer("SPF Result", [
+                    ("Algorithm", "Dijkstra shortest-path-first"),
+                    ("Input", "Link-State Database (all received LSAs)"),
+                    ("Output", "Shortest-path tree → routing table installed"),
+                ]),
+            ],
         ),
     ]
 
@@ -112,6 +154,11 @@ def build_nat_scene(net_info: dict) -> ProtocolSceneData:
                 f"Private ranges (10.x.x.x, 172.16–31.x.x, 192.168.x.x) are not routable on the "
                 f"public internet — the router must rewrite the source before forwarding."
             ),
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(private_ip, server_ip, proto="6 (TCP)"),
+                tcp_layer(49152, 443, "SYN", seq=0),
+            ],
         ),
         AnimStep(
             from_node="nat", to_node="server",
@@ -123,6 +170,15 @@ def build_nat_scene(net_info: dict) -> ProtocolSceneData:
                 f"in the NAT table: {public_ip}:50001 ↔ {private_ip}:49152. "
                 f"All return traffic for this flow is de-translated using this entry."
             ),
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(public_ip, server_ip, proto="6 (TCP)"),
+                tcp_layer(50001, 443, "SYN", seq=0),
+                FrameLayer("NAT Table", [
+                    ("Original", f"{private_ip}:49152"),
+                    ("Translated", f"{public_ip}:50001"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="server", to_node="nat",
@@ -135,6 +191,11 @@ def build_nat_scene(net_info: dict) -> ProtocolSceneData:
                 f"NAT table entry and are silently dropped."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(server_ip, public_ip, proto="6 (TCP)"),
+                tcp_layer(443, 50001, "SYN,ACK", seq=0, ack=1),
+            ],
         ),
         AnimStep(
             from_node="nat", to_node="client",
@@ -147,6 +208,15 @@ def build_nat_scene(net_info: dict) -> ProtocolSceneData:
                 f"This is Port Address Translation (PAT/NAPT) — the most common form of NAT."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(server_ip, private_ip, proto="6 (TCP)"),
+                tcp_layer(443, 49152, "SYN,ACK", seq=0, ack=1),
+                FrameLayer("NAT Table", [
+                    ("Original", f"{public_ip}:50001"),
+                    ("Translated", f"{private_ip}:49152"),
+                ]),
+            ],
         ),
     ]
 
@@ -177,6 +247,12 @@ def build_vlan_scene(net_info: dict) -> ProtocolSceneData:  # noqa: ARG001
                 "Access ports belong to exactly one VLAN; the switch assigns VLAN 10 based on "
                 "port configuration. End devices never see VLAN tags — only the switch does."
             ),
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                FrameLayer("802.1Q Tag", [
+                    ("Status", "Untagged — access port assigns VLAN 10 internally"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="sw1", to_node="sw2",
@@ -188,6 +264,15 @@ def build_vlan_scene(net_info: dict) -> ProtocolSceneData:  # noqa: ARG001
                 "a Drop Eligibility bit (DEI), and a 12-bit VLAN ID (here: 10). "
                 "Tagged frames carry VLAN context across inter-switch trunk links."
             ),
+            layers=[
+                ethernet_layer("", "", "0x8100", "802.1Q"),
+                FrameLayer("802.1Q Tag", [
+                    ("TPID", "0x8100"),
+                    ("PCP", "0"),
+                    ("DEI", "0"),
+                    ("VLAN ID", "10"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="sw2", to_node="pc_b",
@@ -199,6 +284,12 @@ def build_vlan_scene(net_info: dict) -> ProtocolSceneData:  # noqa: ARG001
                 "End devices never see the tag — it exists only on trunk links between switches."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                FrameLayer("802.1Q Tag", [
+                    ("Status", "Tag removed — VLAN 10 matched destination access port"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="sw1", to_node="sw2",
@@ -211,6 +302,15 @@ def build_vlan_scene(net_info: dict) -> ProtocolSceneData:  # noqa: ARG001
                 "SVI (Switched Virtual Interface) on a Layer 3 switch."
             ),
             is_broadcast=True,
+            layers=[
+                ethernet_layer("", "", "0x8100", "802.1Q"),
+                FrameLayer("802.1Q Tag", [
+                    ("TPID", "0x8100"),
+                    ("PCP", "0"),
+                    ("DEI", "0"),
+                    ("VLAN ID", "20"),
+                ]),
+            ],
         ),
     ]
 
@@ -223,7 +323,7 @@ def build_vlan_scene(net_info: dict) -> ProtocolSceneData:  # noqa: ARG001
 
 # ── TLS 1.3 Handshake ──────────────────────────────────────────────────────────
 
-def build_tls_scene(net_info: dict, devices: list) -> ProtocolSceneData:  # noqa: ARG001
+def build_tls_scene(net_info: dict, devices: list) -> ProtocolSceneData:
     my_ip   = _local_ip(net_info)
     my_name = _hostname()
     target_ip = net_info.get("gateway", "93.184.216.34")
@@ -232,6 +332,10 @@ def build_tls_scene(net_info: dict, devices: list) -> ProtocolSceneData:  # noqa
         AnimNode("client", f"{my_name}\n{_short_ip(my_ip)}",         "client", 0.15, 0.5),
         AnimNode("server", f"HTTPS Server\n{_short_ip(target_ip)}:443", "server", 0.85, 0.5),
     ]
+
+    my_mac     = find_mac_for_ip(devices, my_ip)
+    target_mac = find_mac_for_ip(devices, target_ip)
+    _CLIENT_PORT = 51820
 
     steps = [
         AnimStep(
@@ -244,6 +348,18 @@ def build_tls_scene(net_info: dict, devices: list) -> ProtocolSceneData:  # noqa
                 "x25519). TLS 1.3 sends key material in the first message — removing a full round trip "
                 "vs TLS 1.2 and making 0-RTT session resumption possible."
             ),
+            layers=[
+                ethernet_layer(my_mac, target_mac, "0x0800", "IPv4"),
+                ipv4_layer(my_ip, target_ip, proto="6 (TCP)"),
+                tcp_layer(_CLIENT_PORT, 443, "PSH,ACK", seq=1, ack=1),
+                FrameLayer("TLS Record", [
+                    ("Content Type", "22 (Handshake)"),
+                    ("Version", "TLS 1.3"),
+                    ("Handshake Type", "1 (ClientHello)"),
+                    ("Cipher Suites", "TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256"),
+                    ("Key Share", "x25519"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="server", to_node="client",
@@ -256,6 +372,18 @@ def build_tls_scene(net_info: dict, devices: list) -> ProtocolSceneData:  # noqa
                 "The certificate chain proves the server's identity, signed by a trusted CA."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer(target_mac, my_mac, "0x0800", "IPv4"),
+                ipv4_layer(target_ip, my_ip, proto="6 (TCP)"),
+                tcp_layer(443, _CLIENT_PORT, "PSH,ACK", seq=1, ack=2),
+                FrameLayer("TLS Record", [
+                    ("Content Type", "22 (Handshake)"),
+                    ("Handshake Type", "2 (ServerHello)"),
+                    ("Chosen Cipher", "TLS_AES_256_GCM_SHA384"),
+                    ("Key Share", "server x25519 public key"),
+                    ("Certificate", "cert chain, signed by trusted CA"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="client", to_node="server",
@@ -267,6 +395,16 @@ def build_tls_scene(net_info: dict, devices: list) -> ProtocolSceneData:  # noqa
                 "encrypted with the derived session key. This proves both parties have the same keys "
                 "and that no message was altered in transit. The connection is live after this step."
             ),
+            layers=[
+                ethernet_layer(my_mac, target_mac, "0x0800", "IPv4"),
+                ipv4_layer(my_ip, target_ip, proto="6 (TCP)"),
+                tcp_layer(_CLIENT_PORT, 443, "PSH,ACK", seq=2, ack=2),
+                FrameLayer("TLS Record", [
+                    ("Content Type", "22 (Handshake, encrypted)"),
+                    ("Handshake Type", "20 (Finished)"),
+                    ("Verify Data", "HMAC over full handshake transcript"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="server", to_node="client",
@@ -279,6 +417,16 @@ def build_tls_scene(net_info: dict, devices: list) -> ProtocolSceneData:  # noqa
                 "every session uses ECDH and therefore achieves perfect forward secrecy by design."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer(target_mac, my_mac, "0x0800", "IPv4"),
+                ipv4_layer(target_ip, my_ip, proto="6 (TCP)"),
+                tcp_layer(443, _CLIENT_PORT, "PSH,ACK", seq=2, ack=3),
+                FrameLayer("TLS Record", [
+                    ("Content Type", "23 (Application Data)"),
+                    ("Handshake Type", "20 (Finished)"),
+                    ("Cipher", "AES-256-GCM, authenticated with SHA-384"),
+                ]),
+            ],
         ),
     ]
 
@@ -314,6 +462,11 @@ def build_icmp_scene(net_info: dict) -> ProtocolSceneData:
                 f"to 0, discards the packet, and replies with ICMP Time Exceeded (type 11, code 0). "
                 f"The elapsed time reveals both the first hop's IP address and the RTT to it."
             ),
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(my_ip, dest_ip, ttl=1, proto="17 (UDP)"),
+                udp_layer(33434, 33434),
+            ],
         ),
         AnimStep(
             from_node="hop1", to_node="client",
@@ -325,6 +478,15 @@ def build_icmp_scene(net_info: dict) -> ProtocolSceneData:
                 f"hop 1 (TTL→1) and expires at the second router. Each round reveals one more hop."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(gw_ip, my_ip, ttl=64, proto="1 (ICMP)"),
+                FrameLayer("ICMP", [
+                    ("Type", "11 (Time Exceeded)"),
+                    ("Code", "0 (TTL exceeded in transit)"),
+                    ("Originating Probe TTL", "1"),
+                ]),
+            ],
         ),
         AnimStep(
             from_node="client", to_node="hop2",
@@ -335,6 +497,11 @@ def build_icmp_scene(net_info: dict) -> ProtocolSceneData:
                 f"The ISP router returns its own ICMP Time Exceeded, revealing itself. "
                 f"Most internet paths have 10–20 hops; each probe adds one TTL increment."
             ),
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(my_ip, dest_ip, ttl=2, proto="17 (UDP)"),
+                udp_layer(33435, 33435),
+            ],
         ),
         AnimStep(
             from_node="dest", to_node="client",
@@ -347,6 +514,14 @@ def build_icmp_scene(net_info: dict) -> ProtocolSceneData:
                 f"— the final reply is then ICMP Echo Reply (type 0) rather than Port Unreachable."
             ),
             is_reply=True,
+            layers=[
+                ethernet_layer("", "", "0x0800", "IPv4"),
+                ipv4_layer(dest_ip, my_ip, ttl=64, proto="1 (ICMP)"),
+                FrameLayer("ICMP", [
+                    ("Type", "3 (Destination Unreachable)"),
+                    ("Code", "3 (Port Unreachable)"),
+                ]),
+            ],
         ),
     ]
 

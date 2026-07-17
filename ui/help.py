@@ -533,11 +533,13 @@ _PAGE_HELP: dict[str, dict] = {
     },
     # ── Education ──────────────────────────────────────────────────────────────
     "Protocol Visualizer": {
-        "what": "Animated step-by-step diagrams of ARP, DNS, TCP, DHCP, and STP using your real device addresses.",
+        "what": "Animated step-by-step diagrams of ARP, DNS, TCP, DHCP, and STP using your real device addresses, with a per-step Frame Anatomy breakdown and PNG/storyboard export.",
         "hidden": [
             "Use the ◀◀ / ▶ / ▶▶ step buttons to jump forward or backward through the animation without watching it play in real time.",
             "The '▸ Why this protocol matters' panel at the bottom links the animation to real threats NetSentinel detects.",
             "The 'See diagram' button in any 'What just happened, technically?' panel jumps here with the right protocol pre-selected.",
+            "Click 'Frame Anatomy' below the canvas to see the real Ethernet/IP/protocol fields for the current step, with click-to-expand field tables.",
+            "Right-click the canvas (or use the title-bar buttons) to copy the current frame as an image, save it as PNG, or export a full storyboard filmstrip of every step — useful for coursework submissions.",
         ],
     },
     "Lab Mode": {

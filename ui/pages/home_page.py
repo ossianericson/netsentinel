@@ -1,13 +1,13 @@
 """
-HomePage � introductory landing page shown in Home mode.
+HomePage — introductory landing page shown in Home mode.
 
 Hero card (network grade), three mini metric cards (speed / stability / devices),
 and a recent-alerts strip.
 
 Architecture rules observed:
-  � All colours from ui.styles � no hardcoded hex values.
-  � No blocking I/O. Pure display widget; all data arrives via public slots.
-  � Outer scroll area so the content is never clipped on small windows.
+  • All colours from ui.styles — no hardcoded hex values.
+  • No blocking I/O. Pure display widget; all data arrives via public slots.
+  • Outer scroll area so the content is never clipped on small windows.
 """
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ from ui.widgets.bandwidth_hog_card import BandwidthHogCard
 from ui.widgets.usage_insights_card import UsageInsightsCard
 from ui.widgets.weekly_report_card import WeeklyReportCard
 from ui.widgets.scan_radar_widget import ScanRadarWidget
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -280,7 +281,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         outer.addWidget(self._hw_nudge_bar)
         # ─────────────────────────────────────────────────────────────────────
 
-        # ── Freshness strip � always visible above scroll area ────────────────
+        # ── Freshness strip — always visible above scroll area ────────────────
         self._freshness_strip = FreshnessStrip()
         self._freshness_strip.rescan_requested.connect(self.rescan_requested)
         self._freshness_strip.navigate_to.connect(self.navigate_to)
@@ -330,7 +331,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ds_lay = QHBoxLayout(self._dashboard_strip)
         _ds_lay.setContentsMargins(12, 5, 8, 5)
         _ds_lay.setSpacing(8)
-        _ds_icon = QLabel("�")
+        _ds_icon = QLabel("⬡")
         _ds_icon.setFixedWidth(18)
         _s.themed_ss(_ds_icon, lambda: _s.qss_label(_s.UPDATE_BAR_FG, 12))
         self._ds_text = QLabel("")
@@ -343,9 +344,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             "QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         _ds_open.clicked.connect(self._open_dashboard)
-        _ds_dismiss = QPushButton("�")
+        _ds_dismiss = QPushButton()
         _ds_dismiss.setFixedSize(20, 20)
+        _ds_dismiss.setToolTip("Dismiss")
         _ds_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _wire_close_icon(_ds_dismiss, "UPDATE_BAR_FG")
         _s.themed_ss(_ds_dismiss, lambda: _s.qss_dismiss_button(14, fg=_s.UPDATE_BAR_FG, padding="0", press_bg=_s.BG_HOVER))
         _ds_dismiss.clicked.connect(self._dismiss_dashboard_strip)
         _ds_lay.addWidget(_ds_icon)
@@ -551,9 +554,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _db_lay.setSpacing(10)
         self._delta_chips_lbl = QLabel("")
         _s.themed_ss(self._delta_chips_lbl, lambda: _s.qss_label(_s.TEXT_PRIMARY, 11))
-        _db_dismiss = QPushButton("�")
+        _db_dismiss = QPushButton()
         _db_dismiss.setFixedSize(20, 20)
+        _db_dismiss.setToolTip("Dismiss")
         _db_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _wire_close_icon(_db_dismiss)
         _s.themed_ss(_db_dismiss, lambda: _s.qss_dismiss_button(14, fg=_s.TEXT_MUTED, padding="0", press_bg=_s.BG_HOVER))
         _db_dismiss.clicked.connect(
             lambda: (self._delta_banner.setVisible(False), self.window().activateWindow())
@@ -600,7 +605,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             " background:transparent; border:none; letter-spacing:1.5px;")
         _rec_outer.addWidget(_rec_mon_hdr)
 
-        # Pill row � separate instances synced by set_monitor_pills()
+        # Pill row — separate instances synced by set_monitor_pills()
         _rec_pills_row = QHBoxLayout()
         _rec_pills_row.setSpacing(6)
         _rec_pills_row.setContentsMargins(0, 0, 0, 0)
@@ -650,11 +655,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _rec_status_row = QHBoxLayout()
         _rec_status_row.setSpacing(12)
         _rec_status_row.setContentsMargins(0, 0, 0, 0)
-        self._rec_grade_lbl = QLabel("Network Grade: �")
+        self._rec_grade_lbl = QLabel("Network Grade: —")
         _s.themed_ss(self._rec_grade_lbl, "font-size:11px; font-weight:600; color:{TEXT_SECONDARY};"
             " background:transparent; border:none;")
         self._grade_sparkline = _GradeSparkline()
-        self._rec_scan_time_lbl = QLabel("Last scan: �")
+        self._rec_scan_time_lbl = QLabel("Last scan: —")
         _s.themed_ss(self._rec_scan_time_lbl, lambda: _s.qss_label(_s.TEXT_MUTED, 11))
         self._btn_rescan_compact = QPushButton("▶  Rescan")
         self._btn_rescan_compact.setFixedHeight(26)
@@ -720,7 +725,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             chip_lay = QVBoxLayout(chip)
             chip_lay.setContentsMargins(10, 6, 10, 6)
             chip_lay.setSpacing(2)
-            val_lbl = QLabel("�")
+            val_lbl = QLabel("–")
             _s.themed_ss(
                 val_lbl,
                 lambda c=color: f"font-size:16px; font-weight:bold; color:{c};"
@@ -877,7 +882,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _s.themed_ss(self._hero_title, "font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
             " background:transparent; border:none;")
         self._hero_sub = QLabel(
-            "Discover devices � check stability � detect threats"
+            "Discover devices · check stability · detect threats"
         )
         _s.themed_ss(self._hero_sub, "font-size:11px; color:{TEXT_SECONDARY};"
             " background:transparent; border:none;")
@@ -950,7 +955,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         self._home_search = QLineEdit()
         self._home_search.setPlaceholderText(
-            "Search features � try 'wifi', 'arp', 'heatmap', 'dns'�"
+            "Search features — try 'wifi', 'arp', 'heatmap', 'dns'…"
         )
         self._home_search.setFixedHeight(30)
         _s.themed_ss(self._home_search, "QLineEdit {{ background:{BG_DARK}; border:1px solid {BORDER};"
@@ -990,9 +995,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             " background:transparent; border:none;")
         _sheet_hdr.addWidget(_sheet_title_lbl)
         _sheet_hdr.addStretch()
-        _sheet_x = QPushButton("�")
+        _sheet_x = QPushButton()
         _sheet_x.setFixedSize(20, 20)
+        _sheet_x.setToolTip("Dismiss")
         _sheet_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        _wire_close_icon(_sheet_x)
         _s.themed_ss(_sheet_x, lambda: _s.qss_dismiss_button(14, fg=_s.TEXT_MUTED, padding="0", press_bg=_s.BG_HOVER))
         _sheet_x.clicked.connect(self._dismiss_post_scan_sheet)
         _sheet_hdr.addWidget(_sheet_x)
@@ -1034,7 +1041,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             " border:none; padding-top:4px; letter-spacing:1px;")
         lay.addWidget(self._sec1_lbl)
 
-        # ── Mini-card row � three equal-width columns ────────────────────────
+        # ── Mini-card row — three equal-width columns ────────────────────────
         self._mini_cards_widget = QWidget()
         self._mini_cards_widget.setStyleSheet("background:transparent;")
         card_row = QHBoxLayout(self._mini_cards_widget)
@@ -1192,7 +1199,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._mon_dot.setFixedWidth(12)
         _s.themed_ss(self._mon_dot, lambda: _s.qss_muted_label(9))
         self._mon_status_lbl = QLabel(
-            "Not running � start to log connection stability over time."
+            "Not running — start to log connection stability over time."
         )
         _s.themed_ss(self._mon_status_lbl, lambda: _s.qss_muted_label(11))
         self._mon_status_lbl.setWordWrap(True)
@@ -1261,11 +1268,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             return rw, lbl, dot
 
         _dev_row, self._res_devices_lbl, self._res_devices_dot = \
-            _result_row("�", "View Devices →", "Devices")
+            _result_row("—", "View Devices →", "Devices")
         _conn_row, self._res_conn_lbl, self._res_conn_dot = \
-            _result_row("�", "View Connection →", "DNS & Stability")
+            _result_row("—", "View Connection →", "DNS & Stability")
         _sec_row, self._res_security_lbl, self._res_security_dot = \
-            _result_row("�", "View Dashboard →", "Dashboard")
+            _result_row("—", "View Dashboard →", "Dashboard")
 
         _strip_lay.addWidget(_dev_row)
         _strip_lay.addWidget(_conn_row)
@@ -1325,7 +1332,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _s.themed_ss(self._no_alerts_lbl, "font-size:11px; color:{TEXT_SECONDARY};"
             " background:transparent; border:none;")
         self._alert_inner.addWidget(self._no_alerts_lbl)
-        # Permanent footer � always visible; text changes to "No other alerts" once rows appear
+        # Permanent footer — always visible; text changes to "No other alerts" once rows appear
         self._no_other_alerts_lbl = QLabel()
         self._no_other_alerts_lbl.setVisible(False)
         _s.themed_ss(self._no_other_alerts_lbl, "font-size:10px; color:{TEXT_SECONDARY};"

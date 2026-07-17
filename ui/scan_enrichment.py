@@ -474,7 +474,7 @@ class ScanEnrichmentMixin:
     def _on_diag_result(self, result):
 
         self._diag_result = result
-        self._protocol_viz_page.set_context(
+        self._feed_protocol_viz_context(
             net_info=self._net_info,
             devices=self._m1_result.get("devices", []) if self._m1_result else [],
             diag_result=self._diag_result,
