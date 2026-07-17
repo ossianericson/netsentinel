@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.34**
+Current version: **v2.1.35**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -75,7 +75,7 @@ One line per feature — full behavioural detail lives in the module's own docst
 - **Threat Intelligence** — ThreatIntelDB + AbuseIPDB v2 lookup (consent-gated)
 - **DHCP Lease Inventory** — rogue DHCP server detection
 - **DNS Zone Mapping** — AXFR + mDNS
-- **CVE lifecycle tracker** — per-device CVE tracking (schema v8)
+- **CVE lifecycle tracker** — per-device CVE tracking (schema v20)
 - **Alert pipeline** — AlertEngine + NotificationRouter across Toast/Webhook/Email/Pushover/Ntfy/Telegram
 - **Maintenance windows** — alert suppression per device or fleet-wide
 - **Predictive trend alerting** — OLS regression over RTT/loss/jitter with ETA-to-threshold
@@ -107,7 +107,7 @@ One line per feature — full behavioural detail lives in the module's own docst
 
 ### Home Page
 - **"Since you were last here" banner** — new devices and outages since last session
-- **"What to do next" suggestions strip** — up to four action cards after each scan
+- **"What to do next" suggestions strip** — up to four action cards after each scan (rules in `modules/suggestion_engine.py`)
 - **Weekly digest tray notification** — 7-day summary on startup
 - **Dismissible browser dashboard strip** — shown when REST API is enabled
 - **Dismissible Quick Tips card** — Ctrl+K, right-click pin, REST API hint

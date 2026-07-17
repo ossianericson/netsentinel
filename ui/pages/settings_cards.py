@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _styles
+from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.styles import (
     ACCENT_PURPLE, DEEP_ORANGE, TEAL, qss_chip,
 )
@@ -856,13 +857,14 @@ class _SettingsCardsMixin:
         _styles.themed_ss(self._pm_btn_install, _btn_qss)
         self._pm_btn_install.setEnabled(False)
         self._pm_btn_install.clicked.connect(self._pm_install_selected)
-        self._pm_btn_uninstall = QPushButton("✕  Uninstall")
-        _styles.themed_ss(self._pm_btn_uninstall, "QPushButton{{background:{BG_CARD};color:{RED};"
+        self._pm_btn_uninstall = QPushButton("Uninstall")
+        _wire_close_icon(self._pm_btn_uninstall, "RED")
+        _styles.themed_ss(self._pm_btn_uninstall, "QPushButton{{background:{BG_CARD};"
             "border:1px solid {RED};border-radius:2px;"
             "padding:0 12px;font-size:11px;height:26px;}}"
             "QPushButton:hover{{background:{PRO_WARN_BG};}}"
-            "QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
-            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
+            "QPushButton:disabled{{border-color:{BORDER};}}"
+            "QPushButton:pressed {{ background:{BG_CARD}; }}")
         self._pm_btn_uninstall.setEnabled(False)
         self._pm_btn_uninstall.clicked.connect(self._pm_uninstall_selected)
         self._pm_btn_folder = QPushButton("📁  Open Plugins Folder")

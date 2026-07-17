@@ -61,6 +61,7 @@ from modules.wifi_heatmap import (
 )
 from modules.wifi_scanner import scan as wifi_scan
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.tabs_helpers import _table
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
@@ -219,7 +220,8 @@ class WifiHeatmapPage(QWidget):
         self._btn_save     = _btn("⊟  Save Survey")
         self._btn_add      = _btn("●  Add Sample", accent=True)
         self._btn_render   = _btn("◆  Render Heatmap", accent=True)
-        self._btn_clear    = _btn("✕  Clear Samples")
+        self._btn_clear    = _btn("Clear Samples")
+        _wire_close_icon(self._btn_clear, "TEXT_PRIMARY")
         self._btn_export   = _btn("↓  Export PNG")
 
         self._ap_combo = QComboBox()
@@ -289,7 +291,8 @@ class WifiHeatmapPage(QWidget):
         samp_layout.addWidget(self._sample_table)
 
         # Delete selected sample button
-        del_btn = _btn("✕  Delete Selected Sample")
+        del_btn = _btn("Delete Selected Sample")
+        _wire_close_icon(del_btn, "TEXT_PRIMARY")
         del_btn.clicked.connect(self._on_delete_sample)
         samp_layout.addWidget(del_btn)
         lay.addWidget(samp_card, 1)

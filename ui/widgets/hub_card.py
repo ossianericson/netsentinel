@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QProcess
 
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.styles import (
     alpha,
     BLACK, CARD_RADIUS,
@@ -1024,7 +1025,8 @@ class HubCard(QFrame):
         hdr_lay.addWidget(btn_rename)
 
         # Remove button
-        btn_remove = _btn("✕")
+        btn_remove = _btn("")
+        _wire_close_icon(btn_remove, "TEXT_PRIMARY")
         btn_remove.setFixedWidth(28)
         btn_remove.setToolTip("Remove this instance")
         btn_remove.clicked.connect(lambda: self.remove_clicked.emit(self._path))

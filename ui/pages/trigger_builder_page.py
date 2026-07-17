@@ -58,6 +58,7 @@ from modules.trigger_expression import (
 from ui.widgets.context_menu import install_copy_menu
 from ui.tabs_helpers import _table
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
@@ -444,7 +445,8 @@ class TriggerBuilderPage(QWidget):
         btn_row = QHBoxLayout()
         self._btn_add    = _btn("✚  Add", accent=True)
         self._btn_edit   = _btn("✎  Edit")
-        self._btn_delete = _btn("✕  Delete")
+        self._btn_delete = _btn("Delete")
+        _wire_close_icon(self._btn_delete, "TEXT_PRIMARY")
         self._btn_toggle = _btn("◉  Toggle")
         for b in (self._btn_add, self._btn_edit, self._btn_delete, self._btn_toggle):
             btn_row.addWidget(b)

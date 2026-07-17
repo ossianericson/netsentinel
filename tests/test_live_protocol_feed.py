@@ -144,7 +144,7 @@ def test_dns_handler_emits_normalized_query_event():
     assert evt.src_ip == "192.168.1.50"
     assert evt.dst_ip == "8.8.8.8"
     assert evt.is_reply is False
-    assert "example.com" in evt.summary
+    assert evt.summary == "Query for example.com"
 
 
 def test_dns_handler_emits_normalized_reply_event():

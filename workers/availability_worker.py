@@ -77,6 +77,15 @@ class AvailabilityWorker(QThread):
                     "states": dict(result.states),
                     "rtts":   dict(result.rtts),
                 })
+                # F5: fetch the known-device map once per cycle rather than
+                # once per state change (only needed at all when something
+                # transitioned this cycle).
+                _known = None
+                if result.changes:
+                    try:
+                        _known = self._monitor._store.get_known_devices()
+                    except Exception:
+                        pass  # non-fatal — audit trail is best-effort
                 for change in result.changes:
                     self.state_changed.emit(
                         change.host,
@@ -84,9 +93,10 @@ class AvailabilityWorker(QThread):
                         change.current,
                     )
                     # Record availability transitions in device audit trail
+                    if _known is None:
+                        continue
                     try:
                         from modules.device_tracker import record_event as _rec_ev
-                        _known = self._monitor._store.get_known_devices()
                         _mac = next(
                             (kd.mac for kd in _known.values()
                              if kd.ip == change.host),

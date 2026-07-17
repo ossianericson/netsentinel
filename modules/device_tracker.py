@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from modules.device_stability import update_stability_for_device as _update_stability
-from modules.metric_store import MetricStore
+from modules.metric_store import KnownDevice, MetricStore
 from modules.service_mapper import get_services as _get_services
 
 
@@ -101,7 +101,11 @@ class DeviceTracker:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def process_scan(self, devices) -> TrackerResult:
+    def process_scan(
+        self,
+        devices,
+        known: Optional[Dict[str, KnownDevice]] = None,
+    ) -> TrackerResult:
         """
         Diff `devices` (list of scan dicts or objects) against MetricStore.
 
@@ -111,6 +115,14 @@ class DeviceTracker:
           • Writes a LEFT event for known devices absent longer than gone_threshold_s.
 
         Returns a TrackerResult describing what changed.
+
+        `known` (Phase B2 / F4): an optional pre-fetched get_known_devices()
+        snapshot. When the caller (ui/scan_wiring.py) already read known_device
+        earlier in the same scan-result handler, passing it here avoids a
+        second full-table SELECT — safe because nothing below writes to
+        custom_name, and the final row set is fully derivable from this
+        snapshot plus the MACs upserted in this call (see known_macs below).
+        Defaults to a fresh read when omitted, matching the pre-B2 behaviour.
 
         Single-writer invariant (Phase 3c): this is the ONLY place scan-driven
         known_device.last_seen / scan_count / ip_stability / inferred_role are
@@ -122,7 +134,10 @@ class DeviceTracker:
         """
         now     = int(time.time())
         result  = TrackerResult(scan_ts=now)
-        known   = self._store.get_known_devices()           # dict: mac → KnownDevice
+        known   = known if known is not None else self._store.get_known_devices()  # dict: mac → KnownDevice
+        # Mirrors known_device's mac set through this scan's upserts so total_known
+        # (below) never needs a second live read of the table.
+        known_macs: set[str] = set(known)
         seen_macs: set[str] = set()
 
         for raw in devices:
@@ -152,6 +167,7 @@ class DeviceTracker:
                 ts=now,
                 services=services_json,
             )
+            known_macs.add(td.mac)
 
             # Record this IP observation in device_ip_history (feeds stability scoring).
             # Uses the same `now` as upsert_known_device() above so
@@ -193,11 +209,13 @@ class DeviceTracker:
             if _td is not None:
                 _seen_td[_td.mac] = _td
 
-        # One DB read for all custom_names (avoid N queries inside the loop)
-        _fresh_known = self._store.get_known_devices()
-
+        # custom_name lookup reuses `known` rather than re-querying: upsert_known_device()
+        # (above) never writes custom_name, so the pre-scan/injected snapshot is still
+        # accurate for every pre-existing mac; a mac upserted for the first time this
+        # scan has no custom_name yet (NULL default) — `known.get(mac)` returning None
+        # resolves to the same _custom=None a fresh read would give (Phase B2 / F4).
         for mac, td_ref in _seen_td.items():
-            _kd = _fresh_known.get(mac)
+            _kd = known.get(mac)
             _custom = _kd.custom_name if _kd else None
             try:
                 _update_stability(
@@ -248,7 +266,10 @@ class DeviceTracker:
                             device_type=kd.device_type or "",
                         ))
 
-        result.total_known = len(self._store.get_known_devices())
+        # known_macs already mirrors the final known_device row set: gone-detection
+        # (above) only writes device_events, never known_device, so no third read
+        # is needed (Phase B2 / F4).
+        result.total_known = len(known_macs)
         return result
 
 

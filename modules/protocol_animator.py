@@ -13,7 +13,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
-from modules.protocol_frames import ethernet_layer, find_mac_for_ip, ipv4_layer, tcp_layer, udp_layer
+from modules.protocol_frames import (
+    FrameLayer,
+    ethernet_layer,
+    find_mac_for_ip,
+    ipv4_layer,
+    tcp_layer,
+    udp_layer,
+)
 
 
 # ── Data contracts ─────────────────────────────────────────────────────────────
@@ -25,12 +32,6 @@ class AnimNode:
     role:  str    # "client" | "gateway" | "dns" | "server" | "broadcast" | "switch" | "root"
     x:     float  # 0.0–1.0 relative horizontal position in the canvas
     y:     float  # 0.0–1.0 relative vertical position
-
-
-@dataclass
-class FrameLayer:
-    name:   str                    # "Ethernet II", "IPv4", "UDP", "DHCP"
-    fields: List[tuple[str, str]]  # [("Src MAC", "AA:BB:…"), ("EtherType", "0x0806")]
 
 
 @dataclass

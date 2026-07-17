@@ -22,6 +22,7 @@ from ui import styles as _s
 from ui.styles import (
     CHART_DOWN, CHART_UP,
 )
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 _MIME_TYPE    = "application/x-netsentinel-tile"
 _COLS         = 3
@@ -169,13 +170,13 @@ class _BaseTile(QFrame):
         self._drag_handle.hide()
         tb.addWidget(self._drag_handle)
 
-        self._remove_btn = QPushButton("×")
+        self._remove_btn = QPushButton()
         self._remove_btn.setFixedSize(22, 22)
+        _wire_close_icon(self._remove_btn, "RED")
         _s.themed_ss(self._remove_btn, "QPushButton {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " color:{RED}; font-size:13px; font-weight:bold; padding:0;"
-            " border-radius:3px; }}"
+            " padding:0; border-radius:3px; }}"
             "QPushButton:hover {{ background:{PRO_WARN_BG}; border-color:{RED}; }}"
-            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
+            "QPushButton:pressed {{ background:{BG_CARD}; }}")
         self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._remove_btn.setToolTip("Remove from overview")
         self._remove_btn.hide()

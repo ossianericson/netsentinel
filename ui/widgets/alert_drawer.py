@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui.widgets.device_detail_pane import _wire_close_icon
+
 from ui import styles as _s
 from ui.styles import (
     alpha,
@@ -359,13 +361,13 @@ class AlertDrawer(QFrame):
             " background:transparent; border:none;")
         self._rule_lbl.setMinimumWidth(0)
 
-        close_btn = QPushButton("✕")
+        close_btn = QPushButton()
         close_btn.setFixedSize(22, 22)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            " font-size:13px; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
+        _wire_close_icon(close_btn)
+        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; border:none; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; }}")
         close_btn.clicked.connect(self.close_drawer)
 
         hlay.addWidget(self._sev_badge)

@@ -43,6 +43,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _make_close_icon
 from ui.styles import (
     CARD_RADIUS,
 )
@@ -1859,7 +1860,8 @@ class SpeedTestPage(QWidget):
             " border:1px solid {BORDER}; }}"
             "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
         if row_ts == baseline_ts:
-            act = menu.addAction("✕  Clear baseline")
+            act = menu.addAction("Clear baseline")
+            act.setIcon(_make_close_icon(_s.TEXT_MUTED))
             act.triggered.connect(self._clear_baseline)
         else:
             act = menu.addAction("★  Set as baseline")

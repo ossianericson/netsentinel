@@ -336,6 +336,16 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
         )
         return [dict(r) for r in rows]
 
+    def get_max_device_scan_count(self) -> int:
+        """Return the highest known_device.scan_count across all devices — a cheap
+        proxy for how many scan cycles this install has been through (F8 usage
+        signal), with no new write path required."""
+        rows = self._execute_read(
+            "SELECT COALESCE(MAX(scan_count), 0) AS n FROM known_device",
+            (),
+        )
+        return int(rows[0]["n"]) if rows else 0
+
     def query_device_state_since(self, ip: str, since: int) -> List[Dict]:
         """Return device_state rows (ts, state, rtt_ms) for `ip` since `since` (REST API /uptime)."""
         rows = self._execute_read(

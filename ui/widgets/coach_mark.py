@@ -41,6 +41,7 @@ from ui.styles import (
     CANVAS_AMBER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_FG2,
 )
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 _AUTO_DISMISS_MS = 12_000   # dismiss automatically after 12 s of inactivity
 
@@ -184,13 +185,13 @@ class CoachMarkOverlay(QWidget):
             f" color: {OVERLAY_FG2}; font-size: 11px; line-height: 1.4; }}"
         )
 
-        # × dismiss button
-        close_btn = QPushButton("×", self)
+        # dismiss button
+        close_btn = QPushButton(self)
         close_btn.setGeometry(self._W - 32, 4, 28, 28)
-        _s.themed_ss(close_btn, "QPushButton {{ background: transparent; border: none;"
-            " color: {STATUS_OFFLINE}; font-size: 17px; }}"
-            "QPushButton:hover {{ color: {WHITE}; }}"
-            "QPushButton:pressed {{ color: {WHITE}; }}")
+        _wire_close_icon(close_btn, "STATUS_OFFLINE")
+        _s.themed_ss(close_btn, "QPushButton {{ background: transparent; border: none; }}"
+            "QPushButton:hover {{ background: transparent; }}"
+            "QPushButton:pressed {{ background: transparent; }}")
         close_btn.clicked.connect(self.dismissed)
 
         # Action button — use custom text if provided, otherwise default

@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 _LAST_SHOWN_KEY = "weekly_report/last_shown_week"
 
@@ -60,13 +61,13 @@ class WeeklyReportCard(QWidget):
             " background:transparent; border:none; letter-spacing:1.5px;")
         top_row.addWidget(title)
         top_row.addStretch()
-        dismiss_btn = QPushButton("×")
+        dismiss_btn = QPushButton()
         dismiss_btn.setFixedSize(20, 20)
         dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _s.themed_ss(dismiss_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            " font-size:14px; padding:0; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
+        _wire_close_icon(dismiss_btn)
+        _s.themed_ss(dismiss_btn, "QPushButton {{ background:transparent; border:none; padding:0; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:transparent; }}")
         dismiss_btn.clicked.connect(self.dismiss)
         top_row.addWidget(dismiss_btn)
         frame_lay.addLayout(top_row)

@@ -28,6 +28,7 @@ from ui.styles import (
     STATUS_ICON_OK,
     STATUS_ICON_WARN,
 )
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 # ── Module-level colour helpers ───────────────────────────────────────────────
 
@@ -104,14 +105,14 @@ class VerdictPanel(QFrame):
         _s.themed_ss(self._toggle_btn, _btn_style)
         self._toggle_btn.clicked.connect(self._on_toggle)
 
-        self._close_btn = QPushButton("×")
+        self._close_btn = QPushButton()
         self._close_btn.setFixedSize(22, 22)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.setToolTip("Dismiss — reappears after next scan")
-        _s.themed_ss(self._close_btn, "QPushButton {{ background:transparent; border:none;"
-            " color:{TEXT_PRIMARY}; font-size:14px; font-weight:bold; }}"
-            "QPushButton:hover {{ color:{RED}; }}"
-            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}")
+        _wire_close_icon(self._close_btn, "TEXT_PRIMARY")
+        _s.themed_ss(self._close_btn, "QPushButton {{ background:transparent; border:none; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:transparent; }}")
         self._close_btn.clicked.connect(self.close_requested)
 
         hdr_lay.addWidget(self._title, 1)

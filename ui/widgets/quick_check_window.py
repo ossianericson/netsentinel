@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from ui import styles as _s
 from ui.styles import CARD_RADIUS
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 _STATE_ICON = {"green": "✓", "amber": "⚠", "red": "✗", "unknown": "○"}
 _STATE_COLOUR = {"green": "GREEN", "amber": "AMBER", "red": "RED", "unknown": "TEXT_MUTED"}
@@ -55,14 +56,14 @@ class QuickCheckWindow(QFrame):
             f"font-size:11px; font-weight:bold; color:{_s.TEXT_SECONDARY};"
             " background:transparent; border:none; letter-spacing:1px;"
         )
-        close_btn = QPushButton("×")
+        close_btn = QPushButton()
         close_btn.setFixedSize(20, 20)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _wire_close_icon(close_btn)
         close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{_s.TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton {{ background:transparent; border:none; padding:0; }}"
+            f"QPushButton:hover {{ background:transparent; }}"
+            f"QPushButton:pressed {{ background:transparent; }}"
         )
         close_btn.clicked.connect(self.close)
         top_row.addWidget(title)

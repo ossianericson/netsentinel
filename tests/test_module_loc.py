@@ -32,6 +32,14 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # list (~340 lines) into device_classifier_rules.py; classifier becomes ~360 lines.
     "device_classifier.py": 720,
 
+    # Phase B3 (data-wiring audit, F6): 2 new CREATE INDEX statements for
+    # known_device/grade_result pushed this from 599 to 601. Natural split
+    # (deferred, not yet scheduled): extract the dataclasses (RttPoint,
+    # CertCheckPoint, KnownDevice, ModemSignalPoint, SpeedTestPoint, etc.)
+    # into metric_store_dataclasses.py, re-exported here for backward compat
+    # — would bring this file to ~500 lines with real headroom.
+    "metric_store_schema.py": 610,
+
 }
 
 
@@ -143,7 +151,8 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # Speed test page shell — modem signal panel extracted to ui/widgets/modem_signal_panel.py
     # in Sprint 13. If still large, extract history table → speed_test_history.py.
-    "pages/speed_test_page.py": 1938,  # Sprint 9: +S9-3 slow-result prompt; actual 1,738 + 200 margin
+    "pages/speed_test_page.py": 1940,  # Sprint 9: +S9-3 slow-result prompt; actual 1,738 + 200 margin
+                                        # +2: close-icon bug fix (painted X icon on "Clear baseline" menu action)
 
     # Feature guide shell — card widget + data list still in page.
     # Sprint 13 extracted pure _FEATURES data to discover_data.py.

@@ -19,8 +19,8 @@ def test_import():
     from modules import scan_persistence
     for fn in (
         "record_rtt", "persist_alert", "record_mesh_snapshot", "record_modem_signal",
-        "record_plugin_snapshot", "record_app_traffic_sample", "record_grade",
-        "upsert_known_device", "record_speed_test",
+        "record_plugin_snapshot", "record_app_traffic_sample", "record_app_traffic_samples",
+        "record_grade", "upsert_known_device", "record_speed_test",
     ):
         assert callable(getattr(scan_persistence, fn)), fn
 
@@ -78,6 +78,15 @@ def test_record_app_traffic_sample_forwards_kwargs():
     store.record_app_traffic_sample.assert_called_once_with(
         mac="aa:bb", label="L", category="C", app="A", bytes_total=100, window_s=1.0
     )
+
+
+def test_record_app_traffic_samples_forwards():
+    from modules.scan_persistence import record_app_traffic_samples
+    store = MagicMock()
+    samples = [{"mac": "aa:bb", "label": "L", "category": "C", "app": "A",
+                "bytes_total": 100, "window_s": 1.0}]
+    record_app_traffic_samples(store, samples)
+    store.record_app_traffic_samples.assert_called_once_with(samples)
 
 
 def test_record_grade_forwards():

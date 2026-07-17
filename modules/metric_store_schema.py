@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 19
+_SCHEMA_VERSION = 20
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS known_device (
     -- Per-device alert opt-in (schema v19)
     alert_opt_in  INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS idx_known_device_last_seen ON known_device(last_seen DESC);
 
 -- Home Automation detected protocol signatures (schema v6)
 CREATE TABLE IF NOT EXISTS ha_detected (
@@ -240,6 +241,7 @@ CREATE TABLE IF NOT EXISTS grade_result (
     score   REAL    NOT NULL,
     verdict TEXT    NOT NULL DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS idx_grade_result_ts ON grade_result(ts DESC);
 
 -- User-authored device annotations — labels, location, owner (schema v10)
 CREATE TABLE IF NOT EXISTS device_annotations (

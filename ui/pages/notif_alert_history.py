@@ -28,6 +28,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui.widgets.device_detail_pane import _wire_close_icon
+
 from ui import styles as _s
 
 
@@ -274,12 +276,12 @@ class _NotifAlertHistoryMixin:
             f"QPushButton:pressed{{background:{_s.alpha(_s.AMBER, 0xAA)};color:{_s.TEXT_PRIMARY};}}"
         ))
         _sb_setup_btn.clicked.connect(self._storm_go_to_dep)
-        _sb_dismiss_btn = QPushButton("×")
+        _sb_dismiss_btn = QPushButton()
         _sb_dismiss_btn.setFixedSize(20, 20)
-        _s.themed_ss(_sb_dismiss_btn, "QPushButton{{background:transparent;color:{TEXT_SECONDARY};border:none;"
-            "font-size:13px;font-weight:bold;padding:0;}}"
-            "QPushButton:hover{{color:{TEXT_PRIMARY};}}"
-            "QPushButton:pressed{{background:{BG_HOVER};color:{TEXT_SECONDARY};}}")
+        _wire_close_icon(_sb_dismiss_btn, "TEXT_SECONDARY")
+        _s.themed_ss(_sb_dismiss_btn, "QPushButton{{background:transparent;border:none;padding:0;}}"
+            "QPushButton:hover{{background:transparent;}}"
+            "QPushButton:pressed{{background:{BG_HOVER};}}")
         _sb_dismiss_btn.clicked.connect(lambda: self._storm_banner.setVisible(False))
         _sb_lay.addWidget(_sb_setup_btn)
         _sb_lay.addWidget(_sb_dismiss_btn)

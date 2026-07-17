@@ -341,10 +341,11 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Cinematic Protocol Visualizer", "Curved packet paths, motion trails, pulse rings, and a new Frame Anatomy inspector showing real Ethernet/IP/TCP layer breakdowns."),
-        ("Protocol Visualizer LIVE MODE", "Watch real captured ARP/DNS traffic animate on the canvas as it happens (admin/Npcap required)."),
-        ("PNG and storyboard export", "Copy or save the Protocol Visualizer canvas as an image, or export a full filmstrip of every animation step."),
-        ("Fixed invisible close buttons", "The device history drawer's close button and three Home page dismiss buttons were rendering invisibly on native Windows text rendering — now painted icons."),
+        ("Fixed native window chrome on Network Map", "Opening Network Map could permanently bring back Windows' title bar above the custom header — fixed."),
+        ("Smarter Home page suggestions", "New \"what to do next\" cards for expiring certificates, degrading trends, grade regressions, and new devices since your last visit."),
+        ("Faster background monitoring", "Availability and app-traffic writes are now batched per cycle instead of per row, for a lighter database footprint."),
+        ("Fixed more invisible close buttons", "24 more close/dismiss controls across the app (toasts, alerts, overview tiles, and more) that could silently fail to paint — now painted icons."),
+        ("Security hardening", "Resolved two open CodeQL alerts (an import cycle and a test assertion tightening)."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
