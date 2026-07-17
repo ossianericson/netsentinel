@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-5243%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-5469%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**5,243+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**5,469+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -155,7 +155,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**5,243 automated tests** across 398 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**5,469 automated tests** across 411 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -199,13 +199,12 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.33 (current)
+### v2.1.34 (current)
 
-- Protocol Visualizer now has a clickable Steps list — jump straight to any step in the animation
-- Network Map: devices that never answer ARP (like the scanning PC itself) now show consistently on both the Classic and Interactive maps
-- Microsoft Store users are now pointed at the Store's own update page instead of GitHub
-- OS Detection reuses your last port scan instead of re-scanning; SMB share risk flags are more accurate; SNMP CPU/load polling added
-- Fixed several stderr log warnings and a startup stylesheet-parse error on the Home page
+- Protocol Visualizer overhaul: cinematic canvas rendering, a Frame Anatomy inspector, PNG/storyboard export, and a LIVE MODE that animates real captured ARP/DNS traffic as it happens
+- Fixed an invisible close button on the device history drawer (Network Map, Devices/Inventory) caused by a Windows text-rendering edge case
+- Fixed three Home page dismiss buttons that had rendered as invisible corrupted characters since v2.1.13
+- Removed two dead widget modules from the shipped exe (no behaviour change, smaller install)
 
 ---
 

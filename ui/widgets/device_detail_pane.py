@@ -9,7 +9,10 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, pyqtSignal
+from PyQt6.QtCore import (
+    QEasingCurve, QPointF, QPropertyAnimation, QRect, QSize, Qt, pyqtSignal,
+)
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -26,6 +29,45 @@ if TYPE_CHECKING:
 
 from modules.device_admin import update_device_ha_info
 from ui import styles as _s
+
+
+def _make_close_icon(color: str, size: int = 12) -> QIcon:
+    """Paint a small X as a QIcon rather than drawing it as button text.
+
+    A bare Unicode '×' glyph as QPushButton text on a tiny (22x22) fully
+    flat/borderless button was observed to silently fail to paint on native
+    Windows text rendering, in both themes, while the button's own QSS
+    hover/pressed background still rendered correctly — confirming the QSS
+    pipeline was fine and only the font glyph itself was unreliable. A
+    painted icon has no font dependency, matching why rail icons use SVG
+    instead of Unicode/emoji (RULE-25).
+    """
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color))
+    pen.setWidthF(1.6)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    painter.setPen(pen)
+    m = size * 0.2
+    painter.drawLine(QPointF(m, m), QPointF(size - m, size - m))
+    painter.drawLine(QPointF(size - m, m), QPointF(m, size - m))
+    painter.end()
+    return QIcon(pm)
+
+
+def _wire_close_icon(btn: QPushButton, color_name: str = "TEXT_MUTED") -> None:
+    """Set a painted close icon on ``btn`` and keep it in sync with theme switches."""
+    def _refresh(*_args) -> None:
+        try:
+            btn.setIcon(_make_close_icon(getattr(_s, color_name)))
+        except RuntimeError:
+            pass  # widget deleted — theme_changed connection is dropped with it
+    btn.setIconSize(QSize(12, 12))
+    _refresh()
+    _s.get_theme_manager().theme_changed.connect(_refresh)
+
 
 class _DeviceLabelDialog(QDialog):
     """Edit custom name, tags, and notes for a known device."""
@@ -150,12 +192,13 @@ class _DeviceDrawer(QFrame):
         hdr_row = QHBoxLayout()
         self._title_lbl = QLabel("Device")
         _s.themed_ss(self._title_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
-        close_btn = QPushButton("×")
+        close_btn = QPushButton()
         close_btn.setFixedSize(22, 22)
-        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            " font-size:15px; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
+        close_btn.setToolTip("Close")
+        _wire_close_icon(close_btn)
+        _s.themed_ss(close_btn, "QPushButton {{ background:transparent; border:none; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; }}")
         close_btn.clicked.connect(self.close_drawer)
         hdr_row.addWidget(self._title_lbl, 1)
         hdr_row.addWidget(close_btn)

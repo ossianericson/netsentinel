@@ -86,6 +86,10 @@ This updates all tracked version files, runs consistency tests, and **auto-commi
 files. Do NOT manually edit `app.py`, `cli.py`, `apm.yml`, `installer.iss`, winget manifests —
 `bump_version.py` handles all of them.
 
+It also recomputes the test-count figures (README badge, both README prose mentions, and the
+`docs/architecture.md` "test suite has N tests across M files" line) via
+`pytest --collect-only`, so don't hand-edit those either — they self-correct on every bump.
+
 If `bump_version.py` exits non-zero: fix the reported failures before continuing.
 
 `bump_version.py` handles every tracked version file (RULE 11) — don't hand-edit any of them.

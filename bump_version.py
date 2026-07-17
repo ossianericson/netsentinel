@@ -23,6 +23,29 @@ ROOT = Path(__file__).parent
 _VER = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?"
 # Matches a 4-part MSIX version X.Y.Z.W
 _VER4 = r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"
+# Matches a comma-grouped or bare integer (existing figures use either style)
+_NUM = r"[0-9][0-9,]*"
+
+
+def _test_stats() -> tuple[int, int]:
+    """Collect the current total test count and test-file count.
+
+    Uses `-m ""` to override the default marker deselection (live/benchmark/monkey
+    in pyproject.toml addopts) so the figure reflects every test in the suite, not
+    just the ones a default `pytest tests/` run selects.
+    """
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/", "--collect-only", "-q", "-m", ""],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    match = re.search(r"^(\d+) tests? collected", result.stdout, re.MULTILINE)
+    if not match:
+        print("  WARN  could not determine test count — skipping test-count refresh")
+        print(result.stdout[-500:])
+        return 0, 0
+    n_tests = int(match.group(1))
+    n_files = len(list((ROOT / "tests").rglob("test_*.py")))
+    return n_tests, n_files
 
 
 def _sub(path: Path, pattern: str, replacement: str, flags: int = 0, count: int = 0) -> None:
@@ -122,6 +145,30 @@ def bump(ver: str) -> None:
          rf'\g<1>{ver}',
          count=1)
 
+    # ── test-count figures ─────────────────────────────────────────────────────
+    # README.md and docs/architecture.md each carry a hand-written "N tests across
+    # M files" figure that nobody remembers to refresh — recompute it every bump
+    # instead of relying on a human noticing the drift.
+    print("\nRecomputing test-count figures…")
+    n_tests, n_files = _test_stats()
+    if n_tests and n_files:
+        n_tests_str = f"{n_tests:,}"
+        n_files_str = f"{n_files:,}"
+
+        _sub(ROOT / "README.md",
+             rf'(badge/tests-){_NUM}(%2B)',
+             rf'\g<1>{n_tests}\g<2>')
+        _sub(ROOT / "README.md",
+             rf'(\*\*){_NUM}(\+ tests)',
+             rf'\g<1>{n_tests_str}\g<2>')
+        _sub(ROOT / "README.md",
+             rf'(\*\*){_NUM}( automated tests\*\* across ){_NUM}( test files)',
+             rf'\g<1>{n_tests_str}\g<2>{n_files_str}\g<3>')
+        _sub(ROOT / "docs" / "architecture.md",
+             rf'(The test suite has ){_NUM}( tests across ){_NUM}( files\.)',
+             rf'\g<1>{n_tests_str}\g<2>{n_files_str}\g<3>')
+        print(f"  {n_tests_str} tests across {n_files_str} files")
+
     # .apm/instructions/project-vision.instructions.md  ── "Current version:" line
     # (This is the canonical version-stamped doc. CLAUDE.md is no longer generated
     #  or tracked — Claude Code reads .claude/rules/ directly via `apm install`.)
@@ -162,6 +209,7 @@ def bump(ver: str) -> None:
         ".github/winget/NetSentinel.NetSentinel.installer.yaml",
         ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml",
         "README.md", "CHANGELOG.md", "ui/dashboard.py",
+        "docs/architecture.md",
         ".apm/instructions/project-vision.instructions.md",
         ".claude/rules/project-vision.md",
     ]

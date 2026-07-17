@@ -205,6 +205,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         )
         self._lazy_hosts: list = []          # _LazyPageHost objects awaiting materialization
         self._lazy_build_timer = None        # background chunk-builder QTimer(self)
+        # Buffered kwargs for ProtocolVizPage.set_context() while that page is
+        # still a _LazyPageHost — scan handlers feed it on every scan regardless
+        # of nav state, unlike every other lazy page (see _feed_protocol_viz_context).
+        self._protocol_viz_pending_context: "dict | None" = None
 
         # Scan results cache
         self._m1_result   = None

@@ -417,6 +417,13 @@ Before running `bump_version.py`:
 1. Add a `### vX.Y.Z` entry at the **top** of `CHANGELOG.md` — full detail, one bullet per logical change, following the format already in that file. `bump_version.py` promotes this topmost header to the new version number.
 2. Update the short `### vX.Y.Z (current)` block under `## Changelog` in `README.md` to a 3–5 bullet plain-English summary of the most important changes. The full history lives in CHANGELOG.md; README.md shows only the current release highlights. `bump_version.py` also promotes this topmost header.
 
+**Test-count figures are no longer hand-maintained.** `bump_version.py` recomputes the total
+test count and file count via `pytest --collect-only -q -m ""` (overriding the default marker
+deselection so live/benchmark/monkey tests are counted too) and rewrites all four occurrences —
+the README badge, the two README prose mentions, and the `docs/architecture.md` "test suite has
+N tests across M files" line — every bump. Do not hand-edit these figures; if they drift, the
+next bump self-corrects them.
+
 ### RULE-R2 (blocking): Winget locale manifest must be full — never minimal
 Every winget submission must include all locale fields: Description, Tags, Moniker, PublisherUrl, PublisherSupportUrl, PackageUrl, LicenseUrl, ReleaseNotesUrl.
 
@@ -1251,16 +1258,41 @@ Mojibake occurs when a UTF-8 file is opened by an editor that defaults to Window
 misreads the multi-byte sequences as individual characters, and resaves — turning —, →, ·, ⚠,
 emoji, etc. into garbled sequences (`â€"`, `â†'`, `ðŸŒ™`...).
 
+**Two classes, and only one is recoverable.**
+
+1. **Reversible (double-encoded).** The bytes survive, merely reinterpreted: `—` → `â€"`. The
+   original is recoverable, and the garbled form carries a *signature* a pattern matcher can
+   detect (`Ã…`, `â€`, `ðŸ` prefixes).
+2. **Lossy (destroyed).** A conversion that cannot represent the character replaces it with
+   **U+FFFD REPLACEMENT CHARACTER** (`�`, bytes `EF BF BD`). The original byte is **gone** —
+   unrecoverable from the file *or from git if the file was committed already corrupted*. The
+   file stays valid UTF-8, so it imports, parses, lints, and tests clean.
+
+**Why class 2 needs its own detector:** U+FFFD has no signature to match — the information that
+would form one is exactly what was destroyed. A pattern list tuned for class 1 is *structurally
+blind* to class 2, not merely incomplete. This shipped three `QPushButton("�")` dismiss
+buttons on the Home page for 20 releases (v2.1.13 → v2.1.33): the file was born corrupted, and
+`test_source_encoding.py` passed green the whole time. The buttons were styled via
+`qss_dismiss_button()` — transparent, borderless — so the glyph was their *only* affordance, and
+each sat on a `setVisible(False)` strip that UIA chaos runs can never reach.
+
+**Corollary — never "repair" U+FFFD by guessing silently.** There is no round-trip. Restore from
+in-file convention (sibling widgets, RULE-I4) and say in the session that the value is an
+inference, not a recovery.
+
 **Prevention:**
 - Always save `.py` files as UTF-8 (VS Code default `"files.encoding": "utf8"`)
 - Never open source files in Notepad on Windows 10 and earlier (ANSI/cp1252 default)
 - `git config core.autocrlf` should be `true` (Windows) or `input` (macOS/Linux)
 - Re-read a file with the Read tool before Edit if any external process may have touched it
   since the last Read — a stale cache silently overwrites external repairs (RULE-ENC2)
+- Never decode source with `errors='replace'` in tooling — it *manufactures* U+FFFD from invalid
+  bytes and turns a hard failure into a silent corruption. Use `errors='strict'`.
 
-**Detection:** `python -m pytest tests/test_source_encoding.py -v` before committing.
+**Detection:** `python -m pytest tests/test_source_encoding.py -v` before committing — covers
+both classes (class 2 via `test_no_replacement_char_in_ui_string_literals`).
 
-**Fix:** re-encode the garbled characters as cp1252 bytes, then decode as UTF-8:
+**Fix (class 1 only):** re-encode the garbled characters as cp1252 bytes, then decode as UTF-8:
 ```python
 garbled = 'â€"'                                      # garbled em dash
 fixed   = garbled.encode('cp1252').decode('utf-8')   # -> '—'
