@@ -325,6 +325,116 @@ class TestScanResultBasedSuggestions:
         assert "slow_dns_response" not in keys
 
 
+class TestNewSuggestionRulesWiring:
+    """Behavioral test (RULE-T7) for the Phase B4 wrapper: verifies
+    _compute_suggestions actually assembles a SuggestionContext from
+    self._store data and reaches the home page — the per-rule logic itself
+    is covered in isolation by tests/test_suggestion_engine.py."""
+
+    def _stub(self, monkeypatch, store):
+        from unittest.mock import MagicMock
+        monkeypatch.setattr(
+            "ui.tabs_logger.QSettings",
+            lambda *a, **kw: _FakeQSettings(),
+            raising=False,
+        )
+        from ui.tabs_logger import _LoggerTabMixin
+
+        class _Stub(_LoggerTabMixin):
+            _home_page = MagicMock()
+            _m1_result = None
+            _last_benchmark_result = None
+            _last_portscan_result = None
+            _store = store
+            _logger_worker = None
+
+        return _Stub()
+
+    def _quiet_store(self):
+        from unittest.mock import MagicMock
+        store = MagicMock()
+        store.query_cert_status.return_value = []
+        store.get_unacked_alerts.return_value = []
+        store.query_last_grade.return_value = None
+        store.query_previous_grade.return_value = None
+        store.get_max_device_scan_count.return_value = 0
+        store.query_speed_test_history.return_value = [MagicMock(ts=__import__("time").time())]
+        store.list_cve_lifecycles.return_value = []
+        return store
+
+    def test_cert_expiring_soon_reaches_home_page(self, monkeypatch):
+        from unittest.mock import MagicMock
+        store = self._quiet_store()
+        cert = MagicMock(host="example.com", port=443, days_remaining=5,
+                          is_expired=False, error=None)
+        store.query_cert_status.return_value = [cert]
+
+        stub = self._stub(monkeypatch, store)
+        stub._compute_suggestions()
+        suggestions = stub._home_page.set_suggestions.call_args_list[-1][0][0]
+        match = next(s for s in suggestions if s["action_key"] == "cert_expiring_soon")
+        assert "example.com:443" in match["text"]
+        assert match["priority"] == "high"
+
+    def test_trend_forecast_alert_reaches_home_page(self, monkeypatch):
+        store = self._quiet_store()
+        store.get_unacked_alerts.side_effect = (
+            lambda rule_types: [{"host": "192.168.1.1", "message": "RTT rising fast"}]
+            if rule_types == ["TREND_FORECAST"] else []
+        )
+
+        stub = self._stub(monkeypatch, store)
+        stub._compute_suggestions()
+        suggestions = stub._home_page.set_suggestions.call_args_list[-1][0][0]
+        match = next(s for s in suggestions if s["action_key"] == "trend_forecast_degrading")
+        assert match["text"] == "RTT rising fast"
+
+    def test_grade_regression_reaches_home_page(self, monkeypatch):
+        store = self._quiet_store()
+        store.query_last_grade.return_value = {"grade": "C"}
+        store.query_previous_grade.return_value = {"grade": "B"}
+
+        stub = self._stub(monkeypatch, store)
+        stub._compute_suggestions()
+        suggestions = stub._home_page.set_suggestions.call_args_list[-1][0][0]
+        match = next(s for s in suggestions if s["action_key"] == "grade_regressed")
+        assert match["text"] == "Your grade dropped B→C since last check"
+
+    def test_arp_spoof_alert_reaches_home_page_as_protocol_viz_crosssell(self, monkeypatch):
+        store = self._quiet_store()
+        store.get_unacked_alerts.side_effect = (
+            lambda rule_types: [{"host": "192.168.1.99"}]
+            if rule_types == ["ARP_SPOOF"] else []
+        )
+
+        stub = self._stub(monkeypatch, store)
+        stub._compute_suggestions()
+        suggestions = stub._home_page.set_suggestions.call_args_list[-1][0][0]
+        keys = [s["action_key"] for s in suggestions]
+        assert "arp_storm_protocol_viz_crosssell" in keys
+
+    def test_new_devices_since_last_visit_reaches_home_page(self, monkeypatch):
+        store = self._quiet_store()
+        stub = self._stub(monkeypatch, store)
+        stub._new_devices_since_last_visit = 2
+        stub._compute_suggestions()
+        suggestions = stub._home_page.set_suggestions.call_args_list[-1][0][0]
+        match = next(s for s in suggestions if s["action_key"] == "new_devices_since_last_visit")
+        assert match["text"] == "2 new devices joined while you were away — name them"
+
+    def test_never_visited_key_pages_reaches_home_page(self, monkeypatch):
+        store = self._quiet_store()
+        store.get_max_device_scan_count.return_value = 15
+
+        stub = self._stub(monkeypatch, store)
+        stub._compute_suggestions()
+        suggestions = stub._home_page.set_suggestions.call_args_list[-1][0][0]
+        keys = [s["action_key"] for s in suggestions]
+        # QSettings usage/visits/* is unset (fresh fake) -> both candidates qualify
+        assert "never_visited_network_map" in keys
+        assert "never_visited_network_timeline" in keys
+
+
 class TestExtendedAbsenceRecovery:
     """S9-6: prominent 'welcome back' treatment for 7+ day absences."""
 
@@ -390,3 +500,16 @@ class TestComputeLastVisitSummaryProminence:
         _, kwargs = stub._home_page.set_last_visit_summary.call_args
         assert kwargs.get("prominent") is True
         assert kwargs.get("alert_count") == 3
+
+    def test_joined_count_cached_for_suggestion_engine_reuse(self, monkeypatch):
+        """Phase B4: _compute_suggestions' new_devices_since_last_visit rule
+        reuses this cached value instead of requerying device_events."""
+        from unittest.mock import MagicMock
+        stub = self._stub(monkeypatch, hours_ago=20)
+        event = MagicMock()
+        event.ip = "192.168.1.50"
+        stub._store.query_device_events.side_effect = (
+            lambda hours, event_types: [event] if event_types == ["JOINED"] else []
+        )
+        stub._compute_last_visit_summary()
+        assert stub._new_devices_since_last_visit == 1

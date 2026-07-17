@@ -2,22 +2,29 @@
 protocol_frames — shared FrameLayer constructor helpers for the ten protocol_animator
 scene builders (Phase A2 — Frame Anatomy inspector).
 
-Pure functions, no PyQt imports. Each constructor returns a FrameLayer
-(modules.protocol_animator) with a fixed, consistent field-name vocabulary
-(Src MAC/Dst MAC, Src IP/Dst IP, Src Port/Dst Port, TTL, Flags, Seq/Ack, EtherType)
-so the Frame Anatomy panel reads the same across every protocol.
+Pure functions, no PyQt imports. Each constructor returns a FrameLayer with a
+fixed, consistent field-name vocabulary (Src MAC/Dst MAC, Src IP/Dst IP, Src
+Port/Dst Port, TTL, Flags, Seq/Ack, EtherType) so the Frame Anatomy panel reads
+the same across every protocol.
 
-FrameLayer is imported lazily inside each constructor (not at module level) to
-avoid a load-time cycle with protocol_animator.py, which imports these
-constructors at module level (RULE-LINT5 py/cyclic-import) — see TYPE_CHECKING
-import below for the static-analysis-only type hint.
+FrameLayer is defined in this module (not protocol_animator.py, which imports
+it from here) so this module has zero dependency — at any level, including
+TYPE_CHECKING — on protocol_animator.py, which imports these constructors at
+module level. A prior version dodged the cycle with a TYPE_CHECKING-guarded
+back-import, which satisfies our own tools/check_import_lint.py (it exempts
+TYPE_CHECKING blocks) but not CodeQL's py/unsafe-cyclic-import query, which
+does not grant the same exemption.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from dataclasses import dataclass
+from typing import List, Optional
 
-if TYPE_CHECKING:
-    from modules.protocol_animator import FrameLayer
+
+@dataclass
+class FrameLayer:
+    name:   str                    # "Ethernet II", "IPv4", "UDP", "DHCP"
+    fields: List[tuple[str, str]]  # [("Src MAC", "AA:BB:…"), ("EtherType", "0x0806")]
 
 
 def _mac_or_placeholder(mac: str) -> str:
@@ -31,7 +38,6 @@ def _ip_or_placeholder(ip: str) -> str:
 def ethernet_layer(
     src_mac: str, dst_mac: str, ethertype: str, ethertype_label: str = ""
 ) -> FrameLayer:
-    from modules.protocol_animator import FrameLayer
     et = f"{ethertype} ({ethertype_label})" if ethertype_label else ethertype
     return FrameLayer("Ethernet II", [
         ("Src MAC", _mac_or_placeholder(src_mac)),
@@ -43,7 +49,6 @@ def ethernet_layer(
 def ipv4_layer(
     src_ip: str, dst_ip: str, ttl: int = 64, proto: str = "", flags: str = ""
 ) -> FrameLayer:
-    from modules.protocol_animator import FrameLayer
     fields = [
         ("Src IP", _ip_or_placeholder(src_ip)),
         ("Dst IP", _ip_or_placeholder(dst_ip)),
@@ -57,7 +62,6 @@ def ipv4_layer(
 
 
 def udp_layer(src_port, dst_port, length: Optional[int] = None) -> FrameLayer:
-    from modules.protocol_animator import FrameLayer
     fields = [("Src Port", str(src_port)), ("Dst Port", str(dst_port))]
     if length is not None:
         fields.append(("Length", str(length)))
@@ -65,7 +69,6 @@ def udp_layer(src_port, dst_port, length: Optional[int] = None) -> FrameLayer:
 
 
 def tcp_layer(src_port, dst_port, flags: str, seq, ack=None) -> FrameLayer:
-    from modules.protocol_animator import FrameLayer
     fields = [
         ("Src Port", str(src_port)),
         ("Dst Port", str(dst_port)),

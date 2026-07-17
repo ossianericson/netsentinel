@@ -114,6 +114,7 @@ from ui import styles as _s
 from ui.styles import (
     MAP_LAND_BG, MAP_LAND_BORDER,
 )
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 
 # ── Workers ───────────────────────────────────────────────────────────────────
@@ -428,7 +429,8 @@ class GeoMapPage(QWidget):
         btn_add    = _btn("✚  Add", accent=True)
         btn_ti     = _btn("🧠  Threat Intel IPs")
         btn_ti.setToolTip("Import top-confidence IP indicators from the local threat intel cache")
-        btn_clear  = _btn("✕  Clear All")
+        btn_clear  = _btn("Clear All")
+        _wire_close_icon(btn_clear, "TEXT_PRIMARY")
         btn_add.clicked.connect(self._on_add_manual)
         btn_ti.clicked.connect(self._load_threat_intel_ips)
         btn_clear.clicked.connect(self._on_clear_all)

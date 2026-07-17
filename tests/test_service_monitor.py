@@ -154,7 +154,7 @@ class TestMetricStoreServiceCheck:
 
     def test_schema_version_is_3(self, store):
         rows = store._execute_read("SELECT value FROM meta WHERE key='schema_version'", ())
-        assert rows[0]["value"] == "19"
+        assert rows[0]["value"] == "20"
 
 
 # ── ServiceMonitor ────────────────────────────────────────────────────────────

@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -111,14 +112,14 @@ class _Toast(QFrame):
             act_btn.clicked.connect(self._dismiss)
             root.addWidget(act_btn)
 
-        close_btn = QPushButton("×")
+        close_btn = QPushButton()
         close_btn.setFixedSize(18, 18)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _wire_close_icon(close_btn)
         close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; border:none;"
-            f" font-size:13px; padding:0; }}"
-            f"QPushButton:hover {{ color:{_s.TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
+            f"QPushButton {{ background:transparent; border:none; padding:0; }}"
+            f"QPushButton:hover {{ background:transparent; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; }}"
         )
         close_btn.clicked.connect(self._dismiss)
         root.addWidget(close_btn)

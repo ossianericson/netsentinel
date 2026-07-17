@@ -165,6 +165,32 @@ class TestTrackPageVisitMRU:
         assert harness._get_recent_pages() == ["Home"]
 
 
+class TestUsageVisitCounter:
+    """F8 usage signal (Phase B4) — usage/visits/<label> feeds the suggestion
+    engine's 'never visited X' nudge (modules/suggestion_engine.py)."""
+
+    def setup_method(self):
+        _fresh_settings()
+        QSettings("NetSentinel", "NetSentinel").remove("usage/visits/UsageCounterTestPage")
+
+    def teardown_method(self):
+        _fresh_settings()
+        QSettings("NetSentinel", "NetSentinel").remove("usage/visits/UsageCounterTestPage")
+
+    def test_first_visit_sets_counter_to_1(self, harness):
+        harness._nav_label_to_widget = {"UsageCounterTestPage": QWidget()}
+        harness._track_page_visit("UsageCounterTestPage")
+        qs = QSettings("NetSentinel", "NetSentinel")
+        assert int(qs.value("usage/visits/UsageCounterTestPage", 0, type=int)) == 1
+
+    def test_repeat_visits_increment_counter(self, harness):
+        harness._nav_label_to_widget = {"UsageCounterTestPage": QWidget()}
+        for _ in range(3):
+            harness._track_page_visit("UsageCounterTestPage")
+        qs = QSettings("NetSentinel", "NetSentinel")
+        assert int(qs.value("usage/visits/UsageCounterTestPage", 0, type=int)) == 3
+
+
 class TestToggleRecentFlyout:
     def setup_method(self):    _fresh_settings()
     def teardown_method(self): _fresh_settings()

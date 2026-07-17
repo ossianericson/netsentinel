@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtCore import Qt, QPoint, QEvent
 from PyQt6.QtGui import QFont, QPixmap
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSlot
 
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _make_close_icon, _wire_close_icon
 
 
 class AppHeaderMixin:
@@ -190,7 +191,8 @@ class AppHeaderMixin:
         _act_app_settings = _menu_s.addAction("⚙  App Settings…")
         _act_app_settings.triggered.connect(self._open_settings_dialog)
         _menu_s.addSeparator()
-        _act_quit = _menu_s.addAction("✕  Quit NetSentinel")
+        _act_quit = _menu_s.addAction("Quit NetSentinel")
+        _act_quit.setIcon(_make_close_icon(_s.TEXT_MUTED))
         _act_quit.triggered.connect(self._quit_app)
 
         # Transparent at rest — header dark bg shows through; border+accent on hover.
@@ -451,6 +453,15 @@ class AppHeaderMixin:
                 from PyQt6.QtCore import QTimer as _QTlazy
                 _QTlazy.singleShot(400, self._start_lazy_page_builder)
 
+    def event(self, e):
+        # WinIdChange = Qt recreated our native HWND (to host Network Map's
+        # QWebEngineView), which drops the WM_NCCALCSIZE subclass and brings the real
+        # title bar back. Re-establish it. docs/spikes/webengine-hwnd-recreation.md.
+        if e.type() == QEvent.Type.WinIdChange:
+            from ui.native_chrome import reinstall_after_winid_change
+            reinstall_after_winid_change(self)
+        return super().event(e)
+
     def _install_window_chrome(self):
         """Install whichever window chrome the experimental flags select. Idempotent.
 
@@ -484,6 +495,12 @@ class AppHeaderMixin:
         if getattr(self, "_native_chrome", False):
             from ui.native_chrome import install_native_chrome
             if install_native_chrome(self):
+                # Remember the HWND that now carries the WM_NCCALCSIZE subclass. If Qt
+                # later recreates the window to host a native child (Network Map's
+                # QWebEngineView), the WinIdChange hook in event() compares against
+                # this to recognise the recreation and re-establish the chrome on the
+                # new handle. See docs/spikes/webengine-hwnd-recreation.md.
+                self._last_native_hwnd = int(self.winId())
                 # The frame just changed shape under Qt: _restore_settings() placed
                 # this window against a caption that WM_NCCALCSIZE has now deleted,
                 # so it is sitting a caption-height (~32px) out. Put it back on the
@@ -607,13 +624,14 @@ class AppHeaderMixin:
         self._update_bar_lbl.setOpenExternalLinks(True)
         self._update_bar_lbl.setTextFormat(Qt.TextFormat.RichText)
         row.addWidget(self._update_bar_lbl, 1)
-        btn_dismiss = QPushButton("✕")
+        btn_dismiss = QPushButton()
         btn_dismiss.setFixedSize(20, 20)
+        _wire_close_icon(btn_dismiss, "ACCENT")
         _s.themed_ss(
             btn_dismiss,
-            "QPushButton {{ background:transparent; color:{ACCENT}; border:none; font-size:12px; }}"
-            "QPushButton:hover {{ color:{UPDATE_BAR_FG}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}",
+            "QPushButton {{ background:transparent; border:none; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; }}",
         )
         def _dismiss_update_bar() -> None:
             container.hide()

@@ -557,3 +557,73 @@ class TestLastSeenInvariant:
         max_last_seen = max(_parse_utc(h["last_seen"]) for h in hist.values())
         assert kd.last_seen == max_last_seen
         assert kd.ip == "10.0.0.41"
+
+
+# ── Redundant-read elimination guard (Phase B2 / F4) ──────────────────────────
+
+def _make_devices(n: int) -> list:
+    return [
+        {
+            "mac": f"aa:bb:cc:dd:{i:02x}:{i:02x}",
+            "ip": f"192.168.2.{i}",
+            "hostname": f"host-{i}",
+            "vendor": "Acme",
+            "device_type": "Laptop",
+        }
+        for i in range(n)
+    ]
+
+
+def _count_known_device_selects(conn, fn):
+    """Run fn() and return how many SELECT statements against known_device it issued.
+
+    Adapts the trace-callback pattern from tests/test_metric_store_writes_batch.py's
+    _count_commits (Phase B1) to count reads instead of commits — set_trace_callback
+    observes the literal SQL text sqlite3 sends to SQLite, which is the only reliable
+    way to count statements since Connection.execute is a read-only C slot.
+    """
+    events = []
+    conn.set_trace_callback(lambda sql: events.append(sql))
+    try:
+        fn()
+    finally:
+        conn.set_trace_callback(None)
+    return sum(
+        1 for e in events
+        if e.strip().upper().startswith("SELECT") and "KNOWN_DEVICE" in e.upper()
+    )
+
+
+class TestRedundantReadElimination:
+    """Phase B2 (F4) regression guard.
+
+    Pre-fix, process_scan() issued 3 separate get_known_devices() SELECTs per
+    scan (initial new/gone diff, a post-upsert custom_name lookup, and a final
+    total_known count) even though the 2nd and 3rd never depended on data
+    written in between — upsert_known_device() never touches custom_name, and
+    the row set is fully derivable from the initial snapshot plus this scan's
+    own upserts.
+    """
+
+    def test_process_scan_performs_at_most_two_known_device_selects(self, store):
+        tracker = DeviceTracker(store=store)
+        devices = _make_devices(25)
+        n = _count_known_device_selects(store._conn, lambda: tracker.process_scan(devices))
+        assert n <= 2, (
+            f"process_scan() issued {n} known_device SELECTs for a 25-device scan; "
+            "expected <=2 (F4 regression — see modules/device_tracker.py)"
+        )
+
+    def test_process_scan_reuses_injected_known_snapshot(self, store):
+        """When the caller (ui/scan_wiring.py) already has a fresh snapshot, passing
+        it via known= must eliminate every internal known_device SELECT."""
+        tracker = DeviceTracker(store=store)
+        devices = _make_devices(25)
+        snapshot = store.get_known_devices()
+        n = _count_known_device_selects(
+            store._conn, lambda: tracker.process_scan(devices, known=snapshot)
+        )
+        assert n == 0, (
+            f"process_scan(known=...) issued {n} known_device SELECTs; expected 0 "
+            "when the caller already supplied a snapshot"
+        )

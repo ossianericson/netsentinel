@@ -841,13 +841,13 @@ class InventoryPage(QWidget):
             "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         _udp_btn.clicked.connect(self._on_unknown_device_alert_clicked)
         _udp_lay.addWidget(_udp_btn)
-        _udp_dismiss = QPushButton("×")
+        _udp_dismiss = QPushButton()
         _udp_dismiss.setFixedSize(18, 18)
         _udp_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
-        _s.themed_ss(_udp_dismiss, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            " font-size:12px; padding:0; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}")
+        _wire_close_icon(_udp_dismiss)
+        _s.themed_ss(_udp_dismiss, "QPushButton {{ background:transparent; border:none; padding:0; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:transparent; }}")
         _udp_dismiss.clicked.connect(self._dismiss_unknown_device_prompt)
         _udp_lay.addWidget(_udp_dismiss)
         snap_card_lay.addWidget(self._unknown_device_prompt)

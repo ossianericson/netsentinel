@@ -40,6 +40,8 @@ Single-writer invariant for scan-driven device inventory (Phase 3c):
 Device-inventory write methods (record_ip_observation, upsert_known_device,
 record_device_state, device_annotations/device_events/topology_snapshots, etc.)
 live in modules/metric_store_writes_device.py (_DeviceWritesMixin, Phase 3 split).
+Batched multi-row write methods (Phase B1) live in
+modules/metric_store_writes_batch.py (_BatchWritesMixin).
 """
 
 import sqlite3
@@ -69,11 +71,14 @@ __all__ = [
 ]
 from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
 from modules.metric_store_writes_device import _DeviceWritesMixin
+from modules.metric_store_writes_batch import _BatchWritesMixin
 from modules.metric_store_lifecycle import _LifecycleMixin
 from modules.metric_store_rollup import _RollupMixin
 
 
-class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin, _LifecycleMixin, _RollupMixin):
+class MetricStore(
+    MetricStoreQueryMixin, _DeviceWritesMixin, _BatchWritesMixin, _LifecycleMixin, _RollupMixin,
+):
     """
     Thread-safe time-series store. Default backend is built-in sqlite3.
 

@@ -38,6 +38,7 @@ from ui.tabs_helpers import _table as _make_table
 from ui.styles import (
     alpha,
 )
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 from ui.pages.log_source_panel import (
     _LogSourcePanelMixin,
@@ -282,13 +283,13 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
             "QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
             "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         _cb_view_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
-        _cb_x = QPushButton("×")
+        _cb_x = QPushButton()
         _cb_x.setFixedSize(18, 18)
         _cb_x.setCursor(Qt.CursorShape.PointingHandCursor)
-        _s.themed_ss(_cb_x, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            " font-size:13px; padding:0; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
+        _wire_close_icon(_cb_x)
+        _s.themed_ss(_cb_x, "QPushButton {{ background:transparent; border:none; padding:0; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; }}")
         _cb_x.clicked.connect(self._hide_challenge_banner)
         _cb_lay.addWidget(self._challenge_time_lbl, 1)
         _cb_lay.addWidget(_cb_view_btn)
@@ -372,11 +373,12 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         _acp_hdr = QHBoxLayout()
         _acp_title = QLabel("Alerts near this time (±10 min)")
         _s.themed_ss(_acp_title, "font-size:11px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;")
-        _acp_close = QPushButton("×")
+        _acp_close = QPushButton()
         _acp_close.setFixedSize(18, 18)
-        _s.themed_ss(_acp_close, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:14px; padding:0; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
+        _wire_close_icon(_acp_close)
+        _s.themed_ss(_acp_close, "QPushButton {{ background:transparent; border:none; padding:0; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; }}")
         _acp_close.clicked.connect(lambda: self._alert_corr_panel.setVisible(False))
         _acp_hdr.addWidget(_acp_title, 1)
         _acp_hdr.addWidget(_acp_close)

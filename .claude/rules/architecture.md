@@ -15,7 +15,7 @@ paths:
 | Packaging | PyInstaller (produces single-exe builds) |
 | Distribution | Inno Setup installer + WinGet (Ookla.Speedtest.CLI as ExternalDependencies) |
 | Config persistence | QSettings / INI file (NetSentinel.ini) |
-| Data persistence | SQLite via MetricStore (WAL mode, schema v8) |
+| Data persistence | SQLite via MetricStore (WAL mode, schema v20) |
 | Secrets | OS keychain via `keyring` (RULE 22-A) |
 | Logging | Python `logging` module + custom CSV logger |
 
@@ -119,6 +119,13 @@ scan results — do not call it a second time for the same scan (a prior bug in
 `ip_stability`). `known_device.scan_count`/`ip_stability`/`inferred_role` are likewise derived
 only inside `process_scan()`. Full invariant documented in the `metric_store.py` module
 docstring.
+
+**Batched multi-row writes:** `_BatchWritesMixin` (`metric_store_writes_batch.py`) provides
+`record_app_traffic_samples()` and `record_availability_cycle()` — one-transaction batch
+versions of the single-row `record_app_traffic_sample()` / `record_rtt()` + `record_device_state()`
+calls, used respectively by `ui/tabs.py::_on_app_traffic_sample` (every ~10 s on the GUI thread)
+and `modules/availability_monitor.py::run_cycle` (every 60 s) to replace one SQLite commit per
+row with one commit per burst.
 
 ### Speed tester cascade (ARCH RULE 24)
 `modules/speed_tester.py` tries backends in order:

@@ -450,6 +450,21 @@ class NetworkMapPage(QWidget):
                 def javaScriptConsoleMessage(self, level, message, line, source):  # noqa: N802
                     log.debug("JS [%s:%s] %s", source, line, message)
 
+            # Prevent the top-level window from being destroyed and recreated when the
+            # QWebEngineView (a native-backed child) attaches. That recreation drops
+            # the native chrome's WM_NCCALCSIZE subclass and visibly flashes the whole
+            # window as if the app restarted (the title bar also reappears until the
+            # WinIdChange safety-net reinstalls the chrome). Making this container
+            # native FIRST means Qt hosts the web view under an already-native ancestor
+            # instead of rebuilding the window tree. Must be done here (page is shown,
+            # top-level realised) — never at construction, where forcing the top-level
+            # HWND early collapses the restored geometry. Proven in
+            # docs/spikes/webengine-hwnd-recreation.md.
+            from PyQt6.QtCore import Qt as _QtNative
+            self._interactive_container.setAttribute(
+                _QtNative.WidgetAttribute.WA_NativeWindow, True
+            )
+
             self._web_view = QWebEngineView(self._interactive_container)
             self._web_view.setPage(_LogPage(self._web_view))
             self._web_view.setSizePolicy(

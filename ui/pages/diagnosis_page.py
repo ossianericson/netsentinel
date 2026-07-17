@@ -28,6 +28,7 @@ from ui import styles as _s
 from ui.styles import (
     alpha,
 )
+from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.widgets.jargon_tooltip import JargonTooltip
 
 # Maps finding category names to the primary glossary term to show inline
@@ -621,12 +622,12 @@ class DiagnosisPage(QWidget):
         )
         _lw_text.setWordWrap(True)
         _s.themed_ss(_lw_text, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;")
-        _lw_dismiss = QPushButton("×")
+        _lw_dismiss = QPushButton()
         _lw_dismiss.setFixedSize(18, 18)
-        _s.themed_ss(_lw_dismiss, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            " font-size:14px; padding:0; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
+        _wire_close_icon(_lw_dismiss)
+        _s.themed_ss(_lw_dismiss, "QPushButton {{ background:transparent; border:none; padding:0; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:transparent; }}")
         _lw_dismiss.clicked.connect(lambda: self._logger_warn.setVisible(False))
         _lw_lay.addWidget(_lw_icon)
         _lw_lay.addWidget(_lw_text, 1)

@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 
 class _OoklaInstallWorker(QThread):
@@ -137,14 +138,15 @@ class OoklaCliBanner(QFrame):
         self._btn_manual.setTextFormat(Qt.TextFormat.RichText)
 
         # Dismiss button
-        self._btn_dismiss = QPushButton("\u00d7")   # ×
+        self._btn_dismiss = QPushButton()
+        _wire_close_icon(self._btn_dismiss, "TEXT_SECONDARY")
         _s.themed_ss(self._btn_dismiss,
             "QPushButton {{"
-            "  background:transparent; color:{TEXT_SECONDARY};"
-            "  border:none; font-size:16px; padding:0 4px;"
+            "  background:transparent;"
+            "  border:none; padding:0 4px;"
             "}}"
-            "QPushButton:hover {{ color:{INFO_BOX_FG}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; }}"
         )
         self._btn_dismiss.setFixedSize(24, 24)
         self._btn_dismiss.setToolTip("Dismiss")

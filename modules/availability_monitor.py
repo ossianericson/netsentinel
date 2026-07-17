@@ -127,24 +127,30 @@ class AvailabilityMonitor:
         """
         Ping all targets once, update MetricStore, return a CycleResult.
         Designed to be called in a loop from a background thread.
+
+        rtt_sample/device_state writes for the whole cycle are flushed once,
+        in a single transaction, via record_availability_cycle() (Phase B1 —
+        was 2 commits/target/cycle). record_device_event stays per-transition:
+        it is rare and event ordering matters.
         """
         now    = int(time.time())
         result = CycleResult(ts=now)
+        rtt_rows:   list = []
+        state_rows: list = []
 
         for cfg in list(self._targets):
             rtt_ms = _ping(cfg.host)
             new_state = self._classify(rtt_ms, cfg.degraded_threshold_ms)
 
-            # Record raw sample + state snapshot
-            self._store.record_rtt(cfg.host, rtt_ms)
-            self._store.record_device_state(
-                ip=cfg.host,
-                mac=cfg.mac,
-                hostname=cfg.hostname or cfg.label or None,
-                state=new_state,
-                rtt_ms=rtt_ms if rtt_ms >= 0 else None,
-                ts=now,
-            )
+            rtt_rows.append({"host": cfg.host, "rtt_ms": rtt_ms, "ts": now})
+            state_rows.append({
+                "ip": cfg.host,
+                "mac": cfg.mac,
+                "hostname": cfg.hostname or cfg.label or None,
+                "state": new_state,
+                "rtt_ms": rtt_ms if rtt_ms >= 0 else None,
+                "ts": now,
+            })
 
             result.states[cfg.host] = new_state
             result.rtts[cfg.host]   = rtt_ms
@@ -171,6 +177,8 @@ class AvailabilityMonitor:
                 result.changes.append(change)
 
             self._current_state[cfg.host] = new_state
+
+        self._store.record_availability_cycle(rtt_rows, state_rows)
 
         if self._on_cycle:
             self._on_cycle(result)

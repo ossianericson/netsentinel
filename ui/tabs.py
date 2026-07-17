@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from modules.scan_persistence import record_app_traffic_sample
+from modules.scan_persistence import record_app_traffic_samples
 from ui.nav.labels import NavLabel as L
 from ui.nav.rail import _RailButton, _FlyoutPanel, _CanvasClickFilter, _make_nav_icon
 from ui.widgets.alert_drawer import AlertDrawer
@@ -1046,7 +1046,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._nav_rail_go_to(L.WHATS_WRONG)
 
     def _on_app_traffic_sample(self, samples: list) -> None:
-        """Persist App Traffic per-flow samples to MetricStore (S6-1, RULE-DW1).
+        """Persist App Traffic per-flow samples to MetricStore in one batched
+        transaction (S6-1, RULE-DW1, Phase B1 — was one commit per sample).
 
         AppTrafficPage never writes to the store directly (ARCH RULE 1) — it
         emits traffic_sample_ready and this dashboard-layer handler performs
@@ -1054,13 +1055,15 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         """
         if not self._store:
             return
+        rows = []
         for s in samples:
             try:
-                record_app_traffic_sample(
-                    self._store,
-                    mac=s["mac"], label=s["label"], category=s["category"],
-                    app=s["app"], bytes_total=s["bytes_total"],
-                    window_s=s["window_s"], cdn=s.get("cdn"),
-                )
+                rows.append({
+                    "mac": s["mac"], "label": s["label"], "category": s["category"],
+                    "app": s["app"], "bytes_total": s["bytes_total"],
+                    "window_s": s["window_s"], "cdn": s.get("cdn"),
+                })
             except Exception:
                 pass  # non-fatal — a single malformed sample shouldn't drop the rest
+        if rows:
+            record_app_traffic_samples(self._store, rows)

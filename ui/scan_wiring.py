@@ -24,7 +24,7 @@ from ui.nav.labels import NavLabel as L
 from ui.scan_enrichment import ScanEnrichmentMixin
 
 if TYPE_CHECKING:
-    pass
+    from modules.metric_store_schema import KnownDevice
 
 
 class _VendorBatchWorker(QThread):
@@ -557,12 +557,26 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # non-fatal — table update is best-effort
 
     def _on_m1_result(self, data: dict):
+        # Phase B2 (F4): one known_device snapshot shared across every step below
+        # that would otherwise re-materialize the full table (was 5 SELECTs per
+        # scan cycle: _merge_scan_with_persistent, _m1_populate_device_table's
+        # _known_before, and 3 inside DeviceTracker.process_scan). Safe because
+        # this whole handler runs synchronously on the GUI thread (no
+        # processEvents() calls anywhere in the chain) — the only writers that
+        # could race it are other GUI-thread slots, which can't preempt a
+        # running slot, or the availability worker's background QThread, which
+        # never inserts/updates known_device rows this snapshot would need to
+        # see (it only writes device_state/rtt_sample and device_events). The
+        # display-merging and audit-diff uses below tolerate that residual
+        # staleness the same way the pre-B2 back-to-back independent reads did.
+        _store_ref = getattr(self, "_store", None)
+        _known_snapshot = _store_ref.get_known_devices() if _store_ref else {}
         self._m1_update_scan_registries(data)
-        self._m1_refresh_segments_and_inventory(data)
-        self._m1_populate_device_table(data)
+        self._m1_refresh_segments_and_inventory(data, known=_known_snapshot)
+        self._m1_populate_device_table(data, known=_known_snapshot)
         self._m1_check_baseline_diff(data)
         self._m1_feed_network_doc(data)
-        self._m1_track_devices(data)
+        self._m1_track_devices(data, known=_known_snapshot)
         self._m1_feed_geo_map(data)
         self._m1_restart_availability_worker(data)
         self._m1_update_verdict_and_kpis(data)
@@ -588,7 +602,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if hasattr(self, "_home_page") and devices:
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
 
-    def _m1_refresh_segments_and_inventory(self, data: dict) -> None:
+    def _m1_refresh_segments_and_inventory(
+        self, data: dict, known: dict[str, "KnownDevice"] | None = None
+    ) -> None:
         """Auto-detect network segments and merge live devices into the Inventory page."""
         devices = data.get("devices", [])
         if hasattr(self, "_inventory_page"):
@@ -623,10 +639,12 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 pass  # non-fatal — segment detection is best-effort
             # Merge live devices with pinned/static-candidate offline devices
             self._inventory_page.set_scan_devices(
-                self._merge_scan_with_persistent(devices)
+                self._merge_scan_with_persistent(devices, known=known)
             )
 
-    def _m1_populate_device_table(self, data: dict) -> None:
+    def _m1_populate_device_table(
+        self, data: dict, known: dict[str, "KnownDevice"] | None = None
+    ) -> None:
         """Populate the M1 devices table (+ device-change audit + tooltips); mirror into Network Info."""
         devices = data.get("devices", [])
         # Disable sorting while inserting rows: with setSortingEnabled(True) and an
@@ -638,8 +656,12 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._m1_table.setSortingEnabled(False)
         self._m1_table.setRowCount(0)
         _store_ref = getattr(self, "_store", None)
-        # Snapshot known devices before the loop so we can detect IP/hostname changes
-        _known_before: dict = _store_ref.get_known_devices() if _store_ref else {}
+        # Snapshot known devices before the loop so we can detect IP/hostname changes.
+        # Reuses the caller's pre-fetched snapshot (Phase B2 / F4) when supplied instead
+        # of re-querying — see the comment in _on_m1_result for the staleness rationale.
+        _known_before: dict = known if known is not None else (
+            _store_ref.get_known_devices() if _store_ref else {}
+        )
         for d in devices:
             level   = d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")
             ip      = d.ip       if not isinstance(d, dict) else d.get("ip", "?")
@@ -786,7 +808,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
             topo_widget=getattr(self, "_topology_widget", None),
         )
 
-    def _m1_track_devices(self, data: dict) -> None:
+    def _m1_track_devices(
+        self, data: dict, known: dict[str, "KnownDevice"] | None = None
+    ) -> None:
         """Persist scan results via DeviceTracker; raise join/leave notices, alerts, and MQTT events."""
         # ── Persistent device tracking (MetricStore) ──────────────────────────
         if self._store is not None:
@@ -794,7 +818,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 from modules.device_tracker import DeviceTracker
                 if not hasattr(self, "_device_tracker"):
                     self._device_tracker = DeviceTracker(self._store)
-                tr = self._device_tracker.process_scan(data.get("devices", []))
+                tr = self._device_tracker.process_scan(data.get("devices", []), known=known)
                 self._last_scan_new  = len(tr.new_devices)
                 self._last_scan_gone = len(tr.gone_devices)
                 self._last_new_ips: set = {d.ip for d in tr.new_devices if d.ip}
@@ -1201,7 +1225,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._start_lldp_discovery()
 
 
-    def _merge_scan_with_persistent(self, live_devices: list) -> list:
+    def _merge_scan_with_persistent(
+        self, live_devices: list, known: dict[str, "KnownDevice"] | None = None
+    ) -> list:
         """Return live devices augmented with pinned/static-candidate offline devices.
 
         Devices that appeared in the live scan are returned as-is; the inventory
@@ -1211,6 +1237,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
         to "pinned", "cached" (<24 h), or "stale" (<7 d).  Devices older than 7
         days and not pinned are omitted — they are already excluded from the
         startup cache restore and would just clutter the view.
+
+        `known`: an optional pre-fetched get_known_devices() snapshot (Phase B2 /
+        F4) — reused instead of re-querying when the caller already has one.
         """
         import time as _mt
         _store = getattr(self, "_store", None)
@@ -1231,7 +1260,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     _live_macs.add(_mac.lower())
 
             _extras: list = []
-            for _kd in _store.get_known_devices().values():
+            _known_devices = known if known is not None else _store.get_known_devices()
+            for _kd in _known_devices.values():
                 if not _kd.ip or _kd.ip in ("?", "0.0.0.0", ""):
                     continue
                 if (_kd.mac or "").lower() in _live_macs:

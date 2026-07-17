@@ -72,6 +72,21 @@ def test_get_known_devices_after_upsert(store):
     assert devices["aa:bb:cc:dd:ee:ff"].ip == "192.168.1.5"
 
 
+def test_get_max_device_scan_count_empty_returns_zero(store):
+    assert store.get_max_device_scan_count() == 0
+
+
+def test_get_max_device_scan_count_returns_highest(store):
+    """B4 (F8 usage signal): the suggestion engine's 'you've scanned N times but
+    never visited X' nudge needs a cheap proxy for how many scan cycles this
+    install has been through — the highest known_device.scan_count is that proxy."""
+    store.upsert_known_device("aa:bb:cc:dd:ee:01", ip="192.168.1.5", hostname="router")
+    store.upsert_known_device("aa:bb:cc:dd:ee:02", ip="192.168.1.6", hostname="phone")
+    store.update_device_stability("aa:bb:cc:dd:ee:01", scan_count=3, ip_stability=1.0)
+    store.update_device_stability("aa:bb:cc:dd:ee:02", scan_count=12, ip_stability=1.0)
+    assert store.get_max_device_scan_count() == 12
+
+
 def test_set_device_alert_opt_in(store):
     store.upsert_known_device("aa:bb:cc:dd:ee:ff", ip="192.168.1.5", hostname="router")
     assert store.get_known_devices()["aa:bb:cc:dd:ee:ff"].alert_opt_in is False

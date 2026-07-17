@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
 
 from ui import styles as _s
 from ui.styles import alpha, themed_ss
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 
 class PageHeaderBar(QWidget):
@@ -118,14 +119,14 @@ class PageHeaderBar(QWidget):
         _s.themed_ss(self._banner_lbl, "color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;")
         banner_lay.addWidget(self._banner_lbl, 1)
 
-        self._banner_dismiss_btn = QPushButton("×")
+        self._banner_dismiss_btn = QPushButton()
         self._banner_dismiss_btn.setFixedSize(18, 18)
         self._banner_dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._banner_dismiss_btn.setToolTip("Dismiss — won't show again")
-        _s.themed_ss(self._banner_dismiss_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:13px;"
-            " border:none; padding:0; }}"
-            "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            "QPushButton:pressed {{ color:{TEXT_MUTED}; }}")
+        _wire_close_icon(self._banner_dismiss_btn)
+        _s.themed_ss(self._banner_dismiss_btn, "QPushButton {{ background:transparent; border:none; padding:0; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:transparent; }}")
         self._banner_dismiss_btn.clicked.connect(self._dismiss_banner)
         banner_lay.addWidget(self._banner_dismiss_btn)
 

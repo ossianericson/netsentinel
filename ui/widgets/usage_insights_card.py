@@ -35,6 +35,7 @@ from modules.traffic_insights import (
     format_insight_summary,
 )
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 
 _QOS_CATEGORY_PAIR = ("Gaming", "VoIP")
 
@@ -117,13 +118,14 @@ class UsageInsightsCard(QWidget):
         self._qos_lbl = QLabel("")
         self._qos_lbl.setWordWrap(True)
         _s.themed_ss(self._qos_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
-        self._qos_dismiss_btn = QPushButton("✕")
+        self._qos_dismiss_btn = QPushButton()
         self._qos_dismiss_btn.setFixedSize(18, 18)
         self._qos_dismiss_btn.setFlat(True)
         self._qos_dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _s.themed_ss(self._qos_dismiss_btn, "QPushButton {{ color:{TEXT_SECONDARY}; background:transparent; border:none; font-size:9px; }}"
-            "QPushButton:hover   {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
+        _wire_close_icon(self._qos_dismiss_btn, "TEXT_SECONDARY")
+        _s.themed_ss(self._qos_dismiss_btn, "QPushButton {{ background:transparent; border:none; }}"
+            "QPushButton:hover   {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:transparent; }}")
         self._qos_dismiss_btn.setToolTip("Dismiss this suggestion")
         self._qos_dismiss_btn.clicked.connect(self._dismiss_qos_suggestion)
         qos_row.addWidget(self._qos_lbl, 1)

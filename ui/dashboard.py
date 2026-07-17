@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 from ui.perf_audit import profile_page_init
 from ui.styles import MAIN_STYLE
 from ui import styles as _s
+from ui.widgets.device_detail_pane import _wire_close_icon
 from modules.utils import get_offenders_path, is_admin
 from modules.scan_persistence import persist_alert, record_modem_signal
 
@@ -861,16 +862,18 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         )
         btn_stop.clicked.connect(self._stop_all_resumed_monitors)
         row.addWidget(btn_stop)
-        lbl_dismiss = _L("×")
-        lbl_dismiss.setFixedSize(24, 24)
-        lbl_dismiss.setAlignment(_Qt.AlignmentFlag.AlignCenter)
-        lbl_dismiss.setCursor(_Qt.CursorShape.PointingHandCursor)
+        btn_dismiss = _B("")
+        btn_dismiss.setFixedSize(24, 24)
+        btn_dismiss.setCursor(_Qt.CursorShape.PointingHandCursor)
+        _wire_close_icon(btn_dismiss, "TEXT_SECONDARY")
         _s.themed_ss(
-            lbl_dismiss,
-            "color:{TEXT_SECONDARY}; font-size:16px; font-weight:bold; background:transparent;",
+            btn_dismiss,
+            "QPushButton {{ background:transparent; border:none; }}"
+            "QPushButton:hover {{ background:transparent; }}"
+            "QPushButton:pressed {{ background:transparent; }}",
         )
-        lbl_dismiss.mousePressEvent = lambda _e: container.hide()
-        row.addWidget(lbl_dismiss)
+        btn_dismiss.clicked.connect(lambda: container.hide())
+        row.addWidget(btn_dismiss)
         return container
 
     def _show_monitor_resume_bar(self, resumed: list[str]) -> None:

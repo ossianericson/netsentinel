@@ -41,6 +41,7 @@ from ui.native_chrome import (
     client_rect_for_nccalcsize,
     hit_test,
     lparam_point,
+    should_reinstall_native_chrome,
 )
 
 REPO = Path(__file__).resolve().parents[1]
@@ -332,6 +333,132 @@ def test_geometry_is_reapplied_after_the_chrome_is_installed():
         "that has already been positioned, so it ends up a caption-height (~32px) out "
         "and a strip of bare desktop shows above the header."
     )
+
+
+# ── WinIdChange reinstall (Network Map QWebEngineView recreates the HWND) ─────────
+
+def test_reinstall_decision_fires_only_on_a_genuine_hwnd_change():
+    """A QWebEngineView (Network Map) forces Qt to destroy and recreate the top-level
+    HWND — see docs/spikes/webengine-hwnd-recreation.md. The WM_NCCALCSIZE subclass
+    dies with the old handle, so Windows draws the real title bar above the header.
+    The fix reinstalls the chrome on the new HWND; this is the decision that gates it.
+
+    Reinstall ONLY when: native chrome is the active path, it was already installed
+    once (prev_hwnd != 0), and the handle genuinely changed to a new non-zero HWND.
+    """
+    OLD, NEW = 1000, 2000
+    assert should_reinstall_native_chrome(True, OLD, NEW) is True
+
+
+def test_reinstall_decision_skips_the_first_winid_creation():
+    """WinIdChange also fires when the window's HWND is first created — before the
+    one-time install in showEvent has run. prev_hwnd is still 0 there, and the
+    first-show path (_install_window_chrome) owns that install, so reinstall must not
+    fire and race it."""
+    assert should_reinstall_native_chrome(True, 0, 1234) is False
+
+
+def test_reinstall_decision_skips_when_hwnd_unchanged():
+    """No recreation, nothing to reinstall — and reinstalling on the same live HWND
+    would needlessly re-subclass a window that is already correct."""
+    assert should_reinstall_native_chrome(True, 5000, 5000) is False
+
+
+def test_reinstall_decision_skips_a_zero_new_hwnd():
+    """Defensive: a destroyed/not-yet-realised window reports winId 0; installing a
+    subclass on it is meaningless."""
+    assert should_reinstall_native_chrome(True, 5000, 0) is False
+
+
+def test_reinstall_decision_off_on_non_windows_chrome():
+    """The frameless (non-Windows) path has no WM_NCCALCSIZE subclass to lose, so a
+    winId change there must never trigger the Win32-only reinstall."""
+    assert should_reinstall_native_chrome(False, 1000, 2000) is False
+
+
+def test_header_event_hook_reinstalls_chrome_on_winid_change():
+    """AppHeaderMixin.event() must catch QEvent.WinIdChange and route to the reinstall
+    path — that is the only cause-agnostic signal Qt gives us that the native handle
+    changed (QWebEngineView today, any future native child / DPI rebuild tomorrow)."""
+    source = (REPO / "ui" / "header.py").read_text(encoding="utf-8")
+    event_fn = _find_function_in(source, "event")
+    names = _names_and_attrs(event_fn)
+    assert "WinIdChange" in names, (
+        "AppHeaderMixin.event() does not reference QEvent.WinIdChange — the native "
+        "title bar reappears permanently when Network Map builds its QWebEngineView, "
+        "because nothing re-establishes the WM_NCCALCSIZE subclass on the new HWND."
+    )
+
+
+def test_reinstall_path_reinstalls_without_reapplying_saved_geometry():
+    """The reinstall must call install_native_chrome on the new handle but must NOT
+    call reapply_geometry_after_chrome: that reads the SAVED rect, which is correct
+    only at first show. Mid-session the user may have moved/resized the window, so the
+    reinstall has to keep the current rect and merely re-suppress the frame."""
+    source = (REPO / "ui" / "native_chrome.py").read_text(encoding="utf-8")
+    reinstall = _find_function_in(source, "reinstall_after_winid_change")
+    called = _names_and_attrs(reinstall)
+    assert "install_native_chrome" in called, (
+        "_reinstall_chrome_after_winid_change() never calls install_native_chrome — "
+        "the frame is not re-established on the recreated HWND."
+    )
+    assert "reapply_geometry_after_chrome" not in called, (
+        "_reinstall_chrome_after_winid_change() calls reapply_geometry_after_chrome, "
+        "which snaps the window back to the SAVED rect. Mid-session recreation must "
+        "keep the window where the user left it — only re-suppress the frame."
+    )
+
+
+def test_network_map_marks_container_native_before_building_the_web_view():
+    """Prevention layer: the web view's container must be made WA_NativeWindow BEFORE
+    the QWebEngineView is constructed, so Qt hosts the view under an already-native
+    ancestor instead of destroying and recreating the top-level window.
+
+    Order is the whole point (docs/spikes/webengine-hwnd-recreation.md,
+    strategy `container_late`): if the setAttribute runs AFTER the view is built the
+    recreation has already happened and the window visibly flashes as if it restarted.
+    """
+    source = (REPO / "ui" / "pages" / "network_map_page.py").read_text(encoding="utf-8")
+    fn = _find_function_in(source, "_try_init_webengine")
+
+    native_attr_line = None
+    web_view_line = None
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.Attribute) and node.attr == "WA_NativeWindow"
+                and native_attr_line is None):
+            native_attr_line = node.lineno
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "QWebEngineView" and web_view_line is None):
+            web_view_line = node.lineno
+
+    assert native_attr_line is not None, (
+        "_try_init_webengine() no longer marks the container WA_NativeWindow — the "
+        "top-level window will be recreated when the QWebEngineView attaches, dropping "
+        "the native chrome and flashing the whole window."
+    )
+    assert web_view_line is not None, "QWebEngineView construction not found"
+    assert native_attr_line < web_view_line, (
+        f"WA_NativeWindow is set on line {native_attr_line} but the QWebEngineView is "
+        f"built on line {web_view_line}: the container must be native BEFORE the view "
+        f"is created, or the recreation (and flash) has already happened."
+    )
+
+
+def _find_function_in(source: str, name: str) -> ast.FunctionDef:
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{name}() not found")
+
+
+def _names_and_attrs(fn: ast.AST) -> set:
+    out = set()
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Name):
+            out.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            out.add(node.attr)
+    return out
 
 
 def _find_function(source: str, name: str) -> ast.FunctionDef:

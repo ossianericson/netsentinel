@@ -62,6 +62,12 @@ def record_app_traffic_sample(store: Any, **kwargs: Any) -> None:
     store.record_app_traffic_sample(**kwargs)
 
 
+def record_app_traffic_samples(store: Any, samples: list) -> None:
+    """Persist a batch of app-traffic samples in one transaction
+    (wraps MetricStore.record_app_traffic_samples, Phase B1)."""
+    store.record_app_traffic_samples(samples)
+
+
 def record_grade(store: Any, grade: str, score: float, verdict: str) -> None:
     """Persist an overall network grade (wraps MetricStore.record_grade)."""
     store.record_grade(grade, score, verdict)

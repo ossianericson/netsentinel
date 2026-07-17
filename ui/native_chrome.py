@@ -244,6 +244,31 @@ def lparam_point(lparam: int) -> tuple[int, int]:
     return (x, y)
 
 
+def should_reinstall_native_chrome(
+    native_chrome: bool, prev_hwnd: int, new_hwnd: int
+) -> bool:
+    """Decide whether a ``WinIdChange`` warrants reinstalling the chrome subclass.
+
+    The subclass is bound to a specific ``HWND``.  When Qt embeds a native-backed
+    child — the first ``QWebEngineView`` on the Network Map page — it recreates the
+    top-level window to host it, and the ``WM_NCCALCSIZE`` subclass dies with the old
+    handle, so Windows draws the real title bar again
+    (``docs/spikes/webengine-hwnd-recreation.md``).  ``QEvent.WinIdChange`` is the one
+    cause-agnostic signal Qt gives us that this happened; reacting to it survives any
+    future recreation trigger, not just ``QWebEngineView``.
+
+    Reinstall only when all three hold, or we either race the first-show install or
+    needlessly re-subclass a window that is already correct:
+
+    * ``native_chrome`` — the Win32 path is active (the frameless path has no subclass
+      to lose);
+    * ``prev_hwnd`` is non-zero — the one-time install already ran, so this is a
+      *re*-creation, not the window's first ``WinIdChange`` during initial show;
+    * ``new_hwnd`` is a *different*, non-zero handle — an actual recreation.
+    """
+    return bool(native_chrome and prev_hwnd and new_hwnd and new_hwnd != prev_hwnd)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Win32 shell
 # ══════════════════════════════════════════════════════════════════════════════
@@ -524,6 +549,29 @@ def install_native_chrome(win) -> bool:
         return True
     except Exception:
         return False   # non-fatal — caller stays on the legacy frameless window
+
+
+def reinstall_after_winid_change(win) -> None:
+    """Re-establish the chrome subclass after Qt recreated the window's HWND.
+
+    Called from ``AppHeaderMixin.event()`` on ``QEvent.WinIdChange`` — Qt destroys and
+    recreates the top-level HWND to host a native child (Network Map's
+    ``QWebEngineView``), and the ``WM_NCCALCSIZE`` subclass dies with the old handle.
+    This reinstalls it on the new one but NEVER re-applies saved geometry (that is
+    correct only at first show; mid-session the window must stay where the user has
+    it) — ``install_native_chrome`` merely re-subclasses and re-suppresses the frame.
+    ``win._last_native_hwnd`` gates it to a genuine recreation.
+    See ``docs/spikes/webengine-hwnd-recreation.md``.
+    """
+    new_hwnd = int(win.winId())
+    if not should_reinstall_native_chrome(
+        getattr(win, "_native_chrome", False),
+        getattr(win, "_last_native_hwnd", 0),
+        new_hwnd,
+    ):
+        return
+    if install_native_chrome(win):
+        win._last_native_hwnd = new_hwnd
 
 
 def install_snap_subclass(win) -> None:

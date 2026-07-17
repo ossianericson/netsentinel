@@ -4,6 +4,21 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.35
+
+**Changed**
+- `modules/metric_store_writes_batch.py`: batches availability-monitor and app-traffic writes into one SQLite transaction per cycle instead of one per row — cuts commits from 102→12 per availability cycle (5 targets × 10 samples) and 25→1 per app-traffic burst
+- `modules/device_tracker.py`: `DeviceTracker.process_scan()` now reads `known_device` once per scan cycle instead of up to 5 times
+- Added covering indexes `idx_known_device_last_seen` / `idx_grade_result_ts` (schema v20) speeding up the known-device and grade-history queries
+- Extracted `modules/suggestion_engine.py` from `ui/tabs_logger.py` as a pure, unit-testable module and added 5 new "what to do next" suggestion rules — certificate-expiring-soon, trend-forecast-degrading, grade-regression, new-devices-since-last-visit, and an ARP/storm → Protocol Visualizer cross-sell; suggestions are now priority-sorted (high > medium > low) instead of insertion order
+
+**Fixed**
+- `ui/native_chrome.py` / `ui/header.py`: opening Network Map's `QWebEngineView` forced Qt to destroy and recreate the top-level window handle, dropping the native-chrome subclass and permanently exposing Windows' real title bar above the custom header (with a "restart" flash a few seconds after startup) — the web view's container is now marked native ahead of time, and `AppHeaderMixin` reinstalls the chrome subclass on any future handle recreation as a safety net
+- 24 more close/dismiss buttons across the app (toast, alert drawer, page header, overview tile, log hub, notification history, monitor state, diagnosis page, coach mark, quick check window, weekly report/usage insights cards, Ookla CLI banner, plugin hub) that could silently fail to paint their bare-glyph icon under native Windows text rendering — widens the v2.1.34 Home-page fix to the rest of the app
+- Resolved two open CodeQL alerts: a cyclic import between `protocol_frames.py` and `protocol_animator.py`, and a URL substring-sanitization test assertion tightened to exact-equality
+
+---
+
 ### v2.1.34
 
 **Added**

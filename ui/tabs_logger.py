@@ -532,181 +532,162 @@ class _LoggerTabMixin:
     # ── Retention helpers ─────────────────────────────────────────────────────
 
     def _compute_suggestions(self) -> None:
-        """Compute actionable next-steps and push them to the home page."""
+        """Build a SuggestionContext from live state and push engine output
+        to the home page. Rule logic lives in modules/suggestion_engine.py —
+        this method only assembles plain-value context (QSettings/store/self
+        reads stay here so the engine itself needs no QSettings/store/Qt)."""
         if not hasattr(self, "_home_page"):
             return
-        suggestions: list = []
+        import time as _time
+        from modules.suggestion_engine import (
+            USAGE_NUDGE_CANDIDATE_PAGES,
+            SuggestionContext,
+            compute_suggestions,
+        )
 
-        # High-priority nudge: security audit not yet run after first device scan
-        if getattr(self, "_m1_result", None):
-            from PyQt6.QtCore import QSettings as _QS2
-            if not _QS2("NetSentinel", "NetSentinel").value(
-                "security/any_scan_done", False, type=bool
-            ):
-                suggestions.append({
-                    "action_key": "security_audit_nudge",
-                    "text": "Security audit not run — check for open ports, CVEs, and TLS issues",
-                    "action_label": "Open Security Audit →",
-                    "target": "Security Overview",
-                    "priority": "high",
-                })
+        qs = QSettings("NetSentinel", "NetSentinel")
 
-        # Stale security scan nudge — checks per-tool registry state if available
+        m1 = getattr(self, "_m1_result", None)
+        high_risk_count = m1.get("high_risk_count", 0) if m1 else 0
+        unknown_device_count = 0
+        if m1:
+            for d in m1.get("devices", []):
+                dtype = d.device_type if not isinstance(d, dict) else d.get("device_type", "")
+                if (dtype or "").strip().lower() in ("", "unknown", "unknown device"):
+                    unknown_device_count += 1
+
+        stale_security_tools: list = []
         _registry: dict = getattr(self, "_scan_registry", {})
         if _registry:
             _key_tools = ("Port Scan (TCP)", "Exposed to Internet")
-            _stale_tools = [
+            stale_security_tools = [
                 lbl for lbl in _key_tools
                 if _registry.get(lbl, {}).get("state") in ("stale", "never", "")
             ]
-            if _stale_tools:
-                from PyQt6.QtCore import QSettings as _QS3
-                import datetime as _dt
-                _qs3 = _QS3("NetSentinel", "NetSentinel")
-                from ui.pages.home_suggestions import _HomeSuggestionsMixin as _HSM
-                if not _HSM._suggestion_is_suppressed(
-                    _qs3, _dt.datetime.now(), "security_stale_nudge"
-                ):
-                    _n = len(_stale_tools)
-                    _tool_str = ", ".join(_stale_tools[:2]) + (" + more" if _n > 2 else "")
-                    suggestions.append({
-                        "action_key": "security_stale_nudge",
-                        "text": (
-                            f"{_tool_str} scan{'s are' if _n > 1 else ' is'}"
-                            " stale or never run — re-run Security Audit"
-                        ),
-                        "action_label": "Open Security Audit →",
-                        "target": "Security Overview",
-                        "priority": "high",
-                    })
 
-        # High-risk devices from last scan
-        if getattr(self, "_m1_result", None):
-            high = self._m1_result.get("high_risk_count", 0)
-            if high > 0:
-                s = "s" if high != 1 else ""
-                suggestions.append({
-                    "action_key": "high_risk_check",
-                    "text": f"{high} high-risk device{s} found — review security findings",
-                    "action_label": "View Overview →",
-                    "target": "Dashboard",
-                    "priority": "high",
-                })
-
-        # Unknown devices found (S9-2) — behavioural discovery, not persona-declared
-        if getattr(self, "_m1_result", None):
-            devices = self._m1_result.get("devices", [])
-            unknown = 0
-            for d in devices:
-                dtype = d.device_type if not isinstance(d, dict) else d.get("device_type", "")
-                if (dtype or "").strip().lower() in ("", "unknown", "unknown device"):
-                    unknown += 1
-            if unknown > 0:
-                s = "s" if unknown != 1 else ""
-                suggestions.append({
-                    "action_key": "unknown_devices_found",
-                    "text": f"{unknown} unidentified device{s} on your network — name them or flag as rogue",
-                    "action_label": "View Devices →",
-                    "target": "Devices",
-                    "priority": "medium",
-                })
-
-        # Open ports found (S9-2) — surfaced after a Port Scan, links to CVE review
         pr = getattr(self, "_last_portscan_result", None)
-        if pr is not None and getattr(pr, "open_ports", None):
-            n = len(pr.open_ports)
-            s = "s" if n != 1 else ""
-            suggestions.append({
-                "action_key": "open_ports_found",
-                "text": f"{n} open port{s} found on your network — check for known vulnerabilities",
-                "action_label": "View CVEs →",
-                "target": "CVE Tracker",
-                "priority": "medium",
-            })
+        open_port_count = len(pr.open_ports) if pr is not None and getattr(pr, "open_ports", None) else 0
 
-        # Slow DNS response (S9-2) — from the DNS dimension of the last benchmark
-        _bm_dns = getattr(self, "_last_benchmark_result", None)
-        if _bm_dns is not None:
-            for dim in getattr(_bm_dns, "dimensions", []) or []:
-                if getattr(dim, "name", "") == "DNS Response Speed" and getattr(dim, "grade", "") in ("D", "F"):
-                    suggestions.append({
-                        "action_key": "slow_dns_response",
-                        "text": f"DNS response is slow ({dim.value_label}) — every site visit is delayed",
-                        "action_label": "View DNS & Stability →",
-                        "target": "DNS & Stability",
-                        "priority": "medium",
-                    })
-                    break
-
-        # Stability logger not running
-        if not (self._logger_worker and self._logger_worker.isRunning()):
-            suggestions.append({
-                "action_key": "start_logger",
-                "text": "Network stability is not being monitored — start logging to detect outages",
-                "action_label": "Start Monitoring →",
-                "target": None,
-                "priority": "medium",
-            })
-
-        # No speed test in the last 7 days
-        if self._store is not None:
-            try:
-                speed_rows = self._store.query_speed_test_history(hours=168, limit=1)
-                if not speed_rows:
-                    suggestions.append({
-                        "action_key": "run_speed_test",
-                        "text": "No speed test in the last 7 days — check your internet performance",
-                        "action_label": "Run Speed Test →",
-                        "target": "Speed Test",
-                        "priority": "low",
-                    })
-            except Exception:
-                pass  # non-fatal
-
-        # Open CVEs
-        if self._store is not None:
-            try:
-                open_cves = self._store.list_cve_lifecycles(state_filter="Open")
-                n = len(open_cves)
-                if n > 0:
-                    s = "s" if n != 1 else ""
-                    suggestions.append({
-                        "action_key": "view_open_cves",
-                        "text": f"{n} open CVE{s} need remediation",
-                        "action_label": "View CVEs →",
-                        "target": "CVE Tracker",
-                        "priority": "high",
-                    })
-            except Exception:
-                pass  # non-fatal
-
-        # Poor grade
+        dns_grade = None
+        dns_value_label = ""
         bm = getattr(self, "_last_benchmark_result", None)
         if bm is not None:
-            grade = getattr(bm, "overall_grade", None)
-            if grade in ("C", "D", "F"):
-                suggestions.append({
-                    "action_key": "fix_network_grade",
-                    "text": f"Your network grade is {grade} — run a health check for recommendations",
-                    "action_label": "View Overview →",
-                    "target": "Dashboard",
-                    "priority": "medium",
-                })
+            for dim in getattr(bm, "dimensions", []) or []:
+                if getattr(dim, "name", "") == "DNS Response Speed":
+                    dns_grade = getattr(dim, "grade", "")
+                    dns_value_label = getattr(dim, "value_label", "")
+                    break
 
-        # Fallback: always show ≥1 entry after first scan when no other suggestions
-        if not suggestions:
-            from PyQt6.QtCore import QSettings as _QS
-            _qs = _QS("NetSentinel", "NetSentinel")
-            if not _qs.value("logger_started_once", False, type=bool):
-                suggestions.append({
-                    "action_key": "start_logger_fallback",
-                    "text": "Enable the Network Logger to track stability over time",
-                    "action_label": "Start →",
-                    "target": "Network Logger",
-                    "priority": "low",
-                })
+        store_available = self._store is not None
+        days_since_speed_test = None
+        open_cve_count = 0
+        cert_expiring_host = None
+        cert_expiring_days = None
+        trend_alert_host = None
+        trend_alert_message = None
+        grade_prev = None
+        grade_current = None
+        recent_arp_or_storm_event = False
+        scans_done = 0
 
-        self._home_page.set_suggestions(suggestions)
+        if store_available:
+            try:
+                rows = self._store.query_speed_test_history(hours=24 * 365 * 5, limit=1)
+                if rows:
+                    days_since_speed_test = (_time.time() - rows[0].ts) / 86400.0
+            except Exception:
+                pass  # non-fatal
+
+            try:
+                open_cve_count = len(self._store.list_cve_lifecycles(state_filter="Open"))
+            except Exception:
+                pass  # non-fatal
+
+            try:
+                soonest = None
+                for c in self._store.query_cert_status(hours=168):
+                    if c.error or c.is_expired or c.days_remaining is None:
+                        continue
+                    if soonest is None or c.days_remaining < soonest.days_remaining:
+                        soonest = c
+                if soonest is not None:
+                    cert_expiring_host = f"{soonest.host}:{soonest.port}"
+                    cert_expiring_days = soonest.days_remaining
+            except Exception:
+                pass  # non-fatal
+
+            try:
+                trend_alerts = self._store.get_unacked_alerts(rule_types=["TREND_FORECAST"])
+                if trend_alerts:
+                    latest = trend_alerts[-1]  # get_unacked_alerts orders ts ASC
+                    trend_alert_host = latest.get("host")
+                    trend_alert_message = latest.get("message")
+            except Exception:
+                pass  # non-fatal
+
+            try:
+                last_grade = self._store.query_last_grade()
+                prev_grade = self._store.query_previous_grade()
+                if last_grade and prev_grade:
+                    grade_current = last_grade.get("grade")
+                    grade_prev = prev_grade.get("grade")
+            except Exception:
+                pass  # non-fatal
+
+            try:
+                if self._store.get_unacked_alerts(rule_types=["ARP_SPOOF"]):
+                    recent_arp_or_storm_event = True
+            except Exception:
+                pass  # non-fatal
+
+            try:
+                scans_done = self._store.get_max_device_scan_count()
+            except Exception:
+                pass  # non-fatal
+
+        m3 = getattr(self, "_m3_result", None)
+        if m3 is not None:
+            level = m3.storm_level if not isinstance(m3, dict) else m3.get("storm_level", "")
+            if level in ("WARNING", "STORM"):
+                recent_arp_or_storm_event = True
+
+        never_visited_key_pages: list = []
+        try:
+            never_visited_key_pages = [
+                lbl for lbl in USAGE_NUDGE_CANDIDATE_PAGES
+                if int(qs.value(f"usage/visits/{lbl}", 0, type=int)) == 0
+            ]
+        except Exception:
+            pass  # non-fatal — a QSettings hiccup must not break suggestion computation
+
+        ctx = SuggestionContext(
+            has_scan_result=bool(m1),
+            security_any_scan_done=bool(qs.value("security/any_scan_done", False, type=bool)),
+            stale_security_tools=stale_security_tools,
+            high_risk_count=high_risk_count,
+            unknown_device_count=unknown_device_count,
+            open_port_count=open_port_count,
+            dns_grade=dns_grade,
+            dns_value_label=dns_value_label,
+            logger_running=bool(self._logger_worker and self._logger_worker.isRunning()),
+            store_available=store_available,
+            days_since_speed_test=days_since_speed_test,
+            open_cve_count=open_cve_count,
+            overall_grade=getattr(bm, "overall_grade", None) if bm is not None else None,
+            logger_started_once=bool(qs.value("logger_started_once", False, type=bool)),
+            cert_expiring_host=cert_expiring_host,
+            cert_expiring_days=cert_expiring_days,
+            trend_alert_host=trend_alert_host,
+            trend_alert_message=trend_alert_message,
+            grade_prev=grade_prev,
+            grade_current=grade_current,
+            new_devices_since_last_visit=getattr(self, "_new_devices_since_last_visit", 0),
+            recent_arp_or_storm_event=recent_arp_or_storm_event,
+            scans_done=scans_done,
+            never_visited_key_pages=never_visited_key_pages,
+        )
+
+        self._home_page.set_suggestions(compute_suggestions(ctx))
 
     def _compute_last_visit_summary(self) -> None:
         """Show 'Since you were last here' on the home page using MetricStore + QSettings."""
@@ -743,6 +724,11 @@ class _LoggerTabMixin:
                 hours=hours_since, event_types=["JOINED"]
             )
             joined_count = len({e.ip for e in joined_events})
+            # Cached for _compute_suggestions' new_devices_since_last_visit
+            # rule (Phase B4) — reused, not requeried; this method runs once
+            # at startup (ui/app_settings.py) while _compute_suggestions runs
+            # per scan, so a scan before the startup timer fires just sees 0.
+            self._new_devices_since_last_visit = joined_count
 
             outage_events = self._store.query_device_events(
                 hours=hours_since, event_types=["DOWN"]

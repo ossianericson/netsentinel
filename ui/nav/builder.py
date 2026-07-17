@@ -1057,6 +1057,16 @@ class _NavBuilderMixin:
     def _track_page_visit(self, label: str) -> None:
         import json as _json
         qs = QSettings("NetSentinel", "NetSentinel")
+
+        # F8 usage signal (Phase B4) — per-page visit count feeding the
+        # suggestion engine's "never visited X" nudge. Wrapped so a QSettings
+        # hiccup can never break navigation.
+        try:
+            key = f"usage/visits/{label}"
+            qs.setValue(key, int(qs.value(key, 0, type=int)) + 1)
+        except Exception:
+            pass  # non-fatal — usage counting must not break nav
+
         raw = qs.value("discover/visited_pages", "[]")
         try:
             visited: list = _json.loads(raw)

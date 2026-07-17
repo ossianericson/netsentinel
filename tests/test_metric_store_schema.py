@@ -85,6 +85,45 @@ def test_migrations_list_is_nonempty():
     assert all(isinstance(m, str) for m in _MIGRATIONS)
 
 
+def test_schema_version_is_20():
+    assert _SCHEMA_VERSION == 20
+
+
+def test_fresh_db_has_known_device_and_grade_result_indexes():
+    """B3 (F6): known_device.last_seen and grade_result.ts get covering indexes
+    so the existing ORDER BY queries (query_known_devices_summary,
+    query_last_grade/query_previous_grade) don't do a full table scan+sort."""
+    conn = _make_conn()
+    lock = threading.Lock()
+    apply_sqlite_schema(conn, lock)
+    indexes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
+    assert "idx_known_device_last_seen" in indexes
+    assert "idx_grade_result_ts" in indexes
+
+
+def test_migrated_from_v19_db_gains_v20_indexes():
+    """A DB that already has the v19 tables (no indexes on known_device/grade_result)
+    must gain both indexes and report v20 the next time apply_sqlite_schema runs —
+    the same idempotent executescript() that creates tables for a fresh DB also
+    covers CREATE INDEX IF NOT EXISTS for an existing DB, no separate migration path."""
+    conn = _make_conn()
+    lock = threading.Lock()
+    # Simulate a pre-v20 DB: tables exist, but no known_device/grade_result indexes.
+    conn.executescript(
+        """
+        CREATE TABLE known_device (mac TEXT PRIMARY KEY, last_seen INTEGER NOT NULL);
+        CREATE TABLE grade_result (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL);
+        """
+    )
+    conn.commit()
+    apply_sqlite_schema(conn, lock)
+    indexes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
+    assert "idx_known_device_last_seen" in indexes
+    assert "idx_grade_result_ts" in indexes
+    rows = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchall()
+    assert int(rows[0][0]) == 20
+
+
 def test_rtt_point_dataclass():
     p = RttPoint(ts=1000, host="8.8.8.8", rtt_ms=14.2, loss_pct=0.0, jitter_ms=-1.0)
     assert p.ts == 1000
