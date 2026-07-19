@@ -1008,6 +1008,10 @@ class MonkeyTester:
         self._win = None
         self._last_iter_time = time.time()
         self._stop = threading.Event()
+        # White-frame/hang investigation (2026-07-19): exit code of the last
+        # process _alive() observed disappearing, so a crash report can say
+        # HOW it died instead of just that it did.
+        self._last_exit_code: Optional[int] = None
 
         # Baseline the append-only crash log so _check_crash_log() can tell a fault
         # from THIS run apart from the weeks of history already in the file.
@@ -1172,19 +1176,39 @@ class MonkeyTester:
         may be in a degraded state from a previous test run.
         """
         killed = 0
+        terminated: list = []
         for proc in psutil.process_iter(["name", "cmdline", "pid"]):
             try:
                 name    = (proc.info["name"] or "").lower()
                 cmdline = " ".join(proc.info["cmdline"] or []).lower()
                 if "netsentinel" in name or ("app.py" in cmdline and "netsentinel" in cmdline):
                     proc.terminate()
+                    terminated.append(proc)
                     killed += 1
                     self.log.info("[setup] Killed stale process: %s (PID %d)",
                                   proc.info["name"], proc.info["pid"])
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass  # non-fatal — process may have already exited
-        if killed:
-            time.sleep(1.5)   # let OS reclaim ports/handles before we relaunch
+        if terminated:
+            # White-frame/hang investigation (2026-07-19): terminate() only requests
+            # death — TerminateProcess is asynchronous, so confirm the OS actually
+            # finished tearing the process down (releasing its NetSentinel.db-shm
+            # mapping) before the caller relaunches into the same DB/WAL file.
+            # A fixed sleep() here previously just guessed at this instead of checking.
+            t0 = time.time()
+            gone, alive = psutil.wait_procs(terminated, timeout=5)
+            for p in gone:
+                self.log.info("[setup] stale PID %d confirmed exited (code=%s) after %.2fs",
+                              p.pid, p.returncode, time.time() - t0)
+            for p in alive:
+                self.log.warning(
+                    "[setup] stale PID %d STILL ALIVE %.2fs after terminate() — forcing kill()",
+                    p.pid, time.time() - t0,
+                )
+                try:
+                    p.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass  # already gone, or no permission to force-kill — nothing more we can do
 
     # ── Launch & connect ──────────────────────────────────────────────────
 
@@ -1615,9 +1639,21 @@ class MonkeyTester:
         if self._proc is None:
             return self._window_ok()
         try:
-            return self._proc.is_running() and self._proc.status() != psutil.STATUS_ZOMBIE
+            if self._proc.is_running() and self._proc.status() != psutil.STATUS_ZOMBIE:
+                return True
         except psutil.NoSuchProcess:
-            return False
+            pass
+        # Process is gone — capture its exit code once, best-effort, so a crash
+        # report says HOW it died (Python exception, native fault code, or a
+        # clean 0) instead of just that it did. wait(timeout=0) is non-blocking
+        # here since is_running() already returned False above.
+        try:
+            self._last_exit_code = self._proc.wait(timeout=0)
+            self.log.warning("[health] process PID %d is gone — exit code %s",
+                              self._proc.pid, self._last_exit_code)
+        except Exception:
+            self.log.debug("[health] process gone — exit code unavailable")
+        return False
 
     def _window_ok(self, retries: int = 6) -> bool:
         """
@@ -1945,6 +1981,7 @@ class MonkeyTester:
         report = {
             "reason": reason,
             "iteration": self.stats.completed,
+            "last_exit_code": self._last_exit_code,
             "stats": self.stats.to_dict(),
             "last_actions": self.hist.dump(),
         }
@@ -2103,21 +2140,105 @@ class MonkeyTester:
         except Exception:
             self.log.debug("could not write summary JSON")
 
-        # Graceful shutdown — skip when in --connect mode (we didn't own the app)
-        if not self.cfg.connect_only and self._alive():
-            self.log.info("Closing app...")
-            try:
-                self._win.close()
-                time.sleep(2.5)
-            except Exception:
-                self.log.debug("window close failed")
-            if self._alive():
-                try:
-                    self._proc.terminate()
-                except Exception:
-                    self.log.debug("process terminate failed")
+        # Real-quit phase — skip when in --connect mode (we didn't own the app)
+        if not self.cfg.connect_only:
+            if self._real_quit_phase():
+                crashed = True
+                self.log.error("=" * 70)
+                self.log.error("MONKEY TEST FAILED — real-quit phase")
+                self.log.error("=" * 70)
 
         return 1 if crashed else 0
+
+    # ── Real-quit phase ────────────────────────────────────────────────────────
+
+    #: Bound on the real shutdown path. Dashboard.closeEvent() drains every worker
+    #: against a single 3 s deadline (ui/shutdown.py), so a close that has not
+    #: finished well inside this is a hang, not slowness.
+    QUIT_DEADLINE_S = 25.0
+
+    def _real_quit_phase(self) -> bool:
+        """Drive the REAL quit path and verify the app exits cleanly.
+
+        Returns True on FAILURE (matching this file's `crashed` convention).
+
+        Why this phase exists: every chaos run used to end with `self._win.close()`
+        — a native WM_CLOSE, which Dashboard.closeEvent() answers by hiding to the
+        tray whenever tray/minimize_to_tray is enabled (it defaults to True). The
+        harness then fell through to psutil terminate(). So the shutdown path that
+        real users take — titlebar X -> _quit_app -> _tray_quit=True -> the full
+        worker drain and hard exit — had NEVER been exercised by automation, in
+        any run, which is exactly how a shutdown crash reached the Store.
+
+        Clicking the titlebar X is what makes this faithful: _quit_app bypasses the
+        tray branch entirely, so this works without mutating the user's settings.
+        The X is in _BLACKLIST for random clicking (RULE-CHAOS2: it ends the run by
+        design) — clicking it deliberately, last, is the whole point of this phase.
+
+        Fails on any of: the process not exiting within QUIT_DEADLINE_S (hang), a
+        non-zero exit code, or ANY crash-log byte growth (RULE-CHAOS2 — a native
+        SEH fault does not kill the process, so the crash log is the only witness).
+        """
+        if not self._alive():
+            self.log.error("[quit] app was already dead before the real-quit phase")
+            return True
+
+        self.log.info("=" * 70)
+        self.log.info("[quit] real-quit phase: clicking titlebar X (_quit_app path)")
+
+        try:
+            self._win.set_focus()
+        except Exception:
+            pass  # non-fatal — click_input below works on an unfocused window too
+
+        # The three _ChromeButtons are 46px wide, flush right: close ~23px in from
+        # the right edge (same geometry _chrome_hover_maximize relies on).
+        # coords= is relative to the window rectangle, as at the other
+        # click_input(coords=...) call site in this file.
+        try:
+            r = self._win.rectangle()
+            rel_x, rel_y = int(r.width() - 23), 21
+            self._win.click_input(coords=(rel_x, rel_y))
+            self.log.info("[quit] clicked close button at window-relative (%d, %d)",
+                          rel_x, rel_y)
+        except Exception as exc:
+            self.log.error("[quit] could not click the close button: %s", exc)
+            return True
+
+        t0 = time.time()
+        while time.time() - t0 < self.QUIT_DEADLINE_S:
+            if not self._alive():
+                break
+            time.sleep(0.25)
+        elapsed = time.time() - t0
+
+        failed = False
+        if self._alive():
+            self.log.error(
+                "[quit] app STILL RUNNING %.1fs after close — shutdown hang. "
+                "Read netsentinel_shutdown.log for the per-worker drain timings.",
+                elapsed,
+            )
+            self._crash_report(f"shutdown hang: still alive {elapsed:.1f}s after close")
+            failed = True
+            try:
+                self._proc.terminate()
+            except Exception:
+                self.log.debug("process terminate failed")
+        else:
+            self.log.info("[quit] app exited %.2fs after close", elapsed)
+
+        # A native fault during teardown does not necessarily kill the process and
+        # never reaches netsentinel_exceptions.log — crash-log growth is the only
+        # record, so it must be checked even on a clean-looking exit.
+        if self._check_crash_log():
+            self.log.error("[quit] crash log grew during shutdown — native fault on the quit path")
+            failed = True
+
+        if not failed:
+            self.log.info("[quit] real-quit phase PASSED (clean exit, no crash-log growth)")
+        self.log.info("=" * 70)
+        return failed
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────

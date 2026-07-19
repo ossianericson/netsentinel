@@ -12,30 +12,35 @@ from __future__ import annotations
 import datetime
 import threading
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QFileDialog, QFrame, QHBoxLayout, QLabel,
     QProgressBar, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from modules.lab_progress import mark_complete
 from modules.lab_scenarios import LabResult, LabScenario, SCENARIOS
 from modules.metric_store import MetricStore
+from modules.protocol_animator_extra import build_scene_for_key
 from ui import styles as _s
 from ui.styles import (
     alpha,
 )
+from ui.widgets.lab_canvas_card import LabCanvasCard
+from ui.widgets.lab_picker import LabPickerPanel
 
 _PICKER  = 0
 _RUNNER  = 1
 _RESULT  = 2
 
-_EFFORT_COLOR_NAME = {"S": "GREEN", "M": "AMBER", "L": "RED"}
+# Lab Mode Upgrade Phase L1 (RULE-EXP1) — gates the embedded ProtocolCanvas in
+# the runner. Legacy text-only runner stays default until verified live.
+_LAB_VISUALS_FLAG_KEY = "experimental/lab_visuals"
 
-
-def _effort_color(effort: str) -> str:
-    return getattr(_s, _EFFORT_COLOR_NAME.get(effort, "AMBER"))
+# Lab Mode Upgrade Phase L2 — persisted completion state (modules/lab_progress.py shape).
+_PROGRESS_KEY = "lab/progress"
 
 
 # ---------------------------------------------------------------------------
@@ -246,8 +251,50 @@ class LabModePage(QWidget):
         self._hint_used_this_step:  bool = False
         self._solution_visible:     bool = False
 
+        # scan context for the embedded protocol canvas (Phase L1)
+        self._net_info:    dict           = {}
+        self._devices:     list           = []
+        self._diag_result: Any            = None
+        self._m2_result:   Optional[dict] = None
+        self._lab_visuals_on: bool = QSettings().value(_LAB_VISUALS_FLAG_KEY, False, type=bool)
+        self._lab_canvas: Optional[LabCanvasCard] = None
+
+        # completion tracking (Phase L2)
+        self._progress: dict = self._load_progress()
+        self._picker: Optional[LabPickerPanel] = None
+
         self._setup_ui()
         _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
+
+    # ── Public interface ─────────────────────────────────────────────────
+
+    def set_context(
+        self,
+        net_info: dict,
+        devices: list,
+        diag_result: Any = None,
+        m2_result: Optional[dict] = None,
+    ) -> None:
+        """Refresh the scan context used by the embedded protocol canvas (Phase L1)."""
+        self._net_info    = net_info   or {}
+        self._devices     = devices    or []
+        self._diag_result = diag_result
+        self._m2_result   = m2_result
+
+    # ── Progress persistence (Phase L2) ──────────────────────────────────
+
+    def _load_progress(self) -> dict:
+        import json
+        raw = QSettings().value(_PROGRESS_KEY, "{}", type=str)
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+    def _save_progress(self) -> None:
+        import json
+        QSettings().setValue(_PROGRESS_KEY, json.dumps(self._progress))
 
     # ------------------------------------------------------------------
     # UI build
@@ -266,103 +313,18 @@ class LabModePage(QWidget):
         self._stack.addWidget(self._build_result())
         self._stack.setCurrentIndex(_PICKER)
 
-    # ── Picker ─────────────────────────────────────���────────────────────
+    # ── Picker ──────────────────────────────────────────────────────────
 
     def _build_picker(self) -> QWidget:
-        w = QWidget()
-        outer = QVBoxLayout(w)
-        outer.setContentsMargins(32, 28, 32, 24)
-        outer.setSpacing(6)
+        self._picker = LabPickerPanel(SCENARIOS)
+        self._picker.start_requested.connect(self._on_start_requested)
+        self._picker.explore_protocol_requested.connect(self.explore_protocol.emit)
+        self._picker.refresh_progress(self._progress)
+        return self._picker
 
-        from ui.widgets.page_header import PageHeaderBar
-        _hdr = PageHeaderBar("Lab Mode", subtitle="Guided exercises to learn real networking concepts using your live network.")
-        _hdr.show_first_visit_banner(
-            "lab_mode",
-            "Each exercise walks you through a real networking concept using your actual "
-            "devices, not a simulation. Hints are available if you get stuck, and you can "
-            "reveal the full solution at any point.",
-        )
-        outer.addWidget(_hdr)
-        outer.addSpacing(8)
-
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        for idx, scenario in enumerate(SCENARIOS):
-            card = self._scenario_card(scenario)
-            grid.addWidget(card, idx // 2, idx % 2)
-        outer.addLayout(grid)
-        outer.addStretch()
-        return w
-
-    def _scenario_card(self, scenario: LabScenario) -> QFrame:
-        card = QFrame()
-        card.setObjectName("labCard")
-        _s.themed_ss(card, "QFrame#labCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:8px; }}")
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(6)
-
-        header = QHBoxLayout()
-        t = QLabel(scenario.title)
-        _s.themed_ss(t, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
-        e = QLabel(f"Effort: {scenario.effort}")
-        _s.themed_ss(e, lambda eff=scenario.effort: (
-            f"font-size:10px; color:{_effort_color(eff)}; background:transparent;"
-        ))
-        header.addWidget(t)
-        header.addStretch()
-        header.addWidget(e)
-        lay.addLayout(header)
-
-        g = QLabel(scenario.goal)
-        g.setWordWrap(True)
-        _s.themed_ss(g, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
-        lay.addWidget(g)
-
-        steps_lbl = QLabel(f"{len(scenario.steps)} steps")
-        _s.themed_ss(steps_lbl, "font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
-        lay.addWidget(steps_lbl)
-
-        # Curriculum alignment badges
-        try:
-            from ui.widgets.objective_badge import ObjectiveBadge
-            badge_row = QHBoxLayout()
-            badge_row.setSpacing(4)
-            for badge in ObjectiveBadge.for_scenario(scenario.title):
-                badge_row.addWidget(badge)
-            badge_row.addStretch()
-            lay.addLayout(badge_row)
-        except Exception:
-            pass  # non-fatal — badge widget optional
-
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-
-        btn = QPushButton("Start Exercise")
-        btn.setFixedHeight(28)
-        _s.themed_ss(btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            " border-radius:4px; font-size:11px; }}"
-            "QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            "QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}")
-        btn.clicked.connect(lambda _, s=scenario: self._start_scenario(s))
-        btn.clicked.connect(lambda: self.scan_requested.emit())
-        btn_row.addWidget(btn)
-
-        if scenario.protocol:
-            viz_btn = QPushButton(f"See how {scenario.protocol} works →")
-            viz_btn.setFixedHeight(28)
-            _s.themed_ss(viz_btn, "QPushButton {{ background:transparent; color:{ACCENT};"
-                " border:1px solid {ACCENT}; border-radius:4px; font-size:11px; }}"
-                "QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
-            _proto = scenario.protocol
-            viz_btn.clicked.connect(lambda _, p=_proto: self.explore_protocol.emit(p))
-            btn_row.addWidget(viz_btn)
-
-        btn_row.addStretch()
-        lay.addLayout(btn_row)
-        return card
+    def _on_start_requested(self, scenario: LabScenario) -> None:
+        self._start_scenario(scenario)
+        self.scan_requested.emit()
 
     # ── Runner ──────────────────────────────────────────────────────────
 
@@ -392,6 +354,13 @@ class LabModePage(QWidget):
         hdr.addWidget(self._runner_step_lbl)
         outer.addLayout(hdr)
         outer.addSpacing(4)
+
+        # embedded protocol canvas (Phase L1, RULE-EXP1) — shown above the
+        # instruction card while a scenario's scan step is active.
+        if self._lab_visuals_on:
+            self._lab_canvas = LabCanvasCard()
+            self._lab_canvas.setVisible(False)
+            outer.addWidget(self._lab_canvas)
 
         # instruction card
         self._instruction_card = QFrame()
@@ -549,6 +518,9 @@ class LabModePage(QWidget):
         _s.themed_ss(self._verdict_meta, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         v_lay.addWidget(self._verdict_lbl)
         v_lay.addWidget(self._verdict_meta)
+        self._verdict_badge_row = QHBoxLayout()
+        self._verdict_badge_row.setSpacing(4)
+        v_lay.addLayout(self._verdict_badge_row)
         outer.addWidget(self._verdict_card)
 
         outer.addStretch()
@@ -586,7 +558,19 @@ class LabModePage(QWidget):
             "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
         back_btn.clicked.connect(self._go_picker)
 
+        # cross-sell to the Protocol Visualizer (Lab Mode Upgrade Phase L3) —
+        # only shown for a scenario that has a protocol to animate.
+        self._result_viz_btn = QPushButton()
+        self._result_viz_btn.setFixedHeight(30)
+        self._result_viz_btn.setVisible(False)
+        _s.themed_ss(self._result_viz_btn, "QPushButton {{ background:transparent; color:{ACCENT};"
+            " border:1px solid {ACCENT}; border-radius:4px; font-size:11px; padding:0 14px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
+        self._result_viz_btn.clicked.connect(self._on_result_viz_clicked)
+
         btn_row.addWidget(back_btn)
+        btn_row.addWidget(self._result_viz_btn)
         btn_row.addStretch()
         btn_row.addWidget(again_btn)
         btn_row.addWidget(badge_btn)
@@ -635,6 +619,17 @@ class LabModePage(QWidget):
 
         self._hint_used_this_step = False
 
+        if self._lab_canvas is not None:
+            if self._scenario.protocol and step.scan_type is not None:
+                scene = build_scene_for_key(
+                    self._scenario.protocol, self._net_info, self._devices,
+                    self._diag_result, self._m2_result,
+                )
+                self._lab_canvas.set_scene(scene)
+                self._lab_canvas.setVisible(True)
+            else:
+                self._lab_canvas.setVisible(False)
+
         if step.scan_type is None:
             # review step — carry forward findings from the previous scan step
             self._run_btn.setEnabled(False)
@@ -679,7 +674,7 @@ class LabModePage(QWidget):
 
         color = _s.GREEN if result.get("ok") else _s.AMBER
         self._summary_card.setStyleSheet(
-            f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {color}40;"
+            f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {alpha(color, 0x40)};"
             f" border-left:4px solid {color}; border-radius:6px; }}"
         )
         self._summary_lbl.setText(result.get("summary", "Done."))
@@ -722,7 +717,7 @@ class LabModePage(QWidget):
 
                 row = QFrame()
                 row.setStyleSheet(
-                    f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {color}30;"
+                    f"QFrame {{ background:{_s.BG_CARD}; border:1px solid {alpha(color, 0x30)};"
                     f" border-left:3px solid {color}; border-radius:4px; }}"
                 )
                 rl = QHBoxLayout(row)
@@ -816,6 +811,10 @@ class LabModePage(QWidget):
             verdict=verdict,
         )
         self._result_data = result.to_dict()
+        self._progress = mark_complete(self._progress, self._scenario.id, self._result_data)
+        self._save_progress()
+        if self._picker is not None:
+            self._picker.refresh_progress(self._progress)
         self._show_result(result)
 
     def _show_result(self, result: LabResult) -> None:
@@ -839,7 +838,34 @@ class LabModePage(QWidget):
             f"Steps completed: {result.steps_completed} / {result.steps_total}"
             f"    Hints used: {result.hints_used}"
         )
+
+        # earned curriculum badges (Phase L2) — cleared and rebuilt per result
+        while self._verdict_badge_row.count():
+            item = self._verdict_badge_row.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        if result.verdict == "PASS":
+            try:
+                from ui.widgets.objective_badge import ObjectiveBadge
+                for badge in ObjectiveBadge.for_scenario(result.scenario_title):
+                    self._verdict_badge_row.addWidget(badge)
+                self._verdict_badge_row.addStretch()
+            except Exception:
+                pass  # non-fatal — badge widget optional
+
+        # cross-sell to the Protocol Visualizer (Phase L3)
+        protocol = self._scenario.protocol if self._scenario else None
+        if protocol:
+            self._result_viz_btn.setText(f"See how {protocol} works →")
+            self._result_viz_btn.setVisible(True)
+        else:
+            self._result_viz_btn.setVisible(False)
+
         self._stack.setCurrentIndex(_RESULT)
+
+    def _on_result_viz_clicked(self) -> None:
+        if self._scenario and self._scenario.protocol:
+            self.explore_protocol.emit(self._scenario.protocol)
 
     # ------------------------------------------------------------------
     # Export

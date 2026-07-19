@@ -1,11 +1,10 @@
-"""Tests for the experimental/lazy_pages deferred page-construction path.
+"""Tests for the deferred page-construction path (RULE-EXP1 graduated to permanent).
 
 Phase 2 of the startup-slow-construction fix. Covers:
   * _LazyPageHost placeholder + materialize idempotency (in-process unit tests)
   * navigating to every deferred label materializes the real widget
-  * the eager (flag-off) path constructs real pages directly (no hosts)
 
-The three Dashboard-constructing cases run in a **subprocess** (tests/_lazy_pages_child.py):
+The Dashboard-constructing cases run in a **subprocess** (tests/_lazy_pages_child.py):
 a fully-constructed Dashboard cannot be created-and-destroyed in-process on Windows without
 a Qt/QThread teardown crash, so `Dashboard.closeEvent()` uses `os._exit(0)`. In-process,
 the autouse `_flush_qt_events` fixture would close the Dashboard, fire that os._exit(0), and
@@ -85,6 +84,55 @@ def test_lazy_host_factory_runs_once_via_materialize(qt_app):
     stub._stack.deleteLater()
 
 
+def test_ensure_page_materializes_a_still_lazy_host(qt_app):
+    """_ensure_page must force-build a host and return the real widget."""
+    from ui.nav.lazy_page import _LazyPageMixin
+
+    calls = []
+
+    class _Stub(_LazyPageMixin):
+        def __init__(self):
+            from PyQt6.QtWidgets import QStackedWidget
+            self._stack = QStackedWidget()
+            self._nav_label_to_widget = {}
+            self._nav_sections = []
+            self._lazy_hosts = []
+
+    def factory():
+        w = QLabel("real")
+        calls.append(w)
+        stub._connections_page = w
+        return w
+
+    stub = _Stub()
+    host = _LazyPageHost(factory, "Some Page")
+    stub._connections_page = host
+    stub._stack.addWidget(host)
+    stub._nav_label_to_widget["Some Page"] = host
+    stub._lazy_hosts.append(host)
+
+    real = stub._ensure_page("_connections_page")
+
+    assert len(calls) == 1
+    assert real is calls[0]
+    assert stub._connections_page is real
+    assert not isinstance(real, _LazyPageHost)
+    stub._stack.deleteLater()
+
+
+def test_ensure_page_is_a_noop_for_an_already_real_page(qt_app):
+    """_ensure_page must not re-materialize (or touch) an already-real widget."""
+    from ui.nav.lazy_page import _LazyPageMixin
+
+    class _Stub(_LazyPageMixin):
+        def __init__(self):
+            self._connections_page = QLabel("already real")
+
+    stub = _Stub()
+    real = stub._ensure_page("_connections_page")
+    assert real is stub._connections_page
+
+
 # ── Dashboard integration (out-of-process — see module docstring) ─────────────
 
 _CHILD = Path(__file__).resolve().parent / "_lazy_pages_child.py"
@@ -116,9 +164,13 @@ def test_materialize_all_drains_queue():
     _run_child("test_materialize_all_drains_queue")
 
 
-def test_eager_path_builds_real_pages():
-    _run_child("test_eager_path_builds_real_pages")
-
-
 def test_protocol_viz_pending_context_replayed_on_materialize():
     _run_child("test_protocol_viz_pending_context_replayed_on_materialize")
+
+
+def test_app_traffic_pending_label_map_replayed_on_materialize():
+    _run_child("test_app_traffic_pending_label_map_replayed_on_materialize")
+
+
+def test_connections_page_materializes_via_cross_page_signal():
+    _run_child("test_connections_page_materializes_via_cross_page_signal")

@@ -491,18 +491,13 @@ class SystematicTester(_mt.MonkeyTester):
         except Exception:
             self.log.debug("could not write report JSON")
 
-        # Graceful shutdown
-        if not self.cfg.connect_only and self._alive():
-            try:
-                self._win.close()
-                time.sleep(2.0)
-            except Exception:
-                self.log.debug("window close failed")
-            if self._alive():
-                try:
-                    self._proc.terminate()
-                except Exception:
-                    self.log.debug("process terminate failed")
+        # Real-quit phase (inherited from MonkeyTester). The old teardown here was
+        # self._win.close() -> a native WM_CLOSE, which the minimize-to-tray default
+        # swallows, followed by psutil terminate() — so this sweep never once
+        # exercised the actual _quit_app shutdown path either.
+        if not self.cfg.connect_only:
+            if self._real_quit_phase():
+                crashed = True
 
         return 1 if crashed else 0
 

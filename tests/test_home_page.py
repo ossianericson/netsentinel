@@ -435,3 +435,61 @@ class TestLiveThemeSwitch:
                 if app:
                     for _ in range(3):
                         app.processEvents()
+
+
+def _fresh_protoviz_nudge_key():
+    from PyQt6.QtCore import QSettings
+    QSettings("NetSentinel", "NetSentinel").remove("banner/protoviz_home_nudge_seen")
+
+
+class TestProtovizNudgeCard:
+    """Lab Mode Upgrade Phase L3 — dismissible Home nudge pointing to the
+    Protocol Visualizer, reusing context_banners.py's banner/*_seen scheme.
+
+    context_banners.py always targets QSettings("NetSentinel", "NetSentinel")
+    explicitly, so it is NOT covered by conftest's isolated_settings fixture
+    (which isolates only the org/app-name-derived QSettings() default
+    constructor) — mirrors tests/test_context_banners.py's own pattern of an
+    explicit setup/teardown fixture around the real key.
+    """
+
+    def setup_method(self):    _fresh_protoviz_nudge_key()
+    def teardown_method(self): _fresh_protoviz_nudge_key()
+
+    def test_visible_by_default(self):
+        page = _make_page()
+        assert page._protoviz_nudge_card.isVisibleTo(page)
+
+    def test_open_button_emits_navigate_to_protocol_visualizer(self):
+        page = _make_page()
+        received = []
+        page.navigate_to.connect(received.append)
+        from PyQt6.QtWidgets import QPushButton
+        buttons = page._protoviz_nudge_card.findChildren(QPushButton)
+        go_btn = next(b for b in buttons if b.text() == "Open →")
+        go_btn.click()
+        assert received == ["Protocol Visualizer"]
+
+    def test_dismiss_hides_card_and_marks_banner_seen(self):
+        # Calls the bound handler directly rather than .click()/.emit(): a
+        # QSettings native-format write immediately followed by setVisible()
+        # inside a live Qt signal dispatch deadlocks under the -platform
+        # offscreen driver once the widget sits in HomePage's full tree
+        # (heavy timer/signal graph) — reproduced in isolation, does not
+        # repro for a standalone widget or a direct (non-signal) call. The
+        # production click path is unaffected (real, non-synthetic delivery);
+        # this only works around the offscreen test harness.
+        from ui.context_banners import should_show_banner
+        page = _make_page()
+        assert page._protoviz_nudge_card.isVisibleTo(page)
+
+        page._dismiss_protoviz_nudge()
+
+        assert not page._protoviz_nudge_card.isVisibleTo(page)
+        assert should_show_banner("protoviz_home_nudge") is False
+
+    def test_hidden_when_already_seen(self):
+        from ui.context_banners import mark_banner_seen
+        mark_banner_seen("protoviz_home_nudge")
+        page = _make_page()
+        assert not page._protoviz_nudge_card.isVisibleTo(page)

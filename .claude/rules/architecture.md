@@ -218,6 +218,31 @@ These are distinct systems that coexist. Do not mix them — never display inter
 
 ## Colour Palette (ui/styles.py constants)
 
+Two themes exist, switchable instantly at runtime (`ui/styles.py::apply_theme()`); neither is
+hardcoded UI truth. **`DEFAULT_THEME = "Midnight Pro"`** ([styles.py:283](ui/styles.py#L283)) —
+the app is dark by default on a fresh install. Arctic Clean is the alternate light theme, opted
+into via the Settings page theme swatch.
+
+**Midnight Pro (dark, default):**
+```python
+NAV_BAR     = "#0D1117"   # top application bar
+SIDEBAR_BG  = "#161B22"   # left sidebar
+BG_DARK     = "#0D1117"   # main content area
+BG_CARD     = "#1C2128"   # card backgrounds
+BG_HOVER    = "#1A2233"   # table row hover
+BG_ALT_ROW  = "#111820"   # zebra alternate row
+ACCENT      = "#3B82F6"   # primary brand blue (brighter royal blue)
+TH_BG       = "#0D1520"   # table header navy
+TH_TEXT     = "#E6EDF3"
+TEXT_PRIMARY   = "#E6EDF3"
+TEXT_SECONDARY = "#8B949E"
+BORDER      = "rgba(255,255,255,0.08)"   # QSS-only — see RULE 10
+RED    = "#F85149"
+AMBER  = "#F5B942"
+GREEN  = "#4CAF50"
+```
+
+**Arctic Clean (light, alternate):**
 ```python
 NAV_BAR     = "#141B2D"   # top application bar
 SIDEBAR_BG  = "#1F2B3E"   # left sidebar

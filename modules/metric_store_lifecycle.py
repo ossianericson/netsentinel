@@ -36,18 +36,28 @@ class _LifecycleMixin:
         except Exception:
             pass  # non-fatal
 
-    def checkpoint(self) -> None:
+    def checkpoint(self, passive: bool = False) -> None:
         """G7: force a WAL checkpoint so all pending writes are flushed to the
         main DB file. Call before process exit — dashboard.py's shutdown path
-        uses os._exit(0) (a documented QThread-destructor workaround) which
-        bypasses Python's normal connection-close/atexit path entirely, so the
-        WAL would otherwise never be truncated. wal_checkpoint is a whole-
+        ends in a hard process exit (a documented QThread-destructor workaround)
+        which bypasses Python's normal connection-close/atexit path entirely, so
+        the WAL would otherwise never be truncated. wal_checkpoint is a whole-
         database operation, so any open connection can perform it — it is not
-        limited to flushing only the calling thread's own writes."""
+        limited to flushing only the calling thread's own writes.
+
+        ``passive=True`` issues PASSIVE instead of TRUNCATE and is what the
+        shutdown path uses. TRUNCATE must wait for every reader and writer to
+        clear and honours ``busy_timeout=5000``, so it can block its caller for
+        up to 5 s — on the close path that is the UI thread, at the very end of
+        shutdown, while prune_worker may be inside an uninterruptible VACUUM.
+        PASSIVE flushes whatever it can without ever blocking. The cost is only
+        WAL file size: the data is already durable in the WAL either way, and
+        SQLite replays it on the next open."""
         if self._backend != "sqlite" or self._db_path is None or str(self._db_path) == ":memory:":
             return
+        mode = "PASSIVE" if passive else "TRUNCATE"
         try:
-            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self._conn.execute(f"PRAGMA wal_checkpoint({mode})")
         except Exception:
             pass  # non-fatal — best-effort flush before hard exit
 

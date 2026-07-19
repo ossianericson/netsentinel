@@ -99,6 +99,21 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["start", "alerts", "notify", "email", "webhook"],
     },
+    {
+        "group": "Start here",
+        "icon": "▶",
+        "name": "Protocol Visualizer",
+        "desc": (
+            "See how your network's protocols actually work — animated step-by-step "
+            "diagrams of ARP, DNS, TCP, DHCP, and STP using your real device "
+            "addresses. Why this matters: the fastest way to build a mental model "
+            "of what's actually happening on the wire, no prior networking "
+            "knowledge required."
+        ),
+        "page": "Protocol Visualizer",
+        "requires": None,
+        "tags": ["start", "protocol", "animation", "arp", "dns", "tcp", "dhcp", "stp", "learn", "visualize"],
+    },
     # ── New in this version ────────────────────────────────────────────────────
     {
         "group": "New in this version",

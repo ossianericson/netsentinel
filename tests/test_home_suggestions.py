@@ -373,7 +373,7 @@ class TestNewSuggestionRulesWiring:
         stub._compute_suggestions()
         suggestions = stub._home_page.set_suggestions.call_args_list[-1][0][0]
         match = next(s for s in suggestions if s["action_key"] == "cert_expiring_soon")
-        assert "example.com:443" in match["text"]
+        assert match["text"] == "Certificate for example.com:443 expires in 5 days"
         assert match["priority"] == "high"
 
     def test_trend_forecast_alert_reaches_home_page(self, monkeypatch):

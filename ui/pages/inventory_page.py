@@ -1895,11 +1895,11 @@ class InventoryPage(QWidget):
         dot_color = color or _s.ACCENT
         if active:
             btn.setStyleSheet(
-                f"QPushButton {{ background:{dot_color}22; color:{_s.TEXT_PRIMARY};"
+                f"QPushButton {{ background:{alpha(dot_color, 0x22)}; color:{_s.TEXT_PRIMARY};"
                 f" border:1.5px solid {dot_color}; border-radius:12px;"
                 f" font-size:11px; padding:0 10px; font-weight:bold; }}"
-                f"QPushButton:hover {{ background:{dot_color}33; color:{_s.TEXT_PRIMARY}; }}"
-                f"QPushButton:pressed {{ background:{dot_color}44; color:{_s.TEXT_PRIMARY}; }}"
+                f"QPushButton:hover {{ background:{alpha(dot_color, 0x33)}; color:{_s.TEXT_PRIMARY}; }}"
+                f"QPushButton:pressed {{ background:{alpha(dot_color, 0x44)}; color:{_s.TEXT_PRIMARY}; }}"
             )
         else:
             btn.setStyleSheet(

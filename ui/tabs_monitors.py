@@ -337,7 +337,12 @@ class _MonitorTabsMixin:
         self._sched_interval.setRange(1, 1440)
         self._sched_interval.setValue(15)
         self._sched_interval.setSuffix(" min")
-        self._sched_interval.setFixedWidth(90)
+        self._sched_interval.setFixedWidth(_s.SPINBOX_WIDTH_WITH_SUFFIX)
+        # background-color/color/font-size ONLY -- the global MAIN_STYLE QSpinBox
+        # rule has border/padding, which makes the +/- buttons unclickable under
+        # windows11 (see style_spinbox() docstring) -- override it here.
+        _s.themed_ss(self._sched_interval, "QSpinBox {{ background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        _s.style_spinbox(self._sched_interval)
         btn_start = QPushButton("▶  Start Scheduler")
         btn_start.setObjectName("btnNetRefresh")
         btn_start.clicked.connect(self._start_scheduler)

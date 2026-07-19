@@ -70,15 +70,21 @@ class _LoggerTabMixin:
                 c.setToolTip(tooltip)
             return c
 
-        def _spin(lo: int, hi: int, val: int, suffix: str, w: int = 72) -> QSpinBox:
+        def _spin(lo: int, hi: int, val: int, suffix: str, w: int = _s.SPINBOX_WIDTH_WITH_SUFFIX) -> QSpinBox:
             s = QSpinBox()
             s.setRange(lo, hi)
             s.setValue(val)
             s.setSuffix(suffix)
             s.setFixedWidth(w)
-            _s.themed_ss(s, "QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
-                " border-radius:4px; padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            # background-color/color/font-size ONLY -- border/border-radius/padding
+            # on QSpinBox desyncs the internal QLineEdit from the native +/- button
+            # geometry under the windows11 style and makes the buttons unclickable
+            # (see the mechanism comment above style_spinbox() in ui/styles.py).
+            # BG_DARK (not BG_CARD) so the field reads as recessed against this
+            # card's own BG_CARD background now that there's no border to define it.
+            _s.themed_ss(s, "QSpinBox {{ background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY}; }}"
                 "QSpinBox:disabled {{ color:{TEXT_MUTED}; }}")
+            _s.style_spinbox(s)
             return s
 
         # ── Active Pollers ────────────────────────────────────────────────────
@@ -92,7 +98,7 @@ class _LoggerTabMixin:
         ping_lbl.setToolTip("RTT — Round-Trip Time: how long a packet takes to travel to a host and back, measured in milliseconds.")
         int_lbl = QLabel("Interval:")
         _s.themed_ss(int_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
-        self._log_interval = _spin(5, 3600, _qs.value("logger/interval_s", 60, type=int), " s", 72)
+        self._log_interval = _spin(5, 3600, _qs.value("logger/interval_s", 60, type=int), " s")
         self._log_interval.setToolTip("How often to ping each host")
         self._log_interval.valueChanged.connect(
             lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/interval_s", v)
@@ -549,6 +555,7 @@ class _LoggerTabMixin:
 
         m1 = getattr(self, "_m1_result", None)
         high_risk_count = m1.get("high_risk_count", 0) if m1 else 0
+        risk_assessments_available = bool(getattr(self, "_risk_assessments", None))
         unknown_device_count = 0
         if m1:
             for d in m1.get("devices", []):
@@ -665,6 +672,7 @@ class _LoggerTabMixin:
             security_any_scan_done=bool(qs.value("security/any_scan_done", False, type=bool)),
             stale_security_tools=stale_security_tools,
             high_risk_count=high_risk_count,
+            risk_assessments_available=risk_assessments_available,
             unknown_device_count=unknown_device_count,
             open_port_count=open_port_count,
             dns_grade=dns_grade,

@@ -52,6 +52,48 @@ def test_build_nat_scene_step_labels():
     assert "SYN-ACK" in labels[2]
 
 
+def test_build_scene_for_key_matches_individual_builders_for_all_ten_keys():
+    """Shared dispatch must return byte-identical scenes to calling each builder
+    directly — this is the regression guard for the ProtocolVizPage._build_scene
+    refactor onto the shared helper (Lab Mode Upgrade Phase L1)."""
+    from modules.protocol_animator import (
+        build_arp_scene, build_dhcp_scene, build_dns_scene, build_stp_scene, build_tcp_scene,
+    )
+    from modules.protocol_animator_extra import (
+        build_icmp_scene, build_nat_scene, build_ospf_scene, build_scene_for_key,
+        build_tls_scene, build_vlan_scene,
+    )
+
+    net_info = _NET_INFO
+    devices = [{"ip": "192.168.1.100", "mac": "11:22:33:44:55:66", "hostname": "test-host"}]
+    diag_result = None
+    m2_result = None
+
+    expected = {
+        "ARP":  build_arp_scene(net_info, devices),
+        "DNS":  build_dns_scene(net_info, diag_result),
+        "TCP":  build_tcp_scene(net_info, devices),
+        "DHCP": build_dhcp_scene(net_info),
+        "STP":  build_stp_scene(m2_result),
+        "OSPF": build_ospf_scene(net_info),
+        "NAT":  build_nat_scene(net_info),
+        "VLAN": build_vlan_scene(net_info),
+        "TLS":  build_tls_scene(net_info, devices),
+        "ICMP": build_icmp_scene(net_info),
+    }
+    for key, exp_scene in expected.items():
+        got = build_scene_for_key(key, net_info, devices, diag_result, m2_result)
+        assert got == exp_scene, f"scene mismatch for key={key}"
+
+
+def test_build_scene_for_key_unknown_key_falls_back_to_arp():
+    from modules.protocol_animator import build_arp_scene
+    from modules.protocol_animator_extra import build_scene_for_key
+    devices = []
+    got = build_scene_for_key("NOPE", _NET_INFO, devices)
+    assert got == build_arp_scene(_NET_INFO, devices)
+
+
 def test_build_vlan_scene_returns_valid_structure():
     from modules.protocol_animator_extra import build_vlan_scene
     from modules.protocol_animator import ProtocolSceneData

@@ -311,3 +311,53 @@ a flag — `network_map_page` `QWebEngineView` build (~185 ms) and `threat_intel
 - **Not yet done:** cProfile flag-on-vs-off construction-time delta measurement,
   and a live chaos/monkey soak with the flag on to confirm the startup "hang"
   no longer trips `IsHungAppWindow`.
+
+---
+
+## Every-launch startup measurement (2026-07-17)
+
+Scratchpad cProfile probe (`startup_probe.py`, not in-tree — see the pattern note
+above about `NETSENTINEL_PROFILE_PAGES=1` under an outer cProfile swallowing
+attribution). Pre-imported matplotlib + scapy before timing to isolate
+construction cost from first-import cost. `MetricStore()` profiled against a
+scratchpad **copy** of the real portable `NetSentinel.db` (~50 MB, ~30 days of
+data) — never the live dev DB in place, since `prune_old_data()` deletes rows.
+Two runs per flag state; numbers below are representative (low variance).
+
+| Stage | flag OFF | flag ON | Δ |
+|---|---|---|---|
+| `MetricStore()` total | 0.002–0.008 s | 0.002–0.008 s | ~0 (see below) |
+| `Dashboard()` construction | 2.78–2.84 s | 2.26–2.29 s | **≈ −0.53 s** |
+| `_restore_cached_scan()` | 0.28–0.30 s | 0.35 s | noise (flag-independent) |
+| `window.show()` + `processEvents()` | 0.45–0.50 s | 0.45–0.45 s | noise (flag-independent) |
+| **Total (all four stages)** | **≈ 3.57–3.63 s** | **≈ 3.07–3.09 s** | **≈ −0.5 s (≈ 14–15%)** |
+
+`python -X importtime -c "import ui.dashboard"` cumulative = **104 ms** — a minor
+slice next to the ~2.3–2.8 s `Dashboard()` construction total, consistent with
+the 2026-07-09 finding that startup cost is dominated by widget
+construction/`addWidget` (not imports). Biggest cumulative import contributors:
+`modules.utils` 39.7 ms (drags in `urllib.request`/`http.client`/`email.*` —
+looks like a keyring/SMTP-adjacent transitive import, not investigated further,
+out of scope this session), `modules.mac_lookup` 22.2 ms, `PyQt6.QtCore` 16.9 ms.
+
+**`MetricStore()` / `prune_old_data()` finding — reverses the plan's assumption.**
+Against the real ~50 MB/30-day dev DB, `MetricStore()` construction (WAL
+checkpoint + schema init + prune) totals 2–8 ms, and `prune_old_data()`'s own
+cProfile cumtime rounds to **0.000 s** — i.e. sub-millisecond. The plan's Step 2
+(add `prune_on_init` to skip the duplicate `__init__`-time prune on the GUI path,
+since `app.py`'s `prune_worker` already runs the same prune off-thread
+immediately at startup) is still correct as a **duplication/correctness fix** —
+the exact same rollup + ~12 `DELETE`s genuinely runs twice, once synchronously
+on the main thread and once off-thread seconds later — but it will not produce
+a measurable startup-time win on data shaped like this dev DB. Recorded here so
+Step 2 is not oversold as a perf fix in the session summary.
+
+**Verdict on `experimental/lazy_pages`:** the flag is a real, repeatable
+**≈ 0.5 s / ≈ 15%** reduction in the synchronous pre-window-visible critical path
+(`Dashboard()` construction alone drops ≈ 19%, from the 11 deferred leaf pages no
+longer building eagerly). `_restore_cached_scan()` and `window.show()` are
+flag-independent, as expected — neither touches the lazy-page mechanism. This is
+the number the plan's Step 3 decision gate needed: **worth proposing** the
+default flip, but per the plan of record and RULE-CHAOS1 it still requires a
+user-run chaos/monkey soak with the flag ON before any default change — not
+executed this session.

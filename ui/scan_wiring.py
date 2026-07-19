@@ -885,6 +885,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         self._show_alert_toast(a)
                         self._home_page.on_alert(a)
                         self._mqtt_page.on_alert(a.severity, a.message, a.host)
+                        try:
+                            persist_alert(self._store, a)
+                        except Exception:
+                            pass  # non-fatal — persistence failure must not block the scan handler
                     # V6 Sprint 1 — IP_CHURN: device_ip_history churn since last scan
                     try:
                         churn = self._store.query_ip_churn(hours=24.0, min_ips=3)

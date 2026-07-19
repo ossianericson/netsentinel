@@ -365,7 +365,12 @@ class _AnalysisTabsMixin:
         self._iot_learn_duration.setValue(60)
         self._iot_learn_duration.setSuffix(" s")
         self._iot_learn_duration.setToolTip("How many seconds to observe traffic during the learning phase")
-        self._iot_learn_duration.setFixedWidth(80)
+        self._iot_learn_duration.setFixedWidth(_s.SPINBOX_WIDTH_WITH_SUFFIX)
+        # background-color/color/font-size ONLY -- the global MAIN_STYLE QSpinBox
+        # rule has border/padding, which makes the +/- buttons unclickable under
+        # windows11 (see style_spinbox() docstring) -- override it here.
+        _s.themed_ss(self._iot_learn_duration, "QSpinBox {{ background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        _s.style_spinbox(self._iot_learn_duration)
 
         ctrl.addWidget(btn_learn)
         ctrl.addWidget(self._iot_learn_duration)

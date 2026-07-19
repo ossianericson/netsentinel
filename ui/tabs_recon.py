@@ -91,7 +91,12 @@ class _ReconTabsMixin:
         self._syn_rate.setRange(10, 5000)
         self._syn_rate.setValue(500)
         self._syn_rate.setSuffix(" pps")
-        self._syn_rate.setFixedWidth(100)
+        self._syn_rate.setFixedWidth(_s.SPINBOX_WIDTH_WITH_SUFFIX)
+        # background-color/color/font-size ONLY -- the global MAIN_STYLE QSpinBox
+        # rule has border/padding, which makes the +/- buttons unclickable under
+        # windows11 (see style_spinbox() docstring) -- override it here.
+        _s.themed_ss(self._syn_rate, "QSpinBox {{ background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        _s.style_spinbox(self._syn_rate)
         from PyQt6.QtWidgets import QComboBox as _CB
         self._syn_ports_combo = _CB()
         self._syn_ports_combo.addItems(["Top 1000 ports", "Common 26 ports", "Full range (slow)"])
@@ -622,6 +627,12 @@ class _ReconTabsMixin:
         form.setContentsMargins(0, 0, 0, 0)
         self._cred_host    = QLineEdit(); self._cred_host.setPlaceholderText("192.168.1.1")
         self._cred_port    = QSpinBox(); self._cred_port.setRange(1, 65535); self._cred_port.setValue(22)
+        self._cred_port.setFixedWidth(_s.SPINBOX_WIDTH_WIDE_PLAIN)
+        # background-color/color/font-size ONLY -- the global MAIN_STYLE QSpinBox
+        # rule has border/padding, which makes the +/- buttons unclickable under
+        # windows11 (see style_spinbox() docstring) -- override it here.
+        _s.themed_ss(self._cred_port, "QSpinBox {{ background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        _s.style_spinbox(self._cred_port)
         self._cred_user    = QLineEdit(); self._cred_user.setPlaceholderText("root")
         self._cred_pass    = QLineEdit(); self._cred_pass.setPlaceholderText("(leave blank to use key)")
         self._cred_pass.setEchoMode(QLineEdit.EchoMode.Password)

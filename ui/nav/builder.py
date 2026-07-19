@@ -712,18 +712,20 @@ class _NavBuilderMixin:
                         f"— not a NavLabel member registered in _build_pro_nav()"
                     )
             return
-        # Deferred-construction hook (experimental/lazy_pages): if the label still
-        # points at a placeholder, build the real page and re-point the stack/map
-        # before the crossfade so the user lands on the real widget, not "Loading…".
+        # Deferred-construction hook: if the label still points at a placeholder,
+        # build the real page and re-point the stack/map before the crossfade so
+        # the user lands on the real widget, not "Loading…".
         if isinstance(widget, _LazyPageHost):
             widget = self._materialize_host(widget)
-        if (
-            label != "Settings"
-            and hasattr(self, "_settings_page")
-            and self._settings_page.is_dirty()
-            and not self._settings_page.confirm_leave()
-        ):
-            return
+        # experimental/theme_switch_deferred flush hook: if a theme switch
+        # queued this page instead of refreshing it eagerly (dashboard.py
+        # _on_theme_changed), bring it up to date now that it's about to be
+        # shown. See Dashboard._theme_dirty_widgets.
+        _dirty = getattr(self, "_theme_dirty_widgets", None)
+        if _dirty and widget in _dirty:
+            if hasattr(widget, "refresh_theme"):
+                widget.refresh_theme()
+            _dirty.discard(widget)
         if _push_history and hasattr(self, "_nav_history"):
             current = getattr(self, "_nav_current_page_label", None)
             if current and current != label:
@@ -1710,6 +1712,8 @@ class _NavBuilderMixin:
             self._open_diagnosis()
         else:
             self._nav_rail_go_to(label)
+            if label == "Notifications" and hasattr(self, "_notifications_page"):
+                self._notifications_page.switch_to_history_tab(unacked_only=True)
 
     def _open_diagnosis(self) -> None:
         self._nav_rail_go_to(L.WHATS_WRONG)

@@ -32,8 +32,11 @@ UI_DIR = ROOT / "ui"
 
 # A style-token name in braces, immediately followed by exactly two hex digits,
 # then a QSS delimiter (quote / whitespace / semicolon). The lookahead keeps the
-# match anchored to a real "append alpha to a colour" site.
-PAT = re.compile(r'\{([A-Z_][A-Z0-9_]*)\}([0-9a-fA-F]{2})(?=["\s;])')
+# match anchored to a real "append alpha to a colour" site. Matches both
+# uppercase style-module tokens (e.g. {AMBER}22) and lowercase/mixed-case local
+# variables holding a colour string (e.g. {color}40, {dot_color}22) — Qt parses
+# the 8-digit hex the same broken way regardless of the variable's naming case.
+PAT = re.compile(r'\{([A-Za-z_][A-Za-z0-9_]*)\}([0-9a-fA-F]{2})(?=["\s;])')
 
 # ui/styles.py hosts alpha() and documents the antipattern on purpose.
 EXCLUDE = {UI_DIR / "styles.py"}

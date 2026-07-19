@@ -57,6 +57,42 @@ def is_admin() -> bool:
 
 _is_store_app_cache: list = []
 
+ERROR_INSUFFICIENT_BUFFER = 122     # packaged — buffer too small to hold the name
+APPMODEL_ERROR_NO_PACKAGE = 15700   # not packaged — no identity for this process
+
+
+def package_family_name_status() -> int:
+    """Raw GetPackageFamilyName() return code for the current process.
+
+    Split out from is_store_app() so the syscall itself can be asserted. The
+    boolean form collapses "not packaged" (15700) and "the call never actually
+    ran" (e.g. 6, ERROR_INVALID_HANDLE) into the same False — which is exactly
+    how a permanently-False is_store_app() shipped in v2.1.33.
+
+    restype/argtypes are mandatory here, not decoration: ctypes defaults an
+    undeclared return value to a 32-bit C int, which truncates
+    GetCurrentProcess()'s (HANDLE)-1 pseudo-handle to 0x00000000FFFFFFFF on
+    Win64. GetPackageFamilyName then rejects it with ERROR_INVALID_HANDLE (6)
+    before ever inspecting package identity, so it can never return 122 and
+    is_store_app() answers False even inside the real MSIX package.
+    """
+    import ctypes
+
+    # A local WinDLL handle, NOT ctypes.windll.kernel32 — assigning argtypes to
+    # the cached global function objects would mutate them for every other
+    # caller in the process.
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    k32.GetCurrentProcess.argtypes = []
+    k32.GetPackageFamilyName.restype = ctypes.c_long
+    k32.GetPackageFamilyName.argtypes = [
+        ctypes.c_void_p,                  # HANDLE  hProcess
+        ctypes.POINTER(ctypes.c_uint32),  # UINT32 *packageFamilyNameLength
+        ctypes.c_wchar_p,                 # PWSTR   packageFamilyName
+    ]
+    buf_len = ctypes.c_uint32(0)
+    return k32.GetPackageFamilyName(k32.GetCurrentProcess(), ctypes.byref(buf_len), None)
+
 
 def is_store_app() -> bool:
     """Return True when running inside a Windows Store MSIX package (AppContainer).
@@ -71,14 +107,7 @@ def is_store_app() -> bool:
     result = False
     if platform.system() == "Windows":
         try:
-            import ctypes
-            buf_len = ctypes.c_uint32(0)
-            ret = ctypes.windll.kernel32.GetPackageFamilyName(
-                ctypes.windll.kernel32.GetCurrentProcess(),
-                ctypes.byref(buf_len),
-                None,
-            )
-            result = (ret == 122)  # ERROR_INSUFFICIENT_BUFFER → we are packaged
+            result = (package_family_name_status() == ERROR_INSUFFICIENT_BUFFER)
         except Exception:
             result = False
     _is_store_app_cache.append(result)

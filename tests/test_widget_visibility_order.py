@@ -19,6 +19,21 @@ configured) and ``ui/pages/rest_api_page.py`` (the external-access warning
 label, flashes on startup once "Allow external access" has ever been
 checked) — both fixed in the same commit that added this test.
 
+A fourth instance shipped in ``ui/pages/home_page.py``'s ``protovizNudgeCard``
+(the Protocol Visualizer education nudge on Home) — the AST guard below did
+**not** catch it because the parentless ``QFrame`` is constructed and made
+visible inside ``_build_protoviz_nudge_card()``, but ``addWidget()`` happens
+in the *caller* (``_setup_ui()``) on a different reference
+(``self._protoviz_nudge_card`` vs. the local ``bar``) — this guard only
+tracks a single function's own scope (see the module docstring above), so a
+widget returned from a helper and added to its layout by the caller is
+structurally invisible to it. Found via a live ``python app.py
+--trace-windows`` repro, not by this test. Fixed by deferring the
+``setVisible(should_show_banner(...))`` call from inside the builder to
+right after ``lay.addWidget()`` in ``_setup_ui()``. This is a known blind
+spot of the heuristic below, not something the guard can be trivially
+extended to catch — a real fix would need cross-function data flow analysis.
+
 CORRECT PATTERN — call setVisible() only after addWidget():
 
     self._btn_configure = QPushButton("...")

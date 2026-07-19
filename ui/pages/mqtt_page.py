@@ -164,8 +164,11 @@ class MqttPage(QWidget):
         self._port = QSpinBox()
         self._port.setRange(1, 65535)
         self._port.setValue(1883)
-        _s.themed_ss(self._port, "QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:2px; padding:3px 6px; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        self._port.setFixedWidth(_s.SPINBOX_WIDTH_WIDE_PLAIN)
+        # background-color/color/font-size ONLY -- border/border-radius/padding
+        # make the +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._port, "QSpinBox {{ background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        _s.style_spinbox(self._port)
         _row("Port:", self._port)
 
         self._username = QLineEdit()

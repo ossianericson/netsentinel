@@ -13,12 +13,10 @@ from __future__ import annotations
 import pytest
 
 try:
-    import PyQt6  # noqa: F401
+    from modules.metric_store_schema import KnownDevice
+    from ui.scan_wiring import ScanResultMixin
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
-
-from modules.metric_store_schema import KnownDevice
-from ui.scan_wiring import ScanResultMixin
 
 
 class _FakeStore:

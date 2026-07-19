@@ -480,6 +480,12 @@ class ScanEnrichmentMixin:
             diag_result=self._diag_result,
             m2_result=self._m2_result,
         )
+        self._lab_mode_page.set_context(
+            net_info=self._net_info,
+            devices=self._m1_result.get("devices", []) if self._m1_result else [],
+            diag_result=self._diag_result,
+            m2_result=self._m2_result,
+        )
 
         # Ping table
         self._diag_ping_table.setRowCount(0)
@@ -1001,8 +1007,7 @@ class ScanEnrichmentMixin:
             from modules.utils_net import get_local_mac_label_map
             _label_map.update(get_local_mac_label_map())
             if _label_map:
-                if hasattr(self, "_app_traffic_page"):
-                    self._app_traffic_page.set_label_map(_label_map)
+                self._feed_app_traffic_label_map(_label_map)
                 if getattr(self, "_bw_worker", None) is not None:
                     self._bw_worker.label_map = _label_map
                 if hasattr(self, "_timeline_page"):

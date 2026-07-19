@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSlot
 
 from ui import styles as _s
+from ui.nav.rail import _ClickLabel
 from ui.widgets.device_detail_pane import _make_close_icon, _wire_close_icon
 
 
@@ -157,14 +158,16 @@ class AppHeaderMixin:
         lay.addStretch(1)
 
         # ── Network status (centre) — hidden until a scan produces real data ────
-        self._verdict_badge = QLabel()
+        self._verdict_badge = _ClickLabel()
         # Shape J: restyled live by monitor_state / tabs_network — _s.* read, not themed_ss.
         self._verdict_badge.setStyleSheet(
             f"color:{_s.TEXT_MUTED}; font-size:11px; font-weight:600;"
             f" background:transparent; border:none; padding:0 12px;"
         )
-        self._verdict_badge.setToolTip("Overall network status")
+        self._verdict_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._verdict_badge.setToolTip("Overall network status — click for details")
         self._verdict_badge.setVisible(False)
+        self._verdict_badge.clicked.connect(self._on_verdict_badge_clicked)
         lay.addWidget(self._verdict_badge)
 
         lay.addStretch(1)
@@ -355,7 +358,7 @@ class AppHeaderMixin:
         self._app_header = w
         self._header_nc_client_widgets = [
             _btn_settings, self._time_range_combo, self._header_scan_btn,
-            _btn_min, _btn_close,
+            _btn_min, _btn_close, self._verdict_badge,
         ]
         return w
 
@@ -443,15 +446,14 @@ class AppHeaderMixin:
             self._tray_icon_shown = True
             if getattr(self, "_tray_manager", None) is not None:
                 self._tray_manager.show_tray_icon()
-        # Deferred page construction (experimental/lazy_pages): now that the window
-        # is up and the event loop is running, drain the placeholder queue in the
-        # background so pages are ready before the user reaches them. No-op when the
-        # flag is off. Short delay lets the first frame paint first.
+        # Deferred page construction: now that the window is up and the event
+        # loop is running, drain the placeholder queue in the background so
+        # pages are ready before the user reaches them. Short delay lets the
+        # first frame paint first.
         if not getattr(self, "_lazy_builder_started", False):
             self._lazy_builder_started = True
-            if getattr(self, "_lazy_pages", False):
-                from PyQt6.QtCore import QTimer as _QTlazy
-                _QTlazy.singleShot(400, self._start_lazy_page_builder)
+            from PyQt6.QtCore import QTimer as _QTlazy
+            _QTlazy.singleShot(400, self._start_lazy_page_builder)
 
     def event(self, e):
         # WinIdChange = Qt recreated our native HWND (to host Network Map's
@@ -642,11 +644,11 @@ class AppHeaderMixin:
         return container
 
     def _start_update_check(self):
-        """Kick off a background thread to check the GitHub releases API."""
-        from modules.utils import is_store_app  # noqa: PLC0415
-        if is_store_app():
-            return  # Store auto-updates; never show the GitHub/winget bar
+        """Kick off a background thread to check the GitHub releases API.
 
+        Runs in Store builds too — both publish the same version numbers, so only
+        the remedy _on_update_available() offers differs.
+        """
         import threading
 
         def _check():
@@ -680,17 +682,20 @@ class AppHeaderMixin:
     @pyqtSlot(str)
     def _on_update_available(self, latest: str):
         """Runs on the UI thread — safe to touch widgets."""
-        from modules.utils import is_store_app  # noqa: PLC0415
-        if is_store_app():
-            return  # defensive — no code path should raise this bar in the Store build
-
+        from modules.utils import is_store_app, store_update_url  # noqa: PLC0415
         from PyQt6.QtWidgets import QApplication
         current = QApplication.applicationVersion()
-        msg = (
-            f"NetSentinel v{latest} is available (you have v{current}) — "
-            f'<a href="https://github.com/ossianericson/netsentinel/releases/latest" '
-            f'style="color:{_s.ACCENT};">Download</a>'
-            f' &nbsp;·&nbsp; or run: <code>winget upgrade NetSentinel.NetSentinel</code>'
-        )
-        self._update_bar_lbl.setText(msg)
+        head = f"NetSentinel v{latest} is available (you have v{current}) — "
+        if is_store_app():
+            # Only the Store can replace a Store package; routing around it via
+            # GitHub/winget is disallowed there. Deep-link the product page.
+            link = (f'<a href="{store_update_url()}" '
+                    f'style="color:{_s.ACCENT};">Open in Microsoft Store</a>')
+        else:
+            link = (
+                f'<a href="https://github.com/ossianericson/netsentinel/releases/latest" '
+                f'style="color:{_s.ACCENT};">Download</a>'
+                f' &nbsp;·&nbsp; or run: <code>winget upgrade NetSentinel.NetSentinel</code>'
+            )
+        self._update_bar_lbl.setText(head + link)
         self._update_bar.setVisible(True)

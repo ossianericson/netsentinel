@@ -231,9 +231,12 @@ class _LogSourcePanelMixin:
             " border-radius:2px; background:{BG_DARK}; }}"
             "QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
         )
+        # background-color/color/font-size ONLY -- border/border-radius/padding on
+        # QSpinBox desyncs the internal QLineEdit from the native +/- button geometry
+        # under the windows11 style and makes the buttons unclickable (see the
+        # mechanism comment above style_spinbox() in ui/styles.py).
         _spin_qss = (
-            "QSpinBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            " border:1px solid {BORDER}; border-radius:3px; padding:1px 4px; font-size:11px; }}"
+            "QSpinBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY}; font-size:11px; }}"
         )
 
         def _chk_row(label: str, key: str) -> QCheckBox:
@@ -258,8 +261,9 @@ class _LogSourcePanelMixin:
             spin = QSpinBox()
             spin.setRange(5, 120)
             spin.setValue(_qs.value(f"scan/{key}_duration_s", default, type=int))
-            spin.setFixedWidth(64)
+            spin.setFixedWidth(_s.SPINBOX_WIDTH_PLAIN)
             _s.themed_ss(spin, _spin_qss)
+            _s.style_spinbox(spin)
             spin.valueChanged.connect(
                 lambda v, k=key: QSettings("NetSentinel", "NetSentinel").setValue(
                     f"scan/{k}_duration_s", v

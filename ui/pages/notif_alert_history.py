@@ -14,6 +14,7 @@ import time
 from PyQt6.QtCore import Qt, QEvent, QObject, QTimer
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -216,6 +217,7 @@ class _NotifAlertHistoryMixin:
 
         self._hist_sev_filter: set = {"INFO", "WARNING", "CRITICAL"}
         self._hist_hours = 72.0
+        self._hist_unacked_default_applied = False
         filter_row = QHBoxLayout()
         filter_row.setSpacing(6)
         filter_row.setContentsMargins(0, 0, 0, 2)
@@ -250,6 +252,11 @@ class _NotifAlertHistoryMixin:
             " border:1px solid {BORDER}; border-radius:3px; padding:0 4px; }}")
         self._hist_time_combo.currentTextChanged.connect(self._on_hist_time_changed)
         filter_row.addWidget(self._hist_time_combo)
+        filter_row.addSpacing(12)
+        self._chk_unacked_only = QCheckBox("Unacknowledged only")
+        _s.themed_ss(self._chk_unacked_only, "font-size:10px; color:{TEXT_PRIMARY};")
+        self._chk_unacked_only.toggled.connect(self._on_unacked_only_toggled)
+        filter_row.addWidget(self._chk_unacked_only)
         filter_row.addStretch()
         hist_lay.addLayout(filter_row)
 
@@ -601,11 +608,32 @@ class _NotifAlertHistoryMixin:
         else:
             self._storm_banner.setVisible(False)
 
+    def _on_unacked_only_toggled(self, _checked: bool) -> None:
+        self._hist_time_combo.setEnabled(not self._chk_unacked_only.isChecked())
+        self._refresh_alert_history()
+
     def _refresh_alert_history(self) -> None:
         if self._store is None or not self.isVisible():
             return
+        if not self._hist_unacked_default_applied:
+            self._hist_unacked_default_applied = True
+            try:
+                has_unacked = bool(self._store.get_unacked_alerts())
+            except Exception:
+                has_unacked = False
+            if has_unacked:
+                self._chk_unacked_only.blockSignals(True)
+                self._chk_unacked_only.setChecked(True)
+                self._chk_unacked_only.blockSignals(False)
+        unacked_only = self._chk_unacked_only.isChecked()
+        self._hist_time_combo.setEnabled(not unacked_only)
         try:
-            alerts = self._store.get_recent_alerts(hours=self._hist_hours, limit=500)
+            if unacked_only:
+                alerts = self._store.get_alert_history(
+                    hours=self._hist_hours, limit=500, unacked_only=True
+                )
+            else:
+                alerts = self._store.get_recent_alerts(hours=self._hist_hours, limit=500)
         except Exception:
             return
         self._check_alert_storm(alerts)

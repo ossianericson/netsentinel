@@ -4,7 +4,7 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
-### v2.1.35
+### v2.1.36
 
 **Changed**
 - `modules/metric_store_writes_batch.py`: batches availability-monitor and app-traffic writes into one SQLite transaction per cycle instead of one per row — cuts commits from 102→12 per availability cycle (5 targets × 10 samples) and 25→1 per app-traffic burst

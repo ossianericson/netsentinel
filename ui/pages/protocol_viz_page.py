@@ -22,22 +22,8 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from modules.protocol_animator import (
-    AnimNode,
-    ProtocolSceneData,
-    build_arp_scene,
-    build_dhcp_scene,
-    build_dns_scene,
-    build_stp_scene,
-    build_tcp_scene,
-)
-from modules.protocol_animator_extra import (
-    build_icmp_scene,
-    build_nat_scene,
-    build_ospf_scene,
-    build_tls_scene,
-    build_vlan_scene,
-)
+from modules.protocol_animator import AnimNode, ProtocolSceneData
+from modules.protocol_animator_extra import build_scene_for_key
 from ui import styles as _s
 from ui.widgets.frame_anatomy_panel import FrameAnatomyPanel
 from ui.widgets.protocol_canvas import ProtocolCanvas
@@ -737,28 +723,9 @@ class ProtocolVizPage(QWidget):
             pass  # non-fatal — badge widget optional
 
     def _build_scene(self, key: str) -> ProtocolSceneData:
-        if key == "ARP":
-            scene = build_arp_scene(self._net_info, self._devices)
-        elif key == "DNS":
-            scene = build_dns_scene(self._net_info, self._diag_result)
-        elif key == "TCP":
-            scene = build_tcp_scene(self._net_info, self._devices)
-        elif key == "DHCP":
-            scene = build_dhcp_scene(self._net_info)
-        elif key == "STP":
-            scene = build_stp_scene(self._m2_result)
-        elif key == "OSPF":
-            scene = build_ospf_scene(self._net_info)
-        elif key == "NAT":
-            scene = build_nat_scene(self._net_info)
-        elif key == "VLAN":
-            scene = build_vlan_scene(self._net_info)
-        elif key == "TLS":
-            scene = build_tls_scene(self._net_info, self._devices)
-        elif key == "ICMP":
-            scene = build_icmp_scene(self._net_info)
-        else:
-            scene = build_arp_scene(self._net_info, self._devices)
+        scene = build_scene_for_key(
+            key, self._net_info, self._devices, self._diag_result, self._m2_result,
+        )
         self._enrich_scene_nodes(scene)
         return scene
 

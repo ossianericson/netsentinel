@@ -110,7 +110,16 @@ def test_register_external_worker_appends_without_duplicates():
 
 
 def test_stop_external_workers_signals_stop_but_never_terminates():
-    from ui.dashboard import _drain_external_workers
+    """The never-terminate guarantee, now generalised.
+
+    This originally covered ui.dashboard._drain_external_workers, which applied
+    the rule to the always-on app.py workers only. closeEvent's dashboard-owned
+    loop still called terminate() on _arp/_dhcp/_syn/_udp/_pe_worker — all of
+    which do raw-socket / Npcap / scapy work. Both lists now go through the one
+    bounded drain in ui/shutdown.py, so the invariant is asserted once, for
+    every worker. See tests/test_shutdown_drain.py for the deadline behaviour.
+    """
+    from ui.shutdown import drain_workers as _drain_external_workers
 
     calls = []
 

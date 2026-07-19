@@ -548,6 +548,8 @@ _PAGE_HELP: dict[str, dict] = {
             "When the Home page shows a live event card, clicking 'Investigate →' drops you straight into a one-step lab built from that event.",
             "After finishing an exercise, click 'Export Report (HTML)' to save a portable lab report.",
             "Hints don't penalise you — use them freely. The solution is always there if you're stuck.",
+            "Each lab's picker card shows a ✓ and completion date once you finish it, and the strip at the top tracks how many of the 10 labs you've completed.",
+            "The active exercise shows a live animated diagram of the protocol you're learning, driven by your real network addresses — the same engine as the Protocol Visualizer.",
         ],
     },
     "Feature Guide": {

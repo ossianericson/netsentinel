@@ -425,7 +425,11 @@ def _cross_file_usage_index(
     all_paths: list[Path],
 ) -> tuple[set[tuple[str, str]], dict[str, set[str]]]:
     """Build (module, name) pairs seen via `from module import name`, plus a
-    module -> {attrs accessed} map for `import module [as alias]; alias.attr`.
+    module -> {attrs accessed} map for `import module [as alias]; alias.attr`
+    AND `from package import submodule [as alias]; alias.attr` -- RULE-LINT4
+    mandates the latter form throughout this codebase (`from ui import
+    styles as _s`), so both must resolve to the same alias-tracking to avoid
+    every styles.py-only-consumed-via-alias constant reading as unused.
     """
     from_import_pairs: set[tuple[str, str]] = set()
     attr_access_by_module: dict[str, set[str]] = {}
@@ -444,6 +448,12 @@ def _cross_file_usage_index(
                 if base:
                     for a in node.names:
                         from_import_pairs.add((base, a.name))
+                        # Also treat `from pkg import submodule as alias` as a
+                        # module alias -- imprecise for plain from-imports of a
+                        # function/constant (harmless: just an inert dict key
+                        # no file's dotted module ever matches), but necessary
+                        # for the submodule-as-alias case this codebase uses.
+                        aliases[a.asname or a.name] = f"{base}.{a.name}"
             elif isinstance(node, ast.Import):
                 for a in node.names:
                     aliases[a.asname or a.name.split(".")[0]] = a.name

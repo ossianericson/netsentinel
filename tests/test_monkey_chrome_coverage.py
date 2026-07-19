@@ -136,3 +136,75 @@ def test_crash_log_watcher_targets_the_apps_real_crash_log(monkey):
         f"harness watches {path}, but app.py writes to "
         f"{Path(get_app_data_dir()) / 'netsentinel_crash.log'}"
     )
+
+
+# ── Real-quit phase (Part 3 of the shutdown plan) ────────────────────────────
+#
+# Every chaos run used to end with self._win.close() -- a native WM_CLOSE, which
+# Dashboard.closeEvent() answers by hiding to the tray whenever
+# tray/minimize_to_tray is on (it defaults True). The harness then fell through
+# to psutil terminate(). So the shutdown path real users take -- titlebar X ->
+# _quit_app -> the full worker drain and hard exit -- was NEVER exercised by
+# automation in any run. That is exactly how a shutdown crash reached the Store.
+
+def _quit_phase_code(monkey) -> str:
+    """Source of _real_quit_phase with its docstring removed.
+
+    The docstring legitimately names the patterns the phase must NOT use (it
+    explains why win.close() is the wrong call), so a raw-source substring check
+    would flag that prose as a violation.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    fn = ast.parse(
+        textwrap.dedent(inspect.getsource(monkey.MonkeyTester._real_quit_phase))
+    ).body[0]
+    if ast.get_docstring(fn) is not None:
+        fn.body = fn.body[1:]
+    return ast.unparse(fn)
+
+
+def test_real_quit_phase_exists_on_the_tester(monkey):
+    assert hasattr(monkey.MonkeyTester, "_real_quit_phase"), (
+        "no real-quit phase: the harness cannot detect a shutdown crash or hang"
+    )
+
+
+def test_real_quit_phase_does_not_rely_on_win_close(monkey):
+    """win.close() posts WM_CLOSE, which the tray branch swallows — it drives the
+    minimize path, not the quit path. The phase must click the titlebar X."""
+    code = _quit_phase_code(monkey)
+    assert ".close()" not in code, (
+        "the real-quit phase still uses win.close() (WM_CLOSE), which "
+        "minimize-to-tray swallows — it would test the tray path, not the quit path"
+    )
+    assert "click_input" in code, "the phase must click the real titlebar close button"
+
+
+def test_real_quit_phase_fails_on_hang_and_on_crash_log_growth(monkey):
+    """Both failure modes must be detected. A shutdown that never completes is a
+    hang; a native SEH fault during teardown does not kill the process at all, so
+    crash-log growth is its only witness (RULE-CHAOS2)."""
+    import inspect
+
+    src = inspect.getsource(monkey.MonkeyTester._real_quit_phase)
+    assert "_check_crash_log" in src, (
+        "the real-quit phase does not check crash-log growth — a native fault "
+        "during shutdown would pass silently"
+    )
+    assert "QUIT_DEADLINE_S" in src, "the real-quit phase has no hang deadline"
+    assert hasattr(monkey.MonkeyTester, "QUIT_DEADLINE_S")
+    assert 0 < monkey.MonkeyTester.QUIT_DEADLINE_S <= 60, (
+        "quit deadline must be a real bound; the drain itself is capped at 3 s"
+    )
+
+
+def test_systematic_tester_also_runs_the_real_quit_phase():
+    """tools/systematic_test.py had the identical win.close()/terminate() teardown."""
+    src = (REPO / "tools" / "systematic_test.py").read_text(encoding="utf-8")
+    assert "_real_quit_phase" in src, (
+        "systematic_test.py does not run the real-quit phase, so its 62-page "
+        "sweep still never exercises the actual shutdown path"
+    )
