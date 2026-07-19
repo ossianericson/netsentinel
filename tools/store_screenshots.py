@@ -177,12 +177,19 @@ def navigate(app_win, hwnd: int, label: str, wait: float) -> None:
     app_win.type_keys("^k", pause=0.05)
     time.sleep(0.7)
 
-    # Type the full label — long enough to uniquely resolve in fuzzy match
-    app_win.type_keys(label, with_spaces=True, pause=0.05)
+    # Type the full label — long enough to uniquely resolve in fuzzy match.
+    # set_foreground=False from here on: type_keys() defaults to
+    # set_foreground=True, which re-focuses app_win (the cached DASHBOARD
+    # window) before sending keys. Ctrl+K just opened the command palette as
+    # its own top-level window that already took real focus via its own
+    # showEvent(); re-asserting focus on the dashboard here steals it
+    # straight back, so the typed label and Enter land on the dashboard
+    # instead of the palette and navigation silently no-ops.
+    app_win.type_keys(label, with_spaces=True, pause=0.05, set_foreground=False)
     time.sleep(0.6)
 
     # Navigate
-    app_win.type_keys("{ENTER}", pause=0.05)
+    app_win.type_keys("{ENTER}", pause=0.05, set_foreground=False)
 
     # Wait for 160 ms crossfade + page render + any data population
     time.sleep(wait)

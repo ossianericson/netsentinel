@@ -201,11 +201,11 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 ### v2.1.36 (current)
 
-- Fixed a native window chrome bug where opening Network Map could permanently bring back Windows' title bar above the custom header
-- Faster availability monitoring and app-traffic logging under the hood — writes are now batched into one database transaction per cycle instead of one per row
-- New "what to do next" suggestions on the Home page: certificate-expiring warnings, degrading-trend alerts, grade regressions, and a nudge when new devices show up since your last visit
-- Fixed 24 more close/dismiss buttons across the app that could silently fail to paint on native Windows text rendering
-- Resolved two open CodeQL security alerts (import cycle, test assertion hardening)
+- Lab Mode gets an animated canvas, per-scenario progress tracking with completion badges, and closer cross-linking with the Protocol Visualizer
+- Fixed a Store-build bug where the app couldn't detect it was running under Microsoft Store and advertised a GitHub download instead of the Store update page
+- Rebuilt app shutdown to fix an intermittent close crash/hang on Store builds — all background workers now stop concurrently against one shared deadline
+- The header's network-status badge is now clickable and jumps straight to whatever's causing the current alert
+- Fixed a startup white/black flash on some launches, a theme-switch stall, and app-wide QSpinBox click/contrast issues
 
 ---
 

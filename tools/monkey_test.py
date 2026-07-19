@@ -889,10 +889,17 @@ def _nav_command_palette(win, chaos: str) -> str:
     try:
         win.type_keys("^k")
         time.sleep(0.45)
-        # Type only first 6 chars for fuzzy match
-        win.type_keys(page[:6], with_spaces=True, pause=0.04)
+        # Type only first 6 chars for fuzzy match.
+        # set_foreground=False from here on: type_keys() defaults to
+        # set_foreground=True, which re-focuses `win` (the cached DASHBOARD
+        # window) before sending keys. Ctrl+K just opened the command
+        # palette as its own top-level window that already took real focus
+        # via its own showEvent(); re-asserting focus on the dashboard here
+        # steals it straight back, so the typed text and Enter land on the
+        # dashboard instead of the palette and navigation silently no-ops.
+        win.type_keys(page[:6], with_spaces=True, pause=0.04, set_foreground=False)
         time.sleep(0.30)
-        win.type_keys("{ENTER}")
+        win.type_keys("{ENTER}", set_foreground=False)
         time.sleep(0.50)
         return f"palette:{page}"
     except Exception as exc:
@@ -1642,7 +1649,7 @@ class MonkeyTester:
             if self._proc.is_running() and self._proc.status() != psutil.STATUS_ZOMBIE:
                 return True
         except psutil.NoSuchProcess:
-            pass
+            pass  # vanished between is_running() and here -- exit-code capture below still runs
         # Process is gone — capture its exit code once, best-effort, so a crash
         # report says HOW it died (Python exception, native fault code, or a
         # clean 0) instead of just that it did. wait(timeout=0) is non-blocking
