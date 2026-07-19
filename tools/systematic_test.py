@@ -191,11 +191,20 @@ class SystematicTester(_mt.MonkeyTester):
             time.sleep(0.1)
             self._win.type_keys("^k")
             time.sleep(0.5)
-            # Type enough of the page name for the fuzzy match to pick it
+            # Type enough of the page name for the fuzzy match to pick it.
+            # set_foreground=False on every call from here on: type_keys()
+            # defaults to set_foreground=True, which calls set_focus() on
+            # self._win (the cached DASHBOARD window) before sending keys.
+            # Ctrl+K just opened the command palette as its own top-level
+            # window that already took real focus via its own showEvent()
+            # (activateWindow() + _search.setFocus()) -- re-asserting focus
+            # on the dashboard here steals it straight back, so the page
+            # name and Enter land on the dashboard instead of the palette
+            # and navigation silently no-ops (RULE-CHAOS: page-switching bug).
             query = page[:12] if len(page) > 12 else page
-            self._win.type_keys(query, with_spaces=True, pause=0.04)
+            self._win.type_keys(query, with_spaces=True, pause=0.04, set_foreground=False)
             time.sleep(0.35)
-            self._win.type_keys("{ENTER}")
+            self._win.type_keys("{ENTER}", set_foreground=False)
             time.sleep(2.0)   # allow 160ms palette animation + page render + skeleton loaders
             return True
         except Exception as exc:

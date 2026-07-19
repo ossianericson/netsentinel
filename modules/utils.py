@@ -39,6 +39,7 @@ __all__ = [
     "lookup_vendor",
     "ResolvedName", "resolve", "resolve_batch", "rdns",
     "classify", "classify_device", "classify_with_evidence", "classify_registry_first",
+    "APPMODEL_ERROR_NO_PACKAGE",
 ]
 
 

@@ -6,11 +6,40 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ### v2.1.36
 
+**Added**
+- Lab Mode: animated canvas (`ui/widgets/lab_canvas_card.py`'s `LabCanvasCard`, embedding the Protocol Visualizer's `ProtocolCanvas` + `FrameAnatomyPanel`) behind `experimental/lab_visuals`; per-scenario completion and best-verdict tracking (`modules/lab_progress.py`, persisted via QSettings) with a completion badge and "N of 10 complete" strip on the picker, and earned objective badges on a PASS; cross-linked with the Protocol Visualizer via a dual Feature Guide listing, a dismissible Home nudge card, and a "See how {protocol} works" cross-sell on the result screen
+- `ui/shutdown.py` — module-level, unit-testable shutdown drain that logs entry, per-worker stop/wait timings, and total elapsed to `netsentinel_shutdown.log`
+- Chaos harness now drives the real quit path (clicks the titlebar X, the same route `_quit_app` takes) instead of ending on a tray-hide, so shutdown-path regressions are caught by future chaos runs
+
 **Changed**
-- `modules/metric_store_writes_batch.py`: batches availability-monitor and app-traffic writes into one SQLite transaction per cycle instead of one per row — cuts commits from 102→12 per availability cycle (5 targets × 10 samples) and 25→1 per app-traffic burst
-- `modules/device_tracker.py`: `DeviceTracker.process_scan()` now reads `known_device` once per scan cycle instead of up to 5 times
-- Added covering indexes `idx_known_device_last_seen` / `idx_grade_result_ts` (schema v20) speeding up the known-device and grade-history queries
-- Extracted `modules/suggestion_engine.py` from `ui/tabs_logger.py` as a pure, unit-testable module and added 5 new "what to do next" suggestion rules — certificate-expiring-soon, trend-forecast-degrading, grade-regression, new-devices-since-last-visit, and an ARP/storm → Protocol Visualizer cross-sell; suggestions are now priority-sorted (high > medium > low) instead of insertion order
+- `experimental/lazy_pages` graduated to permanent (flag removed) and expanded to `AppTrafficPage`/`ConnectionsPage`, cutting `Dashboard()` construction time ~13% (3.92s → ~3.40s measured)
+- Theme switching: merged the Dashboard-level and application-level `setStyleSheet()` calls into one, removing a double whole-app re-polish that was the real cause of multi-second switch stalls; the theme swatch now shows a wait cursor and a completion toast and disables itself for the duration of a switch
+- Shutdown: all workers are now signal-stopped concurrently against one shared 3-second deadline instead of serially with no overall bound (previously up to ~90s worst case); the dashboard's raw-socket/Npcap workers no longer use `terminate()`; process exit now uses `TerminateProcess` instead of `os._exit` to remove the remaining Store-build crash/hang exposure; the on-close database checkpoint is now passive (non-blocking)
+- Header verdict badge is now clickable and routes to the specific page that raised the current severity (Devices, Rogue Bridge (STP), Broadcast Storm, WiFi Networks, or DNS & Stability) instead of being a dead end
+- Alert History gained an "Unacknowledged only" filter so an unacked alert older than the widest history window (7d) is still reachable; `NEW_DEVICE`/`DEVICE_GONE` alerts now persist like their `IP_CHURN` sibling; a 5th status-bar pulse segment shows live unacked-alert count/severity
+- Settings page no longer shows a false "unsaved changes" warning — every field already saved on change; replaced with a transient "Saved" confirmation
+
+**Fixed**
+- `ctypes` HANDLE-marshalling bug in `is_store_app()` (`modules/utils.py`) made Store-package detection silently return `False` on every machine since v2.1.33 — Store builds advertised a GitHub download and `winget upgrade`, neither of which a Store user can act on; both banners now correctly detect the package and link to the Store product page instead
+- Startup white/black flash caused by a parentless `protovizNudgeCard` (Home page) briefly becoming its own top-level native-chrome window before being added to its layout (RULE-WIN7)
+- Maximized-restore geometry correction racing Qt's first paint under CPU contention, which could flash the unpainted maximized backbuffer white/black on 2nd+ launches
+- Low-contrast `FreshnessStrip` "Last scan"/"Next scan" labels on the nav bar (1.93:1 in Arctic Clean, now 6.58:1/7.44:1) and invisible `QSpinBox` up/down stepper glyphs
+- `QSpinBox` +/- buttons unclickable app-wide under the real Windows 11 Qt style across 15 more call sites, plus residual text clipping; centralized in `style_spinbox()` with an AST test guarding every call site
+- `QTimer`/table leak in skeleton loading rows when a scan never completed, which could later call `.stop()` on an already-deleted `QTimer` after CPython reused the table's `id()`
+- Duplicated synchronous data-prune running on every startup on top of the async prune worker `app.py` already runs
+- 3 open CodeQL alerts (two incomplete URL substring-sanitization checks, one unused import) and an import-and-import-from collision in `test_shutdown_drain.py`
+
+---
+
+### v2.1.35
+
+**Added**
+- `modules/metric_store_writes_batch.py` (`_BatchWritesMixin`) — `record_app_traffic_samples()` / `record_availability_cycle()` batch a whole write burst into one SQLite transaction; wired into `ui/tabs.py`'s app-traffic sample handler and `modules/availability_monitor.py::run_cycle`, cutting commits from 25→1 and 102→12 per cycle respectively
+- Covering indexes `idx_known_device_last_seen` / `idx_grade_result_ts` (schema v20) for the known-device and grade-history queries
+- `modules/suggestion_engine.py` — pure, unit-testable extraction of the Home page's "what to do next" suggestion logic from `ui/tabs_logger.py`, with 5 new rules: certificate-expiring-soon, trend-forecast-degrading, grade-regression, new-devices-since-last-visit, and an ARP/storm → Protocol Visualizer cross-sell; suggestions are now priority-sorted (high > medium > low) instead of insertion order
+
+**Changed**
+- `DeviceTracker.process_scan()` now reads `known_device` once per scan cycle instead of up to 5 times
 
 **Fixed**
 - `ui/native_chrome.py` / `ui/header.py`: opening Network Map's `QWebEngineView` forced Qt to destroy and recreate the top-level window handle, dropping the native-chrome subclass and permanently exposing Windows' real title bar above the custom header (with a "restart" flash a few seconds after startup) — the web view's container is now marked native ahead of time, and `AppHeaderMixin` reinstalls the chrome subclass on any future handle recreation as a safety net

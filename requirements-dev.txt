@@ -3,7 +3,7 @@
 
 # Linting (RULE-LINT1) — also enforced in CI (.github/workflows/ci.yml lint job)
 # run: ruff check . --select=F401,F811,F841
-ruff>=0.15.21
+ruff>=0.15.22
 
 # Import hygiene (RULE-LINT5) — CodeQL py/import-and-import-from + py/cyclic-import,
 # neither of which ruff has a rule for. Stdlib-only, no extra package needed.
@@ -11,7 +11,7 @@ ruff>=0.15.21
 
 # Static type checking (GAP-2) — targets modules/ only (see mypy.ini)
 # run: mypy modules/ --config-file mypy.ini
-mypy>=2.2.0
+mypy>=2.3.0
 
 # Dependency CVE scanning (GAP-3) — also enforced in CI (ci.yml audit job)
 # run: pip-audit -r requirements.txt --desc on --severity critical
@@ -20,7 +20,7 @@ pip-audit>=2.10.1
 # Dependency version locking (GAP-6)
 # Generate a lock file: pip-compile requirements.txt -o requirements-lock.txt
 # Update: pip-compile --upgrade requirements.txt -o requirements-lock.txt
-pip-tools>=7.5.3
+pip-tools>=7.6.0
 
 # Monkey / chaos testing (tools/monkey_test.py)
 pywinauto>=0.6.9
