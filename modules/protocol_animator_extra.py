@@ -9,6 +9,8 @@ No PyQt imports.  All builders are pure functions.
 """
 from __future__ import annotations
 
+from typing import Any, Optional
+
 from modules.protocol_animator import (
     AnimNode,
     AnimStep,
@@ -17,6 +19,11 @@ from modules.protocol_animator import (
     _hostname,
     _local_ip,
     _short_ip,
+    build_arp_scene,
+    build_dhcp_scene,
+    build_dns_scene,
+    build_stp_scene,
+    build_tcp_scene,
 )
 from modules.protocol_frames import ethernet_layer, find_mac_for_ip, ipv4_layer, tcp_layer, udp_layer
 
@@ -530,3 +537,43 @@ def build_icmp_scene(net_info: dict) -> ProtocolSceneData:
         "Conceptual illustration — your gateway is hop 1; hop 2 is illustrative",
         nodes, steps,
     )
+
+
+# ── Shared dispatch ─────────────────────────────────────────────────────────────
+# Lives here (not in protocol_animator.py) because it must reach all ten builders
+# and protocol_animator_extra already depends on protocol_animator, not vice versa
+# — moving the dispatch into the base module would create a cyclic import.
+
+def build_scene_for_key(
+    key: str,
+    net_info: dict,
+    devices: list,
+    diag_result: Any = None,
+    m2_result: Optional[dict] = None,
+) -> ProtocolSceneData:
+    """Build the ProtocolSceneData for any of the ten supported protocol keys.
+
+    Single source of truth for protocol -> builder dispatch, used by both the
+    Protocol Visualizer page and the Lab Mode runner (Lab Mode Upgrade Phase L1).
+    """
+    if key == "ARP":
+        return build_arp_scene(net_info, devices)
+    elif key == "DNS":
+        return build_dns_scene(net_info, diag_result)
+    elif key == "TCP":
+        return build_tcp_scene(net_info, devices)
+    elif key == "DHCP":
+        return build_dhcp_scene(net_info)
+    elif key == "STP":
+        return build_stp_scene(m2_result)
+    elif key == "OSPF":
+        return build_ospf_scene(net_info)
+    elif key == "NAT":
+        return build_nat_scene(net_info)
+    elif key == "VLAN":
+        return build_vlan_scene(net_info)
+    elif key == "TLS":
+        return build_tls_scene(net_info, devices)
+    elif key == "ICMP":
+        return build_icmp_scene(net_info)
+    return build_arp_scene(net_info, devices)

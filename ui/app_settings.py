@@ -143,6 +143,72 @@ def save_settings(window) -> None:
         "tray/minimize_window_to_tray", False, type=bool)
 
 
+def fix_maximized_restore_rect(window, nx, ny, nw, nh) -> None:
+    """
+    Patch the window's WINDOWPLACEMENT restore rect (rcNormal) to
+    (nx, ny, nw, nh) via a native Win32 call.
+
+    Must be called AFTER window.showMaximized(), never before. Two constraints
+    pull in opposite directions here and both must hold:
+
+    1. Do not call this (or anything that touches window.winId()) before
+       showMaximized() — forcing the native HWND to exist ahead of Qt's own
+       show() call makes Qt re-push its stale creation-time geometry once it
+       finally does show the window, and the window collapses to its minimum
+       size (same mechanism reapply_geometry_after_chrome() warns about two
+       functions up). That collapse desyncs any coordinate-based automation
+       (pywinauto/UIA) from the window's real bounds — every subsequent click/
+       keystroke silently lands on nothing, which is what caused a chaos/
+       monkey run to get permanently stuck on whatever page was showing when
+       this fired, never advancing again, with no exception anywhere.
+    2. Do not defer this past the reveal either — the previous approach (a
+       QTimer.singleShot(0, ...) in app.py, fired right after _splash.close())
+       put the native SetWindowPlacement call one event-loop tick after the
+       deliberately-unpainted maximized backbuffer was revealed. Under normal
+       load that gap was invisible, but under chaos/monkey-test CPU
+       contention the native call could force a frame/NC recalculation
+       before Qt's first paint landed, exposing the unpainted backbuffer as a
+       solid white/black flash — reproducible only on a 2nd+ launch
+       (window/maximized only saves True after a prior maximized close) and
+       likewise invisible to crash/exception logs (a pure compositor-timing
+       race, no exception raised either way).
+
+    Calling this right after showMaximized() satisfies both: the HWND already
+    exists as a normal side effect of Qt's own show() call (the same one
+    native chrome installation already safely uses via showEvent()), and it
+    still runs long before _splash.close()'s later reveal.
+    """
+    import sys
+    if sys.platform != "win32":
+        return
+    try:
+        nx_i, ny_i, nw_i, nh_i = int(nx), int(ny), int(nw), int(nh)
+    except (TypeError, ValueError):
+        return
+    try:
+        import ctypes
+        class _POINT(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+        class _RECT(ctypes.Structure):
+            _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                        ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+        class _WINDOWPLACEMENT(ctypes.Structure):
+            _fields_ = [("length", ctypes.c_uint), ("flags", ctypes.c_uint),
+                        ("showCmd", ctypes.c_uint), ("ptMin", _POINT),
+                        ("ptMax", _POINT), ("rcNormal", _RECT)]
+        wp = _WINDOWPLACEMENT()
+        wp.length = ctypes.sizeof(_WINDOWPLACEMENT)
+        hwnd = int(window.winId())
+        ctypes.windll.user32.GetWindowPlacement(hwnd, ctypes.byref(wp))
+        wp.rcNormal.left = nx_i
+        wp.rcNormal.top = ny_i
+        wp.rcNormal.right = nx_i + nw_i
+        wp.rcNormal.bottom = ny_i + nh_i
+        ctypes.windll.user32.SetWindowPlacement(hwnd, ctypes.byref(wp))
+    except Exception:
+        pass  # geometry fixup is best-effort; the window is already shown and usable
+
+
 def restore_settings(window) -> None:
     """Restore window geometry, nav state, and scan inputs from NetSentinel.ini."""
     from PyQt6.QtCore import QSettings, QByteArray
@@ -163,14 +229,6 @@ def restore_settings(window) -> None:
         except (ValueError, TypeError):
             nw_i, nh_i = 1440, 900
         window.resize(nw_i, nh_i)
-        # Store for SetWindowPlacement in app.py (fixes showNormal() restore position).
-        try:
-            window._pending_normal_geo = (
-                (int(nx), int(ny), nw_i, nh_i)
-                if nx is not None and ny is not None else None
-            )
-        except (ValueError, TypeError):
-            window._pending_normal_geo = None
         # Show maximized HERE during construction, with no prior setGeometry().
         # The HWND is created with Qt's default position — there is no
         # "animate-from-normal" rect for the maximize transition, so Windows
@@ -179,6 +237,12 @@ def restore_settings(window) -> None:
         # giving an atomic transition (same DWM frame) from splash to app.
         # This is the same pattern that worked in v1.9.17.
         window.showMaximized()
+        # Fix the restore-to rect AFTER showMaximized(), never before — see
+        # fix_maximized_restore_rect() for why calling window.winId() (forced
+        # by GetWindowPlacement/SetWindowPlacement) ahead of showMaximized()
+        # collapses the window to its minimum size.
+        if nx is not None and ny is not None:
+            fix_maximized_restore_rect(window, nx, ny, nw_i, nh_i)
     elif geom_b64:
         try:
             window.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))

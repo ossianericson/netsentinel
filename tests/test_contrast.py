@@ -118,6 +118,7 @@ _PAIRS: list[tuple[str, str, str, float]] = [
     # ── App bar / NAV_BAR ────────────────────────────────────────────────────
     ("AppBar label",                         "WHITE",           "NAV_BAR",       WCAG_AA),
     ("Status bar text",                      "LABEL_SUBTITLE",  "NAV_BAR",       WCAG_AA_LARGE),
+    ("FreshnessStrip label (NAV_BAR chrome)", "LABEL_SUBTITLE", "NAV_BAR",       WCAG_AA),
 
     # ── Tooltip ──────────────────────────────────────────────────────────────
     ("Tooltip text",                         "TOOLTIP_FG",      "TOOLTIP_BG",    WCAG_AA),
@@ -183,3 +184,9 @@ def test_contrast_ratio(theme_name: str, desc: str, fg_tok: str, bg_tok: str,
         f"{fg_tok}={fg} on {bg_tok}={bg} → ratio={ratio:.2f} "
         f"(need ≥ {min_ratio})"
     )
+
+
+# QSpinBox stepper glyph contrast is covered by tests/test_qspinbox_glyph.py
+# (needs a real QWidget + QPalette, not just the QSS string -- see that
+# file's module docstring for why the QSS-only approaches tried first don't
+# work in Qt's QSS engine).

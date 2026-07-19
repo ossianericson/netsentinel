@@ -20,6 +20,31 @@ import weakref
 
 log = logging.getLogger(__name__)
 
+# Dedicated instrumentation logger for theme-switch stage timing (RULE-T6 /
+# theme-switch responsiveness investigation). A bare log.info() here would be
+# silently dropped: nothing in the app calls logging.basicConfig(), so the
+# root logger's effective level is the default WARNING and there is no
+# handler to receive it. Mirrors the --trace-windows FileHandler pattern in
+# app.py — its own logger + FileHandler under get_app_data_dir() (RULE 23),
+# independent of root logging config.
+_theme_switch_log = logging.getLogger("netsentinel.theme_switch")
+
+
+def _ensure_theme_switch_log_handler() -> None:
+    if _theme_switch_log.handlers:
+        return
+    try:
+        from modules.utils import get_app_data_dir
+        _path = str(get_app_data_dir() / "netsentinel_theme_switch.log")
+        _h = logging.FileHandler(_path, mode="a", encoding="utf-8")
+        _h.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        _theme_switch_log.addHandler(_h)
+        _theme_switch_log.setLevel(logging.INFO)
+        _theme_switch_log.propagate = False
+    except Exception:
+        pass  # instrumentation is best-effort; must never break theme switching
+
+
 # ── Palette definitions ───────────────────────────────────────────────────────
 
 _ARCTIC_CLEAN = {
@@ -1053,17 +1078,6 @@ QComboBox QAbstractItemView {{
     selection-color: {TEXT_PRIMARY};
     color: {TEXT_PRIMARY};
 }}
-QSpinBox::up-button, QSpinBox::down-button {{
-    width: 16px;
-    background: {INPUT_BTN_BG};
-    border-left: 1px solid {BORDER};
-}}
-QSpinBox::up-button {{ border-top-right-radius: 3px; border-bottom: 1px solid {BORDER}; }}
-QSpinBox::down-button {{ border-bottom-right-radius: 3px; }}
-QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
-    background: {ACCENT};
-}}
-
 /* ── Text edit (log / analysis boxes) ── */
 QTextEdit {{
     background-color: {BG_CARD};
@@ -1244,6 +1258,101 @@ def _reapply_themed() -> None:
     )
 
 
+# ── QSpinBox stepper glyph palette ──────────────────────────────────────────────
+#
+# Qt's QSS engine cannot reliably theme the up/down (or +/-) stepper glyph:
+# the CSS border-triangle trick doesn't render (Qt's QSS border painter draws
+# each edge as an independent rectangle -- it does not miter corners into a
+# point the way a browser does), and the moment ANY ::up-button/::down-button
+# subcontrol rule is declared, Qt stops using native palette-based primitive
+# drawing for that control entirely -- the glyph renders nothing at all,
+# arrow or +/-, regardless of buttonSymbols. Confirmed by direct isolated
+# rendering tests before this fix landed (not just contrast math).
+#
+# The fix: style only the base QSpinBox box via QSS (background/color --
+# unaffected, since those aren't subcontrol rules) and set the widget's
+# QPalette ButtonText/Button roles in Python instead, which the native
+# primitive draw DOES respect.
+#
+# Stepper glyph is +/- (PlusMinus), not arrows -- clearer at this control
+# size (user preference). Set centrally here so every caller gets it
+# automatically, rather than each call site remembering to opt in.
+#
+# Width AND a second, more serious bug: the app's real on-screen Qt style is
+# "windows11" (confirmed via app.style().objectName() on a live QApplication
+# -- offscreen/CI probing silently falls back to "Fusion", a DIFFERENT style
+# with different button geometry, so geometry math done against an offscreen
+# probe does not reflect what actually renders). Under windows11, PlusMinus
+# draws as two 21px square buttons SIDE BY SIDE (not stacked like arrows).
+#
+# Declaring `border`, `border-radius`, OR `padding` in a QSpinBox's QSS --
+# even just one of the three, even `border: none` -- desyncs Qt's internal
+# QLineEdit child (the actual editable text field QAbstractSpinBox composes
+# itself from) from where the native +/- buttons are drawn: the LineEdit's
+# real widget geometry (SC_SpinBoxEditField) ends up extending several
+# pixels INTO the button subcontrol rects, confirmed via
+# QWidget.childAt(<button center>) returning the QLineEdit instead of None.
+# Since real mouse events are routed by the window system to the deepest
+# child widget AT THAT SCREEN POSITION, a live click on a visually-correct
+# "+" glyph lands on the LineEdit (just moves the text cursor) instead of
+# the spinbox's button handler -- the button LOOKS right and PAINTS right
+# but does not respond to clicks. (QTest.mouseClick() cannot catch this: it
+# posts synthetic events directly to the named widget, bypassing the
+# geometry-based child dispatch a real click goes through -- childAt() is
+# the reliable check, not a mouseClick()-driven value assertion.) No amount
+# of widening the widget fixes this -- the overlap is a constant offset
+# regardless of total width. The only verified-safe QSpinBox QSS is
+# background-color/color/font-size ONLY; get the left text inset via
+# lineEdit().setTextMargins() below, never via QSS `padding`.
+#
+# Width is still real and separate: even with the click-safe QSS above,
+# the fixed +/- button column (2 x 21px under windows11) needs enough total
+# widget width to avoid the value text visually running under it. These
+# constants are the minimum widths confirmed clean by live-rendering.
+SPINBOX_WIDTH_WITH_SUFFIX = 100   # worst case text e.g. "3600 s", "60 min", "5000 pps"
+SPINBOX_WIDTH_PLAIN = 72          # up to ~3 digits, no suffix, e.g. "120"
+SPINBOX_WIDTH_WIDE_PLAIN = 92     # 4-5 digits, no suffix, e.g. port "65535", "8760"
+
+_SPINBOX_PALETTE_REGISTRY: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+
+
+def style_spinbox(widget) -> None:
+    """Give a QSpinBox a themed, visible, CLICKABLE +/- stepper glyph.
+
+    Call once after constructing any QSpinBox. Registers the widget for
+    live re-theming, mirroring themed_ss(). Does not set widget width --
+    callers must use SPINBOX_WIDTH_WITH_SUFFIX / SPINBOX_WIDTH_PLAIN (or a
+    wider value) so the +/- buttons don't overlap the text.
+
+    Callers' own QSS for this widget must be limited to background-color/
+    color/font-size -- never border, border-radius, or padding (including
+    `border: none`) -- or the +/- buttons render correctly but stop
+    responding to clicks; see the module-level comment above."""
+    from PyQt6.QtGui import QPalette, QColor
+    from PyQt6.QtWidgets import QAbstractSpinBox
+    widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.PlusMinus)
+    pal = widget.palette()
+    pal.setColor(QPalette.ColorRole.ButtonText, QColor(TEXT_PRIMARY))
+    pal.setColor(QPalette.ColorRole.Button, QColor(INPUT_BTN_BG))
+    widget.setPalette(pal)
+    le = widget.lineEdit()
+    if le is not None:
+        le.setTextMargins(6, 0, 2, 0)
+    _SPINBOX_PALETTE_REGISTRY[widget] = True
+
+
+def _reapply_spinbox_palettes() -> None:
+    from PyQt6.QtGui import QPalette, QColor
+    for w in list(_SPINBOX_PALETTE_REGISTRY):   # snapshot: GC/re-entrancy safe
+        try:
+            pal = w.palette()
+            pal.setColor(QPalette.ColorRole.ButtonText, QColor(TEXT_PRIMARY))
+            pal.setColor(QPalette.ColorRole.Button, QColor(INPUT_BTN_BG))
+            w.setPalette(pal)
+        except RuntimeError:
+            _SPINBOX_PALETTE_REGISTRY.pop(w, None)  # C++ object deleted, wrapper alive
+
+
 @contextlib.contextmanager
 def _suspend_repaints():
     """Disable repaints on every top-level widget while re-theming, so nothing
@@ -1268,6 +1377,9 @@ def apply_theme(name: str) -> None:
     """Switch the active theme immediately — no restart required."""
     if name not in THEMES:
         raise ValueError(f"Unknown theme {name!r}. Valid: {list(THEMES)}")
+    import time as _time
+    _ensure_theme_switch_log_handler()
+    _t_start = _time.perf_counter()
     with _suspend_repaints():
         import sys as _sys
         _m = _sys.modules[__name__]
@@ -1291,10 +1403,23 @@ def apply_theme(name: str) -> None:
             "LOW":     _m.BTN_HOVER_BG, "CLEAN":  _m.GREEN_BG,
             "UNKNOWN": _m.BG_CARD,
         })
+        _t_build_qss_start = _time.perf_counter()
         globals()["MAIN_STYLE"] = _build_qss()
+        _t_build_qss_done = _time.perf_counter()
         _reapply_themed()
+        _reapply_spinbox_palettes()
+        _t_reapply_done = _time.perf_counter()
         set_active_theme_name(name)
         get_theme_manager().theme_changed.emit(name)
+    _theme_switch_log.info(
+        "apply_theme(%s): stage1 build_qss=%.1fms stage2 reapply_themed=%.1fms "
+        "stage1+2 subtotal=%.1fms (stages 3-4 timed separately in "
+        "Dashboard._on_theme_changed)",
+        name,
+        (_t_build_qss_done - _t_build_qss_start) * 1000,
+        (_t_reapply_done - _t_build_qss_done) * 1000,
+        (_time.perf_counter() - _t_start) * 1000,
+    )
 
 
 def apply_accent_override(hex_val: "str | None") -> None:

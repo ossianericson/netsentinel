@@ -1,5 +1,23 @@
 """
-native_chrome.py — real-Windows-window custom chrome (``experimental/native_chrome``).
+native_chrome.py — real-Windows-window custom chrome.
+
+STATUS: SETTLED (v2.1.30) — do not rewrite; changes require a spike first
+------------------------------------------------------------------------
+This module is finished and load-bearing.  It is the DEFAULT window on every Windows
+user's machine (``Dashboard.__init__`` gates on ``sys.platform == "win32"`` alone — the
+old ``experimental/native_chrome`` flag was *removed*, not merely defaulted True, in
+v2.1.30).  It has survived multiple 7–9 h chaos soaks clean, and the technique below is
+the exact one Windows Terminal, VS Code and Chrome use — there is no better approach to
+migrate to.  Electron / Tauri / WinUI would discard the entire Python backend
+(scapy/nmap/ctypes have no JS equivalent) AND hit the identical frameless-window problem
+this already solves; that question is closed.
+
+Every historical change here cost days: the ``WS_POPUP`` capability fault (RULE-WIN9),
+the ``QWebEngineView`` HWND recreation (``docs/spikes/webengine-hwnd-recreation.md``), the
+UIA ``0x8001010d`` misattribution (RULE-WIN10), the 32 px restore-geometry gap.  So the
+rule is blunt: **no change to this file without a spike doc first (RULE-SPIKE1), even a
+"one-line" one.**  Do not casually refactor it and do not reopen frameless-vs-native.  The
+design is documented in ``docs/spikes/window-snap-subclass.md``.
 
 WHY THIS EXISTS
 ---------------

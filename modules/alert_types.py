@@ -64,6 +64,13 @@ RULE_TYPES = frozenset({
 # the user just started), not an attack signature like ARP_SPOOF/ROGUE_DHCP — it
 # still fires and lands in the general Alert History, but doesn't compete for
 # attention with genuine security incidents on the Security Audit badge/card.
+# ("Lands in the general Alert History" now holds for every rule type that
+# fires — NEW_DEVICE/DEVICE_GONE tracker alerts were a silent exception,
+# shown as a toast/Home-card entry but never persisted, until scan_wiring.py's
+# tracker-alert loop gained a persist_alert() call alongside its IP_CHURN
+# sibling. Alert History can also now surface any unacked alert regardless of
+# age via its "Unacknowledged only" filter, so "lands in history" also means
+# "reachable there.")
 
 # Gated set = rules that fire against auto-discovered LAN devices from the scan /
 # availability pipeline (the ones that flood when "every device in the scan" is

@@ -23,6 +23,9 @@ from PyQt6.QtWidgets import (
 
 from ui.widgets.empty_state_card import EmptyStateCard
 from ui import styles as _s
+from ui.styles import (
+    alpha,
+)
 
 
 _SOURCE_PAGE_MAP = {
@@ -70,9 +73,9 @@ def _chip_style(source: str, active: bool) -> str:
         color = _source_color(source)
         return (
             f"QPushButton {{ font-size:10px; font-weight:bold; color:{color};"
-            f" background:{color}18; border:1px solid {color}; border-radius:10px;"
+            f" background:{alpha(color, 0x18)}; border:1px solid {color}; border-radius:10px;"
             f" padding:1px 10px; }}"
-            f"QPushButton:hover {{ background:{color}30; }}"
+            f"QPushButton:hover {{ background:{alpha(color, 0x30)}; }}"
         )
     return (
         f"QPushButton {{ font-size:10px; color:{_s.TEXT_MUTED};"
@@ -517,7 +520,7 @@ class TimelinePage(QWidget):
         src_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         src_chip.setStyleSheet(
             f"font-size:9px; font-weight:bold; color:{src_color};"
-            f" background:{src_color}18; border:1px solid {src_color}44;"
+            f" background:{alpha(src_color, 0x18)}; border:1px solid {alpha(src_color, 0x44)};"
             f" border-radius:8px; padding:1px 6px; margin:4px 6px;"
         )
         lay.addWidget(src_chip)

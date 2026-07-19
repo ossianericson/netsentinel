@@ -313,3 +313,132 @@ class TestServiceEscalationToggle:
         # Clean up.
         qs.setValue("notif/service_escalation_enabled", True)
         qs.sync()
+
+
+# ---------------------------------------------------------------------------
+# Alert History — "Unacknowledged only" filter (critical-UX Phase 1.1)
+# ---------------------------------------------------------------------------
+
+class _FakeStore:
+    def __init__(self, unacked=None, recent=None, history=None):
+        self._unacked = unacked or []
+        self._recent = recent or []
+        self._history = history
+        self.get_alert_history_calls: list = []
+
+    def get_unacked_alerts(self, *a, **kw):
+        return self._unacked
+
+    def get_recent_alerts(self, hours=24.0, limit=200):
+        return self._recent
+
+    def get_alert_history(self, hours=24.0, limit=500, unacked_only=False):
+        self.get_alert_history_calls.append((hours, limit, unacked_only))
+        if unacked_only:
+            return self._history if self._history is not None else self._unacked
+        return self._recent
+
+
+class TestAlertHistoryUnackedFilter:
+    def test_checkbox_exists(self):
+        page = _make_page()
+        assert hasattr(page, "_chk_unacked_only")
+
+    def test_checkbox_defaults_checked_when_unacked_alerts_exist(self):
+        page = _make_page()
+        page.set_store(_FakeStore(unacked=[{"id": 1}]))
+        page.show()
+        page._refresh_alert_history()
+        assert page._chk_unacked_only.isChecked() is True
+
+    def test_checkbox_defaults_unchecked_when_no_unacked_alerts(self):
+        page = _make_page()
+        page.set_store(_FakeStore(unacked=[]))
+        page.show()
+        page._refresh_alert_history()
+        assert page._chk_unacked_only.isChecked() is False
+
+    def test_checked_state_calls_get_alert_history_unacked_only(self):
+        page = _make_page()
+        store = _FakeStore(unacked=[{"id": 1, "ts": 0, "severity": "INFO", "host": "h"}])
+        page.set_store(store)
+        page.show()
+        page._chk_unacked_only.setChecked(True)
+        page._refresh_alert_history()
+        assert store.get_alert_history_calls
+        assert store.get_alert_history_calls[-1][2] is True
+
+    def test_unchecked_state_does_not_use_unacked_only(self):
+        """No unacked alerts -> the auto-default logic has nothing to force
+        checked, so an explicit uncheck (or the natural default) sticks."""
+        page = _make_page()
+        store = _FakeStore(unacked=[])
+        page.set_store(store)
+        page.show()
+        page._chk_unacked_only.setChecked(False)
+        page._refresh_alert_history()
+        assert not store.get_alert_history_calls
+
+    def test_user_can_uncheck_despite_unacked_alerts_existing(self):
+        """The auto-default only applies once (first refresh) -- after that,
+        an explicit user uncheck must stick even though unacked alerts still
+        exist, or the checkbox would be un-uncheckable."""
+        page = _make_page()
+        store = _FakeStore(unacked=[{"id": 1, "ts": 0, "severity": "INFO", "host": "h"}])
+        page.set_store(store)
+        page.show()
+        page._refresh_alert_history()  # applies the auto-default -> checked
+        assert page._chk_unacked_only.isChecked() is True
+        calls_before = len(store.get_alert_history_calls)
+        page._chk_unacked_only.setChecked(False)
+        page._refresh_alert_history()
+        assert page._chk_unacked_only.isChecked() is False
+        assert len(store.get_alert_history_calls) == calls_before
+
+    def test_window_combo_disabled_while_unacked_filter_active(self):
+        page = _make_page()
+        page.set_store(_FakeStore(unacked=[{"id": 1, "ts": 0, "severity": "INFO", "host": "h"}]))
+        page.show()
+        page._chk_unacked_only.setChecked(True)
+        page._refresh_alert_history()
+        assert page._hist_time_combo.isEnabled() is False
+
+    def test_window_combo_enabled_when_filter_off(self):
+        page = _make_page()
+        page.set_store(_FakeStore(unacked=[]))
+        page.show()
+        page._chk_unacked_only.setChecked(False)
+        page._refresh_alert_history()
+        assert page._hist_time_combo.isEnabled() is True
+
+
+class TestSwitchToHistoryTabUnacked:
+    def test_default_call_keeps_old_behaviour(self):
+        page = _make_page()
+        page.switch_to_history_tab()
+        assert page._notif_tabs.currentIndex() == 1
+
+    def test_unacked_only_true_checks_the_filter(self):
+        page = _make_page()
+        page.set_store(_FakeStore(unacked=[]))
+        page.switch_to_history_tab(unacked_only=True)
+        assert page._notif_tabs.currentIndex() == 1
+        assert page._chk_unacked_only.isChecked() is True
+
+
+class TestSetGlobalHoursSync:
+    def test_updates_combo_display(self):
+        page = _make_page()
+        page.set_store(_FakeStore())
+        page.set_global_hours(6.0)
+        assert page._hist_time_combo.currentText() == "6h"
+
+    def test_skips_override_while_unacked_filter_active(self):
+        page = _make_page()
+        page.set_store(_FakeStore(unacked=[{"id": 1, "ts": 0, "severity": "INFO", "host": "h"}]))
+        page.show()
+        page._chk_unacked_only.setChecked(True)
+        page._refresh_alert_history()
+        before = page._hist_hours
+        page.set_global_hours(1.0)
+        assert page._hist_hours == before

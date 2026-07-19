@@ -659,8 +659,12 @@ Only: `Info`, `Warning`, `High`, `Critical`. Never invent new severity strings.
 
 ## Architecture Health
 
-### RULE-AH1 (required): Module files must not exceed 600 lines
-Split at 600 lines. Measure: `wc -l modules/<name>.py`.
+### RULE-AH1 (required): Module files must not exceed 780 lines
+Split at 780 lines. Measure: `wc -l modules/<name>.py`.
+
+Budget raised from 600 to 780 (+30%) by owner decision, 2026-07-18. The intent is
+unchanged — split when a file stops being one coherent unit; the threshold was
+simply forcing splits earlier than the codebase's real cohesion boundaries.
 
 ### RULE-AH2 (required): Workers must not block their thread >5 seconds without a progress signal
 Emit `progress(str)` or `status(str)` at least every 5 s. Use `msleep()` + `_running` flag check in loops.
@@ -1174,6 +1178,128 @@ Enforced by `tests/test_uia_warmup.py` (constants, provider-failure handling, id
 AST guard that `app.py` still calls the warmup, and a `monkey`-marked end-to-end that launches
 the real `app.py` under a redirected `LOCALAPPDATA` and asserts the crash log stays clean).
 
+### RULE-WIN11 (blocking): Declare `restype`/`argtypes` on every ctypes call that passes or returns a HANDLE or pointer
+
+**Mechanism.** ctypes defaults an undeclared return value — and an undeclared
+integer argument — to a **32-bit C int**. On Win64 that silently truncates any
+64-bit HANDLE or pointer. The call still "succeeds" at the Python level; the API
+just receives garbage and fails with a code you then misinterpret.
+
+The canonical victim is a **pseudo-handle**. `GetCurrentProcess()` returns
+`(HANDLE)-1`; truncated it becomes `0x00000000FFFFFFFF`, which is not a valid
+handle, so the callee returns `ERROR_INVALID_HANDLE (6)` *before* doing any of
+its real work:
+
+```python
+# WRONG — handle truncated to 32 bits; the API never inspects package identity,
+# so this returns 6 forever and `ret == 122` is unreachable on every machine.
+ret = ctypes.windll.kernel32.GetPackageFamilyName(
+    ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(buf_len), None)
+
+# CORRECT — a LOCAL WinDLL handle with types declared. Never assign argtypes to
+# ctypes.windll.<dll>.<Func>: those function objects are cached process-globals
+# and mutating them changes behaviour for every other caller.
+k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+k32.GetCurrentProcess.restype  = ctypes.c_void_p
+k32.GetPackageFamilyName.restype  = ctypes.c_long
+k32.GetPackageFamilyName.argtypes = [
+    ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_wchar_p]
+```
+
+**Why it shipped (v2.1.33 → v2.1.35).** This made `is_store_app()` return `False`
+unconditionally, so the Store build advertised a GitHub download and
+`winget upgrade` to users who cannot use either. Every test in
+`tests/test_store_update_flow.py` monkeypatched `is_store_app` to return `True`
+— they asserted the guard's behaviour *given* a correct answer and were
+structurally incapable of seeing that the detection itself never worked.
+
+**Corollaries.**
+- Real `HWND`/`HANDLE` values are kept 32-bit-significant by Windows for WOW64
+  interop, so truncation usually appears harmless — right up until a
+  pseudo-handle (`-1`) or a genuine pointer (`LPARAM`, `LRESULT`, `SIZE_T`)
+  makes it fatal. Declare types anyway; "it works on my machine" is the failure
+  mode, not the defence.
+- **A boolean wrapper around a syscall hides the difference between "answered
+  no" and "never ran."** Expose the raw return code through a helper and assert
+  on it directly, or a permanently-broken probe reads as a legitimate `False`.
+- When a rule's whole surface is mockable, at least one test must exercise the
+  **unmocked** path. A suite that mocks the only unmockable link tests nothing
+  about it (see RULE-T6 — this is its unit-test analogue).
+
+Enforced by `tests/test_store_update_flow.py::test_package_family_name_syscall_receives_an_intact_process_handle`,
+which asserts the raw code is `122`/`15700` and never `6` — catching handle
+truncation on any Windows machine without needing a packaged process.
+
+### RULE-WIN12 (blocking): A startup native window-placement call must land in the narrow window AFTER showMaximized() and BEFORE _splash.close() — never before, never deferred past the reveal
+
+**Two failure modes bound this window from opposite sides — a fix for one can walk
+straight into the other (this happened in the same debugging session: the first
+attempt moved the call before `showMaximized()` to fix failure mode 2, and that
+caused failure mode 1).**
+
+**Failure mode 1 — calling it before `window.showMaximized()` (or anything that
+touches `window.winId()` before Qt's own show() call has run).** Forcing the
+native HWND to exist ahead of Qt's own show() call makes Qt re-push its stale
+creation-time geometry once it finally does show the window, and **the window
+collapses to its minimum size** (documented next to `reapply_geometry_after_chrome()`
+in `ui/app_settings.py`, which hit the identical mechanism installing native chrome
+too early). The window still *looks* fine to a casual glance because whatever was
+last painted stays on screen — but its real on-screen bounds no longer match what
+Qt/pywinauto/UIA believe they are. Coordinate-based automation (a chaos/monkey
+harness's `Ctrl+K` + type + click sequence) silently lands on nothing from that
+point on: no exception, no crash, just every subsequent navigation attempt quietly
+failing while the same page stays visible — which reads as "the app is stuck on
+one page and never advances," potentially for the rest of a multi-hour run.
+
+**Failure mode 2 — deferring it past `_splash.close()`'s reveal** (e.g.
+`QTimer.singleShot(0, ...)` fired after the window is already shown). The startup
+sequence deliberately leaves the maximized window's backbuffer unpainted until
+`_splash.close()` fires, for an atomic splash→app transition. A native call like
+`SetWindowPlacement` is heavier than a plain move/resize — it can force Windows to
+re-run frame/NC calculation even when the requested state (`showCmd`) doesn't
+actually change. Firing it one event-loop tick after the reveal races Qt's first
+paint: on an idle system the gap is sub-frame and invisible, but under CPU
+contention (chaos/monkey-test synthetic input, screenshot capture, focus-steal
+handling) the gap widens enough for DWM to composite a frame before Qt has painted
+anything, exposing whatever the redirection surface defaults to — a solid white or
+black flash depending on the rendering backend's clear color.
+
+**Why both are easy to miss:** neither raises an exception or trips an SEH fault
+code, so both are invisible to `netsentinel_crash.log` / `netsentinel_exceptions.log`
+(unlike RULE-WIN9/RULE-WIN10's faults) and to every chaos-harness health check. Both
+only reproduce on a 2nd+ app launch — `window/maximized` only saves `True` after a
+prior maximized close, so a fresh install never takes the affected path — and both
+need either real CPU load (failure mode 2) or a live automated harness reading window
+bounds (failure mode 1) to surface, so a quiet manual dev-machine relaunch may show
+neither. The only reliable way to catch either is a live chaos/monkey run watched
+end-to-end, or Phase 7 (ghost-window/FOUC diagnosis) of `/debug`.
+
+```python
+# WRONG (failure mode 1) — forces the HWND to exist before Qt's own show() call;
+# window collapses to minimum size, desyncing all coordinate-based automation
+ctypes.windll.user32.SetWindowPlacement(hwnd, wp)   # window.winId() called too early
+window.showMaximized()
+
+# WRONG (failure mode 2) — deferred past the reveal; races Qt's first paint under load
+window.showMaximized()
+...
+_splash.close()
+QTimer.singleShot(0, lambda: ctypes.windll.user32.SetWindowPlacement(hwnd, wp))
+
+# CORRECT — after showMaximized() creates the HWND as a normal side effect,
+# still well before _splash.close()'s later reveal
+window.showMaximized()
+ctypes.windll.user32.SetWindowPlacement(hwnd, wp)
+```
+
+Applies to any `ctypes.windll.user32` call that touches window placement, size, or
+Z-order (`SetWindowPlacement`, `SetWindowPos`, `MoveWindow`) made near a
+startup/reveal sequence.
+
+Enforced by `tests/test_app_settings.py` (source-order guard: the fix call must
+come AFTER `showMaximized()`; asserts `app.py` no longer defers it past
+`_splash.close()`).
+
 ---
 
 ## QSettings State Hygiene
@@ -1188,20 +1314,85 @@ Diagnostic: `Remove-Item "HKCU:\Software\NetSentinel" -Recurse -Force` to reprod
 
 ## Startup / DWM Compositing
 
-### RULE-STARTUP1 (blocking): Startup show sequence — off-screen move (non-maximized) then geometry restore
+### RULE-STARTUP1 (blocking): Startup show sequence — showMaximized() during construction, geometry fix after, atomic reveal at splash close
+
+Superseded description — an earlier version of this rule described an
+"off-screen move" technique (`window.move(-width-200, ...)`) that no longer
+exists in the code; this is the current mechanism, in `ui/app_settings.py::
+restore_settings()` + `app.py`'s post-`_restore_cached_scan()` show sequence:
+
 ```python
-if getattr(window, '_pending_show_maximized', False):
-    window.showMaximized()
-    _splash.close()
-else:
-    _saved_rect = window.geometry()
-    window.move(-_saved_rect.width() - 200, -_saved_rect.height() - 200)
+# ui/app_settings.py :: restore_settings() — runs during Dashboard.__init__()
+if was_maximized:
+    window.resize(nw_i, nh_i)
+    window.showMaximized()                 # HWND created here, backbuffer unpainted
+    fix_maximized_restore_rect(window, nx, ny, nw_i, nh_i)   # AFTER, see RULE-WIN12
+elif geom_b64:
+    window.restoreGeometry(...)
+    apply_exact_geometry(window, s)
+
+# app.py :: main() — much later, after the rest of Dashboard() + _restore_cached_scan()
+if not window.isVisible():
     window.show()
-    _splash.close()
-    window.setGeometry(_saved_rect)
+_splash.close()   # atomic reveal: first real paint lands in the same DWM frame
 ```
-WHY: on 2nd+ launch, saved geometry is off-center; `window.show()` at that position sticks out from behind the splash. Off-screen move hides it until the splash closes.
-`_pending_show_maximized` must be set in `_restore_settings()` — do NOT call `showMaximized()` inside `_restore_settings()` itself.
+
+WHY: on a maximized 2nd+ launch, `showMaximized()` runs during construction
+with no prior `setGeometry()` call, so there is no "animate-from-normal" rect
+Windows could animate through the splash — the backbuffer stays deliberately
+unpainted until `_splash.close()` fires far later, giving an atomic
+splash→app transition in one DWM frame. The `window/normal_x/y` restore-rect
+correction (`fix_maximized_restore_rect()`) must land after `showMaximized()`
+but is still applied long before that later `_splash.close()` reveal — see
+RULE-WIN12 for why both boundaries of that window matter.
+
+### RULE-STARTUP2 (blocking): Every QApplication.setStyleSheet() call must be wrapped in _suspend_repaints()
+
+**Mechanism (theoretical risk this guards against — see correction below).**
+`QApplication.setStyleSheet()` forces Qt to recursively re-polish every
+top-level widget in the process — including a `QSplashScreen`, which is a bare
+`QWidget` and therefore matches any selector-less rule (`MAIN_STYLE` opens with
+`QWidget { background-color: ... }`). The re-polish queues a repaint that Qt
+does not flush immediately; it is flushed by whatever `processEvents()` call
+happens to run next. `ui/dashboard.py`'s app-level `setStyleSheet(MAIN_STYLE +
+get_app_qss())` — needed instead of a widget-level call so a later theme switch
+re-polishes every top-level widget, not just the Dashboard (see the comment
+above that call) — runs while the splash may still be on screen, which could in
+principle flush a stale-styled repaint after `showMaximized()` has already
+revealed the window.
+
+**Correction (live-verified):** a real, user-reported startup flash was traced
+and root-caused to a *different* bug — a RULE-WIN7 parentless-widget flash
+(`ui/pages/home_page.py`'s `protovizNudgeCard`, see RULE-WIN7's own history for
+the fix) — not this mechanism. `_suspend_repaints()` wrapping alone did **not**
+make the observed flash go away; only the RULE-WIN7 fix did. This rule and its
+guard remain in place as cheap, still-legitimate protection against the
+mechanism described above, which has not been disproven in general — but do not
+cite this rule as an explanation for a startup flash without first checking for
+a RULE-WIN7 violation via `python app.py --trace-windows`, which is the faster
+and more direct diagnostic for that whole bug class.
+
+`ui/styles.py::_suspend_repaints()` disables `setUpdatesEnabled()` on every
+top-level widget for the duration of a `with` block, which prevents the queued
+repaint from landing regardless of what the stylesheet actually contains — cheap,
+content-agnostic protection. Wrap **every** `QApplication`-instance
+`setStyleSheet()` call in it, with no "this one's content is harmless today"
+exceptions — a future edit to the QSS string could add a matching selector
+without anyone revisiting the call site.
+
+```python
+# WRONG — re-polish queues a repaint that can flush after the window is shown
+QApplication.instance().setStyleSheet(MAIN_STYLE + get_app_qss())
+
+# CORRECT
+from ui.styles import _suspend_repaints
+with _suspend_repaints():
+    QApplication.instance().setStyleSheet(MAIN_STYLE + get_app_qss())
+```
+
+Enforced by `tests/test_startup_repaint_guard.py` (AST scan of `ui/` + `app.py`:
+every `QApplication`-instance `.setStyleSheet(` call must be a lexical descendant
+of a `with _suspend_repaints():` block).
 
 ### RULE-TM1 (blocking): tracemalloc must trace 1 frame and be activated inside the event loop, never inline before app.exec()
 
@@ -1563,7 +1754,7 @@ when the write-commit loop is compressed below verification threshold.
 
 ### RULE-AH1-ENFORCE (blocking): File size limit is enforced in CI — raising the budget is not a valid fix
 
-`test_module_loc.py` enforces the 600-line budget per module. When a file approaches the limit,
+`test_module_loc.py` enforces the 780-line budget per module. When a file approaches the limit,
 the correct action is to plan a split (extract a `_helpers.py` or `_mixin.py`), not to raise
 the budget entry in `KNOWN_LARGE_MODULES`.
 
@@ -1727,6 +1918,9 @@ Currently tool-enforced (high reliability):
 - RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
 - RULE-WIN2 → `test_native_chrome.py` (NC-message-set completeness + no-Qt-in-callback AST guard)
 - RULE-WIN10 → `test_uia_warmup.py` (AST guard that app.py calls the warmup + `monkey`-marked e2e)
+- RULE-WIN11 → `test_store_update_flow.py` (raw `GetPackageFamilyName` code must be 122/15700, never 6)
+- RULE-WIN12 → `test_app_settings.py` (placement-fix-before-showMaximized source-order guard)
+- RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry

@@ -195,8 +195,11 @@ class ServicePage(QWidget):
         e0_port  = QSpinBox()
         e0_port.setRange(1, 65535)
         e0_port.setValue(443)
-        e0_port.setFixedWidth(75)
-        _s.themed_ss(e0_port, "font-size:11px; border:1px solid {BORDER}; padding:3px 4px;")
+        e0_port.setFixedWidth(_s.SPINBOX_WIDTH_WIDE_PLAIN)
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(e0_port, "background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY};")
+        _s.style_spinbox(e0_port)
         e0_label = QLineEdit()
         e0_label.setPlaceholderText("Label  (optional)")
         e0_label.setFixedWidth(140)
@@ -300,9 +303,12 @@ class ServicePage(QWidget):
         self._spin_port = QSpinBox()
         self._spin_port.setRange(1, 65535)
         self._spin_port.setValue(443)
-        self._spin_port.setFixedWidth(70)
+        self._spin_port.setFixedWidth(_s.SPINBOX_WIDTH_WIDE_PLAIN)
         self._spin_port.setFixedHeight(24)
-        _s.themed_ss(self._spin_port, "font-size:11px; border:1px solid {BORDER}; padding:2px 3px;")
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._spin_port, "background:{BG_DARK}; font-size:11px; color:{TEXT_PRIMARY};")
+        _s.style_spinbox(self._spin_port)
         self._txt_label = QLineEdit()
         self._txt_label.setPlaceholderText("Label")
         self._txt_label.setFixedWidth(120)

@@ -52,6 +52,7 @@ def _golden_context() -> SuggestionContext:
         security_any_scan_done=False,
         stale_security_tools=["Port Scan (TCP)", "Exposed to Internet"],
         high_risk_count=2,
+        risk_assessments_available=True,
         unknown_device_count=1,
         open_port_count=3,
         dns_grade="D",
@@ -80,9 +81,15 @@ _GOLDEN_EXPECTED = {
     },
     "high_risk_check": {
         "text": "2 high-risk devices found — review security findings",
-        "action_label": "View Overview →",
-        "target": "Dashboard",
+        "action_label": "View Devices →",
+        "target": "Devices",
         "priority": "high",
+    },
+    "risk_remediation_available": {
+        "text": "Detailed remediation steps are available for your high-risk devices",
+        "action_label": "View remediation steps →",
+        "target": "Device Risk Score",
+        "priority": "low",
     },
     "unknown_devices_found": {
         "text": "1 unidentified device on your network — name them or flag as rogue",
@@ -123,7 +130,7 @@ _GOLDEN_EXPECTED = {
     "fix_network_grade": {
         "text": "Your network grade is D — run a health check for recommendations",
         "action_label": "View Overview →",
-        "target": "Dashboard",
+        "target": "Security Overview",
         "priority": "medium",
     },
 }
@@ -215,8 +222,7 @@ def test_cert_expiring_high_priority_under_14_days():
     suggestions = compute_suggestions(ctx)
     match = next(s for s in suggestions if s["action_key"] == "cert_expiring_soon")
     assert match["priority"] == "high"
-    assert "example.com:443" in match["text"]
-    assert "5" in match["text"]
+    assert match["text"] == "Certificate for example.com:443 expires in 5 days"
     assert match["target"] == "TLS & Exposure"
 
 

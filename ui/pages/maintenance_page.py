@@ -218,12 +218,21 @@ class _WindowDialog(QDialog):
         self._recur_start_hour = QSpinBox()
         self._recur_start_hour.setRange(0, 23)
         self._recur_start_hour.setValue(window.daily_start_hour if is_recurring else 22)
+        self._recur_start_hour.setFixedWidth(_s.SPINBOX_WIDTH_PLAIN)
+        # background-color/color/font-size ONLY -- the global MAIN_STYLE QSpinBox
+        # rule has border/padding, which makes the +/- buttons unclickable under
+        # windows11 (see style_spinbox() docstring) -- override it here.
+        _s.themed_ss(self._recur_start_hour, "QSpinBox {{ background:{BG_CARD}; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        _s.style_spinbox(self._recur_start_hour)
         self._recur_start_row_label = QLabel("Daily start hour (0-23):")
         form.addRow(self._recur_start_row_label, self._recur_start_hour)
 
         self._recur_end_hour = QSpinBox()
         self._recur_end_hour.setRange(0, 23)
         self._recur_end_hour.setValue(window.daily_end_hour if is_recurring else 7)
+        self._recur_end_hour.setFixedWidth(_s.SPINBOX_WIDTH_PLAIN)
+        _s.themed_ss(self._recur_end_hour, "QSpinBox {{ background:{BG_CARD}; font-size:11px; color:{TEXT_PRIMARY}; }}")
+        _s.style_spinbox(self._recur_end_hour)
         self._recur_end_row_label = QLabel("Daily end hour (0-23):")
         form.addRow(self._recur_end_row_label, self._recur_end_hour)
 

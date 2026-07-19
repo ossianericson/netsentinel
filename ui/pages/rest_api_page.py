@@ -169,8 +169,11 @@ class RestApiPage(QWidget):
         self._spin_port = QSpinBox()
         self._spin_port.setRange(1024, 65535)
         self._spin_port.setValue(int(qs.value("rest_api/port", 8765)))
-        self._spin_port.setFixedWidth(90)
-        _s.themed_ss(self._spin_port, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
+        self._spin_port.setFixedWidth(_s.SPINBOX_WIDTH_WIDE_PLAIN)
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._spin_port, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_DARK};")
+        _s.style_spinbox(self._spin_port)
         self._spin_port.valueChanged.connect(self._on_port_changed)
         port_row.addWidget(port_lbl)
         port_row.addWidget(self._spin_port)

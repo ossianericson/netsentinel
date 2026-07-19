@@ -1,10 +1,10 @@
 """
 ui.nav.lazy_page — deferred page-construction placeholder.
 
-Part of the startup-slow-construction fix (Phase 2, flag-gated behind
-``experimental/lazy_pages``).  See docs/spikes/startup-com-reentrancy.md and the
-``project_com_reentrancy_startup_crash`` memory for the full rationale: all ~60
-page widgets were being constructed eagerly inside ``Dashboard.__init__`` and the
+Part of the startup-slow-construction fix (RULE-EXP1 graduated to permanent —
+deferred construction is no longer flag-gated; see docs/spikes/startup-com-reentrancy.md
+and the ``project_com_reentrancy_startup_crash`` memory for the full rationale: all
+~60 page widgets were being constructed eagerly inside ``Dashboard.__init__`` and the
 whole tree polished in one shot when attached to the styled window, which is what
 Windows' ``IsHungAppWindow`` flagged as a startup "hang".
 
@@ -13,7 +13,7 @@ and ``_nav_label_to_widget`` map *in place of* a real page.  It holds a zero-arg
 ``factory`` callable that builds (and self-assigns) the real page on demand.  The
 dashboard swaps the real widget in via ``_NavBuilderMixin._materialize_host`` on
 first navigation or when the background chunk-builder reaches it — whichever
-happens first.  The eager (flag-off) path never creates a host.
+happens first.
 """
 from __future__ import annotations
 
@@ -63,27 +63,23 @@ class _LazyPageMixin:
     """Deferred page-construction runtime, mixed into Dashboard.
 
     Split out of ``ui/nav/builder.py`` (RULE-AH1) — the placeholder swap logic
-    and background chunk-builder. State (``_lazy_pages``, ``_lazy_hosts``,
-    ``_lazy_build_timer``) is created in ``Dashboard.__init__``. The on-first-nav
-    trigger itself lives in ``_NavBuilderMixin._nav_rail_go_to``.
+    and background chunk-builder. State (``_lazy_hosts``, ``_lazy_build_timer``)
+    is created in ``Dashboard.__init__``. The on-first-nav trigger itself lives
+    in ``_NavBuilderMixin._nav_rail_go_to``.
     """
 
     def _lazy_or_build(self, attr: str, nav_label: str,
                        factory: Callable[[], QWidget]) -> None:
-        """Construct a page now, or register a _LazyPageHost placeholder for later.
+        """Register a _LazyPageHost placeholder; the real page is built later.
 
         ``factory`` is a zero-arg callable that builds the real page, assigns it to
-        ``self.<attr>`` and returns it. When ``experimental/lazy_pages`` is off the
-        factory runs immediately (the eager path is unchanged); when on, a
-        placeholder is stored at ``self.<attr>`` and the factory is deferred to
-        ``_materialize_host`` (first-nav hook or background chunk-builder).
+        ``self.<attr>`` and returns it. A placeholder is stored at ``self.<attr>``
+        immediately and the factory is deferred to ``_materialize_host`` (first-nav
+        hook or background chunk-builder).
         """
-        if getattr(self, "_lazy_pages", False):
-            host = _LazyPageHost(factory, nav_label)
-            setattr(self, attr, host)
-            self._lazy_hosts.append(host)
-        else:
-            factory()
+        host = _LazyPageHost(factory, nav_label)
+        setattr(self, attr, host)
+        self._lazy_hosts.append(host)
 
     def _materialize_host(self, host: "_LazyPageHost") -> QWidget:
         """Build a placeholder's real page and swap it into the stack + nav map.
@@ -127,11 +123,9 @@ class _LazyPageMixin:
     def _start_lazy_page_builder(self) -> None:
         """Start the background chunk-builder that drains _lazy_hosts after show.
 
-        Parented QTimer (RULE-WIN5). Idempotent — a no-op if lazy pages are off,
-        the queue is empty, or the builder is already running.
+        Parented QTimer (RULE-WIN5). Idempotent — a no-op if the queue is empty
+        or the builder is already running.
         """
-        if not getattr(self, "_lazy_pages", False):
-            return
         if getattr(self, "_lazy_build_timer", None) is not None:
             return
         if not self._lazy_hosts:
@@ -174,3 +168,35 @@ class _LazyPageMixin:
             self._protocol_viz_pending_context = kwargs
         else:
             page.set_context(**kwargs)
+
+    def _feed_app_traffic_label_map(self, label_map: dict) -> None:
+        """Route an AppTrafficPage.set_label_map() call around lazy construction.
+
+        scan_enrichment.py recomputes the MAC->hostname label map on every scan,
+        independent of nav state (same shape of problem as
+        _feed_protocol_viz_context above). AppTrafficPage starts with an empty
+        _label_map and has no independent way to re-derive it at construction
+        time, so a call dropped while the page is still a placeholder would
+        leave real traffic rows showing raw MACs until the *next* scan. Buffer
+        it instead; the factory in tabs.py replays it once the real page is built.
+        """
+        page = self._app_traffic_page
+        if isinstance(page, _LazyPageHost):
+            self._app_traffic_pending_label_map = dict(label_map)
+        else:
+            page.set_label_map(label_map)
+
+    def _ensure_page(self, attr: str):
+        """Return the real widget at self.<attr>, force-materializing it first if needed.
+
+        For lazy pages that are also the *target* of a cross-page signal fired by
+        an eager page (e.g. inventory_page.show_connections_for reaching into
+        connections_page before the user has ever navigated there) — unlike
+        _feed_*_context above, these call sites need to act on the real widget
+        immediately (focus/select a row), not buffer-and-replay, so materializing
+        on demand is the correct behavior rather than a degradation to paper over.
+        """
+        page = getattr(self, attr)
+        if isinstance(page, _LazyPageHost):
+            return self._materialize_host(page)
+        return page

@@ -19,7 +19,6 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.perf_audit import profile_page_init
-from ui.styles import MAIN_STYLE
 from ui import styles as _s
 from ui.widgets.device_detail_pane import _wire_close_icon
 from modules.utils import get_offenders_path, is_admin
@@ -101,38 +100,6 @@ def _register_external_worker(workers: list, worker) -> None:
         workers.append(worker)
 
 
-def _drain_external_workers(workers: list) -> None:
-    """Signal-stop then bounded-wait every always-on background worker.
-
-    NEVER calls terminate(). These workers can be inside a raw ``recvfrom()``
-    (SNMP-trap / syslog / passive observer) or an Npcap capture (posture
-    probes); TerminateThread on such a thread leaves WinSock / Npcap OS locks
-    held, which is exactly what corrupts the DLL_PROCESS_DETACH teardown that
-    os._exit(0) triggers — the shutdown ACCESS_VIOLATION / hang this replaces.
-
-    The socket workers' stop() closes their socket, so a blocked recvfrom()
-    returns at once; the 1500 ms wait is a safety margin above the receivers'
-    1 s socket timeout. A worker still mid-probe after the wait is left as-is
-    (a daemon-style best effort) rather than terminate()d — strictly safer than
-    the previous behaviour, which never stopped these workers at all.
-
-    Free function (not a Dashboard method) so it is unit-testable without
-    constructing a Dashboard (RULE-TP4-DASH).
-    """
-    for w in list(workers):
-        try:
-            if w.isRunning() and hasattr(w, "stop"):
-                w.stop()
-        except RuntimeError:
-            pass  # underlying C++ QThread already gone
-    for w in list(workers):
-        try:
-            if w.isRunning():
-                w.wait(1500)   # > 1 s socket timeout; deliberately no terminate()
-        except RuntimeError:
-            pass  # underlying C++ QThread already gone
-
-
 class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                _NavBuilderMixin, _LazyPageMixin, _MonitorStateMixin, _PluginPageMixin,
                _ExportMixin, QMainWindow):
@@ -174,7 +141,23 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self.setWindowFlags(Qt.WindowType.Window)
         else:
             self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
-        self.setStyleSheet(MAIN_STYLE)
+        # Page styling goes on the APPLICATION, never on the Dashboard widget.
+        # Qt resolves a widget's own stylesheet ahead of the application one for
+        # that widget and all its descendants, so a widget-level MAIN_STYLE here
+        # would outrank — and permanently strand — the app-level sheet that
+        # _on_theme_changed() writes on every theme switch: the app would come up
+        # half-switched, with only the themed_ss widgets repainted.
+        from PyQt6.QtWidgets import QApplication as _QApp_init
+        _app_init = _QApp_init.instance()
+        if _app_init is not None:
+            # RULE-STARTUP2: an app-level setStyleSheet() re-polishes every
+            # top-level widget, including the QSplashScreen that may still be
+            # showing at this point in construction — _suspend_repaints()
+            # prevents the queued repaint from flushing as a startup flash.
+            with _s._suspend_repaints():
+                _app_init.setStyleSheet(_s.MAIN_STYLE + _s.get_app_qss())
+        else:
+            self.setStyleSheet(_s.MAIN_STYLE)  # no QApplication — headless test path
         from ui.styles import get_theme_manager as _gtm
         _gtm().theme_changed.connect(self._on_theme_changed)
         self._maximize_btn = None   # set by _build_header; updated in changeEvent
@@ -194,22 +177,34 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._offenders_path = get_offenders_path()
         self._admin = is_admin()
 
-        # ── Deferred page construction (RULE-EXP1) ────────────────────────────
-        # experimental/lazy_pages: when True, a conservative set of self-contained
-        # "leaf" pages are registered as _LazyPageHost placeholders and built on
-        # first navigation (or by a background chunk-builder), instead of eagerly
-        # in _build_tabs(). Default False ⇒ the previously-verified eager path is
-        # byte-for-byte intact. See project_com_reentrancy_startup_crash memory /
-        # docs/spikes/startup-com-reentrancy.md.
-        self._lazy_pages = QSettings("NetSentinel", "NetSentinel").value(
-            "experimental/lazy_pages", False, type=bool
-        )
+        # ── Deferred page construction (RULE-EXP1 — graduated to permanent) ───
+        # A conservative set of self-contained "leaf" pages are registered as
+        # _LazyPageHost placeholders and built on first navigation (or by a
+        # background chunk-builder), instead of eagerly in _build_tabs(). See
+        # project_com_reentrancy_startup_crash memory / docs/spikes/startup-com-reentrancy.md.
         self._lazy_hosts: list = []          # _LazyPageHost objects awaiting materialization
         self._lazy_build_timer = None        # background chunk-builder QTimer(self)
         # Buffered kwargs for ProtocolVizPage.set_context() while that page is
         # still a _LazyPageHost — scan handlers feed it on every scan regardless
         # of nav state, unlike every other lazy page (see _feed_protocol_viz_context).
         self._protocol_viz_pending_context: "dict | None" = None
+        # Same pattern for AppTrafficPage.set_label_map() — see
+        # _feed_app_traffic_label_map.
+        self._app_traffic_pending_label_map: "dict | None" = None
+
+        # ── Deferred theme refresh (RULE-EXP1) ────────────────────────────────
+        # experimental/theme_switch_deferred: when True, _on_theme_changed()
+        # calls refresh_theme() immediately only for the currently-visible stack
+        # page; every other page (incl. matplotlib re-renders — topology, both
+        # history charts, geo map, network map, wifi heatmap, timeline, live
+        # bandwidth, app traffic, speed test) is queued in _theme_dirty_widgets
+        # and flushed lazily the next time the user navigates to it
+        # (_nav_rail_go_to in ui/nav/builder.py). Default False ⇒ the
+        # previously-verified eager fan-out stays byte-for-byte intact.
+        self._theme_switch_deferred = QSettings("NetSentinel", "NetSentinel").value(
+            "experimental/theme_switch_deferred", False, type=bool
+        )
+        self._theme_dirty_widgets: set = set()
 
         # Scan results cache
         self._m1_result   = None
@@ -443,10 +438,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._pulse_devices_lbl = _ClickLabel("■  —")
         self._pulse_scan_lbl    = _ClickLabel("Last scan: —")
         self._pulse_logger_lbl  = _ClickLabel("○  Logger off")
+        self._pulse_alerts_lbl  = _ClickLabel("⚠ 0")
         for _l in (self._pulse_online_lbl, self._pulse_devices_lbl,
-                   self._pulse_scan_lbl, self._pulse_logger_lbl):
+                   self._pulse_scan_lbl, self._pulse_logger_lbl, self._pulse_alerts_lbl):
             _s.themed_ss(_l, _pulse_base)
             _l.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._pulse_alerts_lbl.setHidden(True)
         self._pulse_online_lbl.setToolTip(
             "Connection status (last logger result)\nClick to open Connectivity Tests"
         )
@@ -459,6 +456,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._pulse_logger_lbl.setToolTip(
             "Network logger state — starts automatically on first launch\nClick to open Logs"
         )
+        self._pulse_alerts_lbl.setToolTip(
+            "Unacknowledged alerts\nClick to open Alert History"
+        )
 
         self._pulse_online_lbl.clicked.connect(
             lambda: self._nav_rail_go_to(L.WHATS_WRONG))
@@ -468,12 +468,14 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             lambda: self._nav_rail_go_to(L.DASHBOARD))
         self._pulse_logger_lbl.clicked.connect(
             lambda: self._nav_rail_go_to(L.NETWORK_LOGGER))
+        self._pulse_alerts_lbl.clicked.connect(self._on_pulse_alerts_clicked)
 
         self._status_bar.addPermanentWidget(_pulse_sep)
         self._status_bar.addPermanentWidget(self._pulse_online_lbl)
         self._status_bar.addPermanentWidget(self._pulse_devices_lbl)
         self._status_bar.addPermanentWidget(self._pulse_scan_lbl)
         self._status_bar.addPermanentWidget(self._pulse_logger_lbl)
+        self._status_bar.addPermanentWidget(self._pulse_alerts_lbl)
 
         self.setStatusBar(self._status_bar)
         self._set_status("Ready.")
@@ -655,91 +657,86 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             return
 
         # ── Real shutdown path ────────────────────────────────────────────────
+        # Instrumented and bounded — see ui/shutdown.py for the full mechanism.
+        # Previously this loop was serial and per-worker (23 dashboard workers x
+        # (800 + 2000) ms, then 17 external x 1500 ms, no global deadline ⇒ ~90 s
+        # worst case), it terminate()d raw-socket/Npcap workers, and seven live
+        # workers plus the Overview-tile pollers were in no stop list at all.
+        import time as _time
+        from ui.shutdown import (
+            collect_dashboard_workers, collect_hardware_pollers, collect_page_pollers,
+            drain_workers, hard_exit, shutdown_log,
+        )
+        _t_start = _time.monotonic()
+        shutdown_log("=== closeEvent: real shutdown path ===")
+
         self._save_window_state()
 
-        # Collect every worker the dashboard owns into one flat list
-        _all_workers = []
-        # Transient/one-shot workers
-        for attr in ("_net_info_worker", "_diag_worker", "_prescan_worker",
-                     "_mtr_worker", "_ps_worker", "_ipv6_worker", "_cloud_worker",
-                     "_arp_worker", "_dhcp_worker", "_bw_worker", "_sched_worker",
-                     "_snmp_worker", "_snmp_if_worker", "_syn_worker", "_udp_worker", "_cve_worker",
-                     "_exposure_worker", "_os_worker", "_cred_worker",
-                     "_discovery_worker", "_smb_worker", "_pe_worker",
-                     "_plugin_worker"):
-            w = getattr(self, attr, None)
-            if w is not None:
-                _all_workers.append(w)
-        # Workers tracked in self._workers (scan module workers)
-        _all_workers.extend(list(self._workers))
+        # One list, one deadline. Draining the dashboard workers, the always-on
+        # app.py workers and the Overview-tile pollers together is what makes the
+        # deadline global: split into separate calls, each would get its own
+        # budget and the waits would add up again.
+        _workers = (collect_dashboard_workers(self)
+                    + list(self._external_workers)
+                    + collect_page_pollers(self)
+                    + collect_hardware_pollers(self))
+        _still = drain_workers(_workers, deadline_s=3.0, label="shutdown")
+        if _still:
+            # These are the threads the exit below is about to kill mid-syscall —
+            # the single most useful line in the log when diagnosing a WER report.
+            shutdown_log(
+                "  STILL RUNNING at exit: %s",
+                ", ".join(sorted(type(w).__name__ for w in _still)),
+            )
 
-        # Signal stop to every running worker first (non-blocking)
-        for w in _all_workers:
-            if w.isRunning():
-                if hasattr(w, "stop"):
-                    w.stop()
-                elif hasattr(w, "stop_logger"):
-                    w.stop_logger()
-                else:
-                    w.quit()  # ask the event loop to exit
-
-        # Stop the persistent logger worker
-        if self._logger_worker and self._logger_worker.isRunning():
-            self._logger_worker.stop_logger()
-            _all_workers.append(self._logger_worker)
-
-        # Wait briefly for each worker — 800 ms cap so close is responsive
-        for w in _all_workers:
-            if w.isRunning():
-                w.wait(800)
-            if w.isRunning():
-                w.terminate()
-                w.wait(2000)   # wait after terminate before object destruction
-
-        # Always-on background workers created in app.py (raw-socket receivers,
-        # posture probes, …). Stopped WITHOUT terminate() — see the mechanism
-        # note on _drain_external_workers(). Previously these were only stopped
-        # in a post-app.exec() block that os._exit(0) made unreachable, leaving
-        # them mid-syscall during process teardown (the shutdown crash/hang).
-        _drain_external_workers(self._external_workers)
-
-        # Hardware-integration poll workers (USB/serial/GPIO). Same story — their
-        # cleanup lived only in the now-removed dead post-app.exec() block.
+        # The hardware poll workers were drained above; just drop the references.
+        # Calling HardwareIntegrationPage.closedown() here instead would re-run its
+        # own serial stop()/wait(2000)-per-worker loop OUTSIDE the deadline — a
+        # measured flat 2.0 s of the close before this was folded into the drain.
         _hw = getattr(self, "_hardware_integration_page", None)
         if _hw is not None:
             try:
-                _hw.closedown()
-            except Exception:
-                pass  # non-fatal — best-effort during hard shutdown
+                _hw._poll_workers.clear()
+            except Exception as _exc:
+                shutdown_log("  hardware poll-worker clear raised: %s", _exc)
 
         super().closeEvent(event)
-        # Stability Sprint 1 (G7): os._exit(0) below bypasses Python's normal
-        # connection-close/atexit path entirely, so the WAL would otherwise
-        # never be truncated back into the main DB file. Flush it now, before
-        # the hard exit, while it's still safe to touch self._store.
+
+        # WAL flush. The hard exit below bypasses Python's connection-close and
+        # atexit path entirely, so nothing else would checkpoint the WAL.
+        #
+        # PASSIVE, not the default TRUNCATE: TRUNCATE must wait for every reader
+        # and writer to clear and honours busy_timeout=5000, so it could block the
+        # UI thread up to 5 s at the very end of shutdown — with prune_worker
+        # potentially inside an uninterruptible VACUUM. PASSIVE flushes whatever
+        # it can without ever blocking. Skipping TRUNCATE costs nothing but WAL
+        # file size: the data is already durable in the WAL and SQLite replays it
+        # on the next open.
         if self._store is not None:
+            _t_ckpt = _time.monotonic()
             try:
-                self._store.checkpoint()
-            except Exception:
-                pass  # non-fatal — best-effort flush before hard exit
-        # os._exit(0) bypasses Qt destructor cleanup entirely.
-        # This is intentional: calling QApplication.quit() after terminate()
-        # can still trigger QThread destructor crashes (STATUS_STACK_BUFFER_OVERRUN)
-        # if a thread's OS handle is not yet released. os._exit(0) skips all
-        # C++/Qt destructors and exits the process cleanly at the OS level.
-        import os as _os, sys as _sys
+                self._store.checkpoint(passive=True)
+            except Exception as _exc:
+                shutdown_log("  checkpoint raised: %s", _exc)
+            shutdown_log("  checkpoint(passive): %.0fms", (_time.monotonic() - _t_ckpt) * 1000)
+
+        import sys as _sys
         # PyInstaller onefile extracts to a _MEI* temp dir and registers an atexit
-        # handler to clean it up. os._exit() bypasses atexit, leaving the dir behind
-        # and causing a "Failed to remove temporary directory" warning on the next
-        # launch. Delete it explicitly before exiting since nothing will use it after
-        # this point.
+        # handler to clean it up. The hard exit bypasses atexit, leaving the dir
+        # behind and causing a "Failed to remove temporary directory" warning on
+        # the next launch. Delete it explicitly — nothing uses it after this point.
         if getattr(_sys, "frozen", False) and hasattr(_sys, "_MEIPASS"):
             try:
                 import shutil as _shutil
                 _shutil.rmtree(_sys._MEIPASS, ignore_errors=True)
             except Exception:
                 pass  # non-fatal
-        _os._exit(0)
+        shutdown_log("=== closeEvent complete: %.0fms total ===",
+                     (_time.monotonic() - _t_start) * 1000)
+        # TerminateProcess, not os._exit/ExitProcess: it skips DLL_PROCESS_DETACH,
+        # so a thread still inside Npcap/WinSock cannot fault the teardown. See
+        # ui/shutdown.hard_exit().
+        hard_exit(0)
 
 
     def _show_alert_toast(self, alert) -> None:
@@ -1894,15 +1891,48 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._maybe_auto_report()
 
     def _on_theme_changed(self, _name: str) -> None:
+        import time as _time
         from ui import styles as _s
         from PyQt6.QtWidgets import QApplication
-        self.setStyleSheet(_s.MAIN_STYLE)
+        _t0 = _time.perf_counter()
+        # Single app-level setStyleSheet() instead of one on Dashboard (MAIN_STYLE)
+        # plus a second on QApplication (get_app_qss(), QMenu/QToolTip only): each
+        # setStyleSheet() call forces Qt to recursively re-polish EVERY widget in
+        # the application, regardless of the new sheet's size — so two calls back
+        # to back means two full-tree re-polishes. Since Dashboard is a descendant
+        # of QApplication, the app-level sheet already cascades down to it and
+        # every page underneath; combining the two payloads into one app-level
+        # call keeps identical coverage (full page styling + QMenu/QToolTip) at
+        # half the re-polish cost. Measured: this was ~60-80% of the total
+        # theme-switch stall (up to 2.7s of it), dwarfing the ~2,000-widget
+        # _reapply_themed() pass (styles.py) and the 77-page refresh_theme()
+        # fan-out below.
         _app = QApplication.instance()
         if _app:
-            _app.setStyleSheet(_s.get_app_qss())
+            # RULE-STARTUP2. This is already called from inside apply_theme()'s
+            # own _suspend_repaints() block (theme_changed is emitted there, and
+            # a same-thread connection dispatches synchronously) — wrapping again
+            # here makes that lexically true instead of relying on emit-time
+            # ordering, which a future change to the connection type could break.
+            with _s._suspend_repaints():
+                _app.setStyleSheet(_s.MAIN_STYLE + _s.get_app_qss())
+        else:
+            self.setStyleSheet(_s.MAIN_STYLE)  # no QApplication — headless test path
+        _t_stage3 = _time.perf_counter()
+        # experimental/theme_switch_deferred (RULE-EXP1): only the page the user
+        # is actually looking at needs to be correct right now — every other
+        # stack page (incl. any matplotlib re-render its refresh_theme() does)
+        # is queued and flushed on first navigation to it (_nav_rail_go_to,
+        # ui/nav/builder.py) instead of paying for all ~76 up front. Default
+        # False keeps the previously-verified eager fan-out byte-for-byte intact.
+        _current_widget = self._stack.currentWidget() if self._theme_switch_deferred else None
         for i in range(self._stack.count()):
             w = self._stack.widget(i)
-            if w and hasattr(w, "refresh_theme"):
+            if not w or not hasattr(w, "refresh_theme"):
+                continue
+            if self._theme_switch_deferred and w is not _current_widget:
+                self._theme_dirty_widgets.add(w)
+            else:
                 w.refresh_theme()
         # The DNS/ping LiveGraphWidget is embedded inside a QStackedWidget page
         # that has no refresh_theme, so the fan-out above cannot reach it —
@@ -1920,6 +1950,17 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         flyout = getattr(self, "_nav_flyout", None)
         if flyout and hasattr(flyout, "refresh_theme"):
             flyout.refresh_theme()
+        _t_stage4 = _time.perf_counter()
+        # Uses ui.styles' dedicated theme_switch instrumentation logger — a
+        # bare log.info() here would be silently dropped (no logging.basicConfig()
+        # anywhere in the app, so root level is the default WARNING).
+        _s._ensure_theme_switch_log_handler()
+        _s._theme_switch_log.info(
+            "_on_theme_changed(%s): stage3 app setStyleSheet (merged)=%.1fms "
+            "stage4 refresh_theme fan-out (%d pages)=%.1fms total=%.1fms",
+            _name, (_t_stage3 - _t0) * 1000, self._stack.count(),
+            (_t_stage4 - _t_stage3) * 1000, (_t_stage4 - _t0) * 1000,
+        )
 
 
 

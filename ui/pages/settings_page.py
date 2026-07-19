@@ -14,14 +14,13 @@ Architecture rules observed:
 from __future__ import annotations
 
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -66,7 +65,6 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("contentArea")
-        self._dirty = False
         self._all_cards: list[tuple[QFrame, str, str, str]] = []  # (card, title, kw, category)
         self._notif_test_workers: list[_NotifTestWorker] = []  # prevent GC
         self._active_category: str = "All"
@@ -84,12 +82,12 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         hdr_title = QLabel("Settings & Customisation")
         _s.themed_ss(hdr_title, "color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
             " padding:0; background:transparent; border:none;")
-        self._dirty_dot = QLabel("● Unsaved changes")
-        _s.themed_ss(self._dirty_dot, "font-size:10px; color:{AMBER}; background:transparent; border:none;")
-        self._dirty_dot.setVisible(False)
+        self._saved_lbl = QLabel("✓ Saved")
+        _s.themed_ss(self._saved_lbl, "font-size:10px; color:{GREEN}; background:transparent; border:none;")
+        self._saved_lbl.setVisible(False)
         hdr_lay.addWidget(hdr_title)
         hdr_lay.addSpacing(8)
-        hdr_lay.addWidget(self._dirty_dot)
+        hdr_lay.addWidget(self._saved_lbl)
         hdr_lay.addStretch()
         outer.addWidget(hdr_container)
 
@@ -230,40 +228,28 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         for lbl, btn in self._cat_btns.items():
             btn.setStyleSheet(self._chip_qss(lbl == self._active_category))
 
-    def _mark_dirty(self) -> None:
-        self._dirty = True
-        self._dirty_dot.setVisible(True)
-
-    def is_dirty(self) -> bool:
-        return self._dirty
-
-    def clear_dirty(self) -> None:
-        self._dirty = False
-        self._dirty_dot.setVisible(False)
-
-    def confirm_leave(self) -> bool:
-        """Return True if it's OK to navigate away (prompts if dirty)."""
-        if not self._dirty:
-            return True
-        result = QMessageBox.question(
-            self,
-            "Unsaved changes",
-            "You have unsaved settings changes.\nLeave anyway?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if result == QMessageBox.StandardButton.Yes:
-            self.clear_dirty()
-            return True
-        return False
+    def _flash_saved(self) -> None:
+        """Briefly show '✓ Saved' in the header — every settings handler that
+        calls this has already persisted to QSettings on the line above."""
+        existing = getattr(self, "_saved_timer", None)
+        if existing is not None:
+            try:
+                existing.stop()
+            except RuntimeError:
+                pass  # already destroyed
+        self._saved_lbl.setVisible(True)
+        self._saved_timer = QTimer(self)
+        self._saved_timer.setSingleShot(True)
+        self._saved_timer.timeout.connect(lambda: self._saved_lbl.setVisible(False))
+        self._saved_timer.start(2000)
 
     def _on_compact_toggled(self, checked: bool) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("display/compact_rows", checked)
-        self._mark_dirty()
+        self._flash_saved()
 
     def _on_tooltip_toggled(self, checked: bool) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("display/tooltips_enabled", checked)
-        self._mark_dirty()
+        self._flash_saved()
 
     # ── Internet Plan (S6-4) ──────────────────────────────────────────────────
 
@@ -310,9 +296,9 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
 
     def _on_monthly_cap_changed(self, value: float) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("traffic/monthly_cap_gb", value)
-        self._mark_dirty()
+        self._flash_saved()
 
     def _on_plan_speed_changed(self, value: float) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("traffic/plan_speed_mbps", value)
-        self._mark_dirty()
+        self._flash_saved()
 

@@ -714,9 +714,12 @@ tr:nth-child(even){{background:{_s.BG_ALT_ROW}}}
         self._sched_spin = QSpinBox()
         self._sched_spin.setRange(1, 10)
         self._sched_spin.setValue(3)
-        self._sched_spin.setFixedWidth(55)
+        self._sched_spin.setFixedWidth(_s.SPINBOX_WIDTH_PLAIN)
         self._sched_spin.setFixedHeight(24)
-        _s.themed_ss(self._sched_spin, "font-size:11px; border:1px solid {BORDER}; padding:2px 4px;")
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._sched_spin, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};")
+        _s.style_spinbox(self._sched_spin)
         _scans_lbl = QLabel("scans")
         _s.themed_ss(_scans_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         btn_save = QPushButton("Save")

@@ -271,6 +271,57 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _lay.addWidget(_dismiss)
         return bar
 
+    def _dismiss_protoviz_nudge(self) -> None:
+        from ui.context_banners import mark_banner_seen
+        mark_banner_seen("protoviz_home_nudge")
+        self._protoviz_nudge_card.setVisible(False)
+
+    def _build_protoviz_nudge_card(self) -> "QWidget":
+        """Dismissible education nudge pointing to the Protocol Visualizer
+        (Lab Mode Upgrade Phase L3). Reuses context_banners.py's banner/*_seen
+        QSettings suppression — the same permanent-dismiss mechanism as
+        PageHeaderBar.show_first_visit_banner() — instead of inventing a new
+        QSettings scheme."""
+        from ui.nav.labels import NavLabel
+
+        bar = QFrame()
+        bar.setObjectName("protovizNudgeCard")
+        _s.themed_ss(bar, lambda: _s.qss_frame("protovizNudgeCard", _s.BG_HOVER, _s.BORDER, radius=4))
+        # RULE-WIN7: stay hidden until _setup_ui() adds this to its layout —
+        # a parentless QFrame made visible before addWidget() briefly flashes
+        # as its own top-level OS window with full native chrome.
+        bar.setVisible(False)
+        _lay = QHBoxLayout(bar)
+        _lay.setContentsMargins(10, 4, 8, 4)
+        _lay.setSpacing(8)
+        _icon_lbl = QLabel("▶")
+        _icon_lbl.setFixedWidth(16)
+        _s.themed_ss(_icon_lbl, lambda: _s.qss_label(_s.ACCENT, 11))
+        _txt = QLabel(
+            "See how your network's protocols actually work — animated with your real addresses."
+        )
+        _s.themed_ss(_txt, lambda: _s.qss_label(_s.TEXT_PRIMARY, 10))
+        _lay.addWidget(_icon_lbl)
+        _lay.addWidget(_txt, 1)
+        _go = QPushButton("Open →")
+        _go.setFixedHeight(20)
+        _go.setCursor(Qt.CursorShape.PointingHandCursor)
+        _s.themed_ss(_go, "QPushButton {{ background:transparent; color:{ACCENT}; font-size:9px;"
+            " border:1px solid {ACCENT}; border-radius:3px; padding:0 6px; }}"
+            "QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            "QPushButton:pressed {{ background:{BORDER}; color:{TEXT_PRIMARY}; }}")
+        _go.clicked.connect(lambda: self.navigate_to.emit(NavLabel.PROTOCOL_VISUALIZER))
+        _lay.addWidget(_go)
+        _dismiss = QPushButton()
+        _dismiss.setFixedSize(18, 18)
+        _dismiss.setFlat(True)
+        _dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _wire_close_icon(_dismiss)
+        _s.themed_ss(_dismiss, lambda: _s.qss_dismiss_button(9))
+        _dismiss.clicked.connect(self._dismiss_protoviz_nudge)
+        _lay.addWidget(_dismiss)
+        return bar
+
     def _setup_ui(self) -> None:
         self.setObjectName("homePageRoot")
         _s.themed_ss(self, "QWidget#homePageRoot {{ background:{BG_DARK}; }}")
@@ -1162,6 +1213,12 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         self._tip_card.setVisible(False)  # _set_first_run_mode shows it when data exists
         lay.addWidget(self._tip_card)
+
+        # ── Protocol Visualizer education nudge (Lab Mode Upgrade Phase L3) ────
+        self._protoviz_nudge_card = self._build_protoviz_nudge_card()
+        lay.addWidget(self._protoviz_nudge_card)
+        from ui.context_banners import should_show_banner
+        self._protoviz_nudge_card.setVisible(should_show_banner("protoviz_home_nudge"))
 
         _nudge_row = QHBoxLayout()
         _nudge_row.setContentsMargins(0, 2, 0, 0)

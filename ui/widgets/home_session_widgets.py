@@ -41,11 +41,11 @@ class FreshnessStrip(QFrame):
         row.setSpacing(12)
 
         self._fs_scan_lbl = QLabel("Last scan: —")
-        _s.themed_ss(self._fs_scan_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
+        _s.themed_ss(self._fs_scan_lbl, "font-size:11px; color:{LABEL_SUBTITLE}; background:transparent; border:none;")
         row.addWidget(self._fs_scan_lbl)
 
         _sep = QLabel("|")
-        _s.themed_ss(_sep, "font-size:11px; color:{BORDER}; background:transparent; border:none;")
+        _s.themed_ss(_sep, lambda: f"font-size:11px; color:{_s.alpha(_s.WHITE, 0x22)}; background:transparent; border:none;")
         row.addWidget(_sep)
 
         # Pills are QPushButton (flat) so they support tooltips and click events
@@ -68,11 +68,11 @@ class FreshnessStrip(QFrame):
             row.addWidget(pill)
 
         _sep2 = QLabel("|")
-        _s.themed_ss(_sep2, "font-size:11px; color:{BORDER}; background:transparent; border:none;")
+        _s.themed_ss(_sep2, lambda: f"font-size:11px; color:{_s.alpha(_s.WHITE, 0x22)}; background:transparent; border:none;")
         row.addWidget(_sep2)
 
         self._fs_next_scan_lbl = QLabel("")
-        _s.themed_ss(self._fs_next_scan_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
+        _s.themed_ss(self._fs_next_scan_lbl, "font-size:11px; color:{LABEL_SUBTITLE}; background:transparent; border:none;")
         row.addWidget(self._fs_next_scan_lbl)
         self.refresh_next_scan_label()
 

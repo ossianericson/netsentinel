@@ -244,6 +244,12 @@ class _NetworkTabsMixin:
             diag_result=self._diag_result,
             m2_result=self._m2_result,
         )
+        self._lab_mode_page.set_context(
+            net_info=self._net_info,
+            devices=self._m1_result.get("devices", []) if self._m1_result else [],
+            diag_result=self._diag_result,
+            m2_result=self._m2_result,
+        )
         self._diagnosis_page.set_network_info(
             info.get("gateway"),
             info.get("gateway_mac"),

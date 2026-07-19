@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 from modules.alert_types import SECURITY_RELEVANT_RULE_TYPES
 
 from ui import styles as _s
+from ui.nav.labels import NavLabel as L
 from ui.styles import (
     RISK_BG,
     RISK_COLORS,
@@ -175,6 +176,10 @@ class _MonitorStateMixin:
             return
         # Rail mode: dot + tooltip handled by _refresh_section_badges
         self._refresh_section_badges()
+        # Also refresh the Home card on this 30s cadence, not just the 10s
+        # pulse timer's own trigger points -- keeps rail badge and card from
+        # drifting apart between scans.
+        self._push_monitor_pills()
 
     # ── KPI bar (Devices page) ────────────────────────────────────────────────
 
@@ -398,6 +403,38 @@ class _MonitorStateMixin:
         else:
             self._pulse_logger_lbl.setText("○  Logger off")
             self._pulse_logger_lbl.setStyleSheet(_muted)
+
+        # Unacked alerts — same get_unacked_alerts() call the Home card uses
+        # (monitor_state.py::_push_monitor_pills), so footer and card can't disagree.
+        try:
+            unacked = self._store.get_unacked_alerts() if self._store else []
+        except Exception:
+            unacked = []
+        if unacked:
+            any_critical = any(a.get("severity") == "CRITICAL" for a in unacked)
+            self._pulse_alerts_lbl.setText(f"⚠ {len(unacked)}")
+            self._pulse_alerts_lbl.setStyleSheet(_red if any_critical else _amber)
+            self._pulse_alerts_lbl.setHidden(False)
+        else:
+            self._pulse_alerts_lbl.setHidden(True)
+
+    def _on_verdict_badge_clicked(self) -> None:
+        """The header's compact "Overall network status" badge has no detail
+        view of its own -- the full VerdictPanel it summarises is built but
+        never shown (see dashboard.py's _verdict_area comment). Route to
+        whichever scan's page actually raised the current severity
+        (_update_overall_verdict() tracks this in _verdict_cause_page); fall
+        back to the plain-English diagnosis page when nothing more specific
+        is known (e.g. a diagnostics-only escalation, which What's Wrong?
+        itself produced)."""
+        self._nav_rail_go_to(getattr(self, "_verdict_cause_page", None) or L.WHATS_WRONG)
+
+    def _on_pulse_alerts_clicked(self) -> None:
+        """Same two-step sequence _on_overview_navigate uses for "Notifications"
+        from Home -- lands on Alert History with the unacked filter checked."""
+        self._nav_rail_go_to(L.NOTIFICATIONS)
+        if hasattr(self, "_notifications_page"):
+            self._notifications_page.switch_to_history_tab(unacked_only=True)
 
     # ── Section badges ────────────────────────────────────────────────────────
 
@@ -636,6 +673,10 @@ class _MonitorStateMixin:
     def _update_overall_verdict(self):
         verdicts = []
         level = "CLEAN"
+        # Nav label of whichever scan most recently raised `level` -- lets the
+        # header badge (_on_verdict_badge_clicked) route to the specific page
+        # with the actual finding, instead of a generic diagnosis entry point.
+        cause_page = None
 
         if self._m1_result:
             v = self._m1_result.get("plain_verdict", "")
@@ -643,6 +684,7 @@ class _MonitorStateMixin:
                 verdicts.append(v)
             if self._m1_result.get("high_risk_count", 0) > 0:
                 level = "HIGH"
+                cause_page = L.DEVICES
 
         if self._m2_result:
             v = self._m2_result.get("plain_verdict", "")
@@ -650,6 +692,7 @@ class _MonitorStateMixin:
                 verdicts.append(v)
             if self._m2_result.get("rogue_count", 0) > 0:
                 level = "HIGH"
+                cause_page = L.ROGUE_BRIDGE_STP
 
         if self._m3_result:
             storm_level = (
@@ -666,6 +709,7 @@ class _MonitorStateMixin:
                 verdicts.append(v)
             if storm_level in ("STORM", "WARNING") and level == "CLEAN":
                 level = "MEDIUM" if storm_level == "WARNING" else "HIGH"
+                cause_page = L.BROADCAST_STORM
 
         if self._m4_result:
             v = (
@@ -682,6 +726,7 @@ class _MonitorStateMixin:
             )
             if rogue_c and level == "CLEAN":
                 level = "MEDIUM"
+                cause_page = L.WIFI_NETWORKS
 
         if self._m5_result:
             v = (
@@ -698,6 +743,7 @@ class _MonitorStateMixin:
             )
             if stp_sigs:
                 level = "HIGH"
+                cause_page = L.DNS_STABILITY
 
         if self._diag_result:
             v = getattr(self._diag_result, "plain_verdict", "") or ""
@@ -710,11 +756,15 @@ class _MonitorStateMixin:
             )
             if gw_ping and gw_ping.status == "FAIL" and level == "CLEAN":
                 level = "HIGH"
+                # No dedicated results page -- What's Wrong? is what produced
+                # _diag_result in the first place, so leave cause_page unset
+                # and let _on_verdict_badge_clicked() fall back to it.
             # DNS leak
             leak = getattr(self._diag_result, "dns_leak", None)
             if leak and getattr(leak, "leak_detected", False) and level == "CLEAN":
                 level = "MEDIUM"
 
+        self._verdict_cause_page = cause_page
         combined = "\n\n".join(verdicts) if verdicts else "Scan in progress..."
         self._verdict.update(combined, level)
         # Show the compact status badge once real data is available

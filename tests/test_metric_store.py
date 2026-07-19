@@ -59,6 +59,30 @@ class TestConstruction:
                 sys.modules["sqlalchemy"] = sa
 
 
+class TestPruneOnInit:
+    """prune_on_init controls whether __init__ runs prune_old_data() synchronously.
+
+    Default True keeps cli.py/svc.py and every existing caller unchanged. The GUI
+    path (app.py) passes False since app.py's prune_worker (ProactiveProbeWorker)
+    already runs the identical prune off-thread immediately at startup — running
+    it a second time synchronously in __init__ was pure duplicated startup cost.
+    """
+
+    def test_prune_runs_by_default(self, tmp_path, monkeypatch):
+        calls = []
+        monkeypatch.setattr(MetricStore, "prune_old_data", lambda self, retain_days=None: calls.append(1))
+        s = MetricStore(db_path=tmp_path / "test.db")
+        assert calls == [1]
+        s.close()
+
+    def test_prune_skipped_when_prune_on_init_false(self, tmp_path, monkeypatch):
+        calls = []
+        monkeypatch.setattr(MetricStore, "prune_old_data", lambda self, retain_days=None: calls.append(1))
+        s = MetricStore(db_path=tmp_path / "test.db", prune_on_init=False)
+        assert calls == []
+        s.close()
+
+
 # ── record_rtt / query_rtt_history ───────────────────────────────────────────
 
 class TestRttSamples:
@@ -571,3 +595,36 @@ class TestCheckpoint:
 
     def test_checkpoint_noop_on_memory_db(self, mem_store):
         mem_store.checkpoint()  # must not raise on backend without a file
+
+    def test_passive_checkpoint_uses_passive_pragma_not_truncate(self, store):
+        """The close path must not run TRUNCATE.
+
+        TRUNCATE waits for every reader and writer to clear and honours
+        busy_timeout=5000, so on the shutdown path it can block the UI thread for
+        up to 5 s — with prune_worker potentially inside an uninterruptible
+        VACUUM. PASSIVE flushes what it can and returns immediately.
+        """
+        executed: list = []
+        conn = store._conn
+        conn.set_trace_callback(executed.append)   # sqlite3.Connection.execute is read-only
+        try:
+            store.checkpoint(passive=True)
+        finally:
+            conn.set_trace_callback(None)
+
+        pragmas = [s for s in executed if "wal_checkpoint" in s]
+        assert pragmas, "no wal_checkpoint pragma was issued at all"
+        assert all("TRUNCATE" not in s for s in pragmas), (
+            f"passive checkpoint still issued a blocking TRUNCATE: {pragmas}"
+        )
+        assert any("PASSIVE" in s for s in pragmas), (
+            f"expected PRAGMA wal_checkpoint(PASSIVE), got {pragmas}"
+        )
+
+    def test_checkpoint_defaults_to_truncate(self, store, tmp_path):
+        """The default stays TRUNCATE — only the close path opts into PASSIVE."""
+        for i in range(200):
+            store.record_rtt(f"host{i}", 10.0)
+        wal_path = tmp_path / "test.db-wal"
+        store.checkpoint()
+        assert wal_path.stat().st_size == 0

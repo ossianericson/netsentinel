@@ -70,6 +70,14 @@ class SuggestionContext:
     scans_done: int = 0
     never_visited_key_pages: List[str] = field(default_factory=list)
 
+    # ── New context — critical-UX Phase 1.3 (risk-page data guard) ───────────
+    # True once self._risk_assessments has been populated by _run_risk_scorer()
+    # -- the actual data source of the Device Risk Score page _rule_high_risk
+    # targets. Distinct from high_risk_count, which comes from a different
+    # pipeline (rogue_device.py, during the M1 scan itself) and can be
+    # non-zero before the risk scorer has run.
+    risk_assessments_available: bool = False
+
 
 def compute_suggestions(ctx: SuggestionContext) -> List[dict]:
     """Return candidate suggestions, priority-sorted high > medium > low.
@@ -82,6 +90,7 @@ def compute_suggestions(ctx: SuggestionContext) -> List[dict]:
     _rule_security_audit_nudge(ctx, suggestions)
     _rule_security_stale_nudge(ctx, suggestions)
     _rule_high_risk(ctx, suggestions)
+    _rule_risk_remediation_available(ctx, suggestions)
     _rule_unknown_devices(ctx, suggestions)
     _rule_open_ports(ctx, suggestions)
     _rule_slow_dns(ctx, suggestions)
@@ -140,14 +149,35 @@ def _rule_security_stale_nudge(ctx: SuggestionContext, out: List[dict]) -> None:
 
 
 def _rule_high_risk(ctx: SuggestionContext, out: List[dict]) -> None:
+    # Devices' per-device notes column (recognised vendor + known network
+    # issues) is populated by the same M1 scan pass that computes
+    # high_risk_count itself (modules/rogue_device.py) -- always in sync, no
+    # guard needed.
     if ctx.high_risk_count > 0:
         s = "s" if ctx.high_risk_count != 1 else ""
         out.append({
             "action_key": "high_risk_check",
             "text": f"{ctx.high_risk_count} high-risk device{s} found — review security findings",
-            "action_label": "View Overview →",
-            "target": "Dashboard",
+            "action_label": "View Devices →",
+            "target": "Devices",
             "priority": "high",
+        })
+
+
+def _rule_risk_remediation_available(ctx: SuggestionContext, out: List[dict]) -> None:
+    """Secondary, lower-priority nudge alongside _rule_high_risk: Device Risk
+    Score's dedicated top_remediation column (from
+    modules.risk_scorer.score_devices()) is genuinely additive over Devices'
+    freeform notes -- but that pipeline is separate from the M1 scan and can
+    lag or fail independently, so only surface it once it has actually
+    produced data (mirrors the guard _rule_high_risk used to carry)."""
+    if ctx.high_risk_count > 0 and ctx.risk_assessments_available:
+        out.append({
+            "action_key": "risk_remediation_available",
+            "text": "Detailed remediation steps are available for your high-risk devices",
+            "action_label": "View remediation steps →",
+            "target": "Device Risk Score",
+            "priority": "low",
         })
 
 
@@ -226,7 +256,7 @@ def _rule_poor_grade(ctx: SuggestionContext, out: List[dict]) -> None:
             "action_key": "fix_network_grade",
             "text": f"Your network grade is {ctx.overall_grade} — run a health check for recommendations",
             "action_label": "View Overview →",
-            "target": "Dashboard",
+            "target": "Security Overview",
             "priority": "medium",
         })
 

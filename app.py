@@ -934,7 +934,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.35")
+    app.setApplicationVersion("2.1.36")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1077,7 +1077,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.35")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.36")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1111,8 +1111,14 @@ def main():
 
     # Apply QMenu/QToolTip rules at application level so top-level (parentless)
     # menus are styled — widget-level stylesheets do not reach separate windows.
-    from ui.styles import get_app_qss
-    app.setStyleSheet(get_app_qss())
+    # RULE-STARTUP2: the splash is already showing by this point (:1085) — an
+    # app-level setStyleSheet() re-polishes every top-level widget including it,
+    # so wrap in _suspend_repaints() even though today's QMenu/QToolTip-only QSS
+    # has no selector matching QSplashScreen (a future edit to get_app_qss()
+    # could add one without anyone noticing this call site).
+    from ui.styles import get_app_qss, _suspend_repaints
+    with _suspend_repaints():
+        app.setStyleSheet(get_app_qss())
 
     # ── Single instance guard ─────────────────────────────────────────────────
     # If another instance is running, signal it to restore its window and exit.
@@ -1172,7 +1178,10 @@ def main():
     from workers.passive_observer_worker import PassiveObserverWorker
     from workers.health_worker import HealthWorker
 
-    store  = MetricStore()           # uses default portable path
+    # prune_on_init=False: prune_worker (started below) runs the identical
+    # prune_old_data() off-thread immediately at startup — running it a second
+    # time synchronously here was duplicated main-thread startup cost.
+    store  = MetricStore(prune_on_init=False)   # uses default portable path
     alerts = AlertEngine(store=store)
     alerts.set_warmup_period(10)     # suppress boot-time alert noise for 10 s
 
@@ -1553,36 +1562,13 @@ def main():
             window.show()
         # _splash.close() fires the Qt event loop which delivers the first WM_PAINT
         # to the main window and hides the splash in the same DWM compositing frame.
+        # (The maximized-restore-rect fix used to run here, one tick later via a
+        # QTimer.singleShot(0, ...) — that native SetWindowPlacement call could
+        # race Qt's first paint under chaos/monkey-test CPU load and expose the
+        # deliberately-unpainted backbuffer as a solid white/black flash. It now
+        # runs on the hidden window before showMaximized(), inside
+        # app_settings.restore_settings() — see fix_maximized_restore_rect().)
         _splash.close()
-        # Fix restore geometry: showMaximized() in _restore_settings() used Qt's
-        # default HWND position; apply the saved normal geometry via SetWindowPlacement
-        # so showNormal() restores to the correct location.
-        _png = getattr(window, '_pending_normal_geo', None)
-        if _png and sys.platform == "win32":
-            _nx, _ny, _nw, _nh = _png
-            from PyQt6.QtCore import QTimer as _QTimer
-            def _fix_geo(_nx=_nx, _ny=_ny, _nw=_nw, _nh=_nh):
-                try:
-                    import ctypes as _ct
-                    class _P(_ct.Structure):
-                        _fields_ = [("x", _ct.c_long), ("y", _ct.c_long)]
-                    class _R(_ct.Structure):
-                        _fields_ = [("l", _ct.c_long), ("t", _ct.c_long),
-                                    ("r", _ct.c_long), ("b", _ct.c_long)]
-                    class _WP(_ct.Structure):
-                        _fields_ = [("length", _ct.c_uint), ("flags", _ct.c_uint),
-                                    ("showCmd", _ct.c_uint), ("ptMin", _P),
-                                    ("ptMax", _P), ("rcNormal", _R)]
-                    wp = _WP()
-                    wp.length = _ct.sizeof(_WP)
-                    _hwnd = int(window.winId())
-                    _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(wp))
-                    wp.rcNormal.l = _nx; wp.rcNormal.t = _ny
-                    wp.rcNormal.r = _nx + _nw; wp.rcNormal.b = _ny + _nh
-                    _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(wp))
-                except Exception:
-                    pass  # geometry fixup is best-effort; window still visible
-            _QTimer.singleShot(0, _fix_geo)
     else:
         _splash.close()
 

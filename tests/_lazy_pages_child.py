@@ -47,6 +47,8 @@ _DEFERRED = [
     ("Feature Guide", "_discover_page"),
     ("Help & Reference", "_help_tab_widget"),
     ("Protocol Visualizer", "_protocol_viz_page"),  # Phase A4
+    ("App Traffic", "_app_traffic_page"),           # startup-perf coverage expansion
+    ("Active Connections", "_connections_page"),    # startup-perf coverage expansion
 ]
 
 
@@ -104,18 +106,13 @@ def _reset_nav_restore_state():
 # A failed assertion raises BEFORE close(), so main() reports it as exit 1 (no masking).
 
 def test_deferred_pages_are_hosts_until_navigated() -> None:
-    """With the flag on, deferred attrs are _LazyPageHost until first nav."""
+    """Deferred attrs are _LazyPageHost until first nav (permanent behavior)."""
     _ensure_app()
     from ui.dashboard import Dashboard
 
-    QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", True)
-    try:
-        with _reset_nav_restore_state():
-            dash = Dashboard(store=None)
-    finally:
-        QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", False)
+    with _reset_nav_restore_state():
+        dash = Dashboard(store=None)
 
-    assert dash._lazy_pages is True
     assert dash._lazy_hosts, "expected a non-empty deferred-page queue"
 
     for label, attr in _DEFERRED:
@@ -139,30 +136,11 @@ def test_materialize_all_drains_queue() -> None:
     _ensure_app()
     from ui.dashboard import Dashboard
 
-    QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", True)
-    try:
-        with _reset_nav_restore_state():
-            dash = Dashboard(store=None)
-    finally:
-        QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", False)
+    with _reset_nav_restore_state():
+        dash = Dashboard(store=None)
 
     assert dash._lazy_hosts
     dash._materialize_all_pages()
-    assert dash._lazy_hosts == []
-    for _label, attr in _DEFERRED:
-        assert not isinstance(getattr(dash, attr), _LazyPageHost)
-
-    dash.close()   # drain workers + os._exit(0) — clean child success exit
-
-
-def test_eager_path_builds_real_pages() -> None:
-    """With the flag off (default), no hosts are created."""
-    _ensure_app()
-    from ui.dashboard import Dashboard
-
-    QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", False)
-    dash = Dashboard(store=None)
-    assert dash._lazy_pages is False
     assert dash._lazy_hosts == []
     for _label, attr in _DEFERRED:
         assert not isinstance(getattr(dash, attr), _LazyPageHost)
@@ -179,12 +157,8 @@ def test_protocol_viz_pending_context_replayed_on_materialize() -> None:
     from ui.dashboard import Dashboard
     from ui.nav.lazy_page import _LazyPageHost
 
-    QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", True)
-    try:
-        with _reset_nav_restore_state():
-            dash = Dashboard(store=None)
-    finally:
-        QSettings("NetSentinel", "NetSentinel").setValue("experimental/lazy_pages", False)
+    with _reset_nav_restore_state():
+        dash = Dashboard(store=None)
 
     assert isinstance(dash._protocol_viz_page, _LazyPageHost)
     assert dash._protocol_viz_pending_context is None
@@ -208,11 +182,69 @@ def test_protocol_viz_pending_context_replayed_on_materialize() -> None:
     dash.close()   # drain workers + os._exit(0) — clean child success exit
 
 
+def test_app_traffic_pending_label_map_replayed_on_materialize() -> None:
+    """Label map fed by scan_enrichment.py before the user ever opens App Traffic
+    must survive to the real page on first navigation — same shape of problem as
+    Protocol Visualizer above (fed by scan results regardless of nav state), but
+    for AppTrafficPage._label_map."""
+    _ensure_app()
+    from ui.dashboard import Dashboard
+    from ui.nav.lazy_page import _LazyPageHost
+
+    with _reset_nav_restore_state():
+        dash = Dashboard(store=None)
+
+    assert isinstance(dash._app_traffic_page, _LazyPageHost)
+    assert dash._app_traffic_pending_label_map is None
+
+    # Simulate scan_enrichment.py feeding a label map before the user ever
+    # opens App Traffic.
+    fed_map = {"aa:bb:cc:dd:ee:ff": "kitchen-cam"}
+    dash._feed_app_traffic_label_map(fed_map)
+    assert isinstance(dash._app_traffic_page, _LazyPageHost), "still a placeholder"
+    assert dash._app_traffic_pending_label_map == fed_map
+
+    dash._nav_rail_go_to("App Traffic")
+    real = dash._app_traffic_page
+    assert not isinstance(real, _LazyPageHost)
+    assert dash._app_traffic_pending_label_map is None, "buffer must clear after replay"
+    assert real._label_map == fed_map, "buffered label map must reach the real page"
+
+    dash.close()   # drain workers + os._exit(0) — clean child success exit
+
+
+def test_connections_page_materializes_via_cross_page_signal() -> None:
+    """inventory_page.show_connections_for fires before Active Connections has
+    ever been navigated to (e.g. right-click 'Show Connections' from a fresh
+    Inventory view). Unlike the buffered pages above, this handler needs the
+    real widget immediately (to call focus_on_ip), so it force-materializes via
+    _ensure_page rather than deferring — assert that materialization actually
+    happens and the target IP is applied."""
+    _ensure_app()
+    from ui.dashboard import Dashboard
+    from ui.nav.lazy_page import _LazyPageHost
+
+    with _reset_nav_restore_state():
+        dash = Dashboard(store=None)
+
+    assert isinstance(dash._connections_page, _LazyPageHost)
+
+    dash._inventory_page.show_connections_for.emit("192.168.1.50")
+
+    real = dash._connections_page
+    assert not isinstance(real, _LazyPageHost), "signal must force materialization"
+    assert dash._nav_label_to_widget.get("Active Connections") is real
+    assert real._search.text() == "192.168.1.50", "focus_on_ip must reach the real page"
+
+    dash.close()   # drain workers + os._exit(0) — clean child success exit
+
+
 _TESTS = {
     "test_deferred_pages_are_hosts_until_navigated": test_deferred_pages_are_hosts_until_navigated,
     "test_materialize_all_drains_queue": test_materialize_all_drains_queue,
-    "test_eager_path_builds_real_pages": test_eager_path_builds_real_pages,
     "test_protocol_viz_pending_context_replayed_on_materialize": test_protocol_viz_pending_context_replayed_on_materialize,
+    "test_app_traffic_pending_label_map_replayed_on_materialize": test_app_traffic_pending_label_map_replayed_on_materialize,
+    "test_connections_page_materializes_via_cross_page_signal": test_connections_page_materializes_via_cross_page_signal,
 }
 
 

@@ -10,7 +10,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:17b23842f485c52917e4d8a0eebc2eef22a4758a4440bf566da4f3f2063e6c94
+  content_hash: sha256:7338de10d77eb7d16b71089a7247fbb4bce3edbdc9839451708d8c52c078e972
 - kind: project-relative
   target: claude
   value: .claude/rules/changelog.md
@@ -28,7 +28,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:53f3a03a5ce087f263109a487c0d76bad6a5e4d2b851ddb37c9100a20aa1ead0
+  content_hash: sha256:2773c7caeeb2baac9370b2fcc7725cad4c9e8147c0f149056c53bec01e3453be
 - kind: project-relative
   target: claude
   value: .claude/rules/project-vision.md
@@ -37,7 +37,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:b45436d9c00fe84473c5e0d888d0a6fa640b83d36058185201a639d2cd2a62c9
+  content_hash: sha256:3d9a61b9331b9934651aa24cf6d7cc6388832d91d7b46678b9e18f482bac7c17
 - kind: project-relative
   target: claude
   value: .claude/rules/session-workflow.md
@@ -55,7 +55,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:25d829b1e177cbac92318634ea4e8ad91b66451e65a63f683a30b388044f9090
+  content_hash: sha256:4efa31a980c768744c461b782d56c970dc1d43226897e531f7b9cd5bfe75f430
 local_deployed_files:
 - .claude/rules/architecture.md
 - .claude/rules/changelog.md
@@ -64,9 +64,9 @@ local_deployed_files:
 - .claude/rules/session-workflow.md
 - .claude/rules/tests.md
 local_deployed_file_hashes:
-  .claude/rules/architecture.md: sha256:17b23842f485c52917e4d8a0eebc2eef22a4758a4440bf566da4f3f2063e6c94
+  .claude/rules/architecture.md: sha256:7338de10d77eb7d16b71089a7247fbb4bce3edbdc9839451708d8c52c078e972
   .claude/rules/changelog.md: sha256:a3223ba6da72d0faa0a43b7cd898362b985776f534fac0a83ba96e30dc71c496
-  .claude/rules/development-rules.md: sha256:53f3a03a5ce087f263109a487c0d76bad6a5e4d2b851ddb37c9100a20aa1ead0
-  .claude/rules/project-vision.md: sha256:b45436d9c00fe84473c5e0d888d0a6fa640b83d36058185201a639d2cd2a62c9
+  .claude/rules/development-rules.md: sha256:2773c7caeeb2baac9370b2fcc7725cad4c9e8147c0f149056c53bec01e3453be
+  .claude/rules/project-vision.md: sha256:3d9a61b9331b9934651aa24cf6d7cc6388832d91d7b46678b9e18f482bac7c17
   .claude/rules/session-workflow.md: sha256:b767fc662ac6ae516f8e0aae3b9a021fb1c2c8cf67531ca3256eabe7c76e1922
-  .claude/rules/tests.md: sha256:25d829b1e177cbac92318634ea4e8ad91b66451e65a63f683a30b388044f9090
+  .claude/rules/tests.md: sha256:4efa31a980c768744c461b782d56c970dc1d43226897e531f7b9cd5bfe75f430

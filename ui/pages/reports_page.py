@@ -163,8 +163,11 @@ class ReportsPage(QWidget):
         self._spin_hours = QSpinBox()
         self._spin_hours.setRange(1, 8760)
         self._spin_hours.setValue(24)
-        self._spin_hours.setFixedWidth(70)
-        _s.themed_ss(self._spin_hours, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
+        self._spin_hours.setFixedWidth(_s.SPINBOX_WIDTH_WIDE_PLAIN)
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._spin_hours, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};")
+        _s.style_spinbox(self._spin_hours)
         int_row.addWidget(int_lbl)
         int_row.addWidget(self._spin_hours)
         int_row.addWidget(QLabel("hours"))

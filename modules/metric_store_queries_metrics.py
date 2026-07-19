@@ -170,6 +170,32 @@ class _MetricsQueriesMixin:
         )
         return [dict(r) for r in rows]
 
+    def get_alert_history(
+        self, hours: float = 24.0, limit: int = 500, unacked_only: bool = False
+    ) -> List[dict]:
+        """Alert History page's query. Same shape as get_recent_alerts(), plus
+        an unacked_only path that drops the time bound entirely -- so an
+        unacked alert older than any selectable window is still reachable
+        (see get_unacked_alerts(), which has no time bound either; this keeps
+        the two in agreement). Ordered oldest-first when unacked_only, to
+        match get_unacked_alerts()'s own ordering."""
+        if unacked_only:
+            rows = self._execute_read(
+                "SELECT id, ts, rule_name, host, severity, message, "
+                "acked_ts, acked_by, acked_comment, escalated "
+                "FROM alert_fired WHERE acked_ts IS NULL ORDER BY ts ASC LIMIT ?",
+                (limit,),
+            )
+            return [dict(r) for r in rows]
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT id, ts, rule_name, host, severity, message, "
+            "acked_ts, acked_by, acked_comment, escalated "
+            "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+            (since, limit),
+        )
+        return [dict(r) for r in rows]
+
     def get_last_event_time(self, rule_prefix: str) -> Optional[float]:
         """Return Unix timestamp of the most recent matching alert, or None."""
         rows = self._execute_read(

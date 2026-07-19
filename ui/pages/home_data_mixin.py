@@ -667,7 +667,7 @@ class _HomeDataMixin:
         QSettings("NetSentinel", "NetSentinel").setValue("home/last_scan_ts", _now.isoformat())
         self._freshness_strip.set_scan_timestamp(
             "Last scan: just now",
-            f"font-size:11px; color:{_s.TEXT_SECONDARY}; background:transparent; border:none;",
+            f"font-size:11px; color:{_s.LABEL_SUBTITLE}; background:transparent; border:none;",
         )
 
         devices = result.get("devices", [])

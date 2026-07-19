@@ -64,7 +64,16 @@ def insert_skeleton_rows(table: QTableWidget, count: int = 6) -> None:
     timer.setInterval(650)
     timer.timeout.connect(_pulse)
     timer.start()
-    _timers[id(table)] = timer
+    key = id(table)
+    _timers[key] = timer
+    # If the table is destroyed while skeleton rows are still present (e.g. the
+    # scan that would supply real data never completes and clear_skeleton_rows()
+    # is never called), drop the registry entry here -- before Qt deletes the
+    # QTimer child and before CPython can ever reuse this id() for a new table.
+    # Without this, the entry leaks forever (the _pulse closure keeps `table`
+    # alive) and a later id() collision can call .stop() on an already-deleted
+    # QTimer.
+    table.destroyed.connect(lambda _obj=None, k=key: _timers.pop(k, None))
 
 
 def clear_skeleton_rows(table: QTableWidget) -> None:
@@ -92,4 +101,7 @@ def _is_skeleton_present(table: QTableWidget) -> bool:
 def _stop_timer(table: QTableWidget) -> None:
     timer = _timers.pop(id(table), None)
     if timer is not None:
-        timer.stop()
+        try:
+            timer.stop()
+        except RuntimeError:
+            pass  # Qt already deleted this QTimer (e.g. its parent table was destroyed)

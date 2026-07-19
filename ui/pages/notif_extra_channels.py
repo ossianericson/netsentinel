@@ -200,8 +200,11 @@ class _NotifExtraChannelsMixin:
         self._spin_escalation_wait.setRange(1, 1440)
         self._spin_escalation_wait.setValue(15)
         self._spin_escalation_wait.setSuffix(" min")
-        self._spin_escalation_wait.setFixedWidth(90)
-        _s.themed_ss(self._spin_escalation_wait, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
+        self._spin_escalation_wait.setFixedWidth(_s.SPINBOX_WIDTH_WITH_SUFFIX)
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._spin_escalation_wait, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_DARK};")
+        _s.style_spinbox(self._spin_escalation_wait)
         self._spin_escalation_wait.valueChanged.connect(self._save)
         wait_row.addWidget(wait_lbl)
         wait_row.addWidget(self._spin_escalation_wait)
@@ -340,8 +343,11 @@ class _NotifExtraChannelsMixin:
         self._spin_briefing_hour.setRange(0, 23)
         self._spin_briefing_hour.setValue(8)
         self._spin_briefing_hour.setSuffix(":00")
-        self._spin_briefing_hour.setFixedWidth(70)
-        _s.themed_ss(self._spin_briefing_hour, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
+        self._spin_briefing_hour.setFixedWidth(_s.SPINBOX_WIDTH_WITH_SUFFIX)
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._spin_briefing_hour, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_DARK};")
+        _s.style_spinbox(self._spin_briefing_hour)
         self._spin_briefing_hour.valueChanged.connect(self._save_morning_briefing_settings)
         row1.addWidget(self._chk_morning_briefing)
         row1.addWidget(self._spin_briefing_hour)

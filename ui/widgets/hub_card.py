@@ -1369,7 +1369,15 @@ class HubCard(QFrame):
                     w.setValue(int(default))
                 except (TypeError, ValueError):
                     w.setValue(int(spec.get("default", 0)))
-                w.setStyleSheet(_fss)
+                # background-color/color/font-size ONLY -- border/border-radius/padding
+                # (as used by _fss, fine for the QLineEdit branch above) make a
+                # QSpinBox's +/- buttons unclickable under windows11 (see
+                # style_spinbox() docstring in ui/styles.py) -- give it its own QSS.
+                w.setStyleSheet(
+                    f"background:{_s.BG_CARD}; color:{_s.TEXT_PRIMARY}; font-size:11px;"
+                )
+                _s.style_spinbox(w)
+                w.setFixedWidth(_s.SPINBOX_WIDTH_WIDE_PLAIN)
                 w.setFixedHeight(24)
             else:
                 w = QLineEdit(str(default))

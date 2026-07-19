@@ -183,24 +183,39 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._ha_page = HomeAutomationPage(store=self._store, parent=None)
         self._ha_page.navigate_to.connect(self._nav_rail_go_to)
 
-        from ui.pages.connections_page import ConnectionsPage
-        self._connections_page = ConnectionsPage(parent=None)
-        self._connections_page.show_on_map.connect(self._show_ip_on_geo_map)
-        self._connections_page.focus_host_in_inventory.connect(
-            lambda ip: (self._nav_rail_go_to(L.INVENTORY_CHANGES),
-                        self._inventory_page.select_device(ip))
-        )
+        def _mk_connections_page():
+            from ui.pages.connections_page import ConnectionsPage
+            self._connections_page = ConnectionsPage(parent=None)
+            self._connections_page.show_on_map.connect(self._show_ip_on_geo_map)
+            self._connections_page.focus_host_in_inventory.connect(
+                lambda ip: (self._nav_rail_go_to(L.INVENTORY_CHANGES),
+                            self._inventory_page.select_device(ip))
+            )
+            self._connections_page.lookup_threat_intel.connect(
+                lambda ip: (self._threat_intel_page.check_ip(ip),
+                            self._nav_rail_go_to(L.THREAT_INTEL))
+            )
+            self._connections_page.set_popover(self._device_popover)
+            return self._connections_page
+        self._lazy_or_build("_connections_page", L.ACTIVE_CONNECTIONS, _mk_connections_page)
         self._inventory_page.show_connections_for.connect(
-            lambda ip: (self._connections_page.focus_on_ip(ip),
+            lambda ip: (self._ensure_page("_connections_page").focus_on_ip(ip),
                         self._nav_rail_go_to(L.ACTIVE_CONNECTIONS))
         )
 
         from ui.pages.live_bandwidth_page import LiveBandwidthPage
         self._live_bandwidth_page = LiveBandwidthPage(parent=None)
 
-        from ui.pages.app_traffic_page import AppTrafficPage
-        self._app_traffic_page = AppTrafficPage(store=self._store, parent=None)
-        self._app_traffic_page.traffic_sample_ready.connect(self._on_app_traffic_sample)
+        def _mk_app_traffic_page():
+            from ui.pages.app_traffic_page import AppTrafficPage
+            self._app_traffic_page = AppTrafficPage(store=self._store, parent=None)
+            self._app_traffic_page.traffic_sample_ready.connect(self._on_app_traffic_sample)
+            self._app_traffic_page.top_host_changed.connect(self._home_page.on_bandwidth_update)
+            if self._app_traffic_pending_label_map is not None:
+                self._app_traffic_page.set_label_map(self._app_traffic_pending_label_map)
+                self._app_traffic_pending_label_map = None
+            return self._app_traffic_page
+        self._lazy_or_build("_app_traffic_page", L.APP_TRAFFIC, _mk_app_traffic_page)
 
         def _mk_dhcp_lease_page():
             from ui.pages.dhcp_lease_page import DhcpLeasePage
@@ -221,12 +236,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._threat_intel_page = ThreatIntelPage(parent=None)
         self._threat_intel_page.show_on_map.connect(self._show_ip_on_geo_map)
         self._threat_intel_page.show_in_connections.connect(
-            lambda ip: (self._connections_page.focus_on_ip(ip),
+            lambda ip: (self._ensure_page("_connections_page").focus_on_ip(ip),
                         self._nav_rail_go_to(L.ACTIVE_CONNECTIONS))
-        )
-        self._connections_page.lookup_threat_intel.connect(
-            lambda ip: (self._threat_intel_page.check_ip(ip),
-                        self._nav_rail_go_to(L.THREAT_INTEL))
         )
 
         from ui.pages.security_overview_page import SecurityOverviewPage
@@ -257,9 +268,10 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._device_popover.navigate_to_inventory.connect(self._on_popover_open_inventory)
         self._device_popover.navigate_to_threat_intel.connect(self._on_popover_open_threat_intel)
 
-        # Inject popover into pages that need it
-        for _p in (self._connections_page, self._threat_intel_page,
-                   self._cve_page, self._log_hub_page):
+        # Inject popover into pages that need it (connections_page's own
+        # set_popover call lives in its lazy factory above — it isn't
+        # constructed yet at this point when lazy).
+        for _p in (self._threat_intel_page, self._cve_page, self._log_hub_page):
             if hasattr(_p, "set_popover"):
                 _p.set_popover(self._device_popover)
 
@@ -531,7 +543,6 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             self._home_page.add_plugin_requested.connect(
                 lambda p: self._hardware_integration_page._import_bundled(p)
             )
-            self._app_traffic_page.top_host_changed.connect(self._home_page.on_bandwidth_update)
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
         self._overview_page.scan_requested.connect(self._start_full_scan)

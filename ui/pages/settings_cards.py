@@ -606,11 +606,11 @@ class _SettingsCardsMixin:
 
     def _on_auto_snap_toggled(self, checked: bool) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("baseline/auto_snapshot", checked)
-        self._mark_dirty()
+        self._flash_saved()
 
     def _on_vendor_lookup_toggled(self, checked: bool) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("privacy/mac_vendor_online_lookup", checked)
-        self._mark_dirty()
+        self._flash_saved()
 
     # ── Scheduled scan ────────────────────────────────────────────────────────
 
@@ -645,15 +645,19 @@ class _SettingsCardsMixin:
         self._sched_hour_spin = QSpinBox()
         self._sched_hour_spin.setRange(0, 23)
         self._sched_hour_spin.setValue(qs.value("sched_scan/hour", 2, int))
-        self._sched_hour_spin.setFixedWidth(55)
-        _styles.themed_ss(self._sched_hour_spin, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
+        self._sched_hour_spin.setFixedWidth(_styles.SPINBOX_WIDTH_PLAIN)
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _styles.themed_ss(self._sched_hour_spin, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};")
+        _styles.style_spinbox(self._sched_hour_spin)
         colon = QLabel(":")
         _styles.themed_ss(colon, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
         self._sched_min_spin = QSpinBox()
         self._sched_min_spin.setRange(0, 59)
         self._sched_min_spin.setValue(qs.value("sched_scan/minute", 0, int))
-        self._sched_min_spin.setFixedWidth(55)
-        _styles.themed_ss(self._sched_min_spin, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;")
+        self._sched_min_spin.setFixedWidth(_styles.SPINBOX_WIDTH_PLAIN)
+        _styles.themed_ss(self._sched_min_spin, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};")
+        _styles.style_spinbox(self._sched_min_spin)
         time_row.addWidget(time_lbl)
         time_row.addWidget(self._sched_hour_spin)
         time_row.addWidget(colon)
@@ -695,7 +699,7 @@ class _SettingsCardsMixin:
             next_run += _dt.timedelta(hours=hours)
         qs.setValue("sched_scan/next_ts", next_run.timestamp())
         self._refresh_sched_scan_label()
-        self._mark_dirty()
+        self._flash_saved()
 
     def _refresh_sched_scan_label(self) -> None:
         if not hasattr(self, "_sched_scan_next_lbl"):
@@ -765,7 +769,7 @@ class _SettingsCardsMixin:
         self._chk_notify_new_device.toggled.connect(
             lambda v: (
                 QSettings("NetSentinel", "NetSentinel").setValue("tray/notify_new_device", v),
-                self._mark_dirty(),
+                self._flash_saved(),
             )
         )
         bl.addWidget(self._chk_notify_new_device)
@@ -779,7 +783,7 @@ class _SettingsCardsMixin:
         self._chk_notify_gone.toggled.connect(
             lambda v: (
                 QSettings("NetSentinel", "NetSentinel").setValue("tray/notify_device_gone", v),
-                self._mark_dirty(),
+                self._flash_saved(),
             )
         )
         bl.addWidget(self._chk_notify_gone)
@@ -793,7 +797,7 @@ class _SettingsCardsMixin:
         return card
 
     def _on_tray_toggled(self, checked: bool) -> None:
-        self._mark_dirty()
+        self._flash_saved()
         QSettings("NetSentinel", "NetSentinel").setValue("tray/minimize_to_tray", checked)
         try:
             from PyQt6.QtWidgets import QApplication
@@ -809,11 +813,11 @@ class _SettingsCardsMixin:
             pass  # non-fatal
 
     def _on_minimize_tray_toggled(self, checked: bool) -> None:
-        self._mark_dirty()
+        self._flash_saved()
         QSettings("NetSentinel", "NetSentinel").setValue("tray/minimize_window_to_tray", checked)
 
     def _on_startup_toggled(self, checked: bool) -> None:
-        self._mark_dirty()
+        self._flash_saved()
         from ui.system_tray import set_run_on_startup
         set_run_on_startup(checked)
 
@@ -1269,7 +1273,7 @@ class _SettingsCardsMixin:
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.clear()
         qs.sync()
-        # Restore visible checkboxes to their factory defaults without marking dirty
+        # Restore visible checkboxes to their factory defaults without re-triggering toggle handlers
         for attr, default in [
             ("_chk_compact",           True),
             ("_chk_tooltips",          True),
@@ -1289,7 +1293,6 @@ class _SettingsCardsMixin:
             self._reset_settings_status.setText(
                 "All settings reset to defaults — restart NetSentinel to apply."
             )
-        self.clear_dirty()
 
     def _on_restart_guided_tour(self) -> None:
         """Restart the 5-step guided tour (tour/v2_done reset)."""
@@ -1469,10 +1472,32 @@ class _SettingsCardsMixin:
             sw.set_active(name == active)
 
     def _on_theme(self, name: str) -> None:
+        from PyQt6.QtWidgets import QApplication
         from ui.styles import apply_theme
-        apply_theme(name)   # persists + emits itself — do NOT also call set_active_theme_name
-        self._refresh_theme_swatches()
-        self._theme_status_lbl.setText(f"Theme '{name}' applied.")
+        from ui.widgets.toast import ToastManager
+
+        # A theme switch can still take up to ~1-2s even after the Part-1
+        # perf fixes (fewer/cheaper full-app restyles, but still a full-app
+        # restyle). Qt gives no way to paint a real progress bar mid-switch
+        # (the GUI thread never yields — see the theme-switch-responsiveness
+        # plan), so the honest feedback is a wait cursor + a toast on
+        # completion, and disabling the swatches so a second click can't
+        # re-enter apply_theme() mid-switch.
+        for sw in self._theme_swatches.values():
+            sw.setEnabled(False)
+        _app = QApplication.instance()
+        if _app is not None:
+            _app.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            apply_theme(name)   # persists + emits itself — do NOT also call set_active_theme_name
+            self._refresh_theme_swatches()
+            self._theme_status_lbl.setText(f"Theme '{name}' applied.")
+        finally:
+            if _app is not None:
+                _app.restoreOverrideCursor()
+            for sw in self._theme_swatches.values():
+                sw.setEnabled(True)
+        ToastManager.show(f"Theme '{name}' applied.", "success")
 
     # ── Display preferences ───────────────────────────────────────────────────
 
@@ -1496,11 +1521,3 @@ class _SettingsCardsMixin:
         _styles.themed_ss(note, lambda: _styles.qss_muted_label(10))
         bl.addWidget(note)
         return card
-
-    def _on_compact_toggled(self, checked: bool) -> None:
-        QSettings("NetSentinel", "NetSentinel").setValue("display/compact_rows", checked)
-        self._mark_dirty()
-
-    def _on_tooltip_toggled(self, checked: bool) -> None:
-        QSettings("NetSentinel", "NetSentinel").setValue("display/tooltips_enabled", checked)
-        self._mark_dirty()

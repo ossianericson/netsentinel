@@ -91,6 +91,12 @@ class MetricStore(
     backend_url : str | None
         SQLAlchemy URL for an external SQL database (requires: pip install sqlalchemy <driver>).
         When None (default), built-in sqlite3 is used.
+    prune_on_init : bool
+        Run prune_old_data() synchronously during __init__. Default True (matches
+        every existing caller — cli.py, svc.py, tests). app.py passes False on the
+        GUI path: its prune_worker (ProactiveProbeWorker) already runs the same
+        prune off-thread immediately at startup, so the __init__-time run was
+        duplicated main-thread startup cost with no other effect.
     """
 
     def __init__(
@@ -98,6 +104,7 @@ class MetricStore(
         db_path: Optional[Path] = None,
         retain_days: int = 30,
         backend_url: Optional[str] = None,
+        prune_on_init: bool = True,
     ):
         self._retain_days = retain_days
         self._backend_url = backend_url
@@ -126,7 +133,8 @@ class MetricStore(
             if self._backend != "sqlite" or str(self._db_path) == ":memory:":
                 raise
             self._recover_from_corruption(exc)
-        self.prune_old_data()
+        if prune_on_init:
+            self.prune_old_data()
 
     # ── SQLAlchemy engine setup ───────────────────────────────────────────────
 

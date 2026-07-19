@@ -151,9 +151,15 @@ class NotificationsPage(
             self._refresh_alert_history()
             self.refresh_log()
 
-    def switch_to_history_tab(self) -> None:
-        """Navigate directly to the Alert History tab (called by external signals)."""
+    def switch_to_history_tab(self, unacked_only: bool = False) -> None:
+        """Navigate directly to the Alert History tab (called by external signals).
+
+        unacked_only=True also checks the "Unacknowledged only" filter, so an
+        alert older than any selectable window is reachable from a single call
+        (e.g. Home's "View all alerts" / the status-bar alert indicator)."""
         self._notif_tabs.setCurrentIndex(1)
+        if unacked_only:
+            self._chk_unacked_only.setChecked(True)
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
@@ -275,7 +281,16 @@ class NotificationsPage(
             self._alert_drawer.set_store(store)
 
     def set_global_hours(self, hours: float) -> None:
+        if getattr(self, "_chk_unacked_only", None) is not None and self._chk_unacked_only.isChecked():
+            return  # unacked filter active -- the header picker must not override it
         self._hist_hours = hours
+        if hasattr(self, "_hist_time_combo"):
+            _rev = {1.0: "1h", 6.0: "6h", 24.0: "24h", 72.0: "72h", 168.0: "7d"}
+            text = _rev.get(hours)
+            if text is not None:
+                self._hist_time_combo.blockSignals(True)
+                self._hist_time_combo.setCurrentText(text)
+                self._hist_time_combo.blockSignals(False)
         self._refresh_alert_history()
 
     def showEvent(self, event) -> None:
