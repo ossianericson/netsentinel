@@ -27,7 +27,7 @@ def _run_off_main_thread(fn):
     def _target():
         try:
             box["value"] = fn()
-        except BaseException as exc:  # noqa: BLE001 - re-raised on the caller's thread below
+        except Exception as exc:  # noqa: BLE001 - re-raised on the caller's thread below
             box["exc"] = exc
 
     t = threading.Thread(target=_target)

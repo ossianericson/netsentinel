@@ -1831,10 +1831,22 @@ in PowerShell at the repo root:
 # UTF8Encoding($false) = no BOM. A BOM before the `#!/bin/sh` shebang breaks
 # the OS's ability to recognize the shebang at all (RULE-ENC3 is the same
 # gotcha for .py files -- [System.Text.Encoding]::UTF8 always writes a BOM).
-$content = "#!/bin/sh`nruff check . --select=F401,F811,F841 || exit 1`npython tools/check_import_lint.py || exit 1`npython -m mypy modules/ || exit 1`necho '[pre-push] gate passed.'"
+$content = "#!/bin/sh`nruff check . --select=F401,F811,F841 || exit 1`npython tools/check_import_lint.py || exit 1`npython -m mypy modules/ || exit 1`npython -m mypy modules/ --platform linux || exit 1`necho '[pre-push] gate passed.'"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText(".git/hooks/pre-push", $content, $utf8NoBom)
 ```
+
+**Both mypy invocations are required — neither alone covers both branch sets.** The hook
+runs on Windows; GitHub CI type-checks on Ubuntu. Windows-only ctypes symbols
+(`ctypes.WinDLL`, `ctypes.WINFUNCTYPE`) exist in the Windows stubs but not the Linux ones,
+so the native run reports `Success` on code CI will reject — this shipped a red CI on
+v2.1.37's `modules/startup_task.py`. The `--platform linux` run mirrors CI; the native run
+is what still checks the `sys.platform == "win32"` branches.
+
+For the same reason, **never** set `platform = win32` in `mypy.ini` to make CI match local.
+It silences the class (a clean 164 files) by making mypy treat every `sys.platform == "win32"`
+test as always-true, which stops the macOS/Linux branches from being checked at all. Silence
+individual Windows-only lines with `# type: ignore[attr-defined]` instead.
 
 If the hook blocks a push: fix the violations — never use `git push --no-verify`.
 
