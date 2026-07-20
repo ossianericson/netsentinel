@@ -191,6 +191,9 @@ def _smoke_test() -> None:
         "workers.health_worker",
         "ui.widgets.health_status_card",
         "modules.scheduled_speed_test",
+        "modules.autostart",
+        "modules.startup_task",
+        "workers.autostart_worker",
     ]
     for _mod in _checks:
         try:
@@ -934,12 +937,20 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.36")
+    app.setApplicationVersion("2.1.37")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
     if _startup_logger:
         _start_minimised = True
+    if not _start_minimised:
+        # Store builds' uap5:StartupTask has no Arguments attribute, so the
+        # Store path structurally cannot pass --startup-logger — this
+        # QSettings key is the only way to express "start minimised" there,
+        # and it doubles as a user-facing, discoverable equivalent to the
+        # undocumented CLI flag for winget/portable installs too.
+        _start_minimised = QSettings("NetSentinel", "NetSentinel").value(
+            "startup/start_minimised", False, type=bool)
 
     # ── Window-flash trace (diagnostic) ───────────────────────────────────────
     # Run with `python app.py --trace-windows` to log every top-level widget that
@@ -1077,7 +1088,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.36")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.37")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1410,7 +1421,7 @@ def main():
     _splash_msg("Loading interface…")
     from ui.dashboard import Dashboard
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
-                       maint_manager=maint_manager)
+                       maint_manager=maint_manager, start_minimised=_start_minimised)
 
     # Register every always-on background worker with the Dashboard so that
     # closeEvent() stops them before its os._exit(0). These are created above as
@@ -1578,6 +1589,28 @@ def main():
     # process cold here means the first UIA client to connect logs 0x8001010d.
     warm_up_uia_provider(int(window.winId()))
 
+    # Tray icon — guaranteed show, independent of window.show() ever running.
+    # showEvent() (ui/header.py) already shows it for a normal launch, but a
+    # tray-only (_start_minimised) launch never calls window.show() at all, so
+    # showEvent() never fires — without this, that launch is a running process
+    # with zero UI affordance (no window, no tray icon, unkillable except via
+    # Task Manager). This site is past every _splash_msg() pump in main(), so
+    # the earliest turn that can run the QTimer callback is inside the real
+    # app.exec() — the same COM-reentrancy safety showEvent() gets, expressed
+    # as the actual invariant (RULE-WIN10) rather than a proxy for it. Guarded
+    # by the same _tray_icon_shown flag showEvent() uses, so whichever of the
+    # two fires first wins and the other call site is a no-op.
+    def _ensure_tray_icon_shown() -> None:
+        if not getattr(window, "_tray_icon_shown", False):
+            window._tray_icon_shown = True
+            if getattr(window, "_tray_manager", None) is not None:
+                window._tray_manager.show_tray_icon()
+    from PyQt6.QtCore import QTimer as _TrayIconTimer
+    _tray_icon_timer = _TrayIconTimer(window)
+    _tray_icon_timer.setSingleShot(True)
+    _tray_icon_timer.timeout.connect(_ensure_tray_icon_shown)
+    _tray_icon_timer.start(0)
+
     # Windows logoff/shutdown — save state before the session ends.
     # commitDataRequest fires before WM_ENDSESSION; no unsafe MSG casting needed.
     def _on_commit_data(manager) -> None:
@@ -1590,7 +1623,7 @@ def main():
         conn = _instance_server.nextPendingConnection()
         if conn:
             conn.waitForReadyRead(200)
-        window.show()
+        window.show_main_window()
         window.setWindowState(
             (window.windowState() & ~Qt.WindowState.WindowMinimized)
             | Qt.WindowState.WindowActive

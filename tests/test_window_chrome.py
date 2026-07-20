@@ -117,16 +117,21 @@ def test_restore_geometry_does_not_push_the_window_down_by_a_title_bar(qt_app, t
 
     frameless = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window
 
+    # 700x700 rather than a full desktop size (e.g. 1200x800) so the rect
+    # stays within the offscreen Qt platform's small virtual screen — this
+    # test verifies the y=0/x=1 title-bar-clamp undo, not a specific size,
+    # and a too-large rect would now (correctly) get shrunk by
+    # apply_exact_geometry()'s screen-bounds clamp (RULE-T3: off-screen rect).
     saved = QMainWindow()
     saved.setWindowFlags(frameless)
-    saved.setGeometry(1, 0, 1200, 800)        # flush with the top of the screen
+    saved.setGeometry(1, 0, 700, 700)        # flush with the top of the screen
     blob = saved.saveGeometry()
 
     s = QSettings(str(tmp_path / "t.ini"), QSettings.Format.IniFormat)
     s.setValue("window/geo_x", 1)
     s.setValue("window/geo_y", 0)
-    s.setValue("window/geo_w", 1200)
-    s.setValue("window/geo_h", 800)
+    s.setValue("window/geo_w", 700)
+    s.setValue("window/geo_h", 700)
 
     w = QMainWindow()
     w.setWindowFlags(frameless)
@@ -142,7 +147,7 @@ def test_restore_geometry_does_not_push_the_window_down_by_a_title_bar(qt_app, t
         f"desktop above the header."
     )
     assert w.geometry().x() == 1
-    assert (w.geometry().width(), w.geometry().height()) == (1200, 800), (
+    assert (w.geometry().width(), w.geometry().height()) == (700, 700), (
         f"size not restored exactly: {w.geometry()} (Qt clamped it to "
         f"{clamped.width()}x{clamped.height()})"
     )

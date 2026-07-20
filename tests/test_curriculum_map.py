@@ -71,10 +71,10 @@ def test_objective_badge_import():
 
 
 def test_objective_badge_load_map():
-    from ui.widgets.objective_badge import _load_map, _get_entry
-    m = _load_map()
+    from modules.curriculum_map import load_curriculum_map, entry_for
+    m = load_curriculum_map()
     assert "lab_scenarios" in m
-    entry = _get_entry("protocol_viz", "ARP")
+    entry = entry_for("protocol_viz", "ARP")
     assert "certifications" in entry
 
 
@@ -106,7 +106,7 @@ def test_objective_badge_for_protocol_returns_list():
 def test_objective_badge_for_scenario_rogue():
     from ui.widgets.objective_badge import ObjectiveBadge
     app = QApplication.instance()
-    badges = ObjectiveBadge.for_scenario("Find a Rogue Device")
+    badges = ObjectiveBadge.for_scenario("Find the Rogue Device")
     assert isinstance(badges, list)
     assert len(badges) >= 1
     for b in badges:
@@ -122,6 +122,16 @@ def test_objective_badge_for_scenario_rogue():
             pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
+
+
+def test_every_lab_scenario_title_has_a_curriculum_entry():
+    """Guards silent badge loss: ObjectiveBadge.for_scenario() keys off title and
+    returns [] on a miss, so a renamed scenario drops its badges with no error."""
+    from modules.curriculum_map import load_curriculum_map
+    from modules.lab_scenarios import SCENARIOS
+    keys = set(load_curriculum_map().get("lab_scenarios", {}))
+    missing = sorted(s.title for s in SCENARIOS if s.title not in keys)
+    assert not missing, f"No curriculum_map.json entry for: {missing}"
 
 
 @pytest.mark.skipif(not _HAS_QT, reason="PyQt6 not available")

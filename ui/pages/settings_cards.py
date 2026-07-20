@@ -722,7 +722,6 @@ class _SettingsCardsMixin:
     # ── System Tray ───────────────────────────────────────────────────────────
 
     def _build_tray_card(self) -> QFrame:
-        from ui.system_tray import get_run_on_startup
         card, bl = _card("System Tray & Startup")
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_tray = QCheckBox(
@@ -745,13 +744,31 @@ class _SettingsCardsMixin:
             "Start NetSentinel automatically when Windows starts  (runs in tray, starts background logger)"
         )
         _styles.themed_ss(self._chk_startup, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
+        self._autostart_worker = None
         if sys.platform != "win32":
             self._chk_startup.setEnabled(False)
             self._chk_startup.setToolTip("Startup registration is only available on Windows")
         else:
-            self._chk_startup.setChecked(get_run_on_startup())
+            # Real state is backend-selected (Run-key or WinRT StartupTask) and
+            # requires an off-GUI-thread call for the latter (RULE 4). Start
+            # unchecked/disabled with an in-flight tooltip (RULE-UX2); the
+            # actual query is kicked off from showEvent() (RULE-WIN6 — never
+            # auto-start a worker during __init__, it would outlive fixture
+            # teardown in every unrelated test that constructs this page).
+            self._chk_startup.setChecked(False)
+            self._chk_startup.setEnabled(False)
+            self._chk_startup.setToolTip("Checking with Windows…")
         self._chk_startup.toggled.connect(self._on_startup_toggled)
         bl.addWidget(self._chk_startup)
+        self._chk_start_minimised = QCheckBox(
+            "Start minimised to the system tray  (applies to every launch, not just automatic startup)"
+        )
+        _styles.themed_ss(self._chk_start_minimised, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
+        self._chk_start_minimised.setChecked(
+            qs.value("startup/start_minimised", False, type=bool)
+        )
+        self._chk_start_minimised.toggled.connect(self._on_start_minimised_toggled)
+        bl.addWidget(self._chk_start_minimised)
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         _styles.themed_ss(sep, "color:{BORDER}; background:{BORDER}; max-height:1px; border:none;")
@@ -817,9 +834,59 @@ class _SettingsCardsMixin:
         QSettings("NetSentinel", "NetSentinel").setValue("tray/minimize_window_to_tray", checked)
 
     def _on_startup_toggled(self, checked: bool) -> None:
+        # No _flash_saved() here — unlike a QSettings write, the request may
+        # not be honoured (DisabledByUser/Policy). The checkbox's own visual
+        # state, set from the worker's ACTUAL result below, is the honest
+        # confirmation (this is the structural fix for the "lying checkbox" —
+        # docs/spikes/startup-task-winrt.md's RULE-REQ2 paragraph).
+        self._chk_startup.setEnabled(False)
+        self._chk_startup.setToolTip("Asking Windows…")
+        self._start_autostart_worker(enable=checked)
+
+    def _start_autostart_worker(self, enable=None) -> None:
+        """Query (enable=None) or set (enable=True/False) autostart off the
+        GUI thread — never call modules.autostart's setter synchronously
+        (RULE 4); the WinRT backend hard-guards against main-thread calls."""
+        existing = getattr(self, "_autostart_worker", None)
+        if existing is not None and existing.isRunning():
+            return  # a query/set is already in flight; let it finish
+        from workers.autostart_worker import AutostartWorker
+        worker = AutostartWorker(enable=enable, parent=self)
+        worker.result_ready.connect(self._on_autostart_result)
+        worker.error.connect(self._on_autostart_error)
+        worker.finished.connect(worker.deleteLater)
+        self._autostart_worker = worker
+        worker.start()
+
+    def _on_autostart_result(self, state) -> None:
+        self._chk_startup.blockSignals(True)
+        self._chk_startup.setChecked(state.enabled)
+        self._chk_startup.setEnabled(state.can_change)
+        self._chk_startup.setToolTip(state.reason or "")
+        self._chk_startup.blockSignals(False)
+        # Sync the tray menu item too, mirroring how it syncs this checkbox
+        # when the user toggles autostart from the tray instead.
+        try:
+            from PyQt6.QtWidgets import QApplication
+            win = QApplication.instance().activeWindow()
+            if win is None:
+                for w in QApplication.instance().topLevelWidgets():
+                    if hasattr(w, "_tray_manager"):
+                        win = w
+                        break
+            if win and hasattr(win, "_tray_manager"):
+                win._tray_manager._autostart_state = state
+                win._tray_manager._apply_autostart_state(state)
+        except Exception:
+            pass  # non-fatal
+
+    def _on_autostart_error(self, message: str) -> None:
+        self._chk_startup.setEnabled(True)
+        self._chk_startup.setToolTip(f"Could not check with Windows: {message}")
+
+    def _on_start_minimised_toggled(self, checked: bool) -> None:
         self._flash_saved()
-        from ui.system_tray import set_run_on_startup
-        set_run_on_startup(checked)
+        QSettings("NetSentinel", "NetSentinel").setValue("startup/start_minimised", checked)
 
     # ── Plugin Marketplace ────────────────────────────────────────────────────
 

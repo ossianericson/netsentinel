@@ -5,43 +5,19 @@ Shows a pill-style badge (e.g. "N+" or "CCNA") that reveals full exam objectives
 rich tooltip on hover.  Data comes from data/curriculum_map.json.
 
 Usage:
-    badges = ObjectiveBadge.for_scenario("Find a Rogue Device", parent=self)
+    badges = ObjectiveBadge.for_scenario("Find the Rogue Device", parent=self)
     for badge in badges:
         hbox.addWidget(badge)
 """
 from __future__ import annotations
 
-import json
-import sys
-from functools import lru_cache
-from pathlib import Path
 from typing import List
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget
 
+from modules.curriculum_map import entry_for
 from ui import styles as _s
-
-
-# ── Data loader ───────────────────────────────────────────────────────────────
-
-@lru_cache(maxsize=1)
-def _load_map() -> dict:
-    try:
-        base = (
-            Path(sys._MEIPASS)
-            if getattr(sys, "frozen", False)
-            else Path(__file__).parent.parent.parent
-        )
-        path = base / "data" / "curriculum_map.json"
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _get_entry(category: str, key: str) -> dict:
-    m = _load_map()
-    return m.get(category, {}).get(key, {})
 
 
 # ── Badge labels per certification ────────────────────────────────────────────
@@ -96,19 +72,19 @@ class ObjectiveBadge(QLabel):
     @classmethod
     def for_scenario(cls, scenario_name: str, parent: QWidget | None = None) -> List["ObjectiveBadge"]:
         """Return one badge per certification for the given lab scenario name."""
-        entry = _get_entry("lab_scenarios", scenario_name)
+        entry = entry_for("lab_scenarios", scenario_name)
         return cls._from_entry(entry, parent)
 
     @classmethod
     def for_protocol(cls, protocol_key: str, parent: QWidget | None = None) -> List["ObjectiveBadge"]:
         """Return one badge per certification for the given protocol visualizer key (e.g. 'ARP')."""
-        entry = _get_entry("protocol_viz", protocol_key)
+        entry = entry_for("protocol_viz", protocol_key)
         return cls._from_entry(entry, parent)
 
     @classmethod
     def for_page(cls, page_label: str, parent: QWidget | None = None) -> List["ObjectiveBadge"]:
         """Return one badge per certification for the given nav page label."""
-        entry = _get_entry("pages", page_label)
+        entry = entry_for("pages", page_label)
         return cls._from_entry(entry, parent)
 
     @classmethod

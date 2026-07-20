@@ -126,9 +126,10 @@ All features in this section require running as Administrator / `sudo`. Most als
 | Feature | What it does | Key module |
 |---|---|---|
 | **Protocol Visualizer** | Animated step-by-step diagrams of 10 protocols: ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN 802.1Q, TLS 1.3, and ICMP traceroute — using real scan data from your own network. CompTIA N+ / CCNA objective badges on each diagram. | `ui/pages/protocol_viz_page.py`, `modules/protocol_animator_extra.py` |
-| **Lab Mode** | Four guided exercises: Find the Rogue Device, Diagnose Slow DNS, Identify the Broadcast Storm Source, Map Your Subnet. Progressive hints, solution reveal, exportable HTML result reports. Live challenges injected from Network Logger events. | `ui/pages/lab_mode_page.py` |
-| **Feature Guide** | Searchable catalog of all 83+ features across 9 groups with filter bar and direct Open buttons. | `ui/pages/discover_page.py` |
-| **Help** | Per-page help popovers (? button). 24-term networking glossary accessible from any page. "Common Scenarios" lookup table mapping 17 user goals to the correct feature. | `ui/help.py` |
+| **Lab Mode** | Ten guided exercises: Find the Rogue Device, Diagnose Slow DNS, Identify the Broadcast Storm Source, Map Your Subnet, Measure Your DNS Resolver Speed, Find an Open Port, Detect a DHCP Conflict, Measure Network Jitter, Identify Device Manufacturers, Read a Network Topology Map. Progressive hints, solution reveal, exportable HTML result reports. Per-scenario completion and best-verdict tracking. Live challenges injected from Network Logger events. | `ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`, `modules/lab_progress.py` |
+| **Lab Achievements** | Fourth Lab Mode panel: earned/locked badge medallions for all 10 exercises plus per-certification (Network+ / CCNA / Security+) objective coverage, driven by the shared curriculum map. Reached from the picker or the completion toast. | `modules/lab_achievements.py`, `modules/curriculum_map.py`, `ui/widgets/lab_scoreboard.py` |
+| **Feature Guide** | Searchable catalog of all 89 features across 9 groups with filter bar and direct Open buttons. | `ui/pages/discover_page.py` |
+| **Help** | Per-page help popovers (? button). 35-term networking glossary accessible from any page. "Common Scenarios" lookup table mapping 17 user goals to the correct feature. | `ui/help.py` |
 
 ---
 
@@ -139,3 +140,15 @@ All features in this section require running as Administrator / `sudo`. Most als
 | **Hardware Hub** | Central hub for hardware integration plugins. Import, configure, and monitor any plugin. Hub cards with health tracking, circuit breaker, credential management, and plugin log console. | `ui/pages/hardware_integration_page.py` |
 | **10 bundled plugins** | TP-Link Deco, ZTE 5G modem, FRITZ!Box, UniFi, OpenWrt, MikroTik, Netgear, ASUS, Synology, Home Assistant. All signed and hash-verified. | `modules/deco_client.py`, `modules/zte_client.py`, etc. |
 | **Plugin authoring** | In-app Write a Plugin tab: API discovery guide, template wizard ("⬡ New Plugin"), AI-ready prompts, validator CLI, community Browse tab, `.nspkg` import. | `ui/pages/plugin_wizard_mixin.py` |
+
+---
+
+## Settings
+
+Not a nav section — reached from the header. Listed here because these options change app-wide behaviour.
+
+| Setting | What it does | Key module |
+|---|---|---|
+| **Run at startup** | Registers NetSentinel to launch at sign-in. Picks its backend automatically: the WinRT `StartupTask` API on Store/MSIX builds (where the Run key is not the sanctioned surface) and the HKCU Run key on winget/portable installs. Windows only. The checkbox reflects the state that actually resulted — if Windows policy or a user override blocks the change, it says so rather than silently reverting. | `modules/autostart.py`, `modules/startup_task.py`, `ui/pages/settings_cards.py` |
+| **Start minimised to tray** | Launches straight to the tray icon with no window shown. Applies to every launch, not just automatic startup (`startup/start_minimised`; also available as the `--minimised` CLI flag). | `ui/pages/settings_cards.py`, `app.py` |
+| **Theme** | Arctic Clean (light) and Midnight Pro (dark, default). Clicking a swatch restyles the whole running app immediately — no restart. | `ui/styles.py` |

@@ -416,6 +416,30 @@ class AppHeaderMixin:
 
     # ── Windows Snap Layouts ─────────────────────────────────────────────────
 
+    def show_main_window(self) -> None:
+        """
+        Canonical "make the main window visible" entry point — routed from
+        SystemTrayManager._show_window() and app.py's second-instance handler.
+        Honours a pending maximize intent recorded by
+        app_settings.restore_settings() for a tray-only launch whose last
+        session was maximized: replays showMaximized() then the restore-rect
+        fixup, in that order (RULE-WIN12 — the SetWindowPlacement-family call
+        must land AFTER showMaximized() creates the HWND, never before),
+        exactly as restore_settings() would have applied it had the window
+        been shown immediately at startup instead of deferred to first reveal.
+        """
+        if getattr(self, "_pending_show_maximized", False):
+            self._pending_show_maximized = False
+            self.showMaximized()
+            rect = getattr(self, "_pending_maximize_restore_rect", None)
+            if rect is not None:
+                from ui.app_settings import fix_maximized_restore_rect
+                fix_maximized_restore_rect(self, *rect)
+        elif self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+
     def showEvent(self, event):
         super().showEvent(event)
         # The ONLY install site for the window chrome. It cannot run earlier: the

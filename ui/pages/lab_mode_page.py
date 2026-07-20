@@ -1,10 +1,11 @@
 """
 Lab / scenario mode page.
 
-Three internal panels managed via QStackedWidget:
-  0 — picker:  4 scenario cards; click to start an exercise
-  1 — runner:  step-by-step exercise with scan, hint, solution, and next controls
-  2 — result:  verdict card, findings summary, export button
+Four internal panels managed via QStackedWidget:
+  0 — picker:     10 scenario cards; click to start an exercise
+  1 — runner:     step-by-step exercise with scan, hint, solution, and next controls
+  2 — result:     verdict card, findings summary, export button
+  3 — scoreboard: badge collection + curriculum coverage (Lab Mode Badge Scoreboard)
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from modules.lab_achievements import earned_count
 from modules.lab_progress import mark_complete
 from modules.lab_scenarios import LabResult, LabScenario, SCENARIOS
 from modules.metric_store import MetricStore
@@ -28,12 +30,15 @@ from ui import styles as _s
 from ui.styles import (
     alpha,
 )
+from ui.widgets.badge_medallion import BadgeMedallion
 from ui.widgets.lab_canvas_card import LabCanvasCard
 from ui.widgets.lab_picker import LabPickerPanel
+from ui.widgets.lab_scoreboard import LabScoreboardPanel
 
-_PICKER  = 0
-_RUNNER  = 1
-_RESULT  = 2
+_PICKER      = 0
+_RUNNER      = 1
+_RESULT      = 2
+_SCOREBOARD  = 3
 
 # Lab Mode Upgrade Phase L1 (RULE-EXP1) — gates the embedded ProtocolCanvas in
 # the runner. Legacy text-only runner stays default until verified live.
@@ -259,9 +264,10 @@ class LabModePage(QWidget):
         self._lab_visuals_on: bool = QSettings().value(_LAB_VISUALS_FLAG_KEY, False, type=bool)
         self._lab_canvas: Optional[LabCanvasCard] = None
 
-        # completion tracking (Phase L2)
+        # completion tracking (Phase L2) / badge scoreboard
         self._progress: dict = self._load_progress()
         self._picker: Optional[LabPickerPanel] = None
+        self._scoreboard: Optional[LabScoreboardPanel] = None
 
         self._setup_ui()
         _s.themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
@@ -311,6 +317,7 @@ class LabModePage(QWidget):
         self._stack.addWidget(self._build_picker())
         self._stack.addWidget(self._build_runner())
         self._stack.addWidget(self._build_result())
+        self._stack.addWidget(self._build_scoreboard())
         self._stack.setCurrentIndex(_PICKER)
 
     # ── Picker ──────────────────────────────────────────────────────────
@@ -319,12 +326,27 @@ class LabModePage(QWidget):
         self._picker = LabPickerPanel(SCENARIOS)
         self._picker.start_requested.connect(self._on_start_requested)
         self._picker.explore_protocol_requested.connect(self.explore_protocol.emit)
+        self._picker.scoreboard_requested.connect(self._go_scoreboard)
         self._picker.refresh_progress(self._progress)
         return self._picker
 
     def _on_start_requested(self, scenario: LabScenario) -> None:
         self._start_scenario(scenario)
         self.scan_requested.emit()
+
+    # ── Scoreboard ──────────────────────────────────────────────────────
+
+    def _build_scoreboard(self) -> QWidget:
+        self._scoreboard = LabScoreboardPanel(SCENARIOS)
+        self._scoreboard.back_requested.connect(self._go_picker)
+        self._scoreboard.start_requested.connect(self._on_start_requested)
+        self._scoreboard.refresh(self._progress)
+        return self._scoreboard
+
+    def _go_scoreboard(self) -> None:
+        if self._scoreboard is not None:
+            self._scoreboard.refresh(self._progress)
+        self._stack.setCurrentIndex(_SCOREBOARD)
 
     # ── Runner ──────────────────────────────────────────────────────────
 
@@ -508,6 +530,13 @@ class LabModePage(QWidget):
         _s.themed_ss(self._result_title, "font-size:17px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;")
         outer.addWidget(self._result_title)
 
+        self._result_medallion = BadgeMedallion(size=96)
+        medallion_row = QHBoxLayout()
+        medallion_row.addStretch()
+        medallion_row.addWidget(self._result_medallion)
+        medallion_row.addStretch()
+        outer.addLayout(medallion_row)
+
         self._verdict_card = QFrame()
         self._verdict_card.setObjectName("verdictCard")
         v_lay = QVBoxLayout(self._verdict_card)
@@ -542,14 +571,13 @@ class LabModePage(QWidget):
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
         again_btn.clicked.connect(lambda: self._start_scenario(self._scenario) if self._scenario else None)
 
-        badge_btn = QPushButton("Download Badge (PNG)")
-        badge_btn.setFixedHeight(30)
-        _s.themed_ss(badge_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+        view_badges_btn = QPushButton("View All Badges →")
+        view_badges_btn.setFixedHeight(30)
+        _s.themed_ss(view_badges_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
             " border:1px solid {BORDER}; border-radius:4px; font-size:11px; padding:0 14px; }}"
             "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
-        badge_btn.clicked.connect(self._download_badge)
-        self._badge_btn = badge_btn
+        view_badges_btn.clicked.connect(self._go_scoreboard)
 
         back_btn = QPushButton("← Back to Exercises")
         back_btn.setFixedHeight(30)
@@ -573,7 +601,7 @@ class LabModePage(QWidget):
         btn_row.addWidget(self._result_viz_btn)
         btn_row.addStretch()
         btn_row.addWidget(again_btn)
-        btn_row.addWidget(badge_btn)
+        btn_row.addWidget(view_badges_btn)
         btn_row.addWidget(export_btn)
         outer.addLayout(btn_row)
 
@@ -815,10 +843,22 @@ class LabModePage(QWidget):
         self._save_progress()
         if self._picker is not None:
             self._picker.refresh_progress(self._progress)
+        if self._scoreboard is not None:
+            self._scoreboard.refresh(self._progress)
+        if result.verdict == "PASS":
+            from ui.widgets.toast import ToastManager
+            done, total = earned_count(self._progress, SCENARIOS)
+            ToastManager.show(
+                f"Badge earned — {self._scenario.title}  ({done} of {total})",
+                "action",
+                action_label="View badges",
+                action_callback=self._go_scoreboard,
+            )
         self._show_result(result)
 
     def _show_result(self, result: LabResult) -> None:
         self._result_title.setText(result.scenario_title)
+        self._result_medallion.set_earned(result.verdict == "PASS")
 
         color = {
             "PASS": _s.GREEN, "PARTIAL": _s.AMBER, "INCOMPLETE": _s.AMBER,
@@ -870,30 +910,6 @@ class LabModePage(QWidget):
     # ------------------------------------------------------------------
     # Export
     # ------------------------------------------------------------------
-
-    def _download_badge(self) -> None:
-        if not self._result_data:
-            return
-        from modules.utils import get_app_data_dir
-        default_name = (
-            f"badge_{self._result_data['scenario_id']}_"
-            f"{self._result_data['completed_at'][:10]}.png"
-        )
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Lab Badge",
-            str(get_app_data_dir() / "reports" / default_name),
-            "PNG files (*.png)",
-            options=QFileDialog.Option.DontUseNativeDialog,
-        )
-        if not path:
-            return
-        from modules.lab_badge import render_lab_badge_png
-        render_lab_badge_png(
-            self._result_data["scenario_title"],
-            self._result_data["completed_at"],
-            Path(path),
-        )
 
     def _export_report(self) -> None:
         if not self._result_data:

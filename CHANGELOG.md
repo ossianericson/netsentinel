@@ -4,6 +4,25 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.37
+
+**Added**
+- Lab Mode: in-app Achievements panel replacing the "Download Badge (PNG)" export — a `QPainter`-rendered hexagon+shield medallion (earned/locked) plus a 4th panel showing all 10 exercise badges and per-certification (Network+/CCNA/Security+) objective coverage, with a completion toast linking straight to it (`modules/lab_achievements.py`, `ui/widgets/badge_medallion.py`, `ui/widgets/lab_scoreboard.py`)
+- `modules/curriculum_map.py` — Qt-free curriculum loader shared by the objective badges and the new achievement math, replacing a duplicated loader that only `ui/` could import
+- `modules/autostart.py` / `modules/startup_task.py` — Store-aware autostart backend using the WinRT StartupTask API on Store/MSIX builds instead of the HKCU Run key (not the sanctioned mechanism there, and previously produced a "lying checkbox"); `startup/start_minimised` is now a discoverable Settings checkbox
+
+**Changed**
+- Inventory Changes page now skips its 15s auto-refresh table rebuild while the page isn't the active nav tab, fixing unbounded RSS growth (507MB → 1.3GB+ over a 6h chaos soak) traced to off-screen `PulsingDot` animation churn
+
+**Fixed**
+- Saved window position/size is now clamped to a currently-connected screen before being restored (`_clamp_rect_to_screen()` in `ui/app_settings.py`), preventing the window landing off-screen or oversized after a monitor arrangement or resolution change
+- Store/MSIX builds always started maximized regardless of the saved tray-only setting; tray-only launches now stay hidden correctly while still showing the tray icon
+- `ui/nav/rail.py`'s `_SmoothProgressBar` crashed with a deleted-C++-object error on a second animation past 250ms because `set_smooth_value()` never cleared `self._anim` after the animation self-deleted
+- 5 drifted/missing `data/curriculum_map.json` keys that silently dropped badges for those lab scenarios
+- `NetSentinel.spec` was missing `ui.widgets.objective_badge` and `data/curriculum_map.json` from the bundle, which would have silently broken curriculum badges in the installed build
+
+---
+
 ### v2.1.36
 
 **Added**

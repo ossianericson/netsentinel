@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-5699%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-5774%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**5,699+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**5,774+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -147,21 +147,23 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 **Built-in reference material:**
 - **Protocol Visualizer** — 10-protocol animated diagrams (ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN, TLS, ICMP) using real scan data from your own network (not placeholder addresses)
-- **Lab / Scenario Mode** — four guided exercises with progressive hints, solution reveal, and exportable HTML result reports
+- **Lab / Scenario Mode** — ten guided exercises with progressive hints, solution reveal, and exportable HTML result reports; earned badges and per-certification objective coverage in the Achievements panel
 - **IP subnet calculator** with CIDR reference and subnetting examples
-- **24-term networking glossary** accessible via the help button from any page
+- **35-term networking glossary** accessible via the help button from any page
 
 ---
 
 ## Quality
 
-**5,699 automated tests** across 432 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**5,774 automated tests** across 441 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
 ```
 
-**9-hour chaos run** (June 2026): 10,000 automated UIA interactions across mild, moderate, and wild randomisation levels (seeds 1, 42, 99). Zero crashes and zero unhandled exceptions. All 67 pages confirmed functional in byte-identical systematic pre/post runs.
+**9-hour chaos run** (June 2026): 10,001 automated UIA interactions across mild, moderate, and wild randomisation levels (seeds 1, 42, 99). Zero crashes and zero unhandled exceptions. All 62 pages confirmed functional in identical systematic pre/post runs.
+
+**~7-hour chaos soak** (July 2026): 9,729 interactions across mild/moderate/wild laps. Zero crashes, zero unhandled exceptions, and zero growth in the crash log. Peak RSS stayed flat across all three laps (674 → 775 → 750 MB) with no leak trend.
 
 **Every commit gated by:** `ruff` (unused imports/variables) · `mypy` (module type errors) · `pip-audit` (dependency CVEs) · `debug_launch.py` smoke test (catches PyQt6 runtime errors that only appear when the app actually starts) · CodeQL static analysis on every push.
 
@@ -199,13 +201,13 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.36 (current)
+### v2.1.37 (current)
 
-- Lab Mode gets an animated canvas, per-scenario progress tracking with completion badges, and closer cross-linking with the Protocol Visualizer
-- Fixed a Store-build bug where the app couldn't detect it was running under Microsoft Store and advertised a GitHub download instead of the Store update page
-- Rebuilt app shutdown to fix an intermittent close crash/hang on Store builds — all background workers now stop concurrently against one shared deadline
-- The header's network-status badge is now clickable and jumps straight to whatever's causing the current alert
-- Fixed a startup white/black flash on some launches, a theme-switch stall, and app-wide QSpinBox click/contrast issues
+- Lab Mode gets an in-app Achievements panel — earned/locked badge medallions and per-certification (Network+/CCNA/Security+) objective coverage, replacing the PNG badge download
+- Store/MSIX builds now use the proper Windows StartupTask API for "run at startup" instead of the registry Run key, fixing a setting that silently didn't take effect
+- Fixed unbounded memory growth on the Inventory Changes page from a background auto-refresh that kept rebuilding its table even while another page was showing
+- Saved window position is now validated against your currently connected screens before being restored, so it can no longer reopen off-screen after a monitor change
+- Fixed a tray-only Store launch always starting maximized, plus a curriculum-badge data gap and a rare crash in the nav sidebar's progress bar
 
 ---
 

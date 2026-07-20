@@ -108,13 +108,23 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     _wan_ip_ready             = pyqtSignal(str)        # WAN IP fetched → geo map set_home_ip (thread-safe)
     _wan_ip_nav_req           = pyqtSignal(str, str)   # WAN IP + label → set_home_ip + navigate_to_ip
 
-    def __init__(self, store=None, alert_engine=None, notif_router=None, maint_manager=None):
+    def __init__(self, store=None, alert_engine=None, notif_router=None, maint_manager=None,
+                 start_minimised: bool = False):
         super().__init__()
         self._store        = store          # MetricStore | None
         self._alert_engine = alert_engine   # AlertEngine | None
         self._notif_router = notif_router   # NotificationRouter | None
         self._maint_manager = maint_manager # MaintenanceWindowManager | None
         self._global_hours = 24.0
+        # Tray-only startup (Phase 5.5). Set before _restore_settings() runs
+        # (below) so app_settings.restore_settings() can see it. _pending_*
+        # record intent recorded during construction for AppHeaderMixin.
+        # show_main_window() to honour on first real reveal — see RULE-WIN12
+        # for why the SetWindowPlacement-family fixup must be replayed there
+        # in the same order restore_settings() would have applied it.
+        self._start_minimised = start_minimised
+        self._pending_show_maximized = False
+        self._pending_maximize_restore_rect = None
         self.setWindowTitle("NetSentinel  —  Network Security Scanner & Monitor")
         self.setMinimumSize(900, 600)
         # ── Window chrome (RULE-WIN9) ─────────────────────────────────────────

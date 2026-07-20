@@ -590,3 +590,39 @@ def test_update_device_vendor_noop_for_unknown_mac(store):
     page.set_scan_devices([_rich_dev("aa:bb:cc:00:00:01", "192.168.1.10")])
     # Should not raise — just a no-op
     page.update_device_vendor("ff:ff:ff:ff:ff:ff", "Some Vendor")
+
+
+# ── _auto_timer background-refresh visibility guard ───────────────────────────
+# Regression guard for the 2026-07-20 6h chaos soak: the Inventory Changes page
+# ran a full table teardown/rebuild (one new PulsingDot per row) every 15s via
+# _auto_timer for the entire app lifetime, even while a different nav page was
+# showing — the backlog of deleteLater()'d cell widgets never fully drained
+# under moderate/wild chaos load, driving RSS from ~500MB to 1.3GB+ over a few
+# hours with no plateau.
+
+
+def test_refresh_skips_rebuild_while_hidden(store):
+    """_refresh() (what _auto_timer's 15s tick calls) must not touch the store
+    or rebuild _table while the page is not the visible nav page."""
+    store.record_device_event(ip="192.168.1.10", event_type="JOINED", mac="aa:bb:cc:00:00:01")
+    page = _make_page(store)
+    assert not page.isVisible(), "page must start hidden for this test to be meaningful"
+    page._table.setRowCount(0)
+    page._refresh()
+    assert page._table.rowCount() == 0, (
+        "_refresh() rebuilt the event table while the page was hidden — the "
+        "background timer must not do off-screen work (PulsingDot leak regression)"
+    )
+
+
+def test_refresh_runs_once_page_becomes_visible(store):
+    """showEvent() must force a refresh so data isn't stale for up to
+    REFRESH_MS after navigating back to a page that skipped ticks while hidden."""
+    store.record_device_event(ip="192.168.1.10", event_type="JOINED", mac="aa:bb:cc:00:00:01")
+    page = _make_page(store)
+    page._table.setRowCount(0)
+    page.show()
+    assert page.isVisible()
+    assert page._table.rowCount() == 1, (
+        "showEvent() did not refresh the event table on becoming visible"
+    )
