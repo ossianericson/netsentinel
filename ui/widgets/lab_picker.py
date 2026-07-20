@@ -40,6 +40,7 @@ class LabPickerPanel(QWidget):
 
     start_requested             = pyqtSignal(object)  # LabScenario
     explore_protocol_requested  = pyqtSignal(str)
+    scoreboard_requested        = pyqtSignal()
 
     def __init__(self, scenarios: List[LabScenario], parent=None):
         super().__init__(parent)
@@ -67,7 +68,20 @@ class LabPickerPanel(QWidget):
 
         self._progress_strip = QLabel()
         _s.themed_ss(self._progress_strip, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
-        outer.addWidget(self._progress_strip)
+
+        scoreboard_btn = QPushButton("View Badges →")
+        scoreboard_btn.setFlat(True)
+        _s.themed_ss(scoreboard_btn, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            " border:none; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}")
+        scoreboard_btn.clicked.connect(self.scoreboard_requested.emit)
+
+        strip_row = QHBoxLayout()
+        strip_row.setContentsMargins(0, 0, 0, 0)
+        strip_row.addWidget(self._progress_strip)
+        strip_row.addStretch()
+        strip_row.addWidget(scoreboard_btn)
+        outer.addLayout(strip_row)
         outer.addSpacing(6)
 
         grid = QGridLayout()

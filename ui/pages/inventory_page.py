@@ -640,6 +640,7 @@ class InventoryPage(QWidget):
         restore_column_widths(self._table, "devices")
         if self._table.rowCount() == 0:
             insert_skeleton_rows(self._table, count=6)
+        self._refresh()
 
     def _maybe_show_coach_devices(self) -> None:
         if not self.isVisible():
@@ -1413,6 +1414,12 @@ class InventoryPage(QWidget):
     @pyqtSlot()
     def _refresh(self) -> None:
         if not self._store:
+            return
+        if not self.isVisible():
+            # _auto_timer ticks every REFRESH_MS for the page's whole lifetime —
+            # skip the full table teardown/rebuild (one new PulsingDot per row)
+            # while a different nav page is showing. showEvent() forces a
+            # refresh when this page becomes visible again.
             return
 
         active = list(self._active_types) if self._active_types else _ALL_TYPES

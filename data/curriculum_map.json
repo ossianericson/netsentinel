@@ -2,7 +2,7 @@
   "_comment": "Maps Lab Mode scenarios and Protocol Viz protocols to CompTIA Network+ / CCNA exam objectives.",
 
   "lab_scenarios": {
-    "Find a Rogue Device": {
+    "Find the Rogue Device": {
       "certifications": ["Network+", "CCNA"],
       "objectives": [
         "N10-009 2.1 — Compare and contrast OSI model layers",
@@ -11,7 +11,32 @@
       ],
       "study_note": "ARP scanning is the primary technique for discovering Layer 2 devices. A device that appears in ARP replies but not in DHCP leases is a candidate rogue device."
     },
-    "Measure DNS Resolver Speed": {
+    "Diagnose Slow DNS": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.5 — Explain DNS record types and resolution",
+        "N10-009 3.3 — Use appropriate tools to troubleshoot DNS issues",
+        "CCNA 1.6 — Configure and verify DNS"
+      ],
+      "study_note": "Slow DNS resolution is often mistaken for a general connectivity problem. Measuring DNS latency separately from ping RTT isolates whether the resolver or the network path is at fault."
+    },
+    "Identify the Broadcast Storm Source": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 2.2 — Spanning Tree Protocol and loop prevention",
+        "CCNA 2.5 — Configure and verify STP (802.1D, RSTP)"
+      ],
+      "study_note": "STP prevents Layer 2 broadcast storms by electing a root bridge and placing redundant ports into blocking state. RSTP (802.1w) provides faster convergence."
+    },
+    "Map Your Subnet": {
+      "certifications": ["Network+"],
+      "objectives": [
+        "N10-009 1.4 — Given a scenario, apply concepts of IP addressing and subnetting",
+        "N10-009 2.1 — Compare and contrast OSI model layers"
+      ],
+      "study_note": "A subnet map is the foundation of every troubleshooting session — knowing which addresses are gateway, DHCP pool, and static assignments makes every later diagnosis faster."
+    },
+    "Measure Your DNS Resolver Speed": {
       "certifications": ["Network+", "CCNA"],
       "objectives": [
         "N10-009 1.5 — Explain DNS record types and resolution",

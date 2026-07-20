@@ -341,11 +341,11 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Fixed native window chrome on Network Map", "Opening Network Map could permanently bring back Windows' title bar above the custom header — fixed."),
-        ("Smarter Home page suggestions", "New \"what to do next\" cards for expiring certificates, degrading trends, grade regressions, and new devices since your last visit."),
-        ("Faster background monitoring", "Availability and app-traffic writes are now batched per cycle instead of per row, for a lighter database footprint."),
-        ("Fixed more invisible close buttons", "24 more close/dismiss controls across the app (toasts, alerts, overview tiles, and more) that could silently fail to paint — now painted icons."),
-        ("Security hardening", "Resolved two open CodeQL alerts (an import cycle and a test assertion tightening)."),
+        ("Lab Mode Achievements panel", "Earned/locked badge medallions plus per-certification (Network+/CCNA/Security+) objective coverage, replacing the PNG badge download."),
+        ("Store-aware autostart", "Store/MSIX builds now use the Windows StartupTask API for \"run at startup\" instead of the registry Run key, fixing a setting that could silently not take effect."),
+        ("Fixed a memory leak on Inventory Changes", "The page's background auto-refresh kept rebuilding its table even while another page was showing — now paused while it's not visible."),
+        ("Fixed windows reopening off-screen", "Saved window position is now checked against your currently connected screens before being restored."),
+        ("More fixes", "A tray-only Store launch always starting maximized, a curriculum-badge data gap, and a rare crash in the nav sidebar's progress bar."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

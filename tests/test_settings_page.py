@@ -78,13 +78,33 @@ class TestSettingsHandlersStillPersist:
     def setup_method(self):
         self.page = SettingsPage()
 
-    def test_startup_toggle_persists_and_flashes(self, monkeypatch):
-        from unittest.mock import MagicMock
-        mock_set = MagicMock()
-        monkeypatch.setattr("ui.system_tray.set_run_on_startup", mock_set)
+    def test_startup_toggle_starts_worker_and_reflects_actual_result(self, monkeypatch):
+        """Phase 5 rewrite: the checkbox no longer calls set_run_on_startup()
+        synchronously (that structurally cannot express DisabledByUser/Policy —
+        docs/spikes/startup-task-winrt.md's RULE-REQ2 paragraph). It starts
+        workers.autostart_worker.AutostartWorker off the GUI thread and
+        re-sets from the ACTUAL result. No _flash_saved() here — the
+        checkbox's own honest state is the confirmation, not a generic
+        "Saved" flash that could contradict what the OS actually decided."""
+        from PyQt6.QtWidgets import QApplication
+
+        from modules import autostart
+        monkeypatch.setattr(autostart, "autostart_backend", lambda: "run_key")
+        monkeypatch.setattr(autostart, "set_run_on_startup", lambda enabled: None)
+        monkeypatch.setattr(autostart, "get_run_on_startup", lambda: True)
+
         self.page._on_startup_toggled(True)
-        mock_set.assert_called_once_with(True)
-        assert not self.page._saved_lbl.isHidden()
+        assert not self.page._chk_startup.isEnabled()  # in-flight (RULE-UX2)
+
+        assert self.page._autostart_worker is not None
+        assert self.page._autostart_worker.wait(5000)
+        app = QApplication.instance()
+        for _ in range(5):
+            app.processEvents()
+
+        assert self.page._chk_startup.isChecked() is True
+        assert self.page._chk_startup.isEnabled() is True
+        assert self.page._saved_lbl.isHidden()
 
     def test_auto_snap_toggle_persists_and_flashes(self, monkeypatch):
         from unittest.mock import MagicMock
@@ -92,6 +112,16 @@ class TestSettingsHandlersStillPersist:
         monkeypatch.setattr("ui.pages.settings_cards.QSettings", lambda *a: mock_qs)
         self.page._on_auto_snap_toggled(True)
         mock_qs.setValue.assert_called_once_with("baseline/auto_snapshot", True)
+
+    def test_start_minimised_toggle_persists_and_flashes(self, monkeypatch):
+        """Unlike autostart, this is a plain QSettings write with no OS consent
+        involved — _flash_saved() is honest here (Phase 5.4/5.5)."""
+        from unittest.mock import MagicMock
+        mock_qs = MagicMock()
+        monkeypatch.setattr("ui.pages.settings_cards.QSettings", lambda *a: mock_qs)
+        self.page._on_start_minimised_toggled(True)
+        mock_qs.setValue.assert_called_once_with("startup/start_minimised", True)
+        assert not self.page._saved_lbl.isHidden()
         assert not self.page._saved_lbl.isHidden()
 
 

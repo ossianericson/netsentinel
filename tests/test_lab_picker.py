@@ -68,3 +68,14 @@ def test_explore_protocol_requested_emits_key(picker):
     picker.explore_protocol_requested.connect(received.append)
     picker.explore_protocol_requested.emit("ARP")
     assert received == ["ARP"]
+
+
+def test_scoreboard_button_emits_scoreboard_requested(picker):
+    received = []
+    picker.scoreboard_requested.connect(lambda: received.append(True))
+    from PyQt6.QtWidgets import QPushButton
+    scoreboard_btn = next(
+        b for b in picker.findChildren(QPushButton) if b.text() == "View Badges →"
+    )
+    scoreboard_btn.click()
+    assert received == [True]

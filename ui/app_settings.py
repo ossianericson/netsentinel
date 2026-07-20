@@ -46,6 +46,29 @@ def center_on_screen(window, w: int, h: int) -> None:
         window.resize(w, h)
 
 
+def _clamp_rect_to_screen(x: int, y: int, w: int, h: int) -> tuple[int, int, int, int]:
+    """Clamp a saved window rect onto a currently-connected screen's available area.
+
+    A rect saved under one monitor arrangement (e.g. docked to external
+    displays) can reference coordinates no longer on any connected screen
+    once the arrangement changes (undocked, RDP, resolution change) — nothing
+    downstream validates it before feeding it into setGeometry() or the
+    native SetWindowPlacement call, so the window restores partly or wholly
+    off-screen. Same clamp shape as ui/widgets/page_header.py::show_at().
+    """
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtWidgets import QApplication
+    screen = QApplication.screenAt(QPoint(x, y)) or QApplication.primaryScreen()
+    if screen is None:
+        return x, y, w, h
+    avail = screen.availableGeometry()
+    w = min(w, avail.width())
+    h = min(h, avail.height())
+    x = max(avail.left(), min(x, avail.right() - w))
+    y = max(avail.top(), min(y, avail.bottom() - h))
+    return x, y, w, h
+
+
 def apply_exact_geometry(window, s) -> bool:
     """Re-apply the exact saved rect, undoing Qt's title-bar clamp. Returns True if applied.
 
@@ -72,6 +95,7 @@ def apply_exact_geometry(window, s) -> bool:
         return False  # corrupt entry — keep whatever restoreGeometry() produced
     if w <= 0 or h <= 0:
         return False
+    x, y, w, h = _clamp_rect_to_screen(x, y, w, h)
     window.setGeometry(x, y, w, h)
     return True
 
@@ -228,7 +252,32 @@ def restore_settings(window) -> None:
             nw_i, nh_i = int(nw), int(nh)
         except (ValueError, TypeError):
             nw_i, nh_i = 1440, 900
+        if nx is not None and ny is not None:
+            # A rect saved under a different monitor arrangement (undocked,
+            # RDP, resolution change) can reference coordinates no longer on
+            # any connected screen — clamp before it reaches window.resize()
+            # or the native restore-rect fixup below.
+            try:
+                nx, ny, nw_i, nh_i = _clamp_rect_to_screen(int(nx), int(ny), nw_i, nh_i)
+            except (ValueError, TypeError):
+                pass  # leave nx/ny as-is; the placement-rect fixup below swallows bad input too
         window.resize(nw_i, nh_i)
+        # Always record the intent, even on the tray-only path — RULE-STARTUP1's
+        # 3-way invariant. AppHeaderMixin.show_main_window() replays it (both
+        # showMaximized() and the restore-rect fixup, in the same order) the
+        # first time the window is actually revealed.
+        window._pending_show_maximized = True
+        if nx is not None and ny is not None:
+            window._pending_maximize_restore_rect = (nx, ny, nw_i, nh_i)
+        if getattr(window, "_start_minimised", False):
+            # Tray-only launch: leave the window unshown entirely. Do not call
+            # window.winId() here either (via showMaximized() or the restore-rect
+            # fixup) — forcing the HWND to exist this early, before the window is
+            # ever actually shown, collapses it to minimum size once it finally is
+            # (RULE-WIN12 failure mode 1). No splash was shown in this mode
+            # (app.py's `if not _start_minimised: _splash.show()`), so there is no
+            # atomic-transition concern being traded away by deferring.
+            return
         # Show maximized HERE during construction, with no prior setGeometry().
         # The HWND is created with Qt's default position — there is no
         # "animate-from-normal" rect for the maximize transition, so Windows
@@ -237,6 +286,7 @@ def restore_settings(window) -> None:
         # giving an atomic transition (same DWM frame) from splash to app.
         # This is the same pattern that worked in v1.9.17.
         window.showMaximized()
+        window._pending_show_maximized = False
         # Fix the restore-to rect AFTER showMaximized(), never before — see
         # fix_maximized_restore_rect() for why calling window.winId() (forced
         # by GetWindowPlacement/SetWindowPlacement) ahead of showMaximized()

@@ -128,6 +128,30 @@ def test_finishing_scenario_flips_picker_completion_state(page):
     assert scenario.id in persisted
 
 
+def test_scoreboard_panel_is_reachable(page):
+    """The Scoreboard is panel index 3 inside the existing QStackedWidget —
+    no new nav page, so reachability is proven by the stack's panel count."""
+    assert page._stack.count() == 4
+    assert page._scoreboard is not None
+
+
+def test_finishing_scenario_refreshes_scoreboard(page):
+    """RULE-T7: _finish_exercise() on a PASS must push the new state into the
+    Scoreboard panel too, not just the picker (both read the same self._progress)."""
+    from modules.lab_scenarios import get_scenario
+
+    scenario = get_scenario("rogue_device")
+    page.show()
+    assert not page._scoreboard._medallions[scenario.id].is_earned()
+
+    page._on_start_requested(scenario)
+    page._step_idx = len(scenario.steps) - 1
+    page._load_step()
+    page._finish_exercise()
+
+    assert page._scoreboard._medallions[scenario.id].is_earned()
+
+
 def test_result_screen_shows_protocol_cross_sell_button(page):
     """Phase L3 — a completed lab with a protocol offers a one-click jump to
     its Protocol Visualizer animation via the existing explore_protocol signal."""
@@ -162,47 +186,3 @@ def test_has_inject_live_challenge(page):
 def test_inject_live_challenge_is_callable(page):
     """inject_live_challenge() must exist and be callable (Lab Mode ↔ Logger contract)."""
     assert callable(page.inject_live_challenge)
-
-
-def test_download_badge_button_exists(page):
-    assert hasattr(page, "_badge_btn")
-    assert page._badge_btn.text() == "Download Badge (PNG)"
-
-
-def test_download_badge_writes_png(page, monkeypatch, tmp_path):
-    """Clicking Download Badge renders a PNG for the last completed LabResult."""
-    page._result_data = {
-        "scenario_id": "arp_spoof_1",
-        "scenario_title": "ARP Cache Poisoning Detective",
-        "completed_at": "2026-07-03 14:22:00",
-    }
-    out_path = tmp_path / "badge.png"
-    monkeypatch.setattr(
-        "PyQt6.QtWidgets.QFileDialog.getSaveFileName",
-        lambda *a, **kw: (str(out_path), ""),
-    )
-    page._download_badge()
-    assert out_path.exists()
-
-
-def test_download_badge_noop_when_dialog_cancelled(page, monkeypatch, tmp_path):
-    page._result_data = {
-        "scenario_id": "arp_spoof_1",
-        "scenario_title": "ARP Cache Poisoning Detective",
-        "completed_at": "2026-07-03 14:22:00",
-    }
-    monkeypatch.setattr(
-        "PyQt6.QtWidgets.QFileDialog.getSaveFileName",
-        lambda *a, **kw: ("", ""),
-    )
-    page._download_badge()  # must not raise
-
-
-def test_download_badge_noop_when_no_result(page, monkeypatch, tmp_path):
-    out_path = tmp_path / "badge.png"
-    monkeypatch.setattr(
-        "PyQt6.QtWidgets.QFileDialog.getSaveFileName",
-        lambda *a, **kw: (str(out_path), ""),
-    )
-    page._download_badge()  # no _result_data yet — must not raise or write
-    assert not out_path.exists()

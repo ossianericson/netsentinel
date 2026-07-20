@@ -13,6 +13,7 @@ Architecture rules observed:
 """
 from __future__ import annotations
 
+import sys
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -68,6 +69,7 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         self._all_cards: list[tuple[QFrame, str, str, str]] = []  # (card, title, kw, category)
         self._notif_test_workers: list[_NotifTestWorker] = []  # prevent GC
         self._active_category: str = "All"
+        self._autostart_query_started = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -184,6 +186,15 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         self._settings_scroll.setWidget(body)
 
         outer.addWidget(self._settings_scroll, 1)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Deferred to first show, not __init__ (RULE-WIN6): starting a
+        # QThread during construction would outlive fixture teardown in
+        # every unrelated test that constructs SettingsPage.
+        if not self._autostart_query_started and hasattr(self, "_chk_startup") and sys.platform == "win32":
+            self._autostart_query_started = True
+            self._start_autostart_worker()
 
     # ── Search + dirty guard ─────────────────────────────────────────────────
 

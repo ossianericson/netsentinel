@@ -64,7 +64,7 @@ Key modules and their roles:
 | Module | Role |
 |---|---|
 | `modules/combined_discovery.py` | Main scan orchestrator — coordinates ARP, ICMP, SYN, mDNS sweeps |
-| `modules/metric_store.py` | SQLite time-series DB (singleton, WAL mode, schema v17) |
+| `modules/metric_store.py` | SQLite time-series DB (singleton, WAL mode, schema v20) |
 | `modules/metric_store_schema.py` | DDL, schema version, column migrations, dataclasses |
 | `modules/metric_store_queries.py` | cert/service/device/HA/snapshot/grade query methods |
 | `modules/metric_store_queries_uptime.py` | uptime/device-state query methods |
@@ -133,7 +133,7 @@ The installed binary lives in `C:\Program Files\NetSentinel\` — a read-only di
 
 ## Test architecture
 
-The test suite has 5,699 tests across 432 files. Key categories:
+The test suite has 5,774 tests across 441 files. Key categories:
 
 | Category | Files | What it catches |
 |---|---|---|

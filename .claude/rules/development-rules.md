@@ -1325,16 +1325,31 @@ restore_settings()` + `app.py`'s post-`_restore_cached_scan()` show sequence:
 # ui/app_settings.py :: restore_settings() — runs during Dashboard.__init__()
 if was_maximized:
     window.resize(nw_i, nh_i)
+    window._pending_show_maximized = True                       # always recorded
+    if nx is not None and ny is not None:
+        window._pending_maximize_restore_rect = (nx, ny, nw_i, nh_i)
+    if window._start_minimised:
+        return                                                   # tray-only: leave unshown
     window.showMaximized()                 # HWND created here, backbuffer unpainted
+    window._pending_show_maximized = False
     fix_maximized_restore_rect(window, nx, ny, nw_i, nh_i)   # AFTER, see RULE-WIN12
 elif geom_b64:
     window.restoreGeometry(...)
     apply_exact_geometry(window, s)
 
 # app.py :: main() — much later, after the rest of Dashboard() + _restore_cached_scan()
-if not window.isVisible():
-    window.show()
-_splash.close()   # atomic reveal: first real paint lands in the same DWM frame
+if not _start_minimised:
+    if not window.isVisible():
+        window.show()
+    _splash.close()   # atomic reveal: first real paint lands in the same DWM frame
+else:
+    _splash.close()   # no splash was ever shown in this mode (app.py never calls
+                       # _splash.show() when _start_minimised)
+
+# ui/header.py :: AppHeaderMixin.show_main_window() — first reveal on a
+# tray-only launch (tray "Show NetSentinel" or a second-instance relaunch).
+# Replays showMaximized() + the restore-rect fixup in the same order
+# restore_settings() would have used, honouring _pending_show_maximized.
 ```
 
 WHY: on a maximized 2nd+ launch, `showMaximized()` runs during construction
@@ -1345,6 +1360,33 @@ splash→app transition in one DWM frame. The `window/normal_x/y` restore-rect
 correction (`fix_maximized_restore_rect()`) must land after `showMaximized()`
 but is still applied long before that later `_splash.close()` reveal — see
 RULE-WIN12 for why both boundaries of that window matter.
+
+**Three-way invariant (extended, Phase 5.5 — tray-only startup).** The show
+sequence has exactly three outcomes, and every path must leave
+`_pending_show_maximized` in the state `AppHeaderMixin.show_main_window()`
+needs to replay the deferred case faithfully:
+
+1. **maximized-visible** — `was_maximized` and not `_start_minimised`:
+   `showMaximized()` then the restore-rect fix run immediately, in that order
+   (RULE-WIN12); `_pending_show_maximized` is cleared back to `False` once done.
+2. **non-maximized-visible** — `geom_b64` and not `_start_minimised`:
+   `restoreGeometry()`/`apply_exact_geometry()` run immediately;
+   `_pending_show_maximized` stays `False` (this path was never maximized).
+3. **tray-only** — `_start_minimised` is `True`, independent of `was_maximized`:
+   the window is never shown, `window.winId()` is never forced (RULE-WIN12
+   failure mode 1 — forcing the HWND to exist before Qt's own `show()` call
+   collapses the window to minimum size once it is finally shown later), and
+   no splash is shown either. `_pending_show_maximized`/
+   `_pending_maximize_restore_rect` carry the deferred intent forward to
+   whichever call site first reveals the window — `show_main_window()`
+   replays it in the exact RULE-WIN12 order. A tray-only launch also needs
+   its own tray icon shown independent of `showEvent()` (which never fires
+   when the window is never shown) — see the `show_tray_icon()` QTimer site
+   in `app.py main()`, guarded by `tests/test_tray_icon_always_shown.py`.
+
+Enforced by `tests/test_startup_show_sequence.py` (subprocess Dashboard cases,
+RULE-TP4-DASH) and `tests/test_tray_icon_always_shown.py` (AST guard on the
+tray-icon call sites).
 
 ### RULE-STARTUP2 (blocking): Every QApplication.setStyleSheet() call must be wrapped in _suspend_repaints()
 

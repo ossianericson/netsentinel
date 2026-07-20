@@ -58,7 +58,7 @@ chmod +x NetSentinel && sudo ./NetSentinel
 
 ## Documentation
 
-- [Feature Reference](feature-reference.md) — complete list of all 83+ features by nav section
+- [Feature Reference](feature-reference.md) — complete list of all 89 features by nav section
 - [Architecture](architecture.md) — codebase structure, key design decisions, adding a new feature
 - [Hardware Integrations](hardware-plugins.md) — bundled plugins, writing your own, `.nspkg` format
 - [Scan Plugin Authoring](plugin-authoring.md) — custom security checks against the device list

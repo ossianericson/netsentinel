@@ -8,13 +8,16 @@ Features
 - Animated/badge tray icon (unacknowledged alert count overlay)
 - Right-click context menu: Show / Hide / Alerts / Quit
 - show_notification(title, message, severity) — routes desktop toasts
-- Startup-at-login helpers: set_run_on_startup() / get_run_on_startup()
+- Startup-at-login: backed by modules.autostart (Run-key or WinRT StartupTask
+  depending on build) via workers.autostart_worker.AutostartWorker
 
 Architecture notes
 ------------------
 - Single instance created by app.py, passed into Dashboard via __init__
 - No blocking I/O; all badge drawing is pure QPainter
-- Windows startup uses winreg (guarded with ImportError for non-Windows)
+- Autostart state is backend-selected (modules.autostart.autostart_backend())
+  and always queried/set off the GUI thread (workers/autostart_worker.py) —
+  the WinRT backend hard-guards against main-thread calls (RULE 4)
 - Never imports from ui.dashboard — dependency direction is one-way
 """
 
@@ -30,56 +33,11 @@ from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
 from ui import styles as _s
 
-# ── Startup registry helpers (Windows only) ───────────────────────────────────
-
-_STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_STARTUP_NAME = "NetSentinel"
-
-
-def get_run_on_startup() -> bool:
-    """Return True if the startup registry entry exists (Windows only)."""
-    if sys.platform != "win32":
-        return False
-    try:
-        import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _STARTUP_KEY, 0,
-                             winreg.KEY_READ)
-        winreg.QueryValueEx(key, _STARTUP_NAME)
-        winreg.CloseKey(key)
-        return True
-    except (OSError, ImportError):
-        return False
-
-
-def set_run_on_startup(enabled: bool) -> None:
-    """Add or remove the HKCU Run registry entry (Windows only, no-op elsewhere)."""
-    if sys.platform != "win32":
-        return
-    try:
-        import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _STARTUP_KEY, 0,
-                             winreg.KEY_SET_VALUE)
-        if enabled:
-            exe = _resolve_exe_path()
-            winreg.SetValueEx(key, _STARTUP_NAME, 0, winreg.REG_SZ,
-                              f'"{exe}" --startup-logger')
-        else:
-            try:
-                winreg.DeleteValue(key, _STARTUP_NAME)
-            except OSError:
-                pass  # already absent
-        winreg.CloseKey(key)
-    except (OSError, ImportError):
-        pass  # non-fatal
-
-
-def _resolve_exe_path() -> str:
-    """Return the path to NetSentinel.exe (packaged) or python + app.py (dev)."""
-    if getattr(sys, "frozen", False):
-        return sys.executable  # PyInstaller single-exe
-    root = Path(__file__).parent.parent
-    app_py = root / "app.py"
-    return f"{sys.executable} {app_py}"
+# Thin re-exports — Run-key logic now lives in modules.autostart (backend
+# selector: Run-key for winget/portable, WinRT StartupTask for Store/MSIX).
+# Kept here so existing "from ui.system_tray import ..." call sites keep
+# working during the transition.
+from modules.autostart import get_run_on_startup, set_run_on_startup  # noqa: F401
 
 
 # ── Badge icon builder ────────────────────────────────────────────────────────
@@ -185,6 +143,10 @@ class SystemTrayManager:
         # True only after show_tray_icon() has run — see show_tray_icon() and
         # the guards in show_notification()/_refresh_icon() for why this exists.
         self._shown = False
+        # Last-known autostart state (modules.autostart.AutostartState) and
+        # the in-flight query/set worker, if any — see _start_autostart_worker().
+        self._autostart_state = None
+        self._autostart_worker = None
 
     # ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -300,7 +262,10 @@ class SystemTrayManager:
 
         self._act_startup = QAction("Launch at Startup", menu)
         self._act_startup.setCheckable(True)
-        self._act_startup.setChecked(get_run_on_startup())
+        # Real state is backend-selected (Run-key or WinRT StartupTask) and
+        # can require an off-GUI-thread call (RULE 4) — populated
+        # asynchronously on first _on_menu_about_to_show(), not here.
+        self._act_startup.setChecked(False)
         self._act_startup.triggered.connect(self._on_startup_toggled)
         menu.addAction(self._act_startup)
 
@@ -324,7 +289,12 @@ class SystemTrayManager:
         self._act_show.setEnabled(not is_visible)
         self._act_hide.setEnabled(is_visible)
         if hasattr(self, "_act_startup"):
-            self._act_startup.setChecked(get_run_on_startup())
+            # Apply the last-known state immediately (no blocking), then kick
+            # off a background refresh — the user can change this in Windows
+            # Settings while the app runs, so the menu should not go stale.
+            if self._autostart_state is not None:
+                self._apply_autostart_state(self._autostart_state)
+            self._start_autostart_worker()
         # Refresh health line in menu
         if hasattr(self, "_act_health"):
             _icon = {"green": "✓", "amber": "⚠", "red": "✗"}.get(
@@ -412,7 +382,11 @@ class SystemTrayManager:
                 pass  # non-fatal — notification click callback failed
 
     def _show_window(self) -> None:
-        if self._window.isMinimized():
+        if hasattr(self._window, "show_main_window"):
+            # Honours a pending maximize intent from a tray-only launch
+            # (Phase 5.5) — see AppHeaderMixin.show_main_window().
+            self._window.show_main_window()
+        elif self._window.isMinimized():
             self._window.showNormal()
         else:
             self._window.show()
@@ -450,17 +424,55 @@ class SystemTrayManager:
             self._window._show_quick_check_window()
 
     def _on_startup_toggled(self, checked: bool) -> None:
-        set_run_on_startup(checked)
-        # Sync the Settings page checkbox if it is currently open
+        # QAction already flipped its own visual checked state on trigger;
+        # disable it until the worker reports what actually resulted — the
+        # request is not guaranteed to be honoured (DisabledByUser/Policy).
+        self._act_startup.setEnabled(False)
+        self._start_autostart_worker(enable=checked)
+
+    def _start_autostart_worker(self, enable: Optional[bool] = None) -> None:
+        """Query (enable=None) or set (enable=True/False) autostart off the
+        GUI thread. Never calls the setter synchronously (RULE 4 / RULE-UX2) —
+        the WinRT backend hard-guards against main-thread calls outright."""
+        if self._autostart_worker is not None and self._autostart_worker.isRunning():
+            return  # a query/set is already in flight; let it finish
+        from workers.autostart_worker import AutostartWorker
+        worker = AutostartWorker(enable=enable, parent=self._window)
+        worker.result_ready.connect(self._on_autostart_result)
+        worker.error.connect(self._on_autostart_error)
+        worker.finished.connect(worker.deleteLater)
+        self._autostart_worker = worker
+        worker.start()
+
+    def _apply_autostart_state(self, state) -> None:
+        if not hasattr(self, "_act_startup"):
+            return
+        self._act_startup.blockSignals(True)
+        self._act_startup.setChecked(state.enabled)
+        self._act_startup.setEnabled(state.can_change)
+        self._act_startup.setToolTip(state.reason or "")
+        self._act_startup.blockSignals(False)
+
+    def _on_autostart_result(self, state) -> None:
+        self._autostart_state = state
+        self._apply_autostart_state(state)
+        # Sync the Settings page checkbox if it is currently open — with the
+        # ACTUAL resulting state, never the value the user clicked.
         try:
             sp = getattr(self._window, "_settings_page", None)
             chk = getattr(sp, "_chk_startup", None)
             if chk is not None:
                 chk.blockSignals(True)
-                chk.setChecked(checked)
+                chk.setChecked(state.enabled)
+                chk.setEnabled(state.can_change)
+                chk.setToolTip(state.reason or "")
                 chk.blockSignals(False)
         except Exception:
             pass  # non-fatal
+
+    def _on_autostart_error(self, message: str) -> None:
+        if hasattr(self, "_act_startup"):
+            self._act_startup.setEnabled(True)
 
     def _open_alerts(self) -> None:
         self._show_window()

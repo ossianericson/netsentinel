@@ -782,6 +782,12 @@ class _SmoothProgressBar(QProgressBar):
         anim.setDuration(250)
         anim.setEasingCurve(QEasingCurve.Type.InOutSine)
         anim.valueChanged.connect(lambda v: self.setValue(int(v)))
-        anim.finished.connect(anim.deleteLater)  # self-clean when animation completes normally
+
+        def _on_finished(a=anim):
+            a.deleteLater()  # self-clean when animation completes normally
+            if self._anim is a:
+                self._anim = None  # RULE-WIN8-class fix: drop the now-dead handle so the
+                # next set_smooth_value() doesn't call .stop() on a deleted C++ object
+        anim.finished.connect(_on_finished)
         anim.start()
         self._anim = anim
