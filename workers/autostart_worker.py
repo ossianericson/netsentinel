@@ -13,6 +13,7 @@ thread's STA.
 """
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 from PyQt6.QtCore import pyqtSignal
@@ -39,7 +40,14 @@ class AutostartWorker(BaseWorker):
         backend = autostart.autostart_backend()
         ro_inited = False
         try:
-            if backend == "startup_task":
+            # sys.platform guard is required in addition to the backend check:
+            # tests force backend == "startup_task" on every OS to exercise the
+            # WinRT state-mapping logic without a real Store build, but
+            # ro_initialize()/_combase() call ctypes.WinDLL, which does not
+            # exist off Windows -- an unguarded call here raised AttributeError
+            # on the mac/Linux CI runners (routed to the error signal, leaving
+            # the checkbox in the wrong state instead of the mocked result).
+            if backend == "startup_task" and sys.platform == "win32":
                 from modules import startup_task
                 hr = startup_task.ro_initialize()
                 ro_inited = hr in (startup_task.S_OK, startup_task.S_FALSE)

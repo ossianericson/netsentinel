@@ -33,12 +33,6 @@ from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
 from ui import styles as _s
 
-# Thin re-exports — Run-key logic now lives in modules.autostart (backend
-# selector: Run-key for winget/portable, WinRT StartupTask for Store/MSIX).
-# Kept here so existing "from ui.system_tray import ..." call sites keep
-# working during the transition.
-from modules.autostart import get_run_on_startup, set_run_on_startup  # noqa: F401
-
 
 # ── Badge icon builder ────────────────────────────────────────────────────────
 
