@@ -105,7 +105,7 @@ class LabCanvasCard(QFrame):
 
     def _ctrl_btn(self, text: str, tooltip: str) -> QPushButton:
         btn = QPushButton(text)
-        btn.setToolTip(tooltip)
+        btn.setToolTip(_s.safe_tooltip(tooltip))
         btn.setFixedHeight(26)
         _s.themed_ss(btn, "QPushButton {{ background:transparent; border:1px solid {BORDER};"
             " border-radius:4px; color:{TEXT_PRIMARY}; font-size:11px; padding:0 8px; }}"

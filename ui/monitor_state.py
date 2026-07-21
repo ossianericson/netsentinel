@@ -104,14 +104,14 @@ class VerdictPanel(QFrame):
         self._toggle_btn = QPushButton("▼")
         self._toggle_btn.setFixedSize(22, 22)
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._toggle_btn.setToolTip("Collapse / expand verdict")
+        self._toggle_btn.setToolTip(_s.safe_tooltip("Collapse / expand verdict"))
         _s.themed_ss(self._toggle_btn, _btn_style)
         self._toggle_btn.clicked.connect(self._on_toggle)
 
         self._close_btn = QPushButton()
         self._close_btn.setFixedSize(22, 22)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._close_btn.setToolTip("Dismiss — reappears after next scan")
+        self._close_btn.setToolTip(_s.safe_tooltip("Dismiss — reappears after next scan"))
         _wire_close_icon(self._close_btn, "TEXT_PRIMARY")
         _s.themed_ss(self._close_btn, "QPushButton {{ background:transparent; border:none; }}"
             "QPushButton:hover {{ background:transparent; }}"
@@ -494,13 +494,13 @@ class _MonitorStateMixin:
                 alert_count = 0
             if alert_count > 0:
                 sec_btn.set_badge(alert_count)   # numeric red pill
-                sec_btn.setToolTip(f"Security Audit — {alert_count} unacknowledged alert(s)")
+                sec_btn.setToolTip(_s.safe_tooltip(f"Security Audit — {alert_count} unacknowledged alert(s)"))
             elif dhcp:
                 sec_btn.set_badge(_s.GREEN)
-                sec_btn.setToolTip("Security Audit")
+                sec_btn.setToolTip(_s.safe_tooltip("Security Audit"))
             else:
                 sec_btn.set_badge(0)
-                sec_btn.setToolTip("Security Audit")
+                sec_btn.setToolTip(_s.safe_tooltip("Security Audit"))
 
         # POLISH-2: CVE Tracker — count of Open-state CVEs
         cve_btn = self._nav_rail_buttons.get("CVE Tracker")
@@ -511,7 +511,7 @@ class _MonitorStateMixin:
                 open_cves = 0
             cve_btn.set_badge(open_cves if open_cves > 0 else 0)
             if open_cves:
-                cve_btn.setToolTip(f"CVE Tracker — {open_cves} open CVE{'s' if open_cves != 1 else ''}")
+                cve_btn.setToolTip(_s.safe_tooltip(f"CVE Tracker — {open_cves} open CVE{'s' if open_cves != 1 else ''}"))
 
         # POLISH-2: TLS & Exposure — count of expiring / expired certs
         tls_btn = self._nav_rail_buttons.get("TLS & Exposure")
@@ -529,10 +529,10 @@ class _MonitorStateMixin:
             cert_total = expired + expiring
             if cert_total > 0:
                 tls_btn.set_badge(_s.RED if expired > 0 else _s.AMBER)
-                tls_btn.setToolTip(
+                tls_btn.setToolTip(_s.safe_tooltip(
                     f"TLS & Exposure — {expired} expired, {expiring} expiring soon"
                     if expired else f"TLS & Exposure — {expiring} cert{'s' if expiring != 1 else ''} expiring soon"
-                )
+                ))
             else:
                 tls_btn.set_badge(0)
 
@@ -541,7 +541,7 @@ class _MonitorStateMixin:
         if base_btn:
             if getattr(self, "_baseline_has_drift", False):
                 base_btn.set_badge(_s.AMBER)
-                base_btn.setToolTip("Config Snapshots — baseline drift detected")
+                base_btn.setToolTip(_s.safe_tooltip("Config Snapshots — baseline drift detected"))
             else:
                 base_btn.set_badge(0)
 
@@ -678,7 +678,7 @@ class _MonitorStateMixin:
             return
         btn = self._nav_rail_buttons.get("Extend")
         if btn:
-            btn.setToolTip(f"Extend — {n} plugin{'s' if n != 1 else ''} active")
+            btn.setToolTip(_s.safe_tooltip(f"Extend — {n} plugin{'s' if n != 1 else ''} active"))
 
     # ── Overall verdict ───────────────────────────────────────────────────────
 

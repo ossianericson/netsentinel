@@ -49,6 +49,7 @@ from ui.expanding_table import ExpandingTable
 
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 _TABLE_HEADERS = [
@@ -474,9 +475,9 @@ class ConnectionsPage(QWidget):
                 item = QTableWidgetItem(text)
                 item.setForeground(QColor(color))
                 if col == 0:
-                    item.setToolTip(
+                    item.setToolTip(_s.safe_tooltip(
                         f"{exe_name}\n{len(grp_conns)} connection(s) · {external} external"
-                    )
+                    ))
                 self._tbl.setItem(row, col, item)
 
     def _populate_table(self, conns: list) -> None:
@@ -547,7 +548,7 @@ class ConnectionsPage(QWidget):
                         f"{c.exe_path or 'path unknown'}\n"
                         f"PID {c.pid or '—'} · {_total_conn} connection(s) · {_ext_conn} external"
                     )
-                    item.setToolTip(_tip)
+                    item.setToolTip(_s.safe_tooltip(_tip))
                 self._tbl.setItem(row, col, item)
 
     # ── Inline detail panel ───────────────────────────────────────────────────
@@ -836,7 +837,7 @@ class ConnectionsPage(QWidget):
         btns.rejected.connect(dlg.reject)
         lay.addWidget(btns)
 
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
 
         self._pending_block_exe = conn.exe_name

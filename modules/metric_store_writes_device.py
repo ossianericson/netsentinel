@@ -4,7 +4,7 @@ device_events (audit trail), topology_snapshots, device_state, device_event,
 known_device, and classification-override write methods.
 
 Extracted from modules/metric_store.py (Phase 3 split, per that module's own
-"Split plan" note) to keep metric_store.py under the RULE-AH1 600-line budget.
+"Split plan" note) to keep metric_store.py under the RULE-AH1 780-line budget.
 _DeviceWritesMixin is used via multiple inheritance in MetricStore — all
 symbols remain accessible as MetricStore instance methods as before.
 

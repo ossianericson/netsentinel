@@ -227,7 +227,7 @@ class ServicePage(QWidget):
                 else:
                     msg = f"Couldn't reach {host.strip()}:{port} — not added."
                     _s.themed_ss(e0_host, _e0_error_style)
-                    e0_host.setToolTip(msg)
+                    e0_host.setToolTip(_s.safe_tooltip(msg))
                     # setToolTip() alone only shows on hover — pop it up immediately
                     # so the rejection reason is actually seen, not just a red flash.
                     QToolTip.showText(e0_host.mapToGlobal(e0_host.rect().bottomLeft()), msg, e0_host)
@@ -326,7 +326,7 @@ class ServicePage(QWidget):
 
         def _flash_bar_host(tooltip: str, duration_ms: int) -> None:
             _s.themed_ss(self._txt_host, _bar_error_style)
-            self._txt_host.setToolTip(tooltip)
+            self._txt_host.setToolTip(_s.safe_tooltip(tooltip) if tooltip else tooltip)
             if tooltip:
                 # setToolTip() alone only shows on hover — pop it up immediately
                 # so the rejection reason is actually seen, not just a red flash.
@@ -584,7 +584,7 @@ class ServicePage(QWidget):
                     f"color: {status_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
                 )
                 dot.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                dot.setToolTip(f"● {r.label or r.host}:{r.port} responded successfully.")
+                dot.setToolTip(_s.safe_tooltip(f"● {r.label or r.host}:{r.port} responded successfully."))
                 self._table.setCellWidget(row_idx, 3, dot)
             else:
                 # DOWN row — status label + inline Diagnose button
@@ -598,7 +598,7 @@ class ServicePage(QWidget):
                     f"color: {status_color}; font-size: 11px; font-weight: bold;"
                     " background: transparent;"
                 )
-                _dot.setToolTip(f"{r.label or r.host}:{r.port} is not responding — the service may be offline or blocked by a firewall.")
+                _dot.setToolTip(_s.safe_tooltip(f"{r.label or r.host}:{r.port} is not responding — the service may be offline or blocked by a firewall."))
                 _cell_h.addWidget(_dot)
                 _cell_h.addStretch()
                 _diag_btn = QPushButton("Diagnose →")

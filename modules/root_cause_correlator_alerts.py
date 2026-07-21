@@ -1,6 +1,6 @@
 """
 modules/root_cause_correlator_alerts.py — recent-alerts correlation pass for
-root_cause_correlator.py (RULE-AH1: 600-line budget split).
+root_cause_correlator.py (RULE-AH1: 780-line budget split).
 
 V6 Sprint 5.1 — folds already-fired MESH_DEGRADED / MODEM_SIGNAL_DROP /
 IOT_BEHAVIOR / BASELINE_DROP alerts (as recorded by AlertEngine via

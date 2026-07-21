@@ -67,7 +67,7 @@ class _LoggerTabMixin:
             c = QCheckBox(text)
             _s.themed_ss(c, "color:{TEXT_PRIMARY}; font-size:11px;")
             if tooltip:
-                c.setToolTip(tooltip)
+                c.setToolTip(_s.safe_tooltip(tooltip))
             return c
 
         def _spin(lo: int, hi: int, val: int, suffix: str, w: int = _s.SPINBOX_WIDTH_WITH_SUFFIX) -> QSpinBox:
@@ -95,11 +95,11 @@ class _LoggerTabMixin:
         ping_row.setSpacing(6)
         ping_lbl = QLabel("Ping RTT")
         _s.themed_ss(ping_lbl, "color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
-        ping_lbl.setToolTip("RTT — Round-Trip Time: how long a packet takes to travel to a host and back, measured in milliseconds.")
+        ping_lbl.setToolTip(_s.safe_tooltip("RTT — Round-Trip Time: how long a packet takes to travel to a host and back, measured in milliseconds."))
         int_lbl = QLabel("Interval:")
         _s.themed_ss(int_lbl, "color:{TEXT_SECONDARY}; font-size:11px;")
         self._log_interval = _spin(5, 3600, _qs.value("logger/interval_s", 60, type=int), " s")
-        self._log_interval.setToolTip("How often to ping each host")
+        self._log_interval.setToolTip(_s.safe_tooltip("How often to ping each host"))
         self._log_interval.valueChanged.connect(
             lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/interval_s", v)
         )
@@ -149,7 +149,7 @@ class _LoggerTabMixin:
             1, 60, _qs.value("logging/modem_interval_min", 5, type=int), " min"
         )
         self._log_modem_interval.setEnabled(self._log_chk_modem.isChecked())
-        self._log_modem_interval.setToolTip("How often to write modem signal data to the database")
+        self._log_modem_interval.setToolTip(_s.safe_tooltip("How often to write modem signal data to the database"))
         self._log_chk_modem.toggled.connect(
             lambda v: (
                 QSettings("NetSentinel", "NetSentinel").setValue("logging/modem_enabled", v),
@@ -181,7 +181,7 @@ class _LoggerTabMixin:
             1, 60, _qs.value("logging/mesh_interval_min", 5, type=int), " min"
         )
         self._log_mesh_interval.setEnabled(self._log_chk_mesh.isChecked())
-        self._log_mesh_interval.setToolTip("How often to write mesh status data to the database")
+        self._log_mesh_interval.setToolTip(_s.safe_tooltip("How often to write mesh status data to the database"))
         self._log_chk_mesh.toggled.connect(
             lambda v: (
                 QSettings("NetSentinel", "NetSentinel").setValue("logging/mesh_enabled", v),
@@ -257,7 +257,7 @@ class _LoggerTabMixin:
         self._btn_log_chart = QPushButton("◎  View Chart")
         self._btn_log_chart.setFixedHeight(34)
         self._btn_log_chart.setEnabled(False)
-        self._btn_log_chart.setToolTip("Render loaded log as RTT chart (opens interactive window)")
+        self._btn_log_chart.setToolTip(_s.safe_tooltip("Render loaded log as RTT chart (opens interactive window)"))
         self._btn_log_chart.clicked.connect(self._view_log_chart)
 
         rot_lbl = QLabel("Rotate file:")
@@ -265,10 +265,10 @@ class _LoggerTabMixin:
         self._log_rotation = QComboBox()
         self._log_rotation.addItems(["Off", "1 hour", "6 hours", "12 hours", "24 hours"])
         self._log_rotation.setFixedWidth(90)
-        self._log_rotation.setToolTip(
+        self._log_rotation.setToolTip(_s.safe_tooltip(
             "Start a new CSV file after this interval — keeps files to a manageable size.\n"
             "12 h is best practice."
-        )
+        ))
         _rot_vals = [0, 1, 6, 12, 24]
         self._log_rotation_vals = _rot_vals
         _saved_rot = _qs.value("logger/rotation_hours", 12, type=int)
@@ -283,9 +283,9 @@ class _LoggerTabMixin:
 
         self._log_chk_autostart = QCheckBox("Auto-start on launch")
         _s.themed_ss(self._log_chk_autostart, "color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
-        self._log_chk_autostart.setToolTip(
+        self._log_chk_autostart.setToolTip(_s.safe_tooltip(
             "Logger will start immediately each time the app launches — no manual step required."
-        )
+        ))
         self._log_chk_autostart.setChecked(_qs.value("logger/auto_start", False, type=bool))
         self._log_chk_autostart.toggled.connect(
             lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/auto_start", v)

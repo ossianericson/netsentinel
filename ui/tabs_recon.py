@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table, _empty_state_widget, risk_to_label
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 if TYPE_CHECKING:
     pass
@@ -176,7 +177,7 @@ class _ReconTabsMixin:
             box.setIcon(QMessageBox.Icon.Warning)
             box.addButton("Yes, I'm authorized", QMessageBox.ButtonRole.AcceptRole)
             box.addButton("No / Not sure", QMessageBox.ButtonRole.RejectRole)
-            box.exec()
+            run_dialog(box)
             clicked = box.clickedButton()
             authorized = clicked is not None and clicked.text() == "Yes, I'm authorized"
             set_network_authorized(fp, authorized)
@@ -198,7 +199,7 @@ class _ReconTabsMixin:
         box.setIcon(QMessageBox.Icon.Warning)
         box.addButton("Continue", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
+        run_dialog(box)
         clicked = box.clickedButton()
         return clicked is not None and clicked.text() == "Continue"
 
@@ -1045,9 +1046,9 @@ class _ReconTabsMixin:
 
         self._btn_plugin_community = QPushButton("⬇  Get Plugins")
         self._btn_plugin_community.setObjectName("btnNetRefresh")
-        self._btn_plugin_community.setToolTip(
+        self._btn_plugin_community.setToolTip(_s.safe_tooltip(
             "Browse and install scan plugins from the community registry"
-        )
+        ))
         self._btn_plugin_community.clicked.connect(self._browse_community_plugins)
 
         ctrl.addWidget(self._btn_plugin_reload)
@@ -1125,7 +1126,7 @@ class _ReconTabsMixin:
                 tooltip = "\n".join(issues)
             status_item = QTableWidgetItem("●")
             status_item.setForeground(QColor(dot_color))
-            status_item.setToolTip(tooltip)
+            status_item.setToolTip(_s.safe_tooltip(tooltip))
             status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._plugin_list_table.setItem(r, 2, status_item)
 
@@ -1188,7 +1189,7 @@ class _ReconTabsMixin:
         bb.rejected.connect(dlg.reject)
         vlay.addWidget(bb)
 
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
 
         plugin_name = name_edit.text().strip()
@@ -1362,7 +1363,7 @@ class _ReconTabsMixin:
             t.start()
 
         btn_refresh.clicked.connect(_fetch)
-        dlg.exec()
+        run_dialog(dlg)
 
     @pyqtSlot()
     def _run_selected_plugin(self):
@@ -1427,7 +1428,7 @@ class _ReconTabsMixin:
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         bb.rejected.connect(dlg.reject)
         vlay.addWidget(bb)
-        dlg.exec()
+        run_dialog(dlg)
 
     @pyqtSlot(QPoint)
     def _on_plugin_table_context(self, pos) -> None:
@@ -1557,7 +1558,7 @@ class _ReconTabsMixin:
         worker.error.connect(_on_err)
         worker.start()
         self._plugin_worker = worker
-        dlg.exec()
+        run_dialog(dlg)
 
     def _build_recon_pe_tab(self) -> QWidget:
         w = QWidget()

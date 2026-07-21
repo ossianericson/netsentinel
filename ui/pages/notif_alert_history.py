@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMenu,
     QPushButton,
+    QSizePolicy,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -311,7 +312,10 @@ class _NotifAlertHistoryMixin:
         )
         self._alert_history_table.setAlternatingRowColors(True)
         self._alert_history_table.verticalHeader().setDefaultSectionSize(24)
-        self._alert_history_table.setFixedHeight(200)
+        self._alert_history_table.setMinimumHeight(150)
+        self._alert_history_table.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         _s.themed_ss(self._alert_history_table, _tbl_qss)
         for w, col in zip((100, 80, 100, 80), range(4)):
             self._alert_history_table.setColumnWidth(col, w)
@@ -330,7 +334,7 @@ class _NotifAlertHistoryMixin:
         self._alert_history_table.itemSelectionChanged.connect(
             self._on_hist_selection_changed
         )
-        hist_lay.addWidget(self._alert_history_table)
+        hist_lay.addWidget(self._alert_history_table, 1)
 
         self._hist_empty_lbl = QLabel("No alerts recorded yet — alerts appear here after the first detection event.")
         self._hist_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -416,14 +420,17 @@ class _NotifAlertHistoryMixin:
         self._log_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._log_table.setAlternatingRowColors(True)
         self._log_table.verticalHeader().setDefaultSectionSize(24)
-        self._log_table.setFixedHeight(200)
+        self._log_table.setMinimumHeight(150)
+        self._log_table.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         _s.themed_ss(self._log_table, _tbl_qss)
         for w, col in zip((110, 90, 80, 120, 80), range(5)):
             self._log_table.setColumnWidth(col, w)
         self._log_table.itemClicked.connect(self._on_log_row_clicked)
         self._jk_filter_log = _JKNavFilter(self._log_table, self)
         self._log_table.viewport().installEventFilter(self._jk_filter_log)
-        log_lay.addWidget(self._log_table)
+        log_lay.addWidget(self._log_table, 1)
 
         self._log_empty_lbl = QLabel("No delivery attempts recorded yet — entries appear here after the first alert is sent.")
         self._log_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -528,7 +535,7 @@ class _NotifAlertHistoryMixin:
                 if status == "FAILED":
                     item.setBackground(QBrush(QColor(_s.RED + "22")))
                     if err and col == 5:
-                        item.setToolTip(err)
+                        item.setToolTip(_s.safe_tooltip(err))
                 self._log_table.setItem(row, col, item)
             self._log_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, entry)
 

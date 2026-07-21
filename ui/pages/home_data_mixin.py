@@ -21,6 +21,8 @@ from ui.widgets.home_widgets import (
 )
 from ui.widgets.home_session_widgets import _GradeBreakdownDialog
 
+from ui.dialog_utils import run_dialog
+
 try:
     from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
 except ImportError:
@@ -465,7 +467,7 @@ class _HomeDataMixin:
             ))
             msg_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             msg_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
-            msg_lbl.setToolTip("Click to view in Notifications")
+            msg_lbl.setToolTip(_s.safe_tooltip("Click to view in Notifications"))
             msg_lbl.mousePressEvent = lambda _e, a=alert: self.alert_view_requested.emit(a)
 
             time_lbl = QLabel(time_str)
@@ -476,7 +478,7 @@ class _HomeDataMixin:
             ack_btn = QPushButton("✓")
             ack_btn.setFixedSize(22, 18)
             ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            ack_btn.setToolTip("Acknowledge this alert")
+            ack_btn.setToolTip(_s.safe_tooltip("Acknowledge this alert"))
             _s.themed_ss(ack_btn, lambda: (
                 f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED};"
                 f" border:1px solid {_s.BORDER}; border-radius:3px; font-size:10px; }}"
@@ -1147,7 +1149,7 @@ class _HomeDataMixin:
             self._grade_dimensions,
             parent=self,
         )
-        dlg.exec()
+        run_dialog(dlg)
 
     def on_live_challenge(self, scenario) -> None:
         """Show a persistent amber notice when Network Logger flags a network event.
@@ -1220,10 +1222,10 @@ class _HomeDataMixin:
         run_all_btn = QPushButton("▶  Rescan")
         run_all_btn.setFixedHeight(22)
         run_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        run_all_btn.setToolTip(
+        run_all_btn.setToolTip(_s.safe_tooltip(
             "Runs a full device scan. For Security Audit, Speed Test, and other "
             "categories, use each row's own button below."
-        )
+        ))
         _s.themed_ss(
             run_all_btn,
             "QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:10px;"

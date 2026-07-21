@@ -327,7 +327,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             cve_item = QTableWidgetItem(f"{cve_n} CVEs" if cve_n else "—")
             cve_item.setForeground(QColor(_s.AMBER if cve_n else _s.TEXT_MUTED))
             if cve_n:
-                cve_item.setToolTip(f"Click to view {cve_n} CVE(s) for {p.service}")
+                cve_item.setToolTip(_s.safe_tooltip(f"Click to view {cve_n} CVE(s) for {p.service}"))
             self._recon_syn_table.setItem(row, 6, cve_item)
         _ts_syn = time.time()
         _syn_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
@@ -584,7 +584,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     if v_item and v_item.text() in ("Unknown", ""):
                         v_item.setText(vendor)
                         v_item.setForeground(_QC(_s.TEXT_PRIMARY))
-                        v_item.setToolTip(f"Vendor resolved from OUI database\n({mac_item.text()[:8].upper()})")
+                        v_item.setToolTip(_s.safe_tooltip(f"Vendor resolved from OUI database\n({mac_item.text()[:8].upper()})"))
                     break
         except Exception:
             pass  # non-fatal — table update is best-effort
@@ -762,27 +762,27 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 except (ValueError, IndexError):
                     _is_rand = False
                 if _is_rand:
-                    _v_item.setToolTip(
+                    _v_item.setToolTip(_s.safe_tooltip(
                         "MAC address uses privacy randomization\n"
                         "(iOS/Android feature) — vendor lookup not\n"
                         "possible by design. This is normal."
-                    )
+                    ))
                 elif vendor in ("Unknown", ""):
-                    _v_item.setToolTip(
+                    _v_item.setToolTip(_s.safe_tooltip(
                         "OUI prefix not found in device database.\n"
                         "The device may be uncommon or use a\n"
                         "recently issued MAC range."
-                    )
+                    ))
                 else:
-                    _v_item.setToolTip(f"Identified from OUI/device database\n({mac[:8].upper()})")
+                    _v_item.setToolTip(_s.safe_tooltip(f"Identified from OUI/device database\n({mac[:8].upper()})"))
             # Device type tooltip when inferred from hostname/ports
             _dt_item = self._m1_table.item(_row_idx, 5)
             if _dt_item and dtype == "Unknown Device":
-                _dt_item.setToolTip(
+                _dt_item.setToolTip(_s.safe_tooltip(
                     "Device type could not be determined.\n"
                     "Run a full port scan (Security Audit →\n"
                     "Port Scan) to improve classification."
-                )
+                ))
 
         self._m1_table.setSortingEnabled(True)
         # Re-apply search/chip filter and restore persisted sort (FILTER-1 / FILTER-2)

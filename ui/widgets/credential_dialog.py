@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 
 from ui.widgets.hub_card import _PluginConnectionTester, _instance_id
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 def show_credential_dialog(
@@ -112,10 +113,10 @@ def show_credential_dialog(
 
     skip_btn = QPushButton("Add Without Testing")
     skip_btn.setVisible(False)
-    skip_btn.setToolTip(
+    skip_btn.setToolTip(_s.safe_tooltip(
         "Device unreachable — save credentials now and add.\n"
         "The card will show an error until the device comes online."
-    )
+    ))
     _s.themed_ss(skip_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
         " font-size:10px; padding:2px 0; text-decoration:underline; }}"
         "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
@@ -211,7 +212,7 @@ def show_credential_dialog(
     test_btn.clicked.connect(_run_test)
     pw_edit.returnPressed.connect(_run_test)
 
-    result = dlg.exec()
+    result = run_dialog(dlg)
     confirmed_ip = ip_edit.text().strip()
 
     for t in _tester:
@@ -279,4 +280,4 @@ def show_unsigned_warning(parent: QWidget, path: str) -> bool:
     btn_row.addWidget(proceed_btn)
     lay.addLayout(btn_row)
 
-    return dlg.exec() == QDialog.DialogCode.Accepted
+    return run_dialog(dlg) == QDialog.DialogCode.Accepted

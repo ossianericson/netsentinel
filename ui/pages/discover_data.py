@@ -2,9 +2,14 @@
 discover_data.py — Pure data: _FEATURES list and related constants for FeatureGuidePage.
 
 Extracted from ui/pages/discover_page.py (Sprint 13) to keep that file within the
-600-line budget.  discover_page.py imports from here.
+780-line budget.  discover_page.py imports from here.
 """
 from __future__ import annotations
+
+# Both names are private-by-convention but imported directly by discover_page.py —
+# listed here so static analysis (CodeQL py/unused-global-variable) recognizes the
+# cross-module usage as intentional.
+__all__ = ["_FEATURES", "_RECOMMENDED_PAGES"]
 
 # ── Feature registry ───────────────────────────────────────────────────────────
 # Each entry: group, icon, name, desc, page (nav label or None), requires, tags
@@ -27,6 +32,35 @@ _FEATURES: list[dict] = [
             # Natural-language aliases (Sprint 7, S7-5)
             "who is online", "who's online", "who is connected", "what's connected",
         ],
+    },
+    {
+        "group": "Start here",
+        "icon": "▶",
+        "name": "Protocol Visualizer",
+        "desc": (
+            "See how your network's protocols actually work — animated step-by-step "
+            "diagrams of ARP, DNS, TCP, DHCP, and STP using your real device "
+            "addresses. Why this matters: the fastest way to build a mental model "
+            "of what's actually happening on the wire, no prior networking "
+            "knowledge required."
+        ),
+        "page": "Protocol Visualizer",
+        "requires": None,
+        "tags": ["start", "protocol", "animation", "arp", "dns", "tcp", "dhcp", "stp", "learn", "visualize"],
+    },
+    {
+        "group": "Start here",
+        "icon": "⬡",
+        "name": "Lab Mode",
+        "desc": (
+            "Guided hands-on exercises on your own live network — find a rogue device, "
+            "diagnose slow DNS, identify a broadcast storm — with hints, solutions, and "
+            "earned objective badges mapped to CompTIA Network+ / CCNA. Why this matters: "
+            "the fastest way to turn a scan result into an actual skill."
+        ),
+        "page": "Lab Mode",
+        "requires": None,
+        "tags": ["start", "lab", "exercise", "guided", "learn", "scenario", "tutorial", "practice"],
     },
     {
         "group": "Start here",
@@ -98,50 +132,6 @@ _FEATURES: list[dict] = [
         "page": "Notifications",
         "requires": None,
         "tags": ["start", "alerts", "notify", "email", "webhook"],
-    },
-    {
-        "group": "Start here",
-        "icon": "▶",
-        "name": "Protocol Visualizer",
-        "desc": (
-            "See how your network's protocols actually work — animated step-by-step "
-            "diagrams of ARP, DNS, TCP, DHCP, and STP using your real device "
-            "addresses. Why this matters: the fastest way to build a mental model "
-            "of what's actually happening on the wire, no prior networking "
-            "knowledge required."
-        ),
-        "page": "Protocol Visualizer",
-        "requires": None,
-        "tags": ["start", "protocol", "animation", "arp", "dns", "tcp", "dhcp", "stp", "learn", "visualize"],
-    },
-    # ── New in this version ────────────────────────────────────────────────────
-    {
-        "group": "New in this version",
-        "icon": "★",
-        "name": "Native window chrome — Aero Snap, Snap Layouts, drag-to-snap",
-        "desc": (
-            "The window is now a real Win32 window with only the title bar's paint "
-            "suppressed, instead of a frameless popup Windows never treated as snappable. "
-            "Aero Snap, Snap Layouts, Win+arrow, drag-to-snap, shake, and native edge-resize "
-            "all work now, and screen readers can attach cleanly from the moment the app "
-            "launches. v2.1.30."
-        ),
-        "page": None,
-        "requires": None,
-        "tags": ["new", "window", "snap layouts", "aero snap", "accessibility", "screen reader"],
-    },
-    {
-        "group": "New in this version",
-        "icon": "★",
-        "name": "Instant theme switching",
-        "desc": (
-            "Clicking a theme swatch in Settings now restyles the whole running app "
-            "immediately — no restart needed to switch between Arctic Clean and "
-            "Midnight Pro. v2.1.29."
-        ),
-        "page": None,
-        "requires": None,
-        "tags": ["new", "theme", "dark mode", "settings", "arctic clean", "midnight pro"],
     },
     # ── Monitoring ─────────────────────────────────────────────────────────────
     {
@@ -1256,11 +1246,11 @@ _FEATURES: list[dict] = [
 # store/scan dependency, mirroring the existing home-page suggestion strip in
 # ui/nav/builder.py._DISCOVERY_PAGES.
 _RECOMMENDED_PAGES: list[str] = [
+    "Protocol Visualizer",
+    "Lab Mode",
     "Network Logger",
     "What's Wrong?",
     "Network Grade",
-    "Protocol Visualizer",
-    "Lab Mode",
     "Network Health Report",
 ]
 

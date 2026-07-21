@@ -292,7 +292,7 @@ class _ThemeSwatch(QFrame):
         self._colors = colors
         self.setFixedSize(128, 90)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip(f"Apply {name} theme")
+        self.setToolTip(_styles.safe_tooltip(f"Apply {name} theme"))
         self._build(colors)
 
     def _build(self, c: dict) -> None:
@@ -816,7 +816,7 @@ class _SettingsCardsMixin:
         self._autostart_worker = None
         if sys.platform != "win32":
             self._chk_startup.setEnabled(False)
-            self._chk_startup.setToolTip("Startup registration is only available on Windows")
+            self._chk_startup.setToolTip(_styles.safe_tooltip("Startup registration is only available on Windows"))
         else:
             # Real state is backend-selected (Run-key or WinRT StartupTask) and
             # requires an off-GUI-thread call for the latter (RULE 4). Start
@@ -826,7 +826,7 @@ class _SettingsCardsMixin:
             # teardown in every unrelated test that constructs this page).
             self._chk_startup.setChecked(False)
             self._chk_startup.setEnabled(False)
-            self._chk_startup.setToolTip("Checking with Windows…")
+            self._chk_startup.setToolTip(_styles.safe_tooltip("Checking with Windows…"))
         self._chk_startup.toggled.connect(self._on_startup_toggled)
         bl.addWidget(self._chk_startup)
         self._chk_start_minimised = QCheckBox(
@@ -909,7 +909,7 @@ class _SettingsCardsMixin:
         # confirmation (this is the structural fix for the "lying checkbox" —
         # docs/spikes/startup-task-winrt.md's RULE-REQ2 paragraph).
         self._chk_startup.setEnabled(False)
-        self._chk_startup.setToolTip("Asking Windows…")
+        self._chk_startup.setToolTip(_styles.safe_tooltip("Asking Windows…"))
         self._start_autostart_worker(enable=checked)
 
     def _start_autostart_worker(self, enable=None) -> None:
@@ -931,7 +931,7 @@ class _SettingsCardsMixin:
         self._chk_startup.blockSignals(True)
         self._chk_startup.setChecked(state.enabled)
         self._chk_startup.setEnabled(state.can_change)
-        self._chk_startup.setToolTip(state.reason or "")
+        self._chk_startup.setToolTip(_styles.safe_tooltip(state.reason) if state.reason else "")
         self._chk_startup.blockSignals(False)
         # Sync the tray menu item too, mirroring how it syncs this checkbox
         # when the user toggles autostart from the tray instead.
@@ -951,7 +951,7 @@ class _SettingsCardsMixin:
 
     def _on_autostart_error(self, message: str) -> None:
         self._chk_startup.setEnabled(True)
-        self._chk_startup.setToolTip(f"Could not check with Windows: {message}")
+        self._chk_startup.setToolTip(_styles.safe_tooltip(f"Could not check with Windows: {message}"))
 
     def _on_start_minimised_toggled(self, checked: bool) -> None:
         self._flash_saved()
@@ -1224,9 +1224,9 @@ class _SettingsCardsMixin:
 
         skip_hints_btn = QPushButton("Skip all guided hints")
         skip_hints_btn.setFixedWidth(220)
-        skip_hints_btn.setToolTip(
+        skip_hints_btn.setToolTip(_styles.safe_tooltip(
             "Mark every first-run coach mark as seen so they never appear again."
-        )
+        ))
         _styles.themed_ss(skip_hints_btn, "QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
             " border:1px solid {BORDER}; padding:4px 14px;"
             " font-size:11px; border-radius:4px; }}"
@@ -1237,9 +1237,9 @@ class _SettingsCardsMixin:
 
         restart_tour_btn = QPushButton("Restart guided tour")
         restart_tour_btn.setFixedWidth(220)
-        restart_tour_btn.setToolTip(
+        restart_tour_btn.setToolTip(_styles.safe_tooltip(
             "Replay the 5-step introductory tour that runs on first launch."
-        )
+        ))
         _styles.themed_ss(restart_tour_btn, "QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
             " border:1px solid {ACCENT}; padding:4px 14px;"
             " font-size:11px; border-radius:4px; }}"
@@ -1546,7 +1546,7 @@ class _SettingsCardsMixin:
         for hex_val, name in _ACCENT_PRESETS:
             sw = QPushButton()
             sw.setFixedSize(28, 28)
-            sw.setToolTip(f"{name} ({hex_val})")
+            sw.setToolTip(_styles.safe_tooltip(f"{name} ({hex_val})"))
             sw.setCursor(Qt.CursorShape.PointingHandCursor)
             active = (current_override == hex_val)
             # Loop-capture trap: bind hex_val + active as default args so each swatch keeps

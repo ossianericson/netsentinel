@@ -118,8 +118,14 @@ class JargonTooltip(QLabel):
                 f'<span style="color:{_s.ACCENT}; text-decoration:underline dotted;">{term}</span>'
             )
             self.setTextFormat(Qt.TextFormat.RichText)
+            # Not routed through safe_tooltip() — this string is already hand-built
+            # rich text (<b>/<span> tags); safe_tooltip() HTML-escapes its input,
+            # which would literal-ize those tags. Wrap with the same fixed light
+            # foreground color it applies, without escaping the inner markup.
             self.setToolTip(
+                f"<span style='color:{_s.WHITE};'>"
                 f"<b>{term}</b><br><span style='font-size:11px;'>{definition}</span>"
+                f"</span>"
             )
             self.setCursor(Qt.CursorShape.WhatsThisCursor)
         else:

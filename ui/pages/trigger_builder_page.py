@@ -59,6 +59,7 @@ from ui.widgets.context_menu import install_copy_menu
 from ui.tabs_helpers import _table
 from ui import styles as _s
 from ui.widgets.device_detail_pane import _wire_close_icon
+from ui.dialog_utils import run_dialog
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
@@ -581,14 +582,14 @@ class TriggerBuilderPage(QWidget):
             description="Alert when the gateway stops responding",
         )
         dlg = _RuleEditorDialog(rule=template, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._rules.append(dlg.result_rule)
             save_rules(self._rules)
             self._refresh_table()
 
     def _on_add(self) -> None:
         dlg = _RuleEditorDialog(parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._rules.append(dlg.result_rule)
             save_rules(self._rules)
             self._refresh_table()
@@ -598,7 +599,7 @@ class TriggerBuilderPage(QWidget):
         if rule is None:
             return
         dlg = _RuleEditorDialog(rule=rule, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             idx = next((i for i, r in enumerate(self._rules) if r.id == rule.id), -1)
             if idx >= 0:
                 self._rules[idx] = dlg.result_rule

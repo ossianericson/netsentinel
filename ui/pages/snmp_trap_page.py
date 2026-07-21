@@ -31,6 +31,7 @@ from ui.widgets.context_menu import install_copy_menu
 from modules.metric_store import MetricStore
 from ui.tabs_helpers import _table
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 # ── Helpers (mirrors dashboard helpers, no dependency on dashboard) ───────────
@@ -257,7 +258,7 @@ class SnmpTrapPage(QWidget):
         if not trap:
             return
         dlg = _TrapDetailDialog(trap, parent=self)
-        dlg.exec()
+        run_dialog(dlg)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

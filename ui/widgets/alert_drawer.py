@@ -576,7 +576,7 @@ class AlertDrawer(QFrame):
         self._log_btn = QPushButton("Network Logger →")
         self._log_btn.setFixedHeight(26)
         self._log_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._log_btn.setToolTip("Open Network Logger at ±30 min around this alert")
+        self._log_btn.setToolTip(_s.safe_tooltip("Open Network Logger at ±30 min around this alert"))
         _s.themed_ss(self._log_btn, lambda: (
             f"QPushButton {{ background:transparent; color:{_s.ACCENT};"
             f" border:1px solid {_s.ACCENT}; border-radius:3px;"
@@ -610,7 +610,7 @@ class AlertDrawer(QFrame):
         self._troubleshoot_btn = QPushButton("Troubleshoot →")
         self._troubleshoot_btn.setFixedHeight(26)
         self._troubleshoot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._troubleshoot_btn.setToolTip("Open the Troubleshoot hub to find the right fix")
+        self._troubleshoot_btn.setToolTip(_s.safe_tooltip("Open the Troubleshoot hub to find the right fix"))
         _s.themed_ss(self._troubleshoot_btn, "QPushButton {{ background:transparent; color:{ACCENT};"
             " border:1px solid {BORDER}; border-radius:3px;"
             " font-size:10px; padding:0 8px; }}"

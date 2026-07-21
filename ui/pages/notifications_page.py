@@ -127,7 +127,7 @@ class NotificationsPage(
         _hist_layout = QVBoxLayout(_hist_widget)
         _hist_layout.setContentsMargins(16, 12, 16, 12)
         _hist_layout.setSpacing(0)
-        _hist_layout.addWidget(self._build_log_card())
+        _hist_layout.addWidget(self._build_log_card(), 1)
         self._notif_tabs.addTab(_hist_widget, "Alert History")
 
         self._alert_drawer = AlertDrawer(self)
@@ -295,7 +295,15 @@ class NotificationsPage(
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        if self._alert_history_table.rowCount() == 0:
+        if self._notif_tabs.currentIndex() == 1:
+            # switch_to_history_tab() sets the inner tab index synchronously,
+            # before _nav_crossfade_to()'s deferred setCurrentWidget() actually
+            # makes this page visible -- so the currentChanged-driven refresh
+            # bails on isVisible() and never retries. showEvent fires exactly
+            # when isVisible() becomes true, so redo it here.
+            self._refresh_alert_history()
+            self.refresh_log()
+        elif self._alert_history_table.rowCount() == 0:
             insert_skeleton_rows(self._alert_history_table, count=4)
 
     # ── Apply to live objects ─────────────────────────────────────────────────

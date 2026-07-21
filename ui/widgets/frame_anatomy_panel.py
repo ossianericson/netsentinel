@@ -156,7 +156,7 @@ class FrameAnatomyPanel(QFrame):
             name_item = QTableWidgetItem(name)
             definition = get_definition(name)
             if definition:
-                name_item.setToolTip(definition)
+                name_item.setToolTip(_s.safe_tooltip(definition))
             self._table.setItem(row, 0, name_item)
             self._table.setItem(row, 1, QTableWidgetItem(str(value)))
 

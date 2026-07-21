@@ -86,7 +86,7 @@ class FreshnessStrip(QFrame):
         _btn = QPushButton("↻")
         _btn.setFixedSize(24, 22)
         _btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _btn.setToolTip("Rescan network")
+        _btn.setToolTip(_s.safe_tooltip("Rescan network"))
         _s.themed_ss(_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
             " font-size:14px; border-radius:3px; }}"
             "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
@@ -155,14 +155,16 @@ class FreshnessStrip(QFrame):
                     " border:none; padding:0 2px; }}"
                     "QPushButton:hover {{ color:{GREEN}; background:transparent; }}"
                     "QPushButton:pressed {{ color:{GREEN}; background:transparent; }}")
-                pill.setToolTip(_PILL_ON_TIPS.get(name, ""))
+                _tip = _PILL_ON_TIPS.get(name, "")
+                pill.setToolTip(_s.safe_tooltip(_tip) if _tip else _tip)
             else:
                 pill.setText(f"○ {name}")
                 _s.themed_ss(pill, "QPushButton {{ font-size:10px; color:{TEXT_MUTED}; background:transparent;"
                     " border:none; padding:0 2px; }}"
                     "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
                     "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
-                pill.setToolTip(_PILL_OFF_TIPS.get(name, ""))
+                _tip = _PILL_OFF_TIPS.get(name, "")
+                pill.setToolTip(_s.safe_tooltip(_tip) if _tip else _tip)
 
         _set_pill(self._fs_pill_arp,   arp,    "ARP")
         _set_pill(self._fs_pill_dhcp,  dhcp,   "DHCP")
@@ -215,7 +217,7 @@ class FreshnessStrip(QFrame):
             parts.append(f"Last entry: {last_entry_str}")
         if rtt_str:
             parts.append(f"RTT: {rtt_str}")
-        self._fs_pill_log.setToolTip("  ·  ".join(parts))
+        self._fs_pill_log.setToolTip(_s.safe_tooltip("  ·  ".join(parts)))
 
 
 # ── GettingStartedCard ────────────────────────────────────────────────────────
@@ -609,7 +611,7 @@ class _GradeBreakdownDialog:
             _fg2 = _GRADE_COLOR.get(dgrade, _s.TEXT_SECONDARY)
             _th  = " | ".join(_THRESHOLDS.get(name, ()))
             if _th:
-                row.setToolTip(f"Thresholds: {_th}")
+                row.setToolTip(_s.safe_tooltip(f"Thresholds: {_th}"))
 
             rl = QHBoxLayout(row)
             rl.setContentsMargins(8, 5, 8, 5)

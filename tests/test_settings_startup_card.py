@@ -102,7 +102,7 @@ def test_in_flight_state_shows_asking_windows_tooltip(monkeypatch):
     page._on_startup_toggled(True)
 
     assert page._chk_startup.isEnabled() is False
-    assert page._chk_startup.toolTip() == "Asking Windows…"
+    assert "Asking Windows…" in page._chk_startup.toolTip()
 
     assert page._autostart_worker.wait(5000)
     _pump()

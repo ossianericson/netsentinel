@@ -341,11 +341,11 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Lab Mode Achievements panel", "Earned/locked badge medallions plus per-certification (Network+/CCNA/Security+) objective coverage, replacing the PNG badge download."),
-        ("Store-aware autostart", "Store/MSIX builds now use the Windows StartupTask API for \"run at startup\" instead of the registry Run key, fixing a setting that could silently not take effect."),
-        ("Fixed a memory leak on Inventory Changes", "The page's background auto-refresh kept rebuilding its table even while another page was showing — now paused while it's not visible."),
-        ("Fixed windows reopening off-screen", "Saved window position is now checked against your currently connected screens before being restored."),
-        ("More fixes", "A tray-only Store launch always starting maximized, a curriculum-badge data gap, and a rare crash in the nav sidebar's progress bar."),
+        ("Fixed dialogs leaking memory", "Every confirmation, picker, and other dialog now cleans up properly when closed — the single biggest contributor to memory growth over long sessions."),
+        ("Fixed illegible tooltips in Arctic Clean", "Tooltips rendered black-on-black in the light theme; they're readable in both themes now."),
+        ("Fixed Alert History getting stuck loading", "Opening it from the alert badge or another shortcut could leave it stuck on placeholder rows until you switched tabs and back."),
+        ("Fixed a rare crash", "Could occur before a device's gateway MAC address had finished resolving."),
+        ("Feature Guide reordered", "Protocol Visualizer and Lab Mode now lead \"Start here\" instead of outdated \"what's new\" callouts."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

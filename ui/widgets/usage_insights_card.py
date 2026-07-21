@@ -126,7 +126,7 @@ class UsageInsightsCard(QWidget):
         _s.themed_ss(self._qos_dismiss_btn, "QPushButton {{ background:transparent; border:none; }}"
             "QPushButton:hover   {{ background:transparent; }}"
             "QPushButton:pressed {{ background:transparent; }}")
-        self._qos_dismiss_btn.setToolTip("Dismiss this suggestion")
+        self._qos_dismiss_btn.setToolTip(_s.safe_tooltip("Dismiss this suggestion"))
         self._qos_dismiss_btn.clicked.connect(self._dismiss_qos_suggestion)
         qos_row.addWidget(self._qos_lbl, 1)
         qos_row.addWidget(self._qos_dismiss_btn)

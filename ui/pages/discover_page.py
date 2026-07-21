@@ -189,9 +189,9 @@ class FeatureGuidePage(QWidget):
                 f" background:transparent; border:1px solid {req_color};"
                 f" border-radius:3px; padding:0 4px;"
             )
-            req_lbl.setToolTip(_REQUIRES_TOOLTIP.get(
+            req_lbl.setToolTip(_s.safe_tooltip(_REQUIRES_TOOLTIP.get(
                 feat["requires"], f"Requires: {feat['requires']}"
-            ))
+            )))
             name_row.addWidget(req_lbl)
 
         badge = feat.get("badge")

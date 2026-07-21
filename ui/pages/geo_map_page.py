@@ -387,10 +387,10 @@ class GeoMapPage(QWidget):
         quick_lbl = QLabel("No database?")
         _s.themed_ss(quick_lbl, "font-size:10px; color:{TEXT_SECONDARY};")
         self._btn_quick_dl = _btn("↓  Quick Download  (no account needed)", accent=True)
-        self._btn_quick_dl.setToolTip(
+        self._btn_quick_dl.setToolTip(_s.safe_tooltip(
             "Downloads GeoLite2-City.mmdb from the P3TERX mirror on GitHub.\n"
             "Source: github.com/P3TERX/GeoLite.mmdb  (~67 MB)"
-        )
+        ))
         self._btn_quick_dl.clicked.connect(self._on_quick_download)
         quick_row.addWidget(quick_lbl)
         quick_row.addWidget(self._btn_quick_dl)
@@ -428,7 +428,7 @@ class GeoMapPage(QWidget):
 
         btn_add    = _btn("✚  Add", accent=True)
         btn_ti     = _btn("🧠  Threat Intel IPs")
-        btn_ti.setToolTip("Import top-confidence IP indicators from the local threat intel cache")
+        btn_ti.setToolTip(_s.safe_tooltip("Import top-confidence IP indicators from the local threat intel cache"))
         btn_clear  = _btn("Clear All")
         _wire_close_icon(btn_clear, "TEXT_PRIMARY")
         btn_add.clicked.connect(self._on_add_manual)
@@ -451,18 +451,18 @@ class GeoMapPage(QWidget):
             legend_row.addSpacing(8)
         self._chk_arcs = QCheckBox("Show lines from home to threat IPs")
         _s.themed_ss(self._chk_arcs, "color:{TEXT_SECONDARY}; font-size:9px;")
-        self._chk_arcs.setToolTip(
+        self._chk_arcs.setToolTip(_s.safe_tooltip(
             "Draws arcs from your network's public IP to each Threat Intel dot.\n"
             "Set home location via right-click 'Show on Geolocation Map' on a local device."
-        )
+        ))
         self._chk_arcs.stateChanged.connect(self._redraw_map)
         legend_row.addWidget(self._chk_arcs)
         self._chk_heatmap = QCheckBox("Show risk heatmap")
         _s.themed_ss(self._chk_heatmap, "color:{TEXT_SECONDARY}; font-size:9px;")
-        self._chk_heatmap.setToolTip(
+        self._chk_heatmap.setToolTip(_s.safe_tooltip(
             "Draws radial colour glow behind Threat Intel and Exposed Service dots\n"
             "to highlight geographic risk concentrations."
-        )
+        ))
         self._chk_heatmap.stateChanged.connect(self._redraw_map)
         legend_row.addWidget(self._chk_heatmap)
         legend_row.addStretch()

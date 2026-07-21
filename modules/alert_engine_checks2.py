@@ -4,7 +4,7 @@ TREND_FORECAST rule evaluation (V6 Sprint 2 — "wire the dormant baseline
 engines").
 
 New file rather than growing alert_engine_checks.py further — keeps both
-files under the RULE-AH1 600-line budget (see tests/test_module_loc.py).
+files under the RULE-AH1 780-line budget (see tests/test_module_loc.py).
 
 Provides:
   evaluate_rtt_anomaly_checks() — RTT_ANOMALY: per-host mean+2sigma baseline

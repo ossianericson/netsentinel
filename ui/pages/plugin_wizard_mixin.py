@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 
 from ui.widgets.hub_card import _TEMPLATE
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 log = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ class _PluginWizardMixin:
 
         create_btn.clicked.connect(_on_create)
 
-        if dlg.exec() != QDialog.DialogCode.Accepted or not _created_path:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted or not _created_path:
             return
 
         created = _created_path[0]
@@ -237,7 +238,7 @@ class _PluginWizardMixin:
         msg.setTextFormat(Qt.TextFormat.RichText)
         open_btn = msg.addButton("Open in editor", QMessageBox.ButtonRole.ActionRole)
         msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
-        msg.exec()
+        run_dialog(msg)
         if msg.clickedButton() == open_btn:
             import os as _os
             try:

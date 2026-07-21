@@ -58,6 +58,7 @@ from ui.widgets.hub_helpers import (
     _record_success, _record_error,  # noqa: F401
     _save_health,  # noqa: F401
 )
+from ui.dialog_utils import run_dialog
 
 # Explicit re-export list so CodeQL recognises these as intentional re-exports.
 __all__ = [
@@ -746,7 +747,7 @@ class PipInstallDialog(QDialog):
 
     Usage:
         dlg = PipInstallDialog("fritzconnection", parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             # library is now installed
     """
 
@@ -872,7 +873,7 @@ class HubCard(QFrame):
         self._dot = QLabel("●")
         _s.themed_ss(self._dot, "color:{TEXT_MUTED}; font-size:13px; border:none;")
         self._dot.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._dot.setToolTip("Click to expand / collapse detail")
+        self._dot.setToolTip(_s.safe_tooltip("Click to expand / collapse detail"))
         self._dot.mousePressEvent = lambda _: self._toggle_detail()
         hdr_lay.addWidget(self._dot)
 
@@ -929,7 +930,7 @@ class HubCard(QFrame):
         # Install dependency button — hidden until a dep error is detected
         self._btn_install = _btn("⬇ Install dependency", accent=True)
         self._btn_install.setFixedHeight(26)
-        self._btn_install.setToolTip("Install the missing Python library via pip")
+        self._btn_install.setToolTip(_s.safe_tooltip("Install the missing Python library via pip"))
         self._btn_install.setVisible(False)
         self._btn_install.clicked.connect(self._on_install_dep)
         hdr_lay.addWidget(self._btn_install)
@@ -937,7 +938,7 @@ class HubCard(QFrame):
         # Re-enable button — shown after circuit breaker fires
         self._btn_reenable = _btn("↺ Re-enable")
         self._btn_reenable.setFixedHeight(26)
-        self._btn_reenable.setToolTip("Reset error counter and resume polling")
+        self._btn_reenable.setToolTip(_s.safe_tooltip("Reset error counter and resume polling"))
         self._btn_reenable.setVisible(False)
         self._btn_reenable.clicked.connect(self._on_reenable)
         hdr_lay.addWidget(self._btn_reenable)
@@ -945,9 +946,9 @@ class HubCard(QFrame):
         # Update credentials button — shown when an AUTH: error is detected (P4-1)
         self._btn_update_cred = _btn("🔑 Re-enter Password")
         self._btn_update_cred.setFixedHeight(26)
-        self._btn_update_cred.setToolTip(
+        self._btn_update_cred.setToolTip(_s.safe_tooltip(
             "Authentication failed — click to update the saved password"
-        )
+        ))
         self._btn_update_cred.setVisible(False)
         self._btn_update_cred.clicked.connect(
             lambda: self.update_credentials_clicked.emit(self._instance_id)
@@ -957,9 +958,9 @@ class HubCard(QFrame):
         # Re-import button — shown when FILE: error indicates plugin file is gone (P6-2)
         self._btn_reimport = _btn("⤵ Re-import")
         self._btn_reimport.setFixedHeight(26)
-        self._btn_reimport.setToolTip(
+        self._btn_reimport.setToolTip(_s.safe_tooltip(
             "Plugin file was moved or deleted — browse to locate it again"
-        )
+        ))
         self._btn_reimport.setVisible(False)
         self._btn_reimport.clicked.connect(
             lambda: self.reimport_clicked.emit(self._path)
@@ -969,21 +970,21 @@ class HubCard(QFrame):
         # Refresh button
         self._btn_refresh = _btn("↻")
         self._btn_refresh.setFixedWidth(28)
-        self._btn_refresh.setToolTip("Refresh now")
+        self._btn_refresh.setToolTip(_s.safe_tooltip("Refresh now"))
         self._btn_refresh.clicked.connect(lambda: self.refresh_clicked.emit(self._path))
         hdr_lay.addWidget(self._btn_refresh)
 
         # Stop polling button
         self._btn_stop = _btn("■")
         self._btn_stop.setFixedWidth(28)
-        self._btn_stop.setToolTip("Stop polling (disconnect)")
+        self._btn_stop.setToolTip(_s.safe_tooltip("Stop polling (disconnect)"))
         self._btn_stop.clicked.connect(lambda: self.stop_clicked.emit(self._path))
         hdr_lay.addWidget(self._btn_stop)
 
         # Add Another Instance button
         btn_add_another = _btn("＋")
         btn_add_another.setFixedWidth(28)
-        btn_add_another.setToolTip("Add another instance of this plugin (different device / IP)")
+        btn_add_another.setToolTip(_s.safe_tooltip("Add another instance of this plugin (different device / IP)"))
         btn_add_another.clicked.connect(lambda: self.add_another.emit(self._path))
         hdr_lay.addWidget(btn_add_another)
 
@@ -991,7 +992,7 @@ class HubCard(QFrame):
         self._btn_logs = QPushButton("≡")
         self._btn_logs.setFixedSize(28, 26)
         self._btn_logs.setCheckable(True)
-        self._btn_logs.setToolTip("Show / hide plugin log")
+        self._btn_logs.setToolTip(_s.safe_tooltip("Show / hide plugin log"))
         self._btn_logs.setCursor(Qt.CursorShape.PointingHandCursor)
         _s.themed_ss(self._btn_logs, lambda alpha=alpha: f"QPushButton {{ background:{_s.BG_CARD}; color:{_s.TEXT_PRIMARY};"
             f" border:1px solid {_s.BORDER}; border-radius:3px; }}"
@@ -1006,7 +1007,7 @@ class HubCard(QFrame):
         self._btn_configure = QPushButton("⚙")
         self._btn_configure.setFixedSize(28, 26)
         self._btn_configure.setCheckable(True)
-        self._btn_configure.setToolTip("Configure plugin settings")
+        self._btn_configure.setToolTip(_s.safe_tooltip("Configure plugin settings"))
         self._btn_configure.setCursor(Qt.CursorShape.PointingHandCursor)
         _s.themed_ss(self._btn_configure, lambda alpha=alpha: f"QPushButton {{ background:{_s.BG_CARD}; color:{_s.TEXT_PRIMARY};"
             f" border:1px solid {_s.BORDER}; border-radius:3px; }}"
@@ -1020,7 +1021,7 @@ class HubCard(QFrame):
         # Rename button — inline display-name edit (P3-4)
         btn_rename = _btn("✎")
         btn_rename.setFixedWidth(28)
-        btn_rename.setToolTip("Rename this plugin instance")
+        btn_rename.setToolTip(_s.safe_tooltip("Rename this plugin instance"))
         btn_rename.clicked.connect(self._on_rename_btn)
         hdr_lay.addWidget(btn_rename)
 
@@ -1028,7 +1029,7 @@ class HubCard(QFrame):
         btn_remove = _btn("")
         _wire_close_icon(btn_remove, "TEXT_PRIMARY")
         btn_remove.setFixedWidth(28)
-        btn_remove.setToolTip("Remove this instance")
+        btn_remove.setToolTip(_s.safe_tooltip("Remove this instance"))
         btn_remove.clicked.connect(lambda: self.remove_clicked.emit(self._path))
         hdr_lay.addWidget(btn_remove)
 
@@ -1063,14 +1064,14 @@ class HubCard(QFrame):
         pw_lay.addWidget(self._pw_status)
 
         btn_pw_save = _btn("Save")
-        btn_pw_save.setToolTip("Save password in OS keychain")
+        btn_pw_save.setToolTip(_s.safe_tooltip("Save password in OS keychain"))
         btn_pw_save.clicked.connect(
             lambda: self._save_password(hw_ip_for_pw, self._pw_edit, self._pw_status)
         )
         pw_lay.addWidget(btn_pw_save)
 
         btn_pw_forget = _btn("Forget")
-        btn_pw_forget.setToolTip("Remove saved password from OS keychain")
+        btn_pw_forget.setToolTip(_s.safe_tooltip("Remove saved password from OS keychain"))
         btn_pw_forget.clicked.connect(
             lambda: self._forget_password(hw_ip_for_pw, self._pw_status)
         )
@@ -1164,7 +1165,7 @@ class HubCard(QFrame):
         if not self._pending_pkg:
             return
         dlg = PipInstallDialog(self._pending_pkg, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._btn_install.setVisible(False)
             self._pending_pkg = ""
             self._metrics_lbl.setText("Library installed — reloading plugin…")
@@ -1195,9 +1196,9 @@ class HubCard(QFrame):
             hours_since = (_t.time() - h["last_ok"]) / 3600
             if hours_since > _DEGRADED_HOURS:
                 _s.themed_ss(self._dot, "color:{AMBER}; font-size:13px; border:none;")
-                self._dot.setToolTip(
+                self._dot.setToolTip(_s.safe_tooltip(
                     f"Degraded — no successful poll in {int(hours_since)} h"
-                )
+                ))
 
         # Health counter label: "42/45" only after at least 3 polls
         if total >= 3:
@@ -1303,9 +1304,9 @@ class HubCard(QFrame):
     def _toggle_detail(self) -> None:
         self._detail_visible = not self._detail_visible
         self._detail.setVisible(self._detail_visible)
-        self._dot.setToolTip(
+        self._dot.setToolTip(_s.safe_tooltip(
             "Click to collapse detail" if self._detail_visible else "Click to expand detail"
-        )
+        ))
 
     # ── Log console (P3-3) ────────────────────────────────────────────────────
 
@@ -1439,7 +1440,7 @@ class HubCard(QFrame):
         except Exception as exc:
             status.setText("Error")
             _s.themed_ss(status, "color:{RED}; font-size:9px;")
-            status.setToolTip(str(exc))
+            status.setToolTip(_s.safe_tooltip(str(exc)))
 
     def _forget_password(self, hw_ip: str, status: QLabel) -> None:
         if not hw_ip:
@@ -1556,7 +1557,7 @@ def _code_chip(code: str) -> QWidget:
     lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     copy_btn = _btn("⎘")
     copy_btn.setFixedSize(24, 20)
-    copy_btn.setToolTip("Copy to clipboard")
+    copy_btn.setToolTip(_s.safe_tooltip("Copy to clipboard"))
     copy_btn.clicked.connect(lambda: _copy_text(copy_btn, code))
     row.addWidget(lbl, 1)
     row.addWidget(copy_btn)

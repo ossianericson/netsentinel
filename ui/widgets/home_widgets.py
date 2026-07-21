@@ -40,9 +40,9 @@ class _GradeRing(QWidget):
 
         self._arc_anim: QVariantAnimation | None = None
         self._score_anim: QVariantAnimation | None = None
-        self.setToolTip(
+        self.setToolTip(_s.safe_tooltip(
             "Network Grade — A–F score across 8 health dimensions."
-        )
+        ))
 
     def set_grade(self, grade: str, score: float) -> None:
         from ui.theme import _reduce_motion

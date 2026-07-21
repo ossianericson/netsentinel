@@ -31,6 +31,7 @@ from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.tabs_helpers import _table
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -411,4 +412,4 @@ class SyslogPage(QWidget):
         row = index.row()
         if 0 <= row < len(self._row_data_cache):
             dlg = _MsgDetailDialog(self._row_data_cache[row], parent=self)
-            dlg.exec()
+            run_dialog(dlg)

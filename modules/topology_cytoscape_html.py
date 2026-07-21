@@ -1,7 +1,7 @@
 """
 topology_cytoscape_html.py — HTML/JS template builder for the Cytoscape.js Network Map.
 
-Split from topology_cytoscape.py (RULE-AH1: 600-line budget) to keep the element
+Split from topology_cytoscape.py (RULE-AH1: 780-line budget) to keep the element
 builder and the HTML/JS page generator in separate files.
 
 Exports:

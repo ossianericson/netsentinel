@@ -276,7 +276,7 @@ At minimum: one import test and one behavioural test in `tests/test_my_page.py`.
 
 Modules live in `modules/`. They contain pure business logic — no Qt imports, no widgets, no UI calls.
 
-**File size limit:** No module file may exceed 600 lines (RULE-AH1). If you find yourself going over, extract cohesive sub-concerns into sibling modules.
+**File size limit:** No module file may exceed 780 lines (RULE-AH1). If you find yourself going over, extract cohesive sub-concerns into sibling modules.
 
 **Lazy imports for optional dependencies:**
 

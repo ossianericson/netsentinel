@@ -65,7 +65,7 @@ __all__ = [
 
 # ── CTA routing + action-step text — see modules/alert_engine_routing.py ─────
 # (RULE-AH1 split: this was a self-contained lookup-table block with no
-# evaluate_* logic, so it moved out cleanly when alert_engine.py hit 600 lines.)
+# evaluate_* logic, so it moved out cleanly when alert_engine.py hit the budget.)
 
 _cta_for_rule = cta_for_rule
 

@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 
 from modules.utils import get_app_data_dir
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 _LOG_FILE = "feedback.log"
 _MAX_CHARS = 2000
@@ -117,4 +118,4 @@ class FeedbackDialog(QDialog):
 def show_feedback_dialog(parent=None) -> None:
     """Open the feedback dialog. Call from command palette action handler."""
     dlg = FeedbackDialog(parent)
-    dlg.exec()
+    run_dialog(dlg)

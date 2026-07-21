@@ -179,7 +179,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _wire_close_icon(_dismiss)
         _s.themed_ss(_dismiss, lambda: _s.qss_dismiss_button(10))
-        _dismiss.setToolTip("Dismiss")
+        _dismiss.setToolTip(_s.safe_tooltip("Dismiss"))
         _dismiss.clicked.connect(self._dismiss_hw_nudge)
         lay.addWidget(_icon)
         lay.addWidget(_text, 1)
@@ -405,7 +405,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ds_open.clicked.connect(self._open_dashboard)
         _ds_dismiss = QPushButton()
         _ds_dismiss.setFixedSize(20, 20)
-        _ds_dismiss.setToolTip("Dismiss")
+        _ds_dismiss.setToolTip(_s.safe_tooltip("Dismiss"))
         _ds_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _wire_close_icon(_ds_dismiss, "UPDATE_BAR_FG")
         _s.themed_ss(_ds_dismiss, lambda: _s.qss_dismiss_button(14, fg=_s.UPDATE_BAR_FG, padding="0", press_bg=_s.BG_HOVER))
@@ -469,10 +469,10 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _sc_advanced = QPushButton("Advanced settings →")
         _sc_advanced.setFlat(True)
         _sc_advanced.setCursor(Qt.CursorShape.PointingHandCursor)
-        _sc_advanced.setToolTip(
+        _sc_advanced.setToolTip(_s.safe_tooltip(
             "SMTP, SNMP, API keys and other technical configuration live here — "
             "optional, and never required to use NetSentinel."
-        )
+        ))
         _s.themed_ss(_sc_advanced, "QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             " border:none; padding:0; }}"
             "QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
@@ -616,7 +616,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _s.themed_ss(self._delta_chips_lbl, lambda: _s.qss_label(_s.TEXT_PRIMARY, 11))
         _db_dismiss = QPushButton()
         _db_dismiss.setFixedSize(20, 20)
-        _db_dismiss.setToolTip("Dismiss")
+        _db_dismiss.setToolTip(_s.safe_tooltip("Dismiss"))
         _db_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _wire_close_icon(_db_dismiss)
         _s.themed_ss(_db_dismiss, lambda: _s.qss_dismiss_button(14, fg=_s.TEXT_MUTED, padding="0", press_bg=_s.BG_HOVER))
@@ -686,26 +686,26 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._rec_pill_dhcp   = _rec_pill("DHCP Watch",      "DHCP Rogue Monitor")
         self._rec_pill_storm  = _rec_pill("Broadcast Storm", "Broadcast Storm")
         self._rec_pill_logger = _rec_pill("Network Logger",  "Network Logger")
-        self._rec_pill_arp.setToolTip(
+        self._rec_pill_arp.setToolTip(_s.safe_tooltip(
             "ARP Watch monitors for MAC address impersonation (ARP spoofing).\n"
             "Attackers use this to intercept traffic on your network.\n"
             "Click to open ARP Spoof Watch and enable monitoring."
-        )
-        self._rec_pill_dhcp.setToolTip(
+        ))
+        self._rec_pill_dhcp.setToolTip(_s.safe_tooltip(
             "DHCP Watch detects rogue DHCP servers that could redirect your traffic.\n"
             "A rogue server assigns itself as your DNS, intercepting all lookups.\n"
             "Click to open DHCP Rogue Monitor."
-        )
-        self._rec_pill_storm.setToolTip(
+        ))
+        self._rec_pill_storm.setToolTip(_s.safe_tooltip(
             "Broadcast Storm monitor listens for flood-level broadcast traffic\n"
             "that can slow or freeze your entire network.\n"
             "Requires Npcap and administrator rights. Click to open."
-        )
-        self._rec_pill_logger.setToolTip(
+        ))
+        self._rec_pill_logger.setToolTip(_s.safe_tooltip(
             "Network Logger records your connection stability (RTT, jitter, packet loss)\n"
             "continuously in the background. Start it once to build a history timeline.\n"
             "Click to open Network Logger and start recording."
-        )
+        ))
         for _rp in (self._rec_pill_arp, self._rec_pill_dhcp,
                     self._rec_pill_storm, self._rec_pill_logger):
             _rec_pills_row.addWidget(_rp)
@@ -908,16 +908,16 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         hero_lay.setSpacing(16)
 
         self._grade_circle = _GradeRing()
-        self._grade_circle.setToolTip(
+        self._grade_circle.setToolTip(_s.safe_tooltip(
             "Network Grade \u2014 A\u2013F score across 8 health dimensions:\n"
             "Uptime, Latency, Jitter, DNS Speed, Download Speed,\n"
             "Device Safety, STP Health, Broadcast Storm Level.\n"
             "Click (?) to see the full breakdown."
-        )
+        ))
         self._grade_details_btn = QPushButton("?")
         self._grade_details_btn.setFixedSize(20, 18)
         self._grade_details_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._grade_details_btn.setToolTip("Show grade breakdown")
+        self._grade_details_btn.setToolTip(_s.safe_tooltip("Show grade breakdown"))
         self._grade_details_btn.setVisible(False)
         _s.themed_ss(self._grade_details_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
             " font-size:10px; border-radius:3px; }}"
@@ -957,9 +957,9 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._btn_scan = QPushButton("\u25b6  Scan Network")
         self._btn_scan.setObjectName("btnScanHero")
         self._btn_diagnose = QPushButton("\u25c6  What\u2019s Wrong?")
-        self._btn_diagnose.setToolTip(
+        self._btn_diagnose.setToolTip(_s.safe_tooltip(
             "Pick a symptom \u2014 slow, dropping, or no connection \u2014 and get a plain-English diagnosis"
-        )
+        ))
         _s.themed_ss(self._btn_diagnose, "QPushButton {{ min-height: 34px; font-size: 12px; font-weight: 600;"
             " background: {ACCENT}; color: {WHITE};"
             " border: none; border-radius: 4px; padding: 0 14px; }}"
@@ -987,7 +987,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         isp_row = QHBoxLayout()
         isp_row.setSpacing(0)
         self._btn_isp = QPushButton("\ud83d\udcca  Network Health Report")
-        self._btn_isp.setToolTip("Generate a Network Health Report \u2014 great for ISP support tickets")
+        self._btn_isp.setToolTip(_s.safe_tooltip("Generate a Network Health Report \u2014 great for ISP support tickets"))
         _s.themed_ss(self._btn_isp, "QPushButton {{ min-height: 22px; font-size: 11px; font-weight: 500;"
             " background: transparent; color: {TEXT_MUTED};"
             " border: none; padding: 0; text-decoration: underline; }}"
@@ -1060,7 +1060,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _sheet_hdr.addStretch()
         _sheet_x = QPushButton()
         _sheet_x.setFixedSize(20, 20)
-        _sheet_x.setToolTip("Dismiss")
+        _sheet_x.setToolTip(_s.safe_tooltip("Dismiss"))
         _sheet_x.setCursor(Qt.CursorShape.PointingHandCursor)
         _wire_close_icon(_sheet_x)
         _s.themed_ss(_sheet_x, lambda: _s.qss_dismiss_button(14, fg=_s.TEXT_MUTED, padding="0", press_bg=_s.BG_HOVER))
@@ -1151,26 +1151,26 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._pill_dhcp   = _pill("DHCP Watch",      "DHCP Rogue Monitor")
         self._pill_storm  = _pill("Broadcast Storm", "Broadcast Storm")
         self._pill_logger = _pill("Network Logger",  "Network Logger")
-        self._pill_arp.setToolTip(
+        self._pill_arp.setToolTip(_s.safe_tooltip(
             "ARP Watch monitors for MAC address impersonation (ARP spoofing).\n"
             "Attackers use this to intercept traffic on your network.\n"
             "Click to open ARP Spoof Watch and enable monitoring."
-        )
-        self._pill_dhcp.setToolTip(
+        ))
+        self._pill_dhcp.setToolTip(_s.safe_tooltip(
             "DHCP Watch detects rogue DHCP servers that could redirect your traffic.\n"
             "A rogue server assigns itself as your DNS, intercepting all lookups.\n"
             "Click to open DHCP Rogue Monitor."
-        )
-        self._pill_storm.setToolTip(
+        ))
+        self._pill_storm.setToolTip(_s.safe_tooltip(
             "Broadcast Storm monitor listens for flood-level broadcast traffic\n"
             "that can slow or freeze your entire network.\n"
             "Requires Npcap and administrator rights. Click to open."
-        )
-        self._pill_logger.setToolTip(
+        ))
+        self._pill_logger.setToolTip(_s.safe_tooltip(
             "Network Logger records your connection stability (RTT, jitter, packet loss)\n"
             "continuously in the background. Start it once to build a history timeline.\n"
             "Click to open Network Logger and start recording."
-        )
+        ))
         for _p in (self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger):
             _pills_lay.addWidget(_p)
         _pills_lay.addStretch()
@@ -1238,10 +1238,10 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._btn_start_logger.setFixedHeight(22)
         self._btn_start_logger.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_start_logger.setVisible(False)
-        self._btn_start_logger.setToolTip(
+        self._btn_start_logger.setToolTip(_s.safe_tooltip(
             "Start the Network Logger to record connection stability in the background.\n"
             "It logs RTT, jitter, and packet loss continuously so you can spot patterns."
-        )
+        ))
         _s.themed_ss(self._btn_start_logger, "QPushButton {{ background:transparent; color:{ACCENT}; font-size:10px;"
             " border:1px solid {ACCENT}; border-radius:11px; padding:1px 10px; }}"
             "QPushButton:hover {{ background:{BG_HOVER}; }}"

@@ -109,7 +109,7 @@ class LabPickerPanel(QWidget):
                 date = progress[scenario.id].get("completed_at", "")[:10]
                 verdict = best_verdict(progress, scenario.id) or ""
                 badge.setText(f"✓  Completed · {date}" if date else "✓  Completed")
-                badge.setToolTip(f"Best result: {verdict}" if verdict else "")
+                badge.setToolTip(_s.safe_tooltip(f"Best result: {verdict}") if verdict else "")
             badge.setVisible(completed)
             _s.themed_ss(self._cards[scenario.id], lambda done=completed: (
                 f"QFrame#labCard {{ background:{_s.BG_ALT_ROW if done else _s.BG_CARD};"

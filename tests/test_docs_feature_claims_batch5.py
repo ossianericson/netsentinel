@@ -38,22 +38,33 @@ class TestF12IspReportReadmeClaim:
 
 
 class TestF17FeatureGuideNewInVersion:
-    """The 'New in this version' group's two entries referenced '...v1.9.97'
-    while the app ships v2.1.30 -- dozens of releases had shipped since
-    with no update to this group."""
+    """The 'New in this version' group's two entries (window chrome, theme
+    switching) had drifted to v2.1.29/v2.1.30 while the app shipped v2.1.38+
+    -- nine releases with no update to this group, and one of the two was
+    actively steering onboarding attention toward theme switching instead of
+    higher-value tools (Protocol Visualizer, Lab Mode). Rather than re-dating
+    the same entries again, they were removed outright and Protocol
+    Visualizer / Lab Mode were promoted directly into 'Start here' and
+    _RECOMMENDED_PAGES instead. These tests guard against the group quietly
+    regaining unmaintained, stale-versioned content."""
 
     def _new_in_version_entries(self):
         return [f for f in _FEATURES if f["group"] == "New in this version"]
 
-    def test_entries_no_longer_reference_stale_version(self):
+    def test_no_stale_pre_2_1_version_entries(self):
         entries = self._new_in_version_entries()
-        assert entries, "expected at least one 'New in this version' entry"
         for f in entries:
             assert "v1.9.97" not in f["desc"]
+            assert "v2.1.29" not in f["desc"]
+            assert "v2.1.30" not in f["desc"]
 
-    def test_entries_reference_current_era_versions(self):
+    def test_any_entries_reference_current_era_versions(self):
         entries = self._new_in_version_entries()
-        assert any("v2.1." in f["desc"] for f in entries)
+        for f in entries:
+            assert "v2.1." in f["desc"] or "v2.2." in f["desc"], (
+                f"{f['name']!r} in 'New in this version' doesn't reference a "
+                "current-era version -- update or remove it"
+            )
 
 
 class TestF77HardwarePluginRefreshInterval:

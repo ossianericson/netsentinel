@@ -334,7 +334,7 @@ class NetworkMapPage(QWidget):
         def _btn(label: str, tip: str, w: int = 52) -> QPushButton:
             b = QPushButton(label)
             b.setFixedWidth(w)
-            b.setToolTip(tip)
+            b.setToolTip(_s.safe_tooltip(tip))
             _s.themed_ss(b, _TOOLBAR_BTN_SS)
             return b
 
@@ -347,18 +347,18 @@ class NetworkMapPage(QWidget):
         self._btn_focus = QPushButton("Focus Mode")
         self._btn_focus.setCheckable(True)
         self._btn_focus.setFixedWidth(96)
-        self._btn_focus.setToolTip(
+        self._btn_focus.setToolTip(_s.safe_tooltip(
             "Highlight only the selected node and its direct neighbours"
-        )
+        ))
         _s.themed_ss(self._btn_focus, _TOOLBAR_BTN_SS)
 
         # Show Changes toggle (exposed as property for scan_wiring compat)
         self._btn_diff = QPushButton("Show Changes")
         self._btn_diff.setCheckable(True)
         self._btn_diff.setFixedWidth(110)
-        self._btn_diff.setToolTip(
+        self._btn_diff.setToolTip(_s.safe_tooltip(
             "Overlay added/removed devices and links vs. the previous scan"
-        )
+        ))
         _s.themed_ss(self._btn_diff, _TOOLBAR_BTN_SS)
 
         # Diff badge label
@@ -372,18 +372,18 @@ class NetworkMapPage(QWidget):
         self._btn_lock = QPushButton("Lock Layout")
         self._btn_lock.setCheckable(True)
         self._btn_lock.setFixedWidth(96)
-        self._btn_lock.setToolTip(
+        self._btn_lock.setToolTip(_s.safe_tooltip(
             "Freeze all node positions — re-scans update data but cannot move nodes"
-        )
+        ))
         _s.themed_ss(self._btn_lock, _TOOLBAR_BTN_SS)
 
         # Traffic Overlay toggle — live per-MAC bandwidth (requires Scapy + admin)
         self._btn_traffic = QPushButton("Traffic Overlay")
         self._btn_traffic.setCheckable(True)
         self._btn_traffic.setFixedWidth(116)
-        self._btn_traffic.setToolTip(
+        self._btn_traffic.setToolTip(_s.safe_tooltip(
             "Color-code nodes by live bandwidth (requires Scapy + administrator)"
-        )
+        ))
         _s.themed_ss(self._btn_traffic, _TOOLBAR_BTN_SS)
 
         # Bandwidth legend — visible only when Traffic Overlay is on

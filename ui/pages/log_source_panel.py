@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 from ui.styles import (
     alpha,
     LOG_SOURCE_PLUGIN,
@@ -355,16 +356,17 @@ class _LogSourcePanelMixin:
             self._style_toggle(btn, enabled, color)
             btn.clicked.connect(lambda checked, k=key: self._on_source_toggled(k, checked))
             self._toggle_btns[key] = btn
-            btn.setToolTip(_SOURCE_TIPS.get(key, ""))
+            _tip = _SOURCE_TIPS.get(key, "")
+            btn.setToolTip(_s.safe_tooltip(_tip) if _tip else _tip)
             if key == "modem" and not enabled:
-                btn.setToolTip("Enable modem logging in Scan Configuration to show here.")
+                btn.setToolTip(_s.safe_tooltip("Enable modem logging in Scan Configuration to show here."))
             lay.addWidget(btn)
             btn.setVisible(enabled and key != "plugin")
 
         self._source_plus_btn = QPushButton("+")
         self._source_plus_btn.setFixedSize(26, 26)
         self._source_plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._source_plus_btn.setToolTip("Add source filter")
+        self._source_plus_btn.setToolTip(_s.safe_tooltip("Add source filter"))
         _s.themed_ss(self._source_plus_btn, "QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:13px;"
             " font-weight:bold; border:1px solid {BORDER}; border-radius:4px; padding:0; }}"
             "QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
@@ -376,7 +378,7 @@ class _LogSourcePanelMixin:
         _export_btn = QPushButton("↓ Export")
         _export_btn.setFixedHeight(26)
         _export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _export_btn.setToolTip("Export currently visible (filtered) rows to CSV")
+        _export_btn.setToolTip(_s.safe_tooltip("Export currently visible (filtered) rows to CSV"))
         _s.themed_ss(_export_btn, lambda: (
             f"QPushButton {{ background:transparent; color:{_s.ACCENT}; font-size:11px;"
             f" font-weight:600; border:1px solid {alpha(_s.ACCENT, 0x44)}; border-radius:4px; padding:0 8px; }}"
@@ -470,7 +472,7 @@ class _LogSourcePanelMixin:
             if key == "plugin":
                 btn.setVisible(False)
             if key == "modem" and not enabled:
-                btn.setToolTip("Connect a modem plugin to enable modem logging.")
+                btn.setToolTip(_s.safe_tooltip("Connect a modem plugin to enable modem logging."))
         cfg_lbl = QLabel("· Configure in Network Logger")
         _s.themed_ss(cfg_lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         lay.addWidget(cfg_lbl)
@@ -749,7 +751,7 @@ class _LogSourcePanelMixin:
         ))
         btns.rejected.connect(dlg.reject)
         lay.addWidget(btns)
-        dlg.exec()
+        run_dialog(dlg)
 
     def _do_export(self, start, end, dlg: QDialog) -> None:
         path, _ = QFileDialog.getSaveFileName(

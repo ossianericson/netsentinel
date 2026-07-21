@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 _QS_KEY = "alerts/dependencies"
 
@@ -262,7 +263,7 @@ class _NotifDepMixin:
                 pass  # non-fatal
 
         dlg = _AddDepDialog(known_ips, parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         parent, children = dlg.get_values()
         if not parent or not children:

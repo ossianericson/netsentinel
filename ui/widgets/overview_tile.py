@@ -150,7 +150,7 @@ class _BaseTile(QFrame):
 
         self._rerun_btn = QPushButton("↺")
         self._rerun_btn.setFixedSize(20, 20)
-        self._rerun_btn.setToolTip("Re-run scan")
+        self._rerun_btn.setToolTip(_s.safe_tooltip("Re-run scan"))
         self._rerun_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _s.themed_ss(self._rerun_btn, "QPushButton {{ background:transparent; border:1px solid {BORDER};"
             " color:{ACCENT}; font-size:12px; font-weight:bold; padding:0;"
@@ -166,7 +166,7 @@ class _BaseTile(QFrame):
         self._drag_handle.setFixedSize(18, 18)
         self._drag_handle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _s.themed_ss(self._drag_handle, "color:{TEXT_SECONDARY}; font-size:14px; border:none; background:transparent;")
-        self._drag_handle.setToolTip("Drag to reorder")
+        self._drag_handle.setToolTip(_s.safe_tooltip("Drag to reorder"))
         self._drag_handle.hide()
         tb.addWidget(self._drag_handle)
 
@@ -178,7 +178,7 @@ class _BaseTile(QFrame):
             "QPushButton:hover {{ background:{PRO_WARN_BG}; border-color:{RED}; }}"
             "QPushButton:pressed {{ background:{BG_CARD}; }}")
         self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._remove_btn.setToolTip("Remove from overview")
+        self._remove_btn.setToolTip(_s.safe_tooltip("Remove from overview"))
         self._remove_btn.hide()
         self._remove_btn.clicked.connect(lambda: self._remove_cb(self.TILE_ID))
         tb.addWidget(self._remove_btn)
@@ -574,7 +574,7 @@ class RttSummaryTile(_BaseTile):
         _s.themed_ss(self._rtt_lbl, "font-size:30px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
         rtt_sub = QLabel("Avg RTT")
         _s.themed_ss(rtt_sub, lambda: _s.qss_label(_s.TEXT_SECONDARY, 10, transparent=False))
-        rtt_sub.setToolTip("RTT — Round-Trip Time: how long a ping takes to travel to a host and back, in milliseconds. Under 20 ms is excellent.")
+        rtt_sub.setToolTip(_s.safe_tooltip("RTT — Round-Trip Time: how long a ping takes to travel to a host and back, in milliseconds. Under 20 ms is excellent."))
         rtt_col.addWidget(self._rtt_lbl)
         rtt_col.addWidget(rtt_sub)
 
@@ -667,7 +667,7 @@ class NetworkGradeTile(_BaseTile):
         self._grade_lbl = QLabel("–")
         self._grade_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _s.themed_ss(self._grade_lbl, "font-size:56px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
-        self._grade_lbl.setToolTip("Run a Network Grade scan to see your score (A–F).")
+        self._grade_lbl.setToolTip(_s.safe_tooltip("Run a Network Grade scan to see your score (A–F)."))
         self._sub_lbl = QPushButton("Run Network Grade →")
         self._sub_lbl.setFlat(True)
         self._sub_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -689,9 +689,9 @@ class NetworkGradeTile(_BaseTile):
         colour = getattr(_s, self._GRADE_COLOUR.get(letter, "TEXT_SECONDARY"))
         self._grade_lbl.setText(letter)
         _s.themed_ss(self._grade_lbl, lambda colour=colour: f"font-size:56px; font-weight:bold; color:{colour}; border:none;")
-        self._grade_lbl.setToolTip(
+        self._grade_lbl.setToolTip(_s.safe_tooltip(
             self._GRADE_TIPS.get(letter, "Run a Network Grade scan to see your score (A–F).")
-        )
+        ))
         if grade:
             self._sub_lbl.setText(f"Score: {score:.0f} / 100" if score else "")
             _s.themed_ss(self._sub_lbl, "QPushButton {{ font-size:10px; color:{TEXT_SECONDARY}; border:none;"
@@ -983,11 +983,11 @@ class HaDevicesTile(_BaseTile):
                 name  = kd.custom_name or kd.hostname or kd.mac
                 label = QLabel(f"● {name[:28]}")
                 _s.themed_ss(label, lambda: _s.qss_label(_s.TEXT_PRIMARY, 11, transparent=False))
-                label.setToolTip(
+                label.setToolTip(_s.safe_tooltip(
                     f"IP: {kd.ip or '?'}  |  "
                     f"Room: {kd.room or '?'}  |  "
                     f"MAC: {kd.mac}"
-                )
+                ))
                 self._rows.append(label)
                 # Insert before stretch (last item)
                 self._body_layout.insertWidget(

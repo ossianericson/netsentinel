@@ -50,6 +50,7 @@ from modules.maintenance_window import (
 )
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
+from ui.dialog_utils import run_dialog
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -553,7 +554,7 @@ class MaintenancePage(QWidget):
     @pyqtSlot()
     def _add_window(self) -> None:
         dlg = _WindowDialog(parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         w = dlg.get_window()
         if self._manager:
@@ -570,7 +571,7 @@ class MaintenancePage(QWidget):
         if existing is None:
             return
         dlg = _WindowDialog(window=existing, parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         updated = dlg.get_window(existing_id=wid)
         self._manager.update_window(updated)

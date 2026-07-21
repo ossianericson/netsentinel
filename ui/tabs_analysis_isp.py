@@ -19,6 +19,7 @@ from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
 
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 class _AnalysisIspMixin:
@@ -57,7 +58,7 @@ class _AnalysisIspMixin:
             btns.accepted.connect(dlg.accept)
             btns.rejected.connect(dlg.reject)
             form.addRow(btns)
-            if dlg.exec() != QDialog.DialogCode.Accepted:
+            if run_dialog(dlg) != QDialog.DialogCode.Accepted:
                 return
 
             isp_name   = isp_edit.text().strip()
@@ -137,7 +138,7 @@ class _AnalysisIspMixin:
             btns.rejected.connect(dlg.reject)
             form.addRow(btns)
 
-            if dlg.exec() != QDialog.DialogCode.Accepted:
+            if run_dialog(dlg) != QDialog.DialogCode.Accepted:
                 return
 
             log_summary = None

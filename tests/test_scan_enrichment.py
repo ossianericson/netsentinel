@@ -162,6 +162,57 @@ def test_plugin_enrichment_no_net_info_keeps_all_clients(monkeypatch):
     assert _norm_mac(MAC_B) in enrichment
 
 
+def test_plugin_enrichment_handles_unresolved_gateway_mac(monkeypatch):
+    """RULE-NET1 regression: get_network_info() legitimately sets gateway_mac to
+    None when ARP resolution hasn't happened yet (VPN, flushed cache, fresh
+    boot) -- _net_info is present but _net_info["gateway_mac"] is None, not
+    absent. This crashed a live wild-chaos monkey run (2026-07-21):
+    AttributeError: 'NoneType' object has no attribute 'replace' inside
+    _norm_mac(self._net_info.get("gateway_mac", "")) at scan_enrichment.py:168,
+    3 seconds before the process died with STATUS_STACK_BUFFER_OVERRUN.
+    """
+    from modules.deco_client import _norm_mac
+    from ui.scan_enrichment import ScanEnrichmentMixin
+
+    monkeypatch.setattr(
+        "modules.network_infrastructure.hw_state.update_router",
+        lambda *a, **kw: None,
+    )
+
+    CLIENT_MAC = "11:22:33:44:55:03"
+
+    class _Stub(ScanEnrichmentMixin):
+        def __init__(self):
+            self._net_info = {"gateway": "192.168.1.1", "gateway_mac": None}
+            self._plugin_enrichments = {}
+            self._plugin_nodes = {}
+            self._plugin_hardware_name = ""
+            self._mesh_enrichment = {}
+            self._m1_result = None
+
+        def _apply_mesh_enrichment(self):
+            pass
+
+        def _on_modem_signal(self, data):
+            pass
+
+        def _refresh_hardware_badge(self):
+            pass  # badge widget — not under test
+
+    stub = _Stub()
+    stub._on_hardware_plugin_result({
+        "info": {"type": "router", "name": "R"},
+        "status": {},
+        "clients": [
+            {"mac": CLIENT_MAC, "hostname": "DeviceC", "ip": "192.168.1.4"},
+        ],
+        "_path": "router3",
+    })
+
+    enrichment = stub._plugin_enrichments["router3"]
+    assert _norm_mac(CLIENT_MAC) in enrichment
+
+
 # ---------------------------------------------------------------------------
 # Fix 2 — plugin hostname write is skipped for the gateway table row
 # ---------------------------------------------------------------------------

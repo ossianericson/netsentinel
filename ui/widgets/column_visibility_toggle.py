@@ -50,13 +50,13 @@ class ColumnVisibilityToggle(QFrame):
         self._btn_quick = QPushButton("⊟  Quick")
         self._btn_quick.setFixedHeight(22)
         self._btn_quick.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_quick.setToolTip("Show only Name, Status, Device Type")
+        self._btn_quick.setToolTip(_s.safe_tooltip("Show only Name, Status, Device Type"))
         self._btn_quick.clicked.connect(lambda: self._apply("quick"))
 
         self._btn_full = QPushButton("⊞  Full")
         self._btn_full.setFixedHeight(22)
         self._btn_full.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_full.setToolTip("Show every column — IP, MAC, manufacturer, risk, and more")
+        self._btn_full.setToolTip(_s.safe_tooltip("Show every column — IP, MAC, manufacturer, risk, and more"))
         self._btn_full.clicked.connect(lambda: self._apply("full"))
 
         lay.addWidget(self._btn_quick)

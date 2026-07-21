@@ -165,7 +165,7 @@ class AppHeaderMixin:
             f" background:transparent; border:none; padding:0 12px;"
         )
         self._verdict_badge.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._verdict_badge.setToolTip("Overall network status — click for details")
+        self._verdict_badge.setToolTip(_s.safe_tooltip("Overall network status — click for details"))
         self._verdict_badge.setVisible(False)
         self._verdict_badge.clicked.connect(self._on_verdict_badge_clicked)
         lay.addWidget(self._verdict_badge)
@@ -216,7 +216,7 @@ class AppHeaderMixin:
         _btn_settings.setText("⚙︎")
         _btn_settings.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         _btn_settings.setMenu(_menu_s)
-        _btn_settings.setToolTip("Scan Settings — module toggles, durations, and app preferences  (Ctrl+,)")
+        _btn_settings.setToolTip(_s.safe_tooltip("Scan Settings — module toggles, durations, and app preferences  (Ctrl+,)"))
         _s.themed_ss(_btn_settings, _icon_btn_qss)
         lay.addSpacing(4)
         lay.addWidget(_btn_settings)
@@ -236,7 +236,7 @@ class AppHeaderMixin:
         self._time_range_combo = QComboBox()
         self._time_range_combo.addItems(["1h", "6h", "24h", "7d", "30d"])
         self._time_range_combo.setCurrentText("24h")
-        self._time_range_combo.setToolTip("Global time window — applies to all data pages")
+        self._time_range_combo.setToolTip(_s.safe_tooltip("Global time window — applies to all data pages"))
         _s.themed_ss(self._time_range_combo, _time_combo_qss)
         self._time_range_combo.currentTextChanged.connect(self._on_global_time_changed)
         lay.addSpacing(4)
@@ -260,10 +260,10 @@ class AppHeaderMixin:
             )
         self._header_scan_btn = QToolButton()
         self._header_scan_btn.setText("▶  Scan")
-        self._header_scan_btn.setToolTip(
+        self._header_scan_btn.setToolTip(_s.safe_tooltip(
             "Run full network scan (ARP + WiFi + DNS + port discovery)\n"
             "Tip: Ctrl+K to search pages · Ctrl+F to filter sidebar · Ctrl+, for Settings"
-        )
+        ))
         _s.themed_ss(self._header_scan_btn, _scan_btn_qss)
         self._header_scan_btn.clicked.connect(self._start_full_scan)
         lay.addWidget(self._header_scan_btn)
@@ -305,7 +305,7 @@ class AppHeaderMixin:
         _wc_font.setStyleStrategy(QFont.StyleStrategy.NoSubpixelAntialias)
 
         _btn_min = _ChromeButton("\uE921")     # ChromeMinimize
-        _btn_min.setToolTip("Minimise")
+        _btn_min.setToolTip(_s.safe_tooltip("Minimise"))
         _btn_min.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         _btn_min.setFont(_wc_font)
         _s.themed_ss(
@@ -318,7 +318,7 @@ class AppHeaderMixin:
         lay.addWidget(_btn_min)
 
         self._maximize_btn = _ChromeButton("\uE922")   # ChromeMaximize
-        self._maximize_btn.setToolTip("Maximize")
+        self._maximize_btn.setToolTip(_s.safe_tooltip("Maximize"))
         self._maximize_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._maximize_btn.setFont(_wc_font)
         # [ncHover="true"] mirrors :hover for the native-chrome path. There, this
@@ -337,7 +337,7 @@ class AppHeaderMixin:
         lay.addWidget(self._maximize_btn)
 
         _btn_close = _ChromeButton("\uE8BB")   # ChromeClose
-        _btn_close.setToolTip("Close")
+        _btn_close.setToolTip(_s.safe_tooltip("Close"))
         _btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         _btn_close.setFont(_wc_font)
         _s.themed_ss(
@@ -385,7 +385,7 @@ class AppHeaderMixin:
                 is_max = bool(self.windowState() & Qt.WindowState.WindowMaximized)
                 # \uE923 = ChromeRestore, \uE922 = ChromeMaximize (Segoe MDL2 Assets)
                 self._maximize_btn.setText("\uE923" if is_max else "\uE922")
-                self._maximize_btn.setToolTip("Restore Down" if is_max else "Maximize")
+                self._maximize_btn.setToolTip(_s.safe_tooltip("Restore Down" if is_max else "Maximize"))
                 if is_max:
                     # Windows can maximize us without going through _toggle_maximize()
                     # once the window is real (double-click the caption, Win+Up, Aero
