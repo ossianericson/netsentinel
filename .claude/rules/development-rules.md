@@ -542,6 +542,45 @@ QTableWidget::item:selected { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
 QMenu::item:selected        { background: {BG_HOVER};  color: {TEXT_PRIMARY}; }
 ```
 
+### RULE-UX7 (blocking): Every `.setToolTip(...)` call — widget or item-view — must be wrapped in `safe_tooltip()`; Arctic Clean tooltips are illegible otherwise
+
+**Mechanism / trap.** `QToolTip { background: {TOOLTIP_BG}; color: {TOOLTIP_FG}; }` in the
+app-level stylesheet (`ui/styles.py::_build_qss()` / `get_app_qss()`) is not reliably honoured
+by Qt's tooltip renderer on this platform — verified live with side-by-side screenshots on
+**both** a `QPushButton.setToolTip()` (Protocol Visualizer's "NAT Translation" button) and a
+`QListWidgetItem.setToolTip()` (the Protocol Visualizer step list): in both cases the tooltip
+background renders solid black in Arctic Clean regardless of `TOOLTIP_BG`, while the text colour
+still tracks `TOOLTIP_FG`. Midnight Pro's `TOOLTIP_FG` is light (`#E6EDF3`), so black-background +
+light-text reads correctly by pure coincidence — Midnight Pro's intended `TOOLTIP_BG`
+(`#0D1117`) is itself near-black, so a native black fallback is visually indistinguishable from
+the correctly-styled result. Arctic Clean's `TOOLTIP_FG` is dark navy (`#1A1A2E`), so the same
+black background renders dark-on-black — illegible. This is why the bug shipped invisibly for
+the lifetime of "Midnight Pro is the default theme" — nobody hit it until switching to Arctic
+Clean, and it affects every tooltip in the app, not one widget class.
+
+```python
+# WRONG — reads fine in Midnight Pro, illegible black-on-black in Arctic Clean
+btn.setToolTip("Layer 3 — Network Address Translation")
+item.setToolTip(f"{ip} is at {mac}")
+
+# CORRECT — forces a fixed light foreground via inline HTML, which Qt's rich-text
+# tooltip renderer honours directly, independent of the QSS/palette gap above
+from ui import styles as _s
+btn.setToolTip(_s.safe_tooltip("Layer 3 — Network Address Translation"))
+item.setToolTip(_s.safe_tooltip(f"{ip} is at {mac}"))
+```
+
+`safe_tooltip()` (`ui/styles.py`) HTML-escapes the text and converts `\n` to `<br>` (plain
+newlines have no effect once Qt treats the string as rich text). Every `.setToolTip(...)` call
+with non-empty text — `QPushButton`, `QLabel`, `QCheckBox`, `QTableWidgetItem`,
+`QListWidgetItem`, header items, all of it — must route through this helper. `setToolTip("")`
+(clearing a tooltip) needs no wrap. A round-tripped tooltip (read back via `.toolTip()` from an
+already-wrapped item and reassigned elsewhere, e.g. `ui/scan_enrichment.py`'s satellite-grouping
+rebuild) must not be wrapped a second time — it is already rich text.
+
+Enforced by `tests/test_item_tooltip_wrap.py` (ratchet: `safe_tooltip` call-site count in `ui/`
+may only increase; ratchet floor lowers only if a call site is legitimately removed).
+
 ### RULE-AX1 (blocking): Inline QPushButton stylesheets that set base `color:` must also set `color:` in explicit `:pressed` (and `:hover`) rules
 An inline `setStyleSheet()` overrides the global QSS, so the base `color:` leaks
 into the pressed state. **Mechanism / trap:** in Arctic Clean `WHITE == BG_CARD ==
@@ -874,6 +913,44 @@ starting point.
 
 ---
 
+## Network Info Contracts
+
+### RULE-NET1 (blocking): `net_info["gateway"]`/`["gateway_mac"]` are `Optional[str]` — never chain a string method straight off `.get(key, default)`
+
+**Mechanism.** `get_network_info()` (`modules/utils_net.py`) initializes both
+`"gateway"` and `"gateway_mac"` to `None` and only overwrites them after a
+successful route/ARP resolution — a legitimate, common runtime state (VPN,
+just-flushed ARP cache, DHCP not yet leased), not a data-corruption bug.
+`dict.get(key, default)` only substitutes `default` when `key` is **absent**;
+when the key is present with an explicit `None` value — exactly the case here
+— `.get(key, "")` still returns `None`, so a chained `.strip()`/`.replace()`
+raises `AttributeError: 'NoneType' object has no attribute ...`.
+
+This crashed a live 5-hour wild-chaos monkey run (2026-07-21):
+`ui/scan_enrichment.py`'s `_norm_mac(self._net_info.get("gateway_mac", ""))`
+raised the AttributeError, was caught and shown as an "unhandled error"
+`QMessageBox` by the global exception hook, and the process died with
+`STATUS_STACK_BUFFER_OVERRUN` 3 seconds later. The identical shape was found
+(not yet triggered) in `ui/plugin_page_mixin.py::_check_hw_autodetect()` for
+both the `"gateway"` and `"gateway_mac"` keys.
+
+```python
+# WRONG — default never applies; an explicit None value passes straight through
+gw_mac = self._net_info.get("gateway_mac", "").strip()
+
+# CORRECT — `or ""` catches both "key absent" and "key present but None"
+gw_mac = (self._net_info.get("gateway_mac") or "").strip()
+```
+
+`modules/deco_client.py::_norm_mac()` now normalizes `None`/falsy input to
+`""` internally, so any caller routing a MAC through it is already safe —
+prefer routing new gateway-MAC consumers through `_norm_mac()` over
+re-deriving the `or ""` guard inline.
+
+Enforced by `tests/test_deco_client_norm_mac.py`, `tests/test_scan_enrichment.py::
+test_plugin_enrichment_handles_unresolved_gateway_mac`, and
+`tests/test_plugin_page_mixin.py`.
+
 ## Windows Platform Rules
 
 ### RULE-WIN1 (blocking): No subprocess with PIPE on Windows startup paths
@@ -1078,6 +1155,40 @@ Alternative: set `Qt.WidgetAttribute.WA_DeleteOnClose` so the widget self-destru
 (then clear the handle in a `destroyed` slot). Either way, a parented widget you recreate on a
 repeatable action must have a defined destruction point. Regression coverage for the palette:
 `tests/test_command_palette_leak.py`.
+
+**General case — local `dlg = SomeDialog(..., parent=self); dlg.exec()`.** The identical
+mechanism applies even when the dialog is never reassigned to `self._x` at all — a plain local
+variable that goes out of scope at the end of the handler. The Python wrapper is collected, but
+the C++ `QDialog` is still a child of `self` and stays alive regardless. `WA_DeleteOnClose`
+does **not** reliably fix this shape: `QDialog.accept()`/`.reject()` (the normal path for an
+`OK`/`Cancel` `QDialogButtonBox`) call `done()`, which only `hide()`s the dialog — it does not
+call `close()`, so the close-triggered deferred-delete never fires. A live repro (500 opens of a
+representative dialog, `docs/spikes/dialog-exec-leak-repro.py`) measured **~521 KB retained per open** with no
+cleanup, vs. RSS flat (~noise) when `deleteLater()` follows `exec()`. A sweep of `ui/` found
+~47 instances of this exact shape across 26 files, all migrated in the same session that added
+this note.
+
+```python
+# WRONG — dlg goes out of scope, but stays alive as a C++ child of self forever
+def _edit(self):
+    dlg = _DeviceLabelDialog(mac, self._store, self)
+    if dlg.exec() == QDialog.DialogCode.Accepted:
+        self._refresh()
+
+# CORRECT — route every locally-constructed modal dialog through run_dialog()
+from ui.dialog_utils import run_dialog
+
+def _edit(self):
+    dlg = _DeviceLabelDialog(mac, self._store, self)
+    if run_dialog(dlg) == QDialog.DialogCode.Accepted:
+        self._refresh()
+```
+
+`ui/dialog_utils.py::run_dialog(dlg)` calls `dlg.exec()` in a `try`/`finally` and always
+`deleteLater()`s afterward, so cleanup happens regardless of how the dialog closed. Enforced by
+`tests/test_dialog_leak_guard.py` (AST guard: no bare `<dlg|box|msg>.exec()` call may exist
+anywhere in `ui/` outside `dialog_utils.py` itself) and `tests/test_dialog_utils.py` (behavioral:
+`run_dialog()` deletes the dialog on both accept and reject).
 
 ### RULE-WIN9 (blocking): Never claim a native window capability the window's Win32 style does not actually have
 
@@ -1964,10 +2075,11 @@ Currently tool-enforced (high reliability):
 - RULE-QSS1 → `test_qss_scoping.py`
 - RULE-QSS2 → `test_qss_hex_alpha.py`
 - RULE-QSS3 → `test_qss_recipe_adoption.py`
+- RULE-UX7 → `test_item_tooltip_wrap.py` (ratchet on `safe_tooltip` call-site count)
 - RULE-ENC1 → `test_source_encoding.py`
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically
 - RULE-WIN7 → `test_widget_visibility_order.py`
-- RULE-WIN8 → `test_command_palette_leak.py` (palette case only — no general AST guard yet)
+- RULE-WIN8 → `test_command_palette_leak.py` (palette toggle-reopen case) + `test_dialog_leak_guard.py` (general AST guard: no bare dialog `.exec()` anywhere in `ui/`) + `test_dialog_utils.py` (`run_dialog()` behavior)
 - RULE-CHAOS2 → `test_monkey_chrome_coverage.py` (blacklist invariants + chrome-action coverage)
 - RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
 - RULE-WIN2 → `test_native_chrome.py` (NC-message-set completeness + no-Qt-in-callback AST guard)

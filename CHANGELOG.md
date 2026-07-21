@@ -4,6 +4,19 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.39
+
+**Changed**
+- Feature Guide: promoted Protocol Visualizer and Lab Mode to the top of "Start here" and the recommended-pages list; removed the stale "New in this version" group (it was still pointing at window chrome from v2.1.30 and theme switching from v2.1.29 — nine releases out of date, and steering onboarding attention away from the higher-value tools)
+
+**Fixed**
+- Alert History tab got stuck showing skeleton-row placeholders when opened via the alert badge or other shortcuts, because the tab-index switch happened before the page's cross-fade transition had actually made it visible, so the visibility-gated refresh silently bailed and never retried; the two Alert History tables also now expand to fill the window instead of stopping at a fixed 200px height
+- Dialog `.exec()` leak across 26 files (RULE-WIN8 general case): 47 call sites created a dialog with a parent but never called `deleteLater()`, so the parent's C++ side kept every dialog alive forever after the local Python variable went out of scope — the same leak previously fixed only for the Ctrl+K command palette. Measured ~521 KB retained per un-cleaned-up dialog, matching the RSS-growth pattern seen in the 2026-07-21 wild-chaos monkey run. New `ui/dialog_utils.py::run_dialog()` guarantees `deleteLater()` via try/finally, and `tests/test_dialog_leak_guard.py` is a new AST guard preventing bare `.exec()` calls from creeping back in
+- Tooltips illegible in Arctic Clean theme (RULE-UX7): every `.setToolTip()` call rendered black-on-black because the QSS tooltip rule wasn't consistently applied. New `ui/styles.py::safe_tooltip()` forces readable text via inline HTML; all 220 tooltip call sites across `ui/` now route through it
+- `gateway_mac` `None` crash (RULE-NET1): `_norm_mac()` raised an unhandled `AttributeError` when `gateway_mac` was legitimately `None` (before ARP resolution completes), preceding a confirmed wild-chaos `STATUS_STACK_BUFFER_OVERRUN` crash. Hardened `_norm_mac()` to tolerate `None`, and fixed the identical latent shape in `ui/plugin_page_mixin.py::_check_hw_autodetect()`
+
+---
+
 ### v2.1.38
 
 **Added**

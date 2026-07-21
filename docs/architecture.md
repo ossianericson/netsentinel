@@ -20,6 +20,10 @@ MODULE LAYER   modules/*.py
 
 ## Key design decisions
 
+### Why PyQt6 instead of Electron
+
+NetSentinel's core is scapy/nmap/ctypes-level network access (ARP, SYN scanning, Win32 gateway-MAC lookups) with no JS equivalent — Electron would still need that logic in a separate Python process behind IPC, so it buys nothing there while adding a bundled Chromium + Node runtime on top of the Python one. PyQt6 keeps it a single native process: one PyInstaller `.exe`, no bundled browser engine, and genuinely native Win32 window chrome (Aero Snap, Snap Layouts, Win+arrow via real `WM_NCCALCSIZE`, not a faked frameless popup) plus instant whole-app theme switching through Qt's own stylesheet engine instead of a page reload. This was evaluated once and closed — see the `STATUS: SETTLED` block in `ui/native_chrome.py`; RULE-SPIKE1/2 require a new spike document before reopening it.
+
 ### Why QThread workers instead of asyncio
 
 PyQt6's event loop owns the main thread. Python's `asyncio` event loop does not integrate cleanly with Qt — you would need `qasync` or similar glue and lose access to Qt signals/slots across thread boundaries. Every background operation uses a `QThread` subclass in `workers/` that emits `result_ready` and `error` signals. The UI thread connects slots to those signals. No shared mutable state, no locks.
@@ -38,7 +42,7 @@ Ookla CLI produces the most accurate results (server-side precision, 1 Gbps+ sup
 
 ### Why a module LOC budget
 
-Large files are a maintenance hazard: they attract more code, become harder to test in isolation, and cause merge conflicts. Every file in `modules/` is capped at 600 lines. The budget is enforced by `tests/test_module_loc.py`, which fails CI if any module exceeds it. 19 modules were split during development when they hit the limit. The test also documents which files have known higher budgets and why.
+Large files are a maintenance hazard: they attract more code, become harder to test in isolation, and cause merge conflicts. Every file in `modules/` is capped at 780 lines (raised from 600 by owner decision, 2026-07-18 — the intent is unchanged, the threshold was simply forcing splits earlier than the codebase's real cohesion boundaries). The budget is enforced by `tests/test_module_loc.py`, which fails CI if any module exceeds it. 19 modules were split during development when they hit the original limit. The test also documents which files have known higher budgets and why.
 
 ### Why the dashboard was decomposed
 
@@ -135,13 +139,13 @@ The installed binary lives in `C:\Program Files\NetSentinel\` — a read-only di
 
 ## Test architecture
 
-The test suite has 6,064 tests across 455 files. Key categories:
+The test suite has 6,077 tests across 460 files. Key categories:
 
 | Category | Files | What it catches |
 |---|---|---|
 | Encoding hygiene | `test_source_encoding.py` | Mojibake (UTF-8 decoded as cp1252) in string literals |
 | Interactive state | `test_interactive_states.py` | QPushButton with `color:` but no `:pressed` rule (white-on-white on light themes) |
-| Module LOC budget | `test_module_loc.py` | Any module exceeding 600 lines |
+| Module LOC budget | `test_module_loc.py` | Any module exceeding 780 lines |
 | Duplicate methods | `test_no_duplicate_methods.py` | Same method defined twice in a class (silent Python discard) |
 | Bare pass in except | `test_no_bare_pass.py` | Silent exception swallowing without an explanatory comment |
 | Version consistency | `test_version_consistency.py` | Version string mismatch across all 12 tracked files |
@@ -162,7 +166,7 @@ All tests are offline — no real network traffic or live devices required.
 
 ## Adding a new scan module
 
-1. `modules/<name>.py` — pure Python, no PyQt imports; cap at 600 lines
+1. `modules/<name>.py` — pure Python, no PyQt imports; cap at 780 lines
 2. `workers/<name>_worker.py` — QThread, emits `result_ready(object)` and `error(str)`
 3. `ui/pages/<name>_page.py` — receives `store: MetricStore` as constructor parameter
 4. Register in `dashboard._build_pro_nav()` under the correct nav section

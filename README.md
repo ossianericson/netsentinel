@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-6064%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-6077%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**6,064+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**6,077+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -155,7 +155,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**6,064 automated tests** across 455 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**6,077 automated tests** across 460 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -173,7 +173,7 @@ python -m pytest tests/ -v --tb=short
 
 Three strict layers: `modules/` holds all detection logic with zero PyQt imports; `workers/` are QThread wrappers that emit signals and never touch UI state; `ui/` reads from MetricStore and never writes to it directly. Every file write goes through `get_app_data_dir()` — the installed binary lives in a read-only `Program Files` directory.
 
-`dashboard.py` is a thin shell that delegates to six inherited mixins and nine page-factory mixins, each responsible for a single concern. A CI-enforced 600-line budget per module keeps every file readable and independently testable.
+`dashboard.py` is a thin shell that delegates to six inherited mixins and nine page-factory mixins, each responsible for a single concern. A CI-enforced 780-line budget per module keeps every file readable and independently testable.
 
 → **[Architecture reference](docs/architecture.md)** — design decisions, module inventory, worker table, test architecture
 
@@ -201,13 +201,13 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.38 (current)
+### v2.1.39 (current)
 
-- Scans now recognize when you're on a VPN, corporate, or large network and adapt automatically — longer timeouts, bounded scope, and a one-time "scan anyway?" prompt instead of silently misbehaving
-- Device discovery streams results live as they're found, and very large networks (150+ devices) collapse into a manageable map you can expand
-- Security scans blocked by a firewall or VPN now honestly show "Could not test" instead of reporting a device as clean
-- Repeat scans on large networks are faster thanks to a 7-day hostname cache
-- Fixed the onboarding coach mark reappearing on every launch
+- Fixed dialogs (confirmations, pickers, etc.) leaking memory every time one was closed, the biggest contributor to memory growth over long sessions
+- Fixed tooltips being unreadable (black-on-black) in the Arctic Clean light theme
+- Fixed Alert History getting stuck on loading placeholders when opened from the alert badge
+- Fixed a rare crash that could occur before a device's gateway MAC address had finished resolving
+- Feature Guide now leads with Protocol Visualizer and Lab Mode instead of outdated "what's new" callouts
 
 ---
 

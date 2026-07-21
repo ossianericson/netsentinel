@@ -49,17 +49,17 @@ class SignalBar(QWidget):
         self._metric = metric
         self._bars: int = 0        # 0 = no data; 1–5 = filled bars
         self.setFixedSize(34, 20)
-        self.setToolTip("—")
+        self.setToolTip(_s.safe_tooltip("—"))
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
     def set_value(self, value: Optional[float], unit: str = "") -> None:
         if value is None:
             self._bars = 0
-            self.setToolTip("—")
+            self.setToolTip(_s.safe_tooltip("—"))
         else:
             self._bars = bars_for_metric(self._metric, value)
             suffix = f" {unit}" if unit else ""
-            self.setToolTip(f"{value:.1f}{suffix}")
+            self.setToolTip(_s.safe_tooltip(f"{value:.1f}{suffix}"))
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802

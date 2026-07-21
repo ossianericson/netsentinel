@@ -440,6 +440,30 @@ def qss_muted_label(size: int = 11) -> str:
     return qss_label(TEXT_SECONDARY, size)
 
 
+def safe_tooltip(text: str) -> str:
+    """Wrap plain tooltip text for a QListWidgetItem/QTableWidgetItem so it
+    stays readable in Arctic Clean.
+
+    Item-view tooltips (set via ``QListWidgetItem.setToolTip()`` /
+    ``QTableWidgetItem.setToolTip()``) render against a background that does
+    not follow the app's ``QToolTip`` QSS rule (``TOOLTIP_BG``) — verified
+    live: it renders solid black regardless of theme. Midnight Pro's
+    ``TOOLTIP_FG`` is already light, so it reads fine by coincidence; Arctic
+    Clean's ``TOOLTIP_FG`` is dark navy, which is illegible on that black
+    background. Forcing a fixed light foreground via inline HTML (which
+    Qt's rich-text tooltip renderer honours regardless of the QSS/palette
+    issue) fixes both themes. Plain ``QWidget.setToolTip()`` calls are
+    unaffected and must not use this — only item-view tooltips.
+
+    Newlines in *text* are converted to ``<br>`` — plain ``\n`` has no effect
+    once the string is rich text, so multi-line tooltips would otherwise
+    collapse onto one line.
+    """
+    import html as _html
+    safe = _html.escape(text).replace("\n", "<br>")
+    return f"<span style='color:{WHITE};'>{safe}</span>"
+
+
 def qss_frame(
     object_name: str,
     bg: "str | None" = None,

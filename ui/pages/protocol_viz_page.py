@@ -368,7 +368,7 @@ class ProtocolVizPage(QWidget):
             btn = QPushButton(title)
             btn.setCheckable(True)
             _defn = get_definition(key)
-            btn.setToolTip(f"{sub}\n\n{_defn}" if _defn else sub)
+            btn.setToolTip(_s.safe_tooltip(f"{sub}\n\n{_defn}" if _defn else sub))
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.setFixedHeight(36)
             btn.clicked.connect(lambda _checked, k=key: self._select_protocol(k))
@@ -404,9 +404,9 @@ class ProtocolVizPage(QWidget):
         self._btn_live.setCheckable(True)
         self._btn_live.setFixedHeight(26)
         self._btn_live.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_live.setToolTip(
+        self._btn_live.setToolTip(_s.safe_tooltip(
             "Animate real captured packets as they happen (ARP / DNS only)."
-        )
+        ))
         self._btn_live.setVisible(False)   # shown by _update_live_toggle_visibility()
         self._btn_live.clicked.connect(self._toggle_live)
         self._style_live_btn()
@@ -591,7 +591,7 @@ class ProtocolVizPage(QWidget):
 
     def _ctrl_btn(self, text: str, tooltip: str) -> QPushButton:
         btn = QPushButton(text)
-        btn.setToolTip(tooltip)
+        btn.setToolTip(_s.safe_tooltip(tooltip))
         btn.setFixedHeight(28)
         _s.themed_ss(btn, "QPushButton {{ background:transparent; border:1px solid {BORDER};"
             " border-radius:4px; color:{TEXT_PRIMARY}; font-size:11px; padding:0 10px; }}"
@@ -629,7 +629,7 @@ class ProtocolVizPage(QWidget):
             btn.setCheckable(True)
             btn.setFixedHeight(28)
             btn.setFixedWidth(34)
-            btn.setToolTip(f"Play animation at {value:g}x speed")
+            btn.setToolTip(_s.safe_tooltip(f"Play animation at {value:g}x speed"))
             btn.clicked.connect(lambda _checked, v=value: self._on_speed_clicked(v))
             self._speed_group.addButton(btn)
             self._speed_btns[value] = btn
@@ -1008,7 +1008,7 @@ class ProtocolVizPage(QWidget):
             self._step_list.clear()
             for i, step in enumerate(scene.steps):
                 item = QListWidgetItem(f"{i + 1}.  {step.packet_label}")
-                item.setToolTip(step.frame_detail or step.packet_label)
+                item.setToolTip(_s.safe_tooltip(step.frame_detail or step.packet_label))
                 self._step_list.addItem(item)
             if scene.steps:
                 self._step_list.setCurrentRow(0)

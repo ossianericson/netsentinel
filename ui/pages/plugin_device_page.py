@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 from ui.styles import (
     ORANGE,
 )
@@ -653,7 +654,7 @@ class PluginDevicePage(QWidget):
             from ui.pages.hardware_integration_page import PipInstallDialog
             from PyQt6.QtWidgets import QDialog
             dlg = PipInstallDialog(pkg, parent=self)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
+            if run_dialog(dlg) == QDialog.DialogCode.Accepted:
                 import importlib
                 importlib.invalidate_caches()
                 self._banner_frame.setVisible(False)

@@ -168,7 +168,7 @@ class _NetworkTabsMixin:
             btn = QPushButton(label)
             btn.setObjectName("btnNetRefresh")
             btn.setFixedHeight(30)
-            btn.setToolTip(f"Open {uri}")
+            btn.setToolTip(_s.safe_tooltip(f"Open {uri}"))
             if uri.startswith("ms-settings:"):
                 btn.clicked.connect(lambda _c=False, u=uri: __import__('os').startfile(u))
             elif uri.startswith("x-apple"):
@@ -307,7 +307,7 @@ class _NetworkTabsMixin:
             ]:
                 btn = QPushButton(label)
                 btn.setObjectName("btnRouterLink")
-                btn.setToolTip(f"Open {url} in your browser")
+                btn.setToolTip(_s.safe_tooltip(f"Open {url} in your browser"))
                 btn.clicked.connect(lambda _checked, u=url: webbrowser.open(u))
                 self._router_links_layout.addWidget(btn)
         self._router_links_layout.addStretch()

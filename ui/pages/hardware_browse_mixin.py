@@ -31,6 +31,7 @@ from ui.widgets.hub_card import (
     _validate_script,
 )
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 class _HardwareBrowseMixin:
@@ -152,7 +153,7 @@ class _HardwareBrowseMixin:
         has_url = bool(entry.get("file_url"))
         btn_install.setEnabled(has_url)
         if not has_url:
-            btn_install.setToolTip("No download URL provided")
+            btn_install.setToolTip(_s.safe_tooltip("No download URL provided"))
         btn_install.clicked.connect(lambda _=False, e=entry: self._install_community_plugin(e))
         lay.addWidget(btn_install)
         return card
@@ -344,10 +345,10 @@ class _HardwareBrowseMixin:
         dot = QLabel("●")
         if confidence >= 0.7:
             _s.themed_ss(dot, "color:{GREEN}; font-size:11px; border:none;")
-            dot.setToolTip(f"Strong match ({confidence:.0%})")
+            dot.setToolTip(_s.safe_tooltip(f"Strong match ({confidence:.0%})"))
         else:
             _s.themed_ss(dot, "color:{AMBER}; font-size:11px; border:none;")
-            dot.setToolTip(f"Possible match ({confidence:.0%})")
+            dot.setToolTip(_s.safe_tooltip(f"Possible match ({confidence:.0%})"))
         lay.addWidget(dot)
 
         info_col = QVBoxLayout()
@@ -375,23 +376,23 @@ class _HardwareBrowseMixin:
             lay.addWidget(status_lbl)
             btn_open = _btn(f"Open {native_page} →", accent=True)
             btn_open.setFixedHeight(24)
-            btn_open.setToolTip(f"Navigate to the {native_page} page")
+            btn_open.setToolTip(_s.safe_tooltip(f"Navigate to the {native_page} page"))
             btn_open.clicked.connect(lambda _=False, pg=native_page: self.navigate_to.emit(pg))
             lay.addWidget(btn_open)
         else:
             if has_bundled:
                 btn_install = _btn("⬇  Install", accent=True)
                 btn_install.setFixedHeight(24)
-                btn_install.setToolTip(
+                btn_install.setToolTip(_s.safe_tooltip(
                     "Copy bundled plugin into your NetSentinel data folder and register it"
-                )
+                ))
                 btn_install.clicked.connect(lambda _=False, p=plugin: self._install_from_catalogue(p))
                 lay.addWidget(btn_install)
 
             if has_prompt:
                 btn_prompt = _btn("⎘  Copy AI prompt")
                 btn_prompt.setFixedHeight(24)
-                btn_prompt.setToolTip("Copy a pre-written prompt for an AI to generate this plugin")
+                btn_prompt.setToolTip(_s.safe_tooltip("Copy a pre-written prompt for an AI to generate this plugin"))
                 btn_prompt.clicked.connect(
                     lambda _=False, p=plugin: self._copy_ai_prompt(p, btn_prompt)
                 )
@@ -410,7 +411,7 @@ class _HardwareBrowseMixin:
             module_name = pypi_lib.replace("-", "_")
             if importlib.util.find_spec(module_name) is None:
                 dlg = PipInstallDialog(pypi_lib, parent=self)
-                if dlg.exec() != QDialog.DialogCode.Accepted:
+                if run_dialog(dlg) != QDialog.DialogCode.Accepted:
                     self._set_status("Dependency install cancelled.", error=True)
                     return
                 import importlib

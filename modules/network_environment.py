@@ -181,9 +181,9 @@ def detect_environment(net_info: dict = None, adapters: list = None) -> NetworkE
             reasons.append(f"Windows domain membership detected: {domain}")
         effects = [
             "Device names may be missing — VPNs usually block the reverse-DNS and "
-            "NetBIOS lookups NetSentinel uses.",
+            + "NetBIOS lookups NetSentinel uses.",
             "Some security scans need to reach devices directly and may report "
-            "nothing through the tunnel.",
+            + "nothing through the tunnel.",
         ]
         if is_wide:
             effects.append(

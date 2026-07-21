@@ -84,8 +84,10 @@ def _decode_name(s: str) -> str:
         return s
 
 
-def _norm_mac(mac: str) -> str:
-    return mac.replace("-", ":").lower().strip()
+def _norm_mac(mac: Optional[str]) -> str:
+    """Normalize a MAC string; tolerates None (net_info's gateway_mac can be
+    unresolved -- RULE-NET1)."""
+    return (mac or "").replace("-", ":").lower().strip()
 
 
 # ── TP-Link detect ─────────────────────────────────────────────────────────────

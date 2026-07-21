@@ -64,7 +64,11 @@ class ObjectiveBadge(QLabel):
             tip_lines.append(f"&nbsp;&nbsp;• {obj}")
         if study_note:
             tip_lines.append(f"<br><i>{study_note}</i>")
-        self.setToolTip("<br>".join(tip_lines))
+        # Not routed through safe_tooltip() — tip_lines is already hand-built rich
+        # text (<b>/<br>/<i> tags, &nbsp; entities); safe_tooltip() HTML-escapes
+        # its input, which would literal-ize that markup. Wrap with the same
+        # fixed light foreground color it applies, without escaping the content.
+        self.setToolTip(f"<span style='color:{_s.WHITE};'>" + "<br>".join(tip_lines) + "</span>")
         self.setCursor(Qt.CursorShape.WhatsThisCursor)
 
     # ── Factory helpers ───────────────────────────────────────────────────────

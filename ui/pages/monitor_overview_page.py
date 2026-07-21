@@ -36,6 +36,7 @@ from ui.styles import (
     CARD_RADIUS,
 )
 from ui.widgets.animated_kpi import AnimatedKpi
+from ui.dialog_utils import run_dialog
 
 
 class _EventSparkline(QWidget):
@@ -260,7 +261,7 @@ class _GradeTile(QFrame):
         self._details_btn.setFixedSize(18, 16)
         self._details_btn.setVisible(False)
         self._details_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._details_btn.setToolTip("Show grade breakdown")
+        self._details_btn.setToolTip(_s.safe_tooltip("Show grade breakdown"))
         _s.themed_ss(self._details_btn, "QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
             " font-size:9px; border-radius:3px; }}"
             "QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
@@ -290,7 +291,7 @@ class _GradeTile(QFrame):
         from ui.pages.home_page import _GradeBreakdownDialog
         grade = self._grade_circle.text()
         dlg = _GradeBreakdownDialog(grade, self._dimensions, parent=self)
-        dlg.exec()
+        run_dialog(dlg)
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
         self.clicked.emit("Network Grade")
@@ -360,9 +361,9 @@ class MonitorOverviewPage(QWidget):
         self._start_all_btn = QPushButton("Start Core Monitors")
         self._start_all_btn.setFixedHeight(26)
         self._start_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._start_all_btn.setToolTip(
+        self._start_all_btn.setToolTip(_s.safe_tooltip(
             "Start ARP Spoof Watch, DHCP Rogue Monitor, and Network Logger in one click"
-        )
+        ))
         _s.themed_ss(self._start_all_btn, "QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             " border-radius:3px; font-size:11px; font-weight:600; padding:0 12px; }}"
             "QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"

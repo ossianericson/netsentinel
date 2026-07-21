@@ -770,7 +770,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._nav_search = QLineEdit()
         self._nav_search.setObjectName("navSearch")
         self._nav_search.setPlaceholderText("  Filter…")
-        self._nav_search.setToolTip("Filter sidebar pages  (Ctrl+F)")
+        self._nav_search.setToolTip(_s.safe_tooltip("Filter sidebar pages  (Ctrl+F)"))
         self._nav_search.setFixedHeight(28)
         _s.themed_ss(self._nav_search, "QLineEdit#navSearch {{"
             " background:{SIDEBAR_HOVER}; color:{SIDEBAR_ITEM_FG};"
@@ -811,7 +811,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         # Persistent search button — always visible at top of rail, opens Ctrl+K palette
         _rail_search_btn = QPushButton()
         _rail_search_btn.setFixedSize(56, 32)
-        _rail_search_btn.setToolTip("Search all pages  (Ctrl+K)")
+        _rail_search_btn.setToolTip(_s.safe_tooltip("Search all pages  (Ctrl+K)"))
         _rail_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _rail_search_btn.setIcon(_make_nav_icon("search", 18, _s.TEXT_MUTED))
         _rail_search_btn.setIconSize(QSize(18, 18))

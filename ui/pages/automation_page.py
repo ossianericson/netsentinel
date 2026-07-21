@@ -31,6 +31,7 @@ from modules.automation_hooks import (
 )
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
+from ui.dialog_utils import run_dialog
 
 
 # ── Card / layout helpers ─────────────────────────────────────────────────────
@@ -497,13 +498,13 @@ class AutomationPage(QWidget):
         seed.match_field = "alert_level"
         seed.match_value = match_value or "*"
         dlg = RuleEditorDialog(rule=seed, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._engine.add_rule(dlg.get_rule())
             self._reload_table()
 
     def _add_rule(self) -> None:
         dlg = RuleEditorDialog(parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._engine.add_rule(dlg.get_rule())
             self._reload_table()
 
@@ -513,7 +514,7 @@ class AutomationPage(QWidget):
         if not rule:
             return
         dlg = RuleEditorDialog(rule=rule, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._engine.update_rule(dlg.get_rule())
             self._reload_table()
 
@@ -542,7 +543,7 @@ class AutomationPage(QWidget):
     def _add_template(self, factory) -> None:
         rule = factory()
         dlg = RuleEditorDialog(rule=rule, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._engine.add_rule(dlg.get_rule())
             self._reload_table()
 

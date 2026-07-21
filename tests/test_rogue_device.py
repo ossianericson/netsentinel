@@ -307,9 +307,6 @@ def test_scan_calls_device_cb_immediately_per_arp_entry(tmp_path, monkeypatch):
 
     dev_ip, dev_mac = "192.168.1.50", "b0:34:95:11:22:33"
 
-    def _resolve_batch_never_called(entries, **kw):
-        raise AssertionError("resolve_batch must not have been called yet")
-
     monkeypatch.setattr("modules.rogue_device._get_arp_table", lambda: [(dev_ip, dev_mac)])
     monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: "192.168.1.1")
     monkeypatch.setattr("modules.rogue_device.measure_gateway_rtt", lambda gw, **kw: 1.0)

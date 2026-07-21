@@ -225,7 +225,7 @@ class _AnalysisTabsMixin:
         ctrl = QHBoxLayout()
         btn_analyse = QPushButton("🧩  Analyse Root Cause Now")
         btn_analyse.setObjectName("btnScan")
-        btn_analyse.setToolTip("Correlate all scan results and produce a prioritised root-cause list.")
+        btn_analyse.setToolTip(_s.safe_tooltip("Correlate all scan results and produce a prioritised root-cause list."))
         btn_analyse.clicked.connect(self._run_correlator)
         ctrl.addWidget(btn_analyse)
         ctrl.addStretch()
@@ -346,14 +346,14 @@ class _AnalysisTabsMixin:
         ctrl = QHBoxLayout()
         btn_learn = QPushButton("📖  Learn Normal Behaviour (60 s)")
         btn_learn.setObjectName("btnNetRefresh")
-        btn_learn.setToolTip(
+        btn_learn.setToolTip(_s.safe_tooltip(
             "Sniffs traffic for 60 seconds to record which servers and ports each IoT device normally uses."
-        )
+        ))
         btn_learn.clicked.connect(self._run_iot_learn)
 
         btn_monitor = QPushButton("👁  Start Anomaly Monitor")
         btn_monitor.setObjectName("btnScan")
-        btn_monitor.setToolTip("Continuously watches IoT device traffic and alerts on deviations from the baseline.")
+        btn_monitor.setToolTip(_s.safe_tooltip("Continuously watches IoT device traffic and alerts on deviations from the baseline."))
         btn_monitor.clicked.connect(self._run_iot_monitor)
 
         btn_stop = QPushButton("⏹  Stop Monitor")
@@ -364,7 +364,7 @@ class _AnalysisTabsMixin:
         self._iot_learn_duration.setRange(30, 600)
         self._iot_learn_duration.setValue(60)
         self._iot_learn_duration.setSuffix(" s")
-        self._iot_learn_duration.setToolTip("How many seconds to observe traffic during the learning phase")
+        self._iot_learn_duration.setToolTip(_s.safe_tooltip("How many seconds to observe traffic during the learning phase"))
         self._iot_learn_duration.setFixedWidth(_s.SPINBOX_WIDTH_WITH_SUFFIX)
         # background-color/color/font-size ONLY -- the global MAIN_STYLE QSpinBox
         # rule has border/padding, which makes the +/- buttons unclickable under
@@ -653,28 +653,28 @@ class _AnalysisTabsMixin:
         ctrl = QHBoxLayout()
         btn_grade = QPushButton("◎  Grade My Network")
         btn_grade.setObjectName("btnScan")
-        btn_grade.setToolTip("Score your network health across all available dimensions.")
+        btn_grade.setToolTip(_s.safe_tooltip("Score your network health across all available dimensions."))
         btn_grade.clicked.connect(self._run_benchmark)
         btn_isp = QPushButton("⊟  Network Health Report")
         btn_isp.setObjectName("btnNetRefresh")
-        btn_isp.setToolTip(
+        btn_isp.setToolTip(_s.safe_tooltip(
             "Export a Network Health Report — hop table, outages, grade — "
             "as HTML you can print to PDF and attach to an ISP support ticket."
-        )
+        ))
         btn_isp.clicked.connect(self._export_isp_report)
         btn_isp_copy = QPushButton("◇  Copy ISP Complaint")
         btn_isp_copy.setObjectName("btnNetRefresh")
-        btn_isp_copy.setToolTip(
+        btn_isp_copy.setToolTip(_s.safe_tooltip(
             "Copy a ready-to-email complaint script to your clipboard. "
             "Uses NetSentinel's own measurements — no manual steps required."
-        )
+        ))
         btn_isp_copy.clicked.connect(self._copy_isp_complaint)
         btn_isp_reddit = QPushButton("◇  Copy as Reddit post")
         btn_isp_reddit.setObjectName("btnNetRefresh")
-        btn_isp_reddit.setToolTip(
+        btn_isp_reddit.setToolTip(_s.safe_tooltip(
             "Copy a sanitized, forum-ready Markdown post for r/HomeNetworking. "
             "Public IP omitted, private IPs masked — safe to paste publicly."
-        )
+        ))
         btn_isp_reddit.clicked.connect(self._copy_isp_reddit_post)
         ctrl.addWidget(btn_grade)
         ctrl.addWidget(btn_isp)

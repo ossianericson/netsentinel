@@ -45,13 +45,13 @@ class DensityToggle(QFrame):
         self._btn_compact = QPushButton("⊟  Compact")
         self._btn_compact.setFixedHeight(22)
         self._btn_compact.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_compact.setToolTip("Compact rows (24 px)")
+        self._btn_compact.setToolTip(_s.safe_tooltip("Compact rows (24 px)"))
         self._btn_compact.clicked.connect(lambda: self._apply("compact"))
 
         self._btn_comfortable = QPushButton("⊞  Comfortable")
         self._btn_comfortable.setFixedHeight(22)
         self._btn_comfortable.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_comfortable.setToolTip("Comfortable rows (36 px)")
+        self._btn_comfortable.setToolTip(_s.safe_tooltip("Comfortable rows (36 px)"))
         self._btn_comfortable.clicked.connect(lambda: self._apply("comfortable"))
 
         lay.addWidget(self._btn_compact)

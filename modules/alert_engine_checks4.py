@@ -3,7 +3,7 @@ alert_engine_checks4.py — _AlertChecksMixin4: ARP_SPOOF / ROGUE_DHCP /
 CONFIG_DRIFT rule evaluation (V6 Sprint 4 — "passive always-on guards").
 
 New file rather than growing alert_engine_checks3.py further — keeps every
-alert_engine_checks*.py file under the RULE-AH1 600-line budget (see
+alert_engine_checks*.py file under the RULE-AH1 780-line budget (see
 tests/test_module_loc.py).
 
 Provides:

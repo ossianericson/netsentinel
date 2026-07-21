@@ -113,11 +113,11 @@ class _DiagExtraTabsMixin:
         self._ps_mode = QComboBox()
         self._ps_mode.addItems(["Normal", "Fast", "Low Impact"])
         self._ps_mode.setFixedWidth(90)
-        self._ps_mode.setToolTip(
+        self._ps_mode.setToolTip(_s.safe_tooltip(
             "Fast: 100 threads, 0.35s timeout\n"
             "Normal: 50 threads, 0.60s timeout\n"
             "Low Impact: 8 threads, 1.20s timeout, 50ms delay"
-        )
+        ))
         self._btn_ps = QPushButton("Scan Ports")
         self._btn_ps.setObjectName("btnDiag")
         self._btn_ps.setFixedHeight(30)

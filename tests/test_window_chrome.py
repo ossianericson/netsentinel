@@ -167,10 +167,10 @@ def test_changeevent_swaps_glyph_and_tooltip_on_maximize(host):
     host.changeEvent(QEvent(QEvent.Type.WindowStateChange))
 
     assert host._maximize_btn.text() == CHROME_RESTORE
-    assert host._maximize_btn.toolTip() == "Restore Down"
+    assert "Restore Down" in host._maximize_btn.toolTip()
 
     host.setWindowState(Qt.WindowState.WindowNoState)
     host.changeEvent(QEvent(QEvent.Type.WindowStateChange))
 
     assert host._maximize_btn.text() == CHROME_MAXIMIZE
-    assert host._maximize_btn.toolTip() == "Maximize"
+    assert "Maximize" in host._maximize_btn.toolTip()

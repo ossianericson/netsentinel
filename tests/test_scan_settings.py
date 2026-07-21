@@ -31,7 +31,7 @@ class TestEffectiveFlushCaches:
         from ui.scan_settings import effective_flush_caches
         monkeypatch.setattr(
             "modules.network_environment.detect_environment",
-            lambda: type("E", (), {"kind": "home"})(),
+            type("E", (), {"kind": "home"}),
         )
         assert effective_flush_caches() is True
 
@@ -39,7 +39,7 @@ class TestEffectiveFlushCaches:
         from ui.scan_settings import effective_flush_caches
         monkeypatch.setattr(
             "modules.network_environment.detect_environment",
-            lambda: type("E", (), {"kind": "vpn"})(),
+            type("E", (), {"kind": "vpn"}),
         )
         assert effective_flush_caches() is False
 
@@ -47,7 +47,7 @@ class TestEffectiveFlushCaches:
         from ui.scan_settings import effective_flush_caches
         monkeypatch.setattr(
             "modules.network_environment.detect_environment",
-            lambda: type("E", (), {"kind": "corporate"})(),
+            type("E", (), {"kind": "corporate"}),
         )
         assert effective_flush_caches() is False
 
@@ -55,7 +55,7 @@ class TestEffectiveFlushCaches:
         from ui.scan_settings import effective_flush_caches
         monkeypatch.setattr(
             "modules.network_environment.detect_environment",
-            lambda: type("E", (), {"kind": "large_subnet"})(),
+            type("E", (), {"kind": "large_subnet"}),
         )
         assert effective_flush_caches() is False
 
@@ -63,7 +63,7 @@ class TestEffectiveFlushCaches:
         from ui.scan_settings import effective_flush_caches
         monkeypatch.setattr(
             "modules.network_environment.detect_environment",
-            lambda: type("E", (), {"kind": "vpn"})(),
+            type("E", (), {"kind": "vpn"}),
         )
         QSettings("NetSentinel", "NetSentinel").setValue(_KEY, True)
         assert effective_flush_caches() is True
@@ -72,7 +72,7 @@ class TestEffectiveFlushCaches:
         from ui.scan_settings import effective_flush_caches
         monkeypatch.setattr(
             "modules.network_environment.detect_environment",
-            lambda: type("E", (), {"kind": "home"})(),
+            type("E", (), {"kind": "home"}),
         )
         QSettings("NetSentinel", "NetSentinel").setValue(_KEY, False)
         assert effective_flush_caches() is False

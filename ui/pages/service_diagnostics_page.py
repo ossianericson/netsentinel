@@ -128,9 +128,9 @@ class ServiceDiagnosticsPage(QWidget):
         lay.addWidget(self._custom_host_edit)
 
         self._traceroute_chk = QCheckBox("Include traceroute")
-        self._traceroute_chk.setToolTip(
+        self._traceroute_chk.setToolTip(_s.safe_tooltip(
             "Adds path analysis (~30 s extra). Shows each network hop to the service."
-        )
+        ))
         _s.themed_ss(self._traceroute_chk, "color:{TEXT_PRIMARY}; border:none;")
         lay.addWidget(self._traceroute_chk)
 

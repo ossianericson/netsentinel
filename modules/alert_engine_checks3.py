@@ -5,7 +5,7 @@ diffing").
 
 New file rather than growing alert_engine_checks2.py further — keeps both
 files (and alert_engine.py, already at the RULE-AH1 budget) under the
-600-line limit (see tests/test_module_loc.py).
+780-line limit (see tests/test_module_loc.py).
 
 Provides:
   evaluate_port_sweep_checks()  — NEW_OPEN_PORT: one alert per newly opened

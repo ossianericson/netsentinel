@@ -122,7 +122,7 @@ class PageHeaderBar(QWidget):
         self._banner_dismiss_btn = QPushButton()
         self._banner_dismiss_btn.setFixedSize(18, 18)
         self._banner_dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._banner_dismiss_btn.setToolTip("Dismiss — won't show again")
+        self._banner_dismiss_btn.setToolTip(_s.safe_tooltip("Dismiss — won't show again"))
         _wire_close_icon(self._banner_dismiss_btn)
         _s.themed_ss(self._banner_dismiss_btn, "QPushButton {{ background:transparent; border:none; padding:0; }}"
             "QPushButton:hover {{ background:transparent; }}"
@@ -196,7 +196,7 @@ class PageHeaderBar(QWidget):
         self._help_btn = QPushButton("?")
         self._help_btn.setFixedSize(22, 22)
         self._help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._help_btn.setToolTip("Page help")
+        self._help_btn.setToolTip(_s.safe_tooltip("Page help"))
         self._help_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; font-size:11px;"
             f" font-weight:bold; border:1px solid {alpha(_s.WHITE, 0x22)}; border-radius:11px; padding:0; }}"

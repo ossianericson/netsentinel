@@ -316,7 +316,7 @@ class TrendPage(QWidget):
         for col, tip in _hdr_tips.items():
             item = self._table.horizontalHeaderItem(col)
             if item:
-                item.setToolTip(tip)
+                item.setToolTip(_s.safe_tooltip(tip))
         self._table.horizontalHeader().setStretchLastSection(False)
         self._table.horizontalHeader().setSectionResizeMode(
             0, __import__("PyQt6.QtWidgets", fromlist=["QHeaderView"]).QHeaderView.ResizeMode.Stretch

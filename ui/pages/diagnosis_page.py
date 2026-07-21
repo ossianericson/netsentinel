@@ -30,6 +30,7 @@ from ui.styles import (
 )
 from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.widgets.jargon_tooltip import JargonTooltip
+from ui.dialog_utils import run_dialog
 
 # Maps finding category names to the primary glossary term to show inline
 _CATEGORY_TERM: dict[str, str] = {
@@ -1280,7 +1281,7 @@ class DiagnosisPage(QWidget):
 
     def _show_history_dialog(self) -> None:
         dlg = _DiagHistoryDialog(self)
-        dlg.exec()
+        run_dialog(dlg)
 
 
 class _DiagHistoryDialog(QDialog):

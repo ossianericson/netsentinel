@@ -151,7 +151,7 @@ class SystemTrayManager:
 
         self._base_icon = self._load_icon()
         self._tray = QSystemTrayIcon(self._base_icon, self._window)
-        self._tray.setToolTip("NetSentinel — Network Guardian")
+        self._tray.setToolTip(_s.safe_tooltip("NetSentinel — Network Guardian"))
 
         menu = self._build_menu()
         menu.aboutToShow.connect(self._on_menu_about_to_show)
@@ -444,7 +444,7 @@ class SystemTrayManager:
         self._act_startup.blockSignals(True)
         self._act_startup.setChecked(state.enabled)
         self._act_startup.setEnabled(state.can_change)
-        self._act_startup.setToolTip(state.reason or "")
+        self._act_startup.setToolTip(_s.safe_tooltip(state.reason) if state.reason else "")
         self._act_startup.blockSignals(False)
 
     def _on_autostart_result(self, state) -> None:
@@ -459,7 +459,7 @@ class SystemTrayManager:
                 chk.blockSignals(True)
                 chk.setChecked(state.enabled)
                 chk.setEnabled(state.can_change)
-                chk.setToolTip(state.reason or "")
+                chk.setToolTip(_s.safe_tooltip(state.reason) if state.reason else "")
                 chk.blockSignals(False)
         except Exception:
             pass  # non-fatal
@@ -494,4 +494,4 @@ class SystemTrayManager:
             parts.append(f"{self._badge_count} alert{'s' if self._badge_count != 1 else ''}")
         if self._health_state != "unknown" and self._health_headline:
             parts.append(self._health_headline[:50])
-        self._tray.setToolTip(f"NetSentinel — {' | '.join(parts)}")
+        self._tray.setToolTip(_s.safe_tooltip(f"NetSentinel — {' | '.join(parts)}"))

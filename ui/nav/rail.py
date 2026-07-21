@@ -282,7 +282,9 @@ class _RailButton(QPushButton):
         self._badge_fade_anim.finished.connect(self._on_badge_fade_done)
         self.setCheckable(True)
         self.setFixedSize(56, 58)
-        self.setToolTip(tooltip)
+        if tooltip:
+            from ui import styles as _s
+            self.setToolTip(_s.safe_tooltip(tooltip))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_theme()
 
@@ -597,7 +599,8 @@ class _FlyoutPanel(QWidget):
         self._pin_btn = QPushButton("⊞")
         self._pin_btn.setFixedSize(24, 24)
         self._pin_btn.setCheckable(True)
-        self._pin_btn.setToolTip("Pin panel open")
+        from ui import styles as _s
+        self._pin_btn.setToolTip(_s.safe_tooltip("Pin panel open"))
         self._pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         hlay.addWidget(self._title_lbl, 1)
         hlay.addWidget(self._pin_btn)
@@ -705,7 +708,11 @@ class _FlyoutPanel(QWidget):
         """Set the tooltip on a flyout item (shown on hover)."""
         btn = self._items.get(label)
         if btn:
-            btn.setToolTip(text)
+            if text:
+                from ui import styles as _s
+                btn.setToolTip(_s.safe_tooltip(text))
+            else:
+                btn.setToolTip(text)
 
     def open(self) -> None:
         self._anim.stop()

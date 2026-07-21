@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QWidget
 
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 class _HelpTabsMixin:
@@ -168,4 +169,4 @@ class _HelpTabsMixin:
         btn_row.addStretch()
         lay.addLayout(btn_row)
 
-        dlg.exec()
+        run_dialog(dlg)

@@ -1,7 +1,7 @@
 """
 alert_engine_routing.py — CTA page routing + action-step text for AlertEngine.
 
-Extracted from alert_engine.py (RULE-AH1: 600-line budget) — this is a
+Extracted from alert_engine.py (RULE-AH1: 780-line budget) — this is a
 self-contained lookup-table module with no evaluate_* logic, so it splits
 cleanly away from the rule-evaluation mixins in alert_engine_checks*.py.
 """

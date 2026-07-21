@@ -37,6 +37,7 @@ from ui.nav.labels import NavLabel as L
 from ui.nav.rail import (
     _ClickLabel, _SmoothProgressBar,
 )
+from ui.dialog_utils import run_dialog
 
 
 # _PAGE_HELP is defined in ui/help.py and imported at the top of this file.
@@ -457,21 +458,21 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             _s.themed_ss(_l, _pulse_base)
             _l.setCursor(Qt.CursorShape.PointingHandCursor)
         self._pulse_alerts_lbl.setHidden(True)
-        self._pulse_online_lbl.setToolTip(
+        self._pulse_online_lbl.setToolTip(_s.safe_tooltip(
             "Connection status (last logger result)\nClick to open Connectivity Tests"
-        )
-        self._pulse_devices_lbl.setToolTip(
+        ))
+        self._pulse_devices_lbl.setToolTip(_s.safe_tooltip(
             "Number of devices seen in the last scan\nClick to open Overview"
-        )
-        self._pulse_scan_lbl.setToolTip(
+        ))
+        self._pulse_scan_lbl.setToolTip(_s.safe_tooltip(
             "Time since the last network scan completed\nClick to open Overview"
-        )
-        self._pulse_logger_lbl.setToolTip(
+        ))
+        self._pulse_logger_lbl.setToolTip(_s.safe_tooltip(
             "Network logger state — starts automatically on first launch\nClick to open Logs"
-        )
-        self._pulse_alerts_lbl.setToolTip(
+        ))
+        self._pulse_alerts_lbl.setToolTip(_s.safe_tooltip(
             "Unacknowledged alerts\nClick to open Alert History"
-        )
+        ))
 
         self._pulse_online_lbl.clicked.connect(
             lambda: self._nav_rail_go_to(L.WHATS_WRONG))
@@ -636,7 +637,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         btns.accepted.connect(dlg.accept)
         lay.addWidget(btns)
-        dlg.exec()
+        run_dialog(dlg)
 
     # ── Window lifecycle ──────────────────────────────────────────────────────
 
@@ -1405,7 +1406,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         box.setIcon(QMessageBox.Icon.Warning)
         box.addButton("Scan Anyway", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
+        run_dialog(box)
         clicked = box.clickedButton()
         proceed = clicked is not None and clicked.text() == "Scan Anyway"
         if proceed:

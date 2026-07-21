@@ -83,7 +83,7 @@ class _ScanTabsMixin:
         self._m1_seg_list = QPushButton("≡  List")
         self._m1_seg_list.setFixedHeight(22)
         self._m1_seg_list.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._m1_seg_list.setToolTip("Flat device list")
+        self._m1_seg_list.setToolTip(_s.safe_tooltip("Flat device list"))
         _s.themed_ss(
             self._m1_seg_list,
             self._m1_seg_inactive_ss if _node_grp_on else self._m1_seg_active_ss,
@@ -91,7 +91,7 @@ class _ScanTabsMixin:
         self._m1_seg_node = QPushButton("⊞  By Node")
         self._m1_seg_node.setFixedHeight(22)
         self._m1_seg_node.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._m1_seg_node.setToolTip("Group devices by mesh node / AP")
+        self._m1_seg_node.setToolTip(_s.safe_tooltip("Group devices by mesh node / AP"))
         _s.themed_ss(
             self._m1_seg_node,
             self._m1_seg_active_ss if _node_grp_on else self._m1_seg_inactive_ss,

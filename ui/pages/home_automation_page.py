@@ -51,6 +51,7 @@ from ui import styles as _s
 from modules.device_admin import (
     record_ha_detected, update_device_ha_info, upsert_known_device,
 )
+from ui.dialog_utils import run_dialog
 
 # ── Category definitions ──────────────────────────────────────────────────────
 
@@ -447,14 +448,14 @@ class HomeAutomationPage(QWidget):
         btn_scan = QPushButton("⊕  Scan Network")
         btn_scan.setObjectName("btnScan")
         btn_scan.setFixedHeight(30)
-        btn_scan.setToolTip("Scan all known devices for HA protocol signatures")
+        btn_scan.setToolTip(_s.safe_tooltip("Scan all known devices for HA protocol signatures"))
         btn_scan.clicked.connect(self._run_ha_scan)
         btn_scan.clicked.connect(lambda: self.scan_requested.emit())
 
         btn_add = QPushButton("＋  Add Device")
         btn_add.setObjectName("btnNetRefresh")
         btn_add.setFixedHeight(30)
-        btn_add.setToolTip("Pre-register a device by MAC address")
+        btn_add.setToolTip(_s.safe_tooltip("Pre-register a device by MAC address"))
         btn_add.clicked.connect(self._add_device_dialog)
 
         filter_row.addWidget(QLabel("Room:"))
@@ -623,7 +624,7 @@ class HomeAutomationPage(QWidget):
         self._btn_lookup = QPushButton("⊕  Look up MAC")
         self._btn_lookup.setObjectName("btnNetRefresh")
         self._btn_lookup.setFixedHeight(26)
-        self._btn_lookup.setToolTip("Look up vendor for this MAC address online")
+        self._btn_lookup.setToolTip(_s.safe_tooltip("Look up vendor for this MAC address online"))
         self._btn_lookup.clicked.connect(self._lookup_mac)
 
         btn_row.addWidget(self._btn_edit)
@@ -819,7 +820,7 @@ class HomeAutomationPage(QWidget):
 
     def _open_edit_dialog(self, device: dict) -> None:
         dlg = _DeviceEditDialog(device, parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         vals = dlg.values()
         mac = device.get("mac", "")
@@ -994,7 +995,7 @@ class HomeAutomationPage(QWidget):
         btns.rejected.connect(dlg.reject)
         form.addRow(btns)
 
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
 
         mac = mac_edit.text().strip()

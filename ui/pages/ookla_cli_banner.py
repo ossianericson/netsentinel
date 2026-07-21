@@ -149,7 +149,7 @@ class OoklaCliBanner(QFrame):
             "QPushButton:pressed {{ background:{BG_HOVER}; }}"
         )
         self._btn_dismiss.setFixedSize(24, 24)
-        self._btn_dismiss.setToolTip("Dismiss")
+        self._btn_dismiss.setToolTip(_s.safe_tooltip("Dismiss"))
         self._btn_dismiss.clicked.connect(self.hide)
 
         lay.addWidget(icon)

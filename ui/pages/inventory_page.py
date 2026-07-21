@@ -52,6 +52,7 @@ from ui.widgets.inventory_dialogs import (
 )
 from ui.widgets.device_detail_pane import _wire_close_icon
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 # ── Device history drawer (DEVICE-2) ─────────────────────────────────────────
 
@@ -86,7 +87,7 @@ class _DeviceDrawer(QFrame):
         _s.themed_ss(self._title_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         close_btn = QPushButton()
         close_btn.setFixedSize(22, 22)
-        close_btn.setToolTip("Close")
+        close_btn.setToolTip(_s.safe_tooltip("Close"))
         _wire_close_icon(close_btn)
         _s.themed_ss(close_btn, "QPushButton {{ background:transparent; border:none; }}"
             "QPushButton:hover {{ background:{BG_HOVER}; }}"
@@ -797,9 +798,9 @@ class InventoryPage(QWidget):
         self._hide_offline_btn = QPushButton("Hide offline")
         self._hide_offline_btn.setCheckable(True)
         self._hide_offline_btn.setFixedHeight(20)
-        self._hide_offline_btn.setToolTip(
+        self._hide_offline_btn.setToolTip(_s.safe_tooltip(
             "Hide cached/stale devices — devices not seen in this scan"
-        )
+        ))
         self._hide_offline_btn.setStyleSheet(
             f"QPushButton {{ font-size:10px; color:{_s.TH_TEXT}; background:transparent;"
             f" border:1px solid {alpha(_s.TH_TEXT, 0x44)}; border-radius:3px; padding:0 7px; }}"
@@ -1008,7 +1009,8 @@ class InventoryPage(QWidget):
             cb = QCheckBox(label)
             cb.setChecked(True)
             _s.themed_ss(cb, lambda c=color: f"QCheckBox {{ font-size:11px; color:{getattr(_s, c)}; font-weight:bold; }}")
-            cb.setToolTip(_event_tips.get(et, ""))
+            _tip = _event_tips.get(et, "")
+            cb.setToolTip(_s.safe_tooltip(_tip) if _tip else _tip)
             cb.toggled.connect(lambda checked, t=et: self._toggle_type(t, checked))
             self._type_checks[et] = cb
             filter_row.addWidget(cb)
@@ -1095,7 +1097,7 @@ class InventoryPage(QWidget):
         for _i, _tip in enumerate(_header_tips):
             _hi = self._table.horizontalHeaderItem(_i)
             if _hi:
-                _hi.setToolTip(_tip)
+                _hi.setToolTip(_s.safe_tooltip(_tip))
         self._table.cellDoubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_row_single_clicked)
         self._table.selectionModel().selectionChanged.connect(self._on_selection_changed)
@@ -1123,7 +1125,7 @@ class InventoryPage(QWidget):
             mac_it = self._table.item(r, 4)
             if mac_it and mac_it.text() and mac_it.text() != "—":
                 dlg = _DeviceLabelDialog(mac_it.text(), self._store, self)
-                dlg.exec()
+                run_dialog(dlg)
 
         def _inv_open_browser():
             r = self._table.currentRow()
@@ -1520,7 +1522,7 @@ class InventoryPage(QWidget):
                 animate=_is_new and evt.event_type in ("JOINED", "UP", "RECOVERED"),
             )
             if _dot_tip:
-                _dot.setToolTip(_dot_tip)
+                _dot.setToolTip(_s.safe_tooltip(_dot_tip))
             self._table.setCellWidget(row, 0, _dot)
 
             self._table.setItem(row, 1, _plain_item(dt_str))
@@ -1657,7 +1659,7 @@ class InventoryPage(QWidget):
                 dot_tip   = f"Online  ·  Risk: {level}"
             dot_item = QTableWidgetItem(dot_char)
             dot_item.setForeground(QColor(dot_color))
-            dot_item.setToolTip(dot_tip)
+            dot_item.setToolTip(_s.safe_tooltip(dot_tip))
             dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             # Store display_state so _apply_segment_filter can hide offline rows
             dot_item.setData(Qt.ItemDataRole.UserRole + 1, _display_state)
@@ -1673,14 +1675,14 @@ class InventoryPage(QWidget):
             if seg:
                 seg_dot = QTableWidgetItem("●")
                 seg_dot.setForeground(QColor(seg.color))
-                seg_dot.setToolTip(seg.name)
+                seg_dot.setToolTip(_s.safe_tooltip(seg.name))
                 seg_dot.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 # Store seg_key as user data for filtering
                 seg_dot.setData(Qt.ItemDataRole.UserRole, seg_key)
             else:
                 seg_dot = QTableWidgetItem("○")
                 seg_dot.setForeground(QColor(_s.TEXT_MUTED))
-                seg_dot.setToolTip("Unknown segment")
+                seg_dot.setToolTip(_s.safe_tooltip("Unknown segment"))
                 seg_dot.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 seg_dot.setData(Qt.ItemDataRole.UserRole, None)
             self._snap_table.setItem(row, 1, seg_dot)
@@ -1693,7 +1695,7 @@ class InventoryPage(QWidget):
                     item.setForeground(QColor(_s.ACCENT))
                 elif col == 7:
                     item.setForeground(QColor(_ci_color))
-                    item.setToolTip(_ci_tip)
+                    item.setToolTip(_s.safe_tooltip(_ci_tip))
                 self._snap_table.setItem(row, col, item)
             self._snap_table.setRowHeight(row, 24)
 
@@ -1814,7 +1816,7 @@ class InventoryPage(QWidget):
             self.open_device_drawer(mac)
         elif action == act_override and self._store:
             dlg = _TypeOverrideDialog(mac, raw_dtype, current_override, self._store, self)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
+            if run_dialog(dlg) == QDialog.DialogCode.Accepted:
                 self.set_scan_devices(self._scan_devices)
         elif action == act_clear and self._store:
             try:
@@ -2010,7 +2012,7 @@ class InventoryPage(QWidget):
         action = menu.exec(self.cursor().pos())
         if action == edit_act:
             dlg = _SegmentEditorDialog(segment=seg, parent=self)
-            if dlg.exec() == QDialog.DialogCode.Accepted and self._store:
+            if run_dialog(dlg) == QDialog.DialogCode.Accepted and self._store:
                 vals = dlg.result_segment()
                 seg.name = vals["name"]
                 seg.color = vals["color"]
@@ -2188,7 +2190,7 @@ class InventoryPage(QWidget):
             return
         if self._store:
             dlg = _DeviceLabelDialog(mac, self._store, parent=self)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
+            if run_dialog(dlg) == QDialog.DialogCode.Accepted:
                 self._refresh()
         else:
             self.device_selected.emit(mac)
@@ -2391,7 +2393,7 @@ class InventoryPage(QWidget):
             )
             return
         dlg = _ScanCompareDialog(sessions, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             ts_a, ts_b = dlg.result_timestamps()
             self._start_compare_mode(ts_a, ts_b)
 

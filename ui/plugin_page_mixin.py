@@ -31,8 +31,8 @@ class _PluginPageMixin:
 
     def _check_hw_autodetect(self) -> None:
         """Run hardware catalogue detection once per gateway IP per session."""
-        gw_ip  = (self._net_info or {}).get("gateway", "").strip()
-        gw_mac = (self._net_info or {}).get("gateway_mac", "").strip()
+        gw_ip  = ((self._net_info or {}).get("gateway") or "").strip()
+        gw_mac = ((self._net_info or {}).get("gateway_mac") or "").strip()
         if not gw_ip:
             return
         # Only re-run when the gateway IP changes (avoid redundant HTTP probes)

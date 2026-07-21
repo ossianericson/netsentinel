@@ -374,7 +374,7 @@ class BaselinePage(QWidget):
         self._btn_take   = _btn("📸  Take Snapshot", primary=True)
         self._btn_delete = _btn("Delete")
         self._btn_compare = _btn("Compare Selected (2)")
-        self._btn_compare.setToolTip("Select exactly 2 rows, then click Compare")
+        self._btn_compare.setToolTip(_s.safe_tooltip("Select exactly 2 rows, then click Compare"))
 
         self._btn_take.clicked.connect(self._take_snapshot)
         self._btn_delete.clicked.connect(self._delete_snapshot)

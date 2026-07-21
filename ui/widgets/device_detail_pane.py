@@ -194,7 +194,7 @@ class _DeviceDrawer(QFrame):
         _s.themed_ss(self._title_lbl, "font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
         close_btn = QPushButton()
         close_btn.setFixedSize(22, 22)
-        close_btn.setToolTip("Close")
+        close_btn.setToolTip(_s.safe_tooltip("Close"))
         _wire_close_icon(close_btn)
         _s.themed_ss(close_btn, "QPushButton {{ background:transparent; border:none; }}"
             "QPushButton:hover {{ background:{BG_HOVER}; }}"

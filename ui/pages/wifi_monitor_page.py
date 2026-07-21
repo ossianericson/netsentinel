@@ -61,7 +61,7 @@ class WiFiMonitorPage(QWidget):
         ctrl.addWidget(QLabel("Interface:"))
         self._iface_combo = QComboBox()
         self._iface_combo.setMinimumWidth(280)
-        self._iface_combo.setToolTip("Select the wireless interface to capture on")
+        self._iface_combo.setToolTip(_s.safe_tooltip("Select the wireless interface to capture on"))
         ctrl.addWidget(self._iface_combo)
         self._btn_start = QPushButton("▶  Start Capture")
         self._btn_start.setObjectName("btnScan")

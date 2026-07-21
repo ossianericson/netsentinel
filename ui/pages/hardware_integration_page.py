@@ -66,6 +66,7 @@ from ui.widgets.credential_dialog import show_credential_dialog, show_unsigned_w
 from ui.pages.plugin_wizard_mixin import _PluginWizardMixin
 from ui.pages.hardware_browse_mixin import _HardwareBrowseMixin
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 
 class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin):
@@ -115,9 +116,9 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         hdr_row.addWidget(title)
         hdr_row.addStretch()
         self._btn_new_plugin = _btn("⬡  New Plugin")
-        self._btn_new_plugin.setToolTip(
+        self._btn_new_plugin.setToolTip(_s.safe_tooltip(
             "Launch the wizard to create a new plugin script from a template"
-        )
+        ))
         self._btn_new_plugin.clicked.connect(self._on_create_plugin)
         hdr_row.addWidget(self._btn_new_plugin)
 
@@ -126,7 +127,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         hdr_row.addWidget(self._btn_add)
 
         self._btn_nspkg = _btn("⬡  Import .nspkg")
-        self._btn_nspkg.setToolTip("Import a .nspkg plugin bundle (ZIP containing plugin.py + manifest.json)")
+        self._btn_nspkg.setToolTip(_s.safe_tooltip("Import a .nspkg plugin bundle (ZIP containing plugin.py + manifest.json)"))
         self._btn_nspkg.clicked.connect(self._on_import_nspkg)
         hdr_row.addWidget(self._btn_nspkg)
 
@@ -296,7 +297,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
                 module_name = pypi_pkg.replace("-", "_")
                 if importlib.util.find_spec(module_name) is None:
                     dlg = PipInstallDialog(pypi_pkg, parent=self)
-                    if dlg.exec() != QDialog.DialogCode.Accepted:
+                    if run_dialog(dlg) != QDialog.DialogCode.Accepted:
                         self._set_status("Dependency install cancelled.", error=True)
                         return
                     import importlib

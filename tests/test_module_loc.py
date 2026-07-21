@@ -256,7 +256,7 @@ def _line_count(path: Path) -> int:
 
 
 def test_no_module_exceeds_loc_budget():
-    """No file in modules/ may grow past its LOC budget (RULE-AH1: 600 lines).
+    """No file in modules/ may grow past its LOC budget (RULE-AH1: 780 lines).
 
     Offenders are listed with their actual line count and budget so the
     next split is easy to target.

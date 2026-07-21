@@ -19,6 +19,7 @@ from ui.nav.lazy_page import _LazyPageHost
 from ui.nav.rail import _NavEntry, _RailButton, _make_nav_icon
 from ui.perf_audit import warn_if_nav_slow
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 # Pages that auto-expand the tip bar on first visit (non-obvious interactions)
 _AUTO_HELP_PAGES: frozenset[str] = frozenset({
@@ -263,7 +264,7 @@ class _NavBuilderMixin:
         if self._nav_collapsed:
             item.setText(icon)
             if row not in self._nav_header_rows:
-                item.setToolTip(label)
+                item.setToolTip(_s.safe_tooltip(label))
         elif row in self._nav_section_groups:
             grp   = self._nav_section_groups[row]
             arrow = "▶" if grp["collapsed"] else "▼"
@@ -572,7 +573,7 @@ class _NavBuilderMixin:
         # would throw off the count()-2 insertion math used throughout this method.
         self._recent_rail_btn = QPushButton()
         self._recent_rail_btn.setFixedSize(56, 32)
-        self._recent_rail_btn.setToolTip("Recently visited pages")
+        self._recent_rail_btn.setToolTip(_s.safe_tooltip("Recently visited pages"))
         self._recent_rail_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._recent_rail_btn.setCheckable(True)
         self._recent_rail_btn.setIcon(_make_nav_icon("log", 18, _s.TEXT_MUTED))
@@ -607,7 +608,7 @@ class _NavBuilderMixin:
                 short = lbl.split()[0][:8]
                 pin_btn = _RailButton("star", lbl)
                 pin_btn._short_label = short
-                pin_btn.setToolTip(f"{lbl}\nRight-click to unpin or reorder")
+                pin_btn.setToolTip(_s.safe_tooltip(f"{lbl}\nRight-click to unpin or reorder"))
                 pin_btn.clicked.connect(
                     lambda _c, label=lbl: (
                         self._nav_rail_go_to(label),
@@ -640,7 +641,7 @@ class _NavBuilderMixin:
             btn = _RailButton(sec["icon"], sec["name"])
             btn.clicked.connect(lambda _c, s=sec["name"]: self._nav_rail_toggle(s))
             if sec["name"] in _SECTION_HINTS:
-                btn.setToolTip(_SECTION_HINTS[sec["name"]])
+                btn.setToolTip(_s.safe_tooltip(_SECTION_HINTS[sec["name"]]))
             insert_at = self._nav_rail_lay.count() - 2
             self._nav_rail_lay.insertWidget(insert_at, btn)
             self._nav_rail_buttons[sec["name"]] = btn
@@ -1625,7 +1626,7 @@ class _NavBuilderMixin:
         )
         vlay.addSpacing(4)
         vlay.addWidget(btns)
-        dlg.exec()
+        run_dialog(dlg)
 
     def _on_palette_action(self, action: str) -> None:
         if action.startswith("__device__"):

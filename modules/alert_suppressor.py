@@ -52,7 +52,7 @@ class _DeviceScopeMixin:
 class _MaintenanceSuppressionMixin:
     """Mixin for AlertEngine: maintenance-window checker + suppression logging.
 
-    Extracted out of alert_engine.py to stay under the 600-line RULE-AH1
+    Extracted out of alert_engine.py to stay under the 780-line RULE-AH1
     budget. AlertEngine inherits this alongside _AlertChecksMixin.
     """
 

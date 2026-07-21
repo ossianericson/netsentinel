@@ -386,16 +386,16 @@ class ScanEnrichmentMixin:
             if backhaul:
                 from PyQt6.QtGui import QColor
                 ssid_item.setForeground(QColor(_s.TEXT_MUTED))
-                ssid_item.setToolTip(
+                ssid_item.setToolTip(_s.safe_tooltip(
                     "Hidden SSID used for inter-node mesh communication.\n"
                     "Not a user network — safe to ignore."
-                )
+                ))
 
             bssid_item = QTableWidgetItem(bssid)
 
             nodes_item = QTableWidgetItem(str(node_count) if node_count > 1 else "")
             if node_count > 1:
-                nodes_item.setToolTip(node_tip)
+                nodes_item.setToolTip(_s.safe_tooltip(node_tip))
                 from PyQt6.QtGui import QColor
                 nodes_item.setForeground(QColor(_s.ACCENT))
 
@@ -412,11 +412,11 @@ class ScanEnrichmentMixin:
                 conf_item.setForeground(_QC(_s.AMBER))
             if wps:
                 wps_item.setForeground(_QC(_s.AMBER))
-                wps_item.setToolTip(
+                wps_item.setToolTip(_s.safe_tooltip(
                     "WPS (Wi-Fi Protected Setup) is enabled — its PIN method is "
                     "vulnerable to brute-force attacks. Disable WPS in the router's "
                     "admin panel if you don't need it."
-                )
+                ))
             if connected:
                 conn_item.setForeground(_QC(_s.GREEN))
 
@@ -799,7 +799,7 @@ class ScanEnrichmentMixin:
             if mc.name and not _mac_re.match(mc.name):
                 name_item = QTableWidgetItem(mc.name)
                 name_item.setForeground(QColor(_s.TEXT_PRIMARY))
-                name_item.setToolTip("Name assigned in Deco app")
+                name_item.setToolTip(_s.safe_tooltip("Name assigned in Deco app"))
                 self._m1_table.setItem(row, 1, name_item)
 
             # Node column (col 6)
@@ -810,10 +810,10 @@ class ScanEnrichmentMixin:
             # Band column (col 7) with speed tooltip
             band_item = QTableWidgetItem(mc.band)
             band_item.setForeground(QColor(_s.TEXT_PRIMARY))
-            band_item.setToolTip(
+            band_item.setToolTip(_s.safe_tooltip(
                 f"Upload:   {mc.upload_kbps} KB/s\n"
                 f"Download: {mc.download_kbps} KB/s"
-            )
+            ))
             self._m1_table.setItem(row, 7, band_item)
 
         # Reveal Node and Band columns once any Deco data is present
@@ -844,7 +844,7 @@ class ScanEnrichmentMixin:
                 if (not mac_item or not mac_item.text()) and pc.get("mac"):
                     _mac_fill = QTableWidgetItem(pc["mac"])
                     _mac_fill.setForeground(QColor(_s.TEXT_PRIMARY))
-                    _mac_fill.setToolTip(f"MAC from {plugin_name}")
+                    _mac_fill.setToolTip(_s.safe_tooltip(f"MAC from {plugin_name}"))
                     self._m1_table.setItem(row, 2, _mac_fill)
                 # Never overwrite the gateway row's hostname with a client hostname
                 # from the plugin.  Band/node enrichment is still valid for the router.
@@ -853,21 +853,21 @@ class ScanEnrichmentMixin:
                     if hostname and not _mac_re.match(hostname):
                         name_item = QTableWidgetItem(hostname)
                         name_item.setForeground(QColor(_s.TEXT_PRIMARY))
-                        name_item.setToolTip(f"Name from {plugin_name}")
+                        name_item.setToolTip(_s.safe_tooltip(f"Name from {plugin_name}"))
                         self._m1_table.setItem(row, 1, name_item)
                 # Fall back to hw name so single-AP plugins still enable grouping
                 unit = pc.get("unit", "") or plugin_name
                 if unit:
                     node_item = QTableWidgetItem(unit)
                     node_item.setForeground(QColor(_s.TEXT_PRIMARY))
-                    node_item.setToolTip(f"Node from {plugin_name}")
+                    node_item.setToolTip(_s.safe_tooltip(f"Node from {plugin_name}"))
                     self._m1_table.setItem(row, 6, node_item)
                     self._m1_table.setColumnHidden(6, False)
                 band = pc.get("band", "")
                 if band:
                     band_item = QTableWidgetItem(band)
                     band_item.setForeground(QColor(_s.TEXT_PRIMARY))
-                    band_item.setToolTip(f"Band from {plugin_name}")
+                    band_item.setToolTip(_s.safe_tooltip(f"Band from {plugin_name}"))
                     self._m1_table.setItem(row, 7, band_item)
                     self._m1_table.setColumnHidden(7, False)
 
@@ -961,7 +961,7 @@ class ScanEnrichmentMixin:
                 if _row2 is not None:
                     _ti = _QTI(_new_type)
                     _ti.setForeground(_QC(_s.TEXT_PRIMARY))
-                    _ti.setToolTip("Device type inferred from hostname")
+                    _ti.setToolTip(_s.safe_tooltip("Device type inferred from hostname"))
                     self._m1_table.setItem(_row2, 5, _ti)
 
             # Sync device_type cells from DeviceInfo for all devices that have a
@@ -1475,7 +1475,7 @@ class ScanEnrichmentMixin:
                 if _row is not None and hasattr(self, "_m1_table"):
                     _ti = _QTI(fp.device_hint)
                     _ti.setForeground(QColor(_s.TEXT_PRIMARY))
-                    _ti.setToolTip(fp.evidence or "Device type from DHCP VCI fingerprint")
+                    _ti.setToolTip(_s.safe_tooltip(fp.evidence or "Device type from DHCP VCI fingerprint"))
                     self._m1_table.setItem(_row, 5, _ti)
 
         except Exception:
@@ -1575,10 +1575,10 @@ class ScanEnrichmentMixin:
                             _ti = _QTI(new_type)
                             _ti.setForeground(QColor(_s.TEXT_PRIMARY))
                             _summary = getattr(obs, "raw_summary", "")
-                            _ti.setToolTip(
+                            _ti.setToolTip(_s.safe_tooltip(
                                 f"Observed via {_summary}" if _summary else
                                 f"Observed via passive-{getattr(obs, 'protocol', '')}"
-                            )
+                            ))
                             self._m1_table.setItem(_r, 5, _ti)
                             break
                 break

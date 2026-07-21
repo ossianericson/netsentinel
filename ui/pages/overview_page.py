@@ -140,7 +140,7 @@ class OverviewPage(QWidget):
             " font-size:11px; border-radius:4px; }}"
             "QPushButton:hover {{ background:{BG_HOVER}; }}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
-        self._diagnose_btn.setToolTip("Run a full diagnosis to find out what is wrong")
+        self._diagnose_btn.setToolTip(_s.safe_tooltip("Run a full diagnosis to find out what is wrong"))
         self._diagnose_btn.clicked.connect(
             lambda: self.navigate_to.emit("What's Wrong?")
         )
@@ -155,7 +155,7 @@ class OverviewPage(QWidget):
         )
         self._share_btn = QPushButton("Share Card ▾")
         self._share_btn.setStyleSheet(_btn_qss)
-        self._share_btn.setToolTip("Export network health card as PNG or HTML")
+        self._share_btn.setToolTip(_s.safe_tooltip("Export network health card as PNG or HTML"))
         self._share_btn.clicked.connect(self._show_share_menu)
         hdr.addWidget(self._share_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
@@ -176,7 +176,7 @@ class OverviewPage(QWidget):
             " font-size:11px; border-radius:4px; }}"
             "QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
-        self._cancel_edit_btn.setToolTip("Discard layout changes made since entering Edit Layout")
+        self._cancel_edit_btn.setToolTip(_s.safe_tooltip("Discard layout changes made since entering Edit Layout"))
         self._cancel_edit_btn.clicked.connect(self._on_cancel_edit)
         self._cancel_edit_btn.hide()
         hdr.addWidget(self._cancel_edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
@@ -188,9 +188,9 @@ class OverviewPage(QWidget):
             "QPushButton:hover {{ background:{BG_HOVER}; }}"
             "QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
-        self._report_btn.setToolTip(
+        self._report_btn.setToolTip(_s.safe_tooltip(
             "Run all modules + diagnostics and auto-open the full HTML report"
-        )
+        ))
         self._report_btn.clicked.connect(self.report_requested.emit)
         hdr.addWidget(self._report_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
@@ -201,7 +201,7 @@ class OverviewPage(QWidget):
             "QPushButton:hover {{ background:{BG_HOVER}; }}"
             "QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
-        self._export_btn.setToolTip("Export last scan results as HTML, JSON, or CSV")
+        self._export_btn.setToolTip(_s.safe_tooltip("Export last scan results as HTML, JSON, or CSV"))
         self._export_btn.setEnabled(False)
         self._export_btn.clicked.connect(self.export_requested.emit)
         hdr.addWidget(self._export_btn, alignment=Qt.AlignmentFlag.AlignBottom)
@@ -435,7 +435,7 @@ class OverviewPage(QWidget):
             if _gloss_key:
                 _defn = get_definition(_gloss_key)
                 if _defn:
-                    link_btn.setToolTip(_defn)
+                    link_btn.setToolTip(_s.safe_tooltip(_defn))
             link_btn.clicked.connect(
                 lambda _=False, t=target: self.navigate_to.emit(t)
             )

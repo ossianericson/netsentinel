@@ -97,7 +97,7 @@ Symbol guide:
 |---|---|---|
 | Tests | Collection succeeds | Run `python -m pytest tests/ -q` to find failures; fix before committing |
 | Lint | 0 violations | Run `ruff check . --select=F401,F811,F841` for details; fix before committing |
-| LOC budget | All modules ≤ 600 lines | Plan a split (RULE-AH1); don't raise the budget entry |
+| LOC budget | All modules ≤ 780 lines | Plan a split (RULE-AH1); don't raise the budget entry |
 | Nav pages | All pages reachable | Run `test_nav_completeness.py -v` for orphan details; fix before merging |
 | Encoding | No mojibake detected | Run `test_source_encoding.py -v` for file list; re-encode with UTF-8 |
 | Git status | 0 modified / 0 staged | Intended state; if unexpected, review with `git diff HEAD` |

@@ -2,7 +2,7 @@
 PluginGuide — collapsible "How to write a plugin script" guide widget.
 
 Extracted from hardware_integration_page.py (S14-2) to keep that file
-within the 600-line architecture budget.
+within the 780-line architecture budget.
 
 Used by:
     HardwareIntegrationPage._guide_area  (instantiate once, toggle via .toggle())

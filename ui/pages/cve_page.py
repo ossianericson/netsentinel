@@ -32,6 +32,7 @@ from ui.expanding_table import ExpandingTable
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 from ui.widgets.jargon_tooltip import LearnMoreLink
 from ui import styles as _s
+from ui.dialog_utils import run_dialog
 
 # ── CVE state definitions ─────────────────────────────────────────────────────
 
@@ -506,7 +507,7 @@ class CvePage(QWidget):
                     if _matched:
                         _dev_item.setText(f"1 — {_host}")
                         _dev_item.setForeground(QColor(_s.ACCENT))
-                        _dev_item.setToolTip("Click to open in Inventory Changes")
+                        _dev_item.setToolTip(_s.safe_tooltip("Click to open in Inventory Changes"))
                     else:
                         _dev_item.setText("0 devices")
                         _dev_item.setForeground(QColor(_s.TEXT_MUTED))
@@ -659,7 +660,7 @@ class CvePage(QWidget):
             notes=row_data["notes"],
             parent=self,
         )
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) == QDialog.DialogCode.Accepted:
             update_cve_state(
                 self._store,
                 row_data["id"],
@@ -817,7 +818,7 @@ class CvePage(QWidget):
 
     def _import_dialog(self) -> None:
         dlg = _ImportDialog(parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if run_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         services = dlg.services
         host     = dlg.host or ""

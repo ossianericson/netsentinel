@@ -707,7 +707,7 @@ class SpeedTestPage(QWidget):
         footer_row.addWidget(btn_refresh)
         btn_reset_location = QPushButton("↺  Auto-detect")
         _s.themed_ss(btn_reset_location, _link_btn_qss)
-        btn_reset_location.setToolTip("Clear your saved location/server and go back to automatic detection")
+        btn_reset_location.setToolTip(_s.safe_tooltip("Clear your saved location/server and go back to automatic detection"))
         btn_reset_location.clicked.connect(self._on_reset_location)
         footer_row.addWidget(btn_reset_location)
         srv_body.addLayout(footer_row)
@@ -773,12 +773,12 @@ class SpeedTestPage(QWidget):
         self._engine_lbl.setStyleSheet(
             f"font-size:10px; background:transparent; border:none; padding:0 4px;"
         )
-        self._engine_lbl.setToolTip(
+        self._engine_lbl.setToolTip(_s.safe_tooltip(
             "Speed test engine in use.\n"
             "Ookla CLI = highest accuracy (1 Gbps+)\n"
             "speedtest-cli = 8-thread library fallback\n"
             "Pure-Python = built-in 16-stream fallback"
-        )
+        ))
         self._refresh_engine_badge()
 
         action_row.addWidget(self._btn_run)
@@ -1213,7 +1213,7 @@ class SpeedTestPage(QWidget):
             )
             item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, s["id"])
-            item.setToolTip(f"Host: {s['host']}")
+            item.setToolTip(_s.safe_tooltip(f"Host: {s['host']}"))
             self._server_list.addItem(item)
 
     @pyqtSlot(str)
