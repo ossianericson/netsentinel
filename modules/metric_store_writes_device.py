@@ -210,6 +210,7 @@ class _DeviceWritesMixin:
         services: Optional[str] = None,
         mac_randomized: Optional[bool] = None,
         confidence: Optional[float] = None,
+        hostname_resolved_at: Optional[int] = None,
     ) -> None:
         now = ts or int(time.time())
         auth_val: Optional[int] = None if is_authorized is None else int(is_authorized)
@@ -219,9 +220,9 @@ class _DeviceWritesMixin:
             INSERT INTO known_device
                 (mac, ip, hostname, vendor, device_type,
                  first_seen, last_seen, is_authorized,
-                 services, mac_randomized, confidence)
+                 services, mac_randomized, confidence, hostname_resolved_at)
             VALUES(?, ?, ?, ?, ?, ?, ?, COALESCE(?, 1),
-                   ?, COALESCE(?, 0), COALESCE(?, 0.0))
+                   ?, COALESCE(?, 0), COALESCE(?, 0.0), ?)
             ON CONFLICT(mac) DO UPDATE SET
                 ip            = COALESCE(excluded.ip, ip),
                 hostname      = COALESCE(excluded.hostname, hostname),
@@ -232,10 +233,11 @@ class _DeviceWritesMixin:
                                      ELSE ? END,
                 services      = COALESCE(excluded.services, services),
                 mac_randomized = COALESCE(excluded.mac_randomized, mac_randomized),
-                confidence    = COALESCE(excluded.confidence, confidence)
+                confidence    = COALESCE(excluded.confidence, confidence),
+                hostname_resolved_at = COALESCE(excluded.hostname_resolved_at, hostname_resolved_at)
             """,
             (mac, ip, hostname, vendor, device_type, now, now, auth_val,
-             services, rand_val, confidence,
+             services, rand_val, confidence, hostname_resolved_at,
              auth_val, auth_val),
         )
 

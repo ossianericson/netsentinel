@@ -85,8 +85,43 @@ def test_migrations_list_is_nonempty():
     assert all(isinstance(m, str) for m in _MIGRATIONS)
 
 
-def test_schema_version_is_20():
-    assert _SCHEMA_VERSION == 20
+def test_schema_version_is_21():
+    assert _SCHEMA_VERSION == 21
+
+
+def test_known_device_has_hostname_resolved_at_column():
+    """Part 2/L8: TTL hostname cache needs a per-device timestamp of the last
+    ACTIVE name resolution (distinct from last_seen, which updates every scan
+    regardless of whether resolution ran)."""
+    conn = _make_conn()
+    lock = threading.Lock()
+    apply_sqlite_schema(conn, lock)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(known_device)").fetchall()}
+    assert "hostname_resolved_at" in cols
+
+
+def test_migrated_from_v20_db_gains_hostname_resolved_at_column():
+    """A DB with only the v20 known_device shape must gain the new nullable
+    column (and report v21) the next time apply_sqlite_schema runs."""
+    conn = _make_conn()
+    lock = threading.Lock()
+    conn.executescript(
+        "CREATE TABLE known_device (mac TEXT PRIMARY KEY, last_seen INTEGER NOT NULL);"
+    )
+    conn.commit()
+    apply_sqlite_schema(conn, lock)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(known_device)").fetchall()}
+    assert "hostname_resolved_at" in cols
+    rows = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchall()
+    assert int(rows[0][0]) == 21
+
+
+def test_known_device_hostname_resolved_at_defaults_to_none():
+    kd = KnownDevice(
+        mac="aa:bb:cc:dd:ee:ff", ip=None, hostname=None, vendor=None,
+        device_type=None, first_seen=0, last_seen=0, is_authorized=True,
+    )
+    assert kd.hostname_resolved_at is None
 
 
 def test_fresh_db_has_known_device_and_grade_result_indexes():
@@ -121,7 +156,7 @@ def test_migrated_from_v19_db_gains_v20_indexes():
     assert "idx_known_device_last_seen" in indexes
     assert "idx_grade_result_ts" in indexes
     rows = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchall()
-    assert int(rows[0][0]) == 20
+    assert int(rows[0][0]) == _SCHEMA_VERSION
 
 
 def test_rtt_point_dataclass():

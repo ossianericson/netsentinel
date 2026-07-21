@@ -551,3 +551,83 @@ def test_on_discovery_result_persists_positive_rtt(monkeypatch):
 
     stub._store.record_rtt.assert_called_once_with("192.168.1.30", 15.0)
     _cleanup(stub._recon_disc_table)
+
+
+def test_on_cred_result_not_testable_sets_not_testable_state_and_excludes_from_cred_access():
+    """Sprint 5b (D): a connection-refused Login Test must set 'not_testable'
+    (not 'fresh'), and must NOT be added to _cred_access_hosts — the previous
+    'not res.error' check treated any error-free result as a confirmed working
+    login, which a not_testable result (empty .error by design) would have
+    wrongly satisfied."""
+    from unittest.mock import MagicMock
+    from ui.scan_enrichment import ScanEnrichmentMixin
+    from modules.credentialed_scan import CredScanResult
+
+    class _Stub(ScanEnrichmentMixin):
+        pass
+
+    stub = _Stub()
+    stub._cred_verdict = MagicMock()
+    stub._cred_status = MagicMock()
+    stub._nav_set_scan_state = MagicMock()
+    stub._cred_access_hosts: set = set()
+    stub._recon_cred_info_table = QTableWidget(0, 2)
+    stub._recon_cred_sessions_table = QTableWidget(0, 1)
+    stub._recon_cred_sw_table = QTableWidget(0, 3)
+    stub._recon_cred_svc_table = QTableWidget(0, 3)
+    stub._recon_cred_user_table = QTableWidget(0, 4)
+
+    res = CredScanResult(
+        host="10.0.0.9",
+        not_testable=True, not_testable_reason="Could not establish an SSH connection",
+    )
+    stub._on_cred_result(res)
+
+    from ui.nav.labels import NavLabel as L
+    assert stub._nav_set_scan_state.call_args.args == (L.LOGIN_TEST, "not_testable")
+    assert "10.0.0.9" not in stub._cred_access_hosts
+
+    # Live-walk regression: the verdict banner's color previously only
+    # checked risk_flags (RED if any, else GREEN) -- a not_testable result
+    # has zero flags by definition, so it rendered in a falsely-reassuring
+    # GREEN ("Could not test..." text in a success-colored banner). Must use
+    # VIOLET, matching the Device Risk Score not_testable convention.
+    from ui import styles as _s
+    style_arg = stub._cred_verdict.setStyleSheet.call_args.args[0]
+    assert _s.VIOLET in style_arg
+    assert _s.GREEN not in style_arg
+
+    for t in (stub._recon_cred_info_table, stub._recon_cred_sessions_table,
+              stub._recon_cred_sw_table, stub._recon_cred_svc_table, stub._recon_cred_user_table):
+        _cleanup(t)
+
+
+def test_on_discovery_result_not_testable_sets_not_testable_state():
+    """Sprint 5b (E): zero devices from every discovery method must set
+    'not_testable' (not 'fresh'), mirroring the other 5b/5a scan handlers."""
+    from unittest.mock import MagicMock
+    from ui.scan_enrichment import ScanEnrichmentMixin
+    from modules.combined_discovery import DiscoveryResult
+
+    class _Stub(ScanEnrichmentMixin):
+        pass
+
+    stub = _Stub()
+    stub._recon_disc_table = QTableWidget(0, 5)
+    stub._disc_status = MagicMock()
+    stub._nav_set_scan_state = MagicMock()
+    stub._store = None
+
+    res = DiscoveryResult(
+        devices=[], cidr="192.168.1.0/24",
+        not_testable=True, not_testable_reason="No devices found by any method",
+    )
+    stub._on_discovery_result(res)
+
+    from ui.nav.labels import NavLabel as L
+    stub._nav_set_scan_state.assert_called_once_with(
+        L.FULL_DEVICE_DISCOVERY, "not_testable",
+        ts=stub._nav_set_scan_state.call_args.kwargs["ts"],
+        error="No devices found by any method",
+    )
+    _cleanup(stub._recon_disc_table)

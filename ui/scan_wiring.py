@@ -332,7 +332,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
         _ts_syn = time.time()
         _syn_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
         self._syn_status.setText(format_scan_status(_syn_verdict, _ts_syn))
-        self._nav_set_scan_state(L.PORT_SCAN_TCP, "fresh", ts=_ts_syn, verdict=_syn_verdict)
+        if getattr(result, "not_testable", False):
+            if hasattr(self, "_port_scan_not_testable_hosts") and result.host:
+                self._port_scan_not_testable_hosts.add(result.host)
+            self._nav_set_scan_state(
+                L.PORT_SCAN_TCP, "not_testable", ts=_ts_syn, error=result.not_testable_reason,
+            )
+        else:
+            self._nav_set_scan_state(L.PORT_SCAN_TCP, "fresh", ts=_ts_syn, verdict=_syn_verdict)
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.on_port_scan_result(result)
         # ── Update NetworkDocPage with accumulated port data ──────────────────
@@ -385,13 +392,21 @@ class ScanResultMixin(ScanEnrichmentMixin):
         _ts_udp = time.time()
         _udp_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
         self._udp_status.setText(format_scan_status(_udp_verdict, _ts_udp))
-        self._nav_set_scan_state(L.PORT_SCAN_UDP, "fresh", ts=_ts_udp, verdict=_udp_verdict)
+        if getattr(result, "not_testable", False):
+            if hasattr(self, "_port_scan_not_testable_hosts") and result.host:
+                self._port_scan_not_testable_hosts.add(result.host)
+            self._nav_set_scan_state(
+                L.PORT_SCAN_UDP, "not_testable", ts=_ts_udp, error=result.not_testable_reason,
+            )
+        else:
+            self._nav_set_scan_state(L.PORT_SCAN_UDP, "fresh", ts=_ts_udp, verdict=_udp_verdict)
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.on_port_scan_result(result)
 
     def _on_os_result(self, data: dict):
         self._os_stack.setCurrentIndex(1)
-        for guess in data.get("guesses", []):
+        guesses = data.get("guesses", [])
+        for guess in guesses:
             row = self._recon_os_table.rowCount()
             self._recon_os_table.insertRow(row)
             for col, val in enumerate([
@@ -403,10 +418,21 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 getattr(guess, "banner_hint", ""),
             ]):
                 self._recon_os_table.setItem(row, col, QTableWidgetItem(str(val)))
+        if hasattr(self, "_os_detect_not_testable_hosts"):
+            for guess in guesses:
+                if getattr(guess, "not_testable", False) and getattr(guess, "ip", ""):
+                    self._os_detect_not_testable_hosts.add(guess.ip)
         _ts_os = time.time()
-        _os_verdict = f"Fingerprinted {len(data.get('guesses', []))} host(s)."
+        _os_verdict = f"Fingerprinted {len(guesses)} host(s)."
         self._os_status.setText(format_scan_status(_os_verdict, _ts_os))
-        self._nav_set_scan_state(L.OS_DETECTION, "fresh", ts=_ts_os, verdict=_os_verdict)
+        _os_not_testable = bool(guesses) and all(getattr(g, "not_testable", False) for g in guesses)
+        if _os_not_testable:
+            _os_reason = next(
+                (g.not_testable_reason for g in guesses if getattr(g, "not_testable_reason", "")), ""
+            )
+            self._nav_set_scan_state(L.OS_DETECTION, "not_testable", ts=_ts_os, error=_os_reason)
+        else:
+            self._nav_set_scan_state(L.OS_DETECTION, "fresh", ts=_ts_os, verdict=_os_verdict)
 
     def _on_cve_result(self, service_version: str, result):
         from PyQt6.QtGui import QColor
@@ -426,6 +452,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 item = QTableWidgetItem(str(val))
                 item.setForeground(QColor(color if col in (2, 3) else _s.TEXT_PRIMARY))
                 self._recon_cve_table.setItem(row, col, item)
+        if hasattr(self, "_cve_batch_results"):
+            self._cve_batch_results.append(result)
         if hasattr(self, "_monitor_overview_page"):
             self._monitor_overview_page.set_cve_count(self._recon_cve_table.rowCount())
         _cve_n = self._recon_cve_table.rowCount()
@@ -460,7 +488,12 @@ class ScanResultMixin(ScanEnrichmentMixin):
             f"UPnP mappings: {len(result.upnp_mappings)}"
         )
         self._exposure_status.setText(format_scan_status(_exp_verdict, _ts_exp))
-        self._nav_set_scan_state(L.EXPOSED_TO_INTERNET, "fresh", ts=_ts_exp, verdict=_exp_verdict)
+        if getattr(result, "not_testable", False):
+            self._nav_set_scan_state(
+                L.EXPOSED_TO_INTERNET, "not_testable", ts=_ts_exp, error=result.not_testable_reason,
+            )
+        else:
+            self._nav_set_scan_state(L.EXPOSED_TO_INTERNET, "fresh", ts=_ts_exp, verdict=_exp_verdict)
         if getattr(self, "_pending_security_tools", []):
             self._advance_security_audit()
 
@@ -555,6 +588,31 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     break
         except Exception:
             pass  # non-fatal — table update is best-effort
+
+    def _m1_stream_device_row(self, info: dict) -> None:
+        """Live-preview upsert into the Devices table while Module 1 is still
+        scanning (Part 2/L7) — the moment an ARP entry is known it appears
+        here; as its hostname resolves the same row updates in place instead
+        of a second one being appended. Purely a preview: _m1_populate_device_table()
+        wipes and rebuilds this table authoritatively the instant the scan
+        completes (_on_m1_result), so nothing streamed here needs to be exact.
+        """
+        ip = info.get("ip", "")
+        if not ip:
+            return
+        rows = getattr(self, "_m1_stream_rows", None)
+        if rows is None:
+            rows = self._m1_stream_rows = {}
+        level = (info.get("risk_level") or "UNKNOWN").upper()
+        values = [
+            ip, info.get("name") or "—", info.get("mac", ""),
+            info.get("vendor") or "Unknown", level,
+            info.get("type") or "—", "", "", info.get("verdict") or "Scanning…",
+        ]
+        row = rows.get(ip)
+        _add_row(self._m1_table, values, level, row=row)
+        if row is None:
+            rows[ip] = self._m1_table.rowCount() - 1
 
     def _on_m1_result(self, data: dict):
         # Phase B2 (F4): one known_device snapshot shared across every step below

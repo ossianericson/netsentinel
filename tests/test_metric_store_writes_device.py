@@ -150,6 +150,29 @@ class TestKnownDeviceWrites:
         with pytest.raises(ValueError):
             store.record_device_event("10.0.2.3", "NOT_A_TYPE")
 
+    def test_hostname_resolved_at_round_trips(self, store):
+        """Part 2/L8: the TTL hostname cache needs this timestamp read back exactly."""
+        mac = "aa:bb:cc:00:05:03"
+        store.upsert_known_device(mac, ip="10.0.2.4", hostname="mypc", hostname_resolved_at=1000)
+        kd = store.get_known_devices()[mac]
+        assert kd.hostname_resolved_at == 1000
+
+    def test_hostname_resolved_at_defaults_to_none_when_never_passed(self, store):
+        mac = "aa:bb:cc:00:05:04"
+        store.upsert_known_device(mac, ip="10.0.2.5")
+        kd = store.get_known_devices()[mac]
+        assert kd.hostname_resolved_at is None
+
+    def test_hostname_resolved_at_none_preserves_prior_value(self, store):
+        """A cache-hit scan must not pass hostname_resolved_at at all (None), so
+        COALESCE preserves the original resolution timestamp -- otherwise the
+        TTL clock would reset on every scan and never expire."""
+        mac = "aa:bb:cc:00:05:05"
+        store.upsert_known_device(mac, ip="10.0.2.6", hostname="mypc", hostname_resolved_at=1000)
+        store.upsert_known_device(mac, ip="10.0.2.6", hostname="mypc", hostname_resolved_at=None)
+        kd = store.get_known_devices()[mac]
+        assert kd.hostname_resolved_at == 1000
+
 
 class TestClassificationOverrides:
     def test_set_and_clear(self, store):

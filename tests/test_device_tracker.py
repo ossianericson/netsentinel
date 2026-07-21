@@ -493,6 +493,54 @@ class TestVendorPreservation:
         )
 
 
+class TestHostnameResolvedAtTTL:
+    """Part 2/L8: process_scan() must stamp known_device.hostname_resolved_at
+    only when the scan actually performed name resolution this cycle
+    (DeviceInfo/dict name_resolved_fresh=True, the default), and leave it
+    untouched (COALESCE preserves the prior value) on a TTL cache hit
+    (name_resolved_fresh=False) -- otherwise the TTL clock would reset on
+    every scan and never expire.
+    """
+
+    def test_stamps_hostname_resolved_at_when_fresh(self, store):
+        mac = "aa:bb:cc:dd:ee:10"
+        tracker = DeviceTracker(store=store)
+        before = int(time.time())
+        tracker.process_scan([{
+            "mac": mac, "ip": "192.168.1.20", "hostname": "myhost",
+            "vendor": "Acme", "device_type": "Laptop", "name_resolved_fresh": True,
+        }])
+        kd = store.get_known_devices()[mac]
+        assert kd.hostname_resolved_at is not None
+        assert kd.hostname_resolved_at >= before
+
+    def test_default_name_resolved_fresh_is_true_when_key_omitted(self, store):
+        """A caller that doesn't know about this flag must reproduce pre-L8
+        behaviour: always stamp (safe default -- never silently skip a real
+        resolution just because the caller predates this feature)."""
+        mac = "aa:bb:cc:dd:ee:11"
+        tracker = DeviceTracker(store=store)
+        tracker.process_scan([_dev(mac=mac)])
+        kd = store.get_known_devices()[mac]
+        assert kd.hostname_resolved_at is not None
+
+    def test_does_not_stamp_when_not_fresh(self, store):
+        mac = "aa:bb:cc:dd:ee:12"
+        store.upsert_known_device(
+            mac, ip="192.168.1.21", hostname="myhost", hostname_resolved_at=1000
+        )
+        tracker = DeviceTracker(store=store)
+        tracker.process_scan([{
+            "mac": mac, "ip": "192.168.1.21", "hostname": "myhost",
+            "vendor": "Acme", "device_type": "Laptop", "name_resolved_fresh": False,
+        }])
+        kd = store.get_known_devices()[mac]
+        assert kd.hostname_resolved_at == 1000, (
+            "a cache-hit scan (name_resolved_fresh=False) must not bump "
+            "hostname_resolved_at, or the TTL would never expire"
+        )
+
+
 # ── Double-count regression guard (Phase 3a) ──────────────────────────────────
 
 class TestNoDoubleCountPerScan:

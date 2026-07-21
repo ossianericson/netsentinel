@@ -7,6 +7,8 @@ overall verdict, and the RiskBadge / VerdictPanel widget classes.
 """
 from __future__ import annotations
 
+import re
+
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -346,6 +348,16 @@ class _MonitorStateMixin:
 
     def _set_status(self, msg: str):
         self._status_bar.showMessage(f"  {msg}")
+        if not hasattr(self, "_progress"):
+            return
+        count_match = re.search(r"(\d+)\s*/\s*(\d+)", msg)
+        if count_match:
+            done, total = int(count_match.group(1)), int(count_match.group(2))
+            if total > 0:
+                self._progress.setRange(0, total)
+                self._progress.setValue(done)
+                return
+        self._progress.setRange(0, 0)  # indeterminate -- no known total right now
 
     # ── Pulse bar ─────────────────────────────────────────────────────────────
 

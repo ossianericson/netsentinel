@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from modules.metric_store import MetricStore
+from modules.metric_store_schema import _SCHEMA_VERSION
 from modules.service_monitor import ServiceMonitor, ServiceTarget, check_tcp
 
 
@@ -154,7 +155,7 @@ class TestMetricStoreServiceCheck:
 
     def test_schema_version_is_3(self, store):
         rows = store._execute_read("SELECT value FROM meta WHERE key='schema_version'", ())
-        assert rows[0]["value"] == "20"
+        assert rows[0]["value"] == str(_SCHEMA_VERSION)
 
 
 # ── ServiceMonitor ────────────────────────────────────────────────────────────

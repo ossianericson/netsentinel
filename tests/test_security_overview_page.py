@@ -525,6 +525,63 @@ def test_update_scan_registry_fresh_then_stale(page):
     assert page._scan_status_table.rowCount() == len(_AUDIT_SCAN_LABELS)
 
 
+# ── L3: not_testable scan state (Sprint 5a) ─────────────────────────────────────
+
+def test_state_labels_and_colors_include_not_testable():
+    from ui.pages.security_overview_page import _STATE_LABELS, _STATE_COLORS
+    assert _STATE_LABELS["not_testable"] == "Could not test"
+    assert _STATE_COLORS["not_testable"] == "VIOLET"
+
+
+def test_scan_status_table_shows_could_not_test_pill(page):
+    import time
+    page.update_scan_registry({
+        "Port Scan (TCP)": {
+            "state": "not_testable", "ts": time.time(),
+            "verdict": None,
+            "error": "All 1000 probed port(s) were filtered.",
+        },
+    })
+    pill = page._scan_status_table.cellWidget(0, 1)
+    assert pill.text() == "Could not test"
+
+
+def test_grade_excludes_not_testable_port_scan_from_score(page):
+    """A blocked Port Scan must not count as '0 findings = clean' — its dims
+    entry is excluded from the score math entirely (per L3 design)."""
+    page._port_scan_done = True
+    page._port_findings = [{"host": "1.2.3.4", "port": 3389, "service": "RDP"}] * 3
+    page._cred_scan_done = True
+    page._cred_flags = []
+    page._scan_registry_data = {
+        "Port Scan (TCP)": {"state": "not_testable", "ts": 0, "verdict": None, "error": "blocked"},
+    }
+    page._update_security_grade()
+    # Only the cred dim (0 findings) counts -> score 100 -> grade A, not the
+    # C that the 3 (excluded) port findings would otherwise have produced.
+    assert page._grade_ring._grade == "A"
+
+
+def test_grade_verdict_gets_coverage_caveat_when_check_not_testable(page):
+    page._cred_scan_done = True
+    page._cred_flags = []
+    page._scan_registry_data = {
+        "Port Scan (TCP)": {"state": "not_testable", "ts": 0, "verdict": None, "error": "blocked"},
+    }
+    page._update_security_grade()
+    assert "1 of 9 checks could not run in this environment" in page._grade_verdict_lbl.text()
+
+
+def test_grade_verdict_has_no_caveat_when_nothing_not_testable(page):
+    page._port_scan_done = True
+    page._port_findings = []
+    page._scan_registry_data = {
+        "Port Scan (TCP)": {"state": "fresh", "ts": 0, "verdict": "clean", "error": None},
+    }
+    page._update_security_grade()
+    assert "could not run" not in page._grade_verdict_lbl.text()
+
+
 # ── per-tool finding counts ─────────────────────────────────────────────────────
 
 def test_port_scan_result_updates_findings(page):

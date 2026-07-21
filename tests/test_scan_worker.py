@@ -69,6 +69,39 @@ def test_module1_lifecycle(tmp_path, monkeypatch):
     _cleanup(w)
 
 
+def test_module1_forwards_scan_progress_to_status_signal(tmp_path, monkeypatch):
+    """Part 1/C1: the slowest phase (name resolution) must report real progress
+    via the status signal instead of leaving the bar looking stuck."""
+    from workers.scan_worker import Module1Worker
+
+    _empty = {
+        "devices": [], "gateway_ip": None,
+        "high_risk_count": 0, "total_count": 0,
+        "plain_verdict": "No devices.", "proxy_arp_ips": set(),
+    }
+
+    def _fake_scan(_path, progress_cb=None, **_kw):
+        if progress_cb:
+            progress_cb("Identifying devices: 5/10…")
+        return _empty
+
+    monkeypatch.setattr("modules.rogue_device.scan", _fake_scan)
+
+    statuses = []
+    w = Module1Worker(offenders_path=tmp_path / "offenders.json")
+    w.status.connect(statuses.append)
+    w.start()
+    finished = w.wait(10000)
+    # Drain the Qt event queue -- cross-thread signal delivery is queued
+    app = QApplication.instance()
+    if app:
+        for _ in range(5):
+            app.processEvents()
+    assert finished, "Module1Worker did not finish within 10 s"
+    assert any("5/10" in s for s in statuses), statuses
+    _cleanup(w)
+
+
 # ── PreScanWorker ─────────────────────────────────────────────────────────────
 
 def test_prescan_instantiation():
@@ -198,6 +231,144 @@ def test_module1_device_found_emits_with_deviceinfo_objects(tmp_path, monkeypatc
     assert found[0]["name"] == "test-host"
     assert found[0]["type"] == "Windows PC"
 
+    _cleanup(w)
+
+
+# ── Part 2/L7: stream devices live via scan()'s device_cb ────────────────────
+
+def test_module1_forwards_device_cb_to_scan_for_live_streaming(tmp_path, monkeypatch):
+    """Regression coverage for "a 715-device resolve produces nothing on screen
+    for minutes and then everything at once" — Module1Worker must pass a
+    device_cb into scan() so device_found fires the moment a device is
+    streamed, not only after the whole scan returns."""
+    from modules.rogue_device import DeviceInfo
+    from workers.scan_worker import Module1Worker
+
+    streamed_device = DeviceInfo(ip="10.0.0.5", mac="aa:bb:cc:dd:ee:ff",
+                                  vendor="Acme", hostname="", device_type="")
+
+    def _fake_scan(_path, progress_cb=None, device_cb=None, **_kw):
+        if device_cb:
+            device_cb(streamed_device)  # simulate a device streamed mid-scan
+        return {
+            "devices": [], "gateway_ip": None,
+            "high_risk_count": 0, "total_count": 0,
+            "plain_verdict": "No devices.", "proxy_arp_ips": set(),
+        }
+
+    monkeypatch.setattr("modules.rogue_device.scan", _fake_scan)
+
+    found: list = []
+    w = Module1Worker(offenders_path=tmp_path / "offenders.json")
+    w.device_found.connect(found.append)
+    w.start()
+    finished = w.wait(10000)
+    app = QApplication.instance()
+    if app:
+        for _ in range(5):
+            app.processEvents()
+    assert finished, "Module1Worker did not finish within 10 s"
+    assert found, "scan()'s device_cb must reach device_found for live streaming"
+    assert found[0]["ip"] == "10.0.0.5"
+    assert found[0]["mac"] == "aa:bb:cc:dd:ee:ff"
+    assert found[0]["vendor"] == "Acme"
+    _cleanup(w)
+
+
+def test_module1_forwards_known_devices_to_scan(tmp_path, monkeypatch):
+    """Part 2/L8: Module1Worker must forward a caller-supplied known_devices
+    snapshot into scan() so the TTL hostname cache can skip re-resolving
+    unchanged devices. ui/plugin_page_mixin.py fetches this from MetricStore
+    before constructing the worker."""
+    from workers.scan_worker import Module1Worker
+
+    sentinel_known_devices = {"aa:bb:cc:dd:ee:ff": object()}
+    received: dict = {}
+
+    def _fake_scan(_path, progress_cb=None, device_cb=None, known_devices=None, **_kw):
+        received["known_devices"] = known_devices
+        return {
+            "devices": [], "gateway_ip": None,
+            "high_risk_count": 0, "total_count": 0,
+            "plain_verdict": "No devices.", "proxy_arp_ips": set(),
+        }
+
+    monkeypatch.setattr("modules.rogue_device.scan", _fake_scan)
+
+    w = Module1Worker(offenders_path=tmp_path / "offenders.json", known_devices=sentinel_known_devices)
+    w.start()
+    finished = w.wait(10000)
+    app = QApplication.instance()
+    if app:
+        for _ in range(5):
+            app.processEvents()
+    assert finished, "Module1Worker did not finish within 10 s"
+    assert received.get("known_devices") is sentinel_known_devices
+    _cleanup(w)
+
+
+def test_module1_forwards_scope_cidr_to_scan(tmp_path, monkeypatch):
+    """Part 2/L5: Module1Worker must forward a caller-supplied scope_cidr into
+    scan() so ARP entries outside the declared subnet are bounded/reported
+    rather than silently touched. ui/tabs_network.py computes this from the
+    detected NetworkEnvironment before constructing the worker."""
+    from workers.scan_worker import Module1Worker
+
+    received: dict = {}
+
+    def _fake_scan(_path, progress_cb=None, device_cb=None, known_devices=None,
+                    scope_cidr=None, **_kw):
+        received["scope_cidr"] = scope_cidr
+        return {
+            "devices": [], "gateway_ip": None,
+            "high_risk_count": 0, "total_count": 0,
+            "plain_verdict": "No devices.", "proxy_arp_ips": set(),
+            "out_of_scope_devices": [],
+        }
+
+    monkeypatch.setattr("modules.rogue_device.scan", _fake_scan)
+
+    w = Module1Worker(offenders_path=tmp_path / "offenders.json", scope_cidr="192.168.1.0/24")
+    w.start()
+    finished = w.wait(10000)
+    app = QApplication.instance()
+    if app:
+        for _ in range(5):
+            app.processEvents()
+    assert finished, "Module1Worker did not finish within 10 s"
+    assert received.get("scope_cidr") == "192.168.1.0/24"
+    _cleanup(w)
+
+
+def test_module1_omitting_scope_cidr_forwards_none(tmp_path, monkeypatch):
+    """Default (scope_cidr omitted) must reproduce pre-L5 behaviour exactly."""
+    from workers.scan_worker import Module1Worker
+
+    received: dict = {"called": False}
+
+    def _fake_scan(_path, progress_cb=None, device_cb=None, known_devices=None,
+                    scope_cidr=None, **_kw):
+        received["called"] = True
+        received["scope_cidr"] = scope_cidr
+        return {
+            "devices": [], "gateway_ip": None,
+            "high_risk_count": 0, "total_count": 0,
+            "plain_verdict": "No devices.", "proxy_arp_ips": set(),
+            "out_of_scope_devices": [],
+        }
+
+    monkeypatch.setattr("modules.rogue_device.scan", _fake_scan)
+
+    w = Module1Worker(offenders_path=tmp_path / "offenders.json")
+    w.start()
+    finished = w.wait(10000)
+    app = QApplication.instance()
+    if app:
+        for _ in range(5):
+            app.processEvents()
+    assert finished, "Module1Worker did not finish within 10 s"
+    assert received["called"] is True
+    assert received.get("scope_cidr") is None
     _cleanup(w)
 
 

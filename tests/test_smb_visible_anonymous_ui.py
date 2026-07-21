@@ -31,6 +31,7 @@ def _call_on_smb_result(result):
         _smb_status=QLabel(),
         _recon_smb_shares_table=QTableWidget(0, 4),
         _recon_smb_users_table=QTableWidget(0, 4),
+        _nav_set_scan_state=lambda *a, **kw: None,
     )
     ScanEnrichmentMixin._on_smb_result(obj, result)
     return obj

@@ -93,6 +93,8 @@ class SMBEnumResult:
     anonymous_login: bool = False
     error: str = ""
     tier: int = 1   # 1 = unauthenticated, 2 = credentialed
+    not_testable: bool = False
+    not_testable_reason: str = ""
 
     @property
     def risk_flags(self) -> List[str]:
@@ -440,6 +442,12 @@ def enumerate_smb(
             is_domain_controller=netbios.is_domain_controller,
             tier=1,
         )
+        if not anonymous_ok and not netbios.machine_name and not shares:
+            result.not_testable = True
+            result.not_testable_reason = (
+                "NetBIOS name query, SMB banner probe, and share listing all got no response — "
+                "SMB could not be reached on this host (port 445 may be blocked)."
+            )
         if progress_cb:
             progress_cb(result.plain_verdict)
         return result

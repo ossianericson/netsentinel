@@ -78,3 +78,49 @@ class TestRiskScoreRowClickShowsAllFindings:
         assert "Disable Telnet" in text
         assert "Update firmware" in text
         assert "Change the password" in text
+
+
+# Live-walk regression (Sprint 5a RULE-T6): a not_testable device whose only
+# finding is the noise "Vendor risk (UNKNOWN)" placeholder — see
+# tests/test_risk_scorer.py::test_not_testable_with_only_unknown_vendor_finding_...
+_INSUFFICIENT_DATA_ASSESSMENT = RiskAssessment(
+    ip="10.0.0.9", mac="", hostname="", vendor="Acme Corp",
+    device_type="", os_family="", total_score=3, severity="INFO",
+    findings=[RiskFinding(
+        title="Vendor risk (UNKNOWN): Acme Corp", score_contribution=3,
+        impact="Vendor flagged in OUI risk database.",
+        remediation="Review known issues for this vendor and apply recommended network segmentation.",
+    )],
+    plain_summary=(
+        "10.0.0.9 — Insufficient data — Port Scan could not reach this device, "
+        "so this is not a confirmed clean result."
+    ),
+    top_remediation="Re-run the scan from a network path that can reach this device.",
+    not_testable_inputs=["Port Scan"],
+    insufficient_data=True,
+)
+
+
+class TestRiskScoreTableShowsInsufficientData:
+    def test_primary_finding_column_shows_coverage_gap_not_vendor_noise(self, monkeypatch):
+        monkeypatch.setattr(
+            "modules.risk_scorer.score_devices", lambda *a, **kw: [_INSUFFICIENT_DATA_ASSESSMENT]
+        )
+        host = _FakeHost()
+        host._run_risk_scorer()
+        primary_finding_item = host._recon_risk_table.item(0, 4)
+        assert "Could not test" in primary_finding_item.text()
+        assert "Vendor risk" not in primary_finding_item.text()
+
+    def test_row_click_shows_dialog_even_with_only_noise_finding(self, monkeypatch):
+        monkeypatch.setattr(
+            "modules.risk_scorer.score_devices", lambda *a, **kw: [_INSUFFICIENT_DATA_ASSESSMENT]
+        )
+        host = _FakeHost()
+        host._run_risk_scorer()
+        with patch("PyQt6.QtWidgets.QMessageBox.information") as mock_info:
+            host._on_risk_cell_clicked(0, 0)
+            assert mock_info.called, "clicking an insufficient-data row must not silently no-op"
+            args, _kwargs = mock_info.call_args
+            text = args[-1] if args else ""
+            assert "Insufficient data" in text

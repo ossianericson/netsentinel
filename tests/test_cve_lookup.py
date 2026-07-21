@@ -2,8 +2,11 @@
 Tests for modules/cve_lookup.py — pure logic (data classes + normalisation).
 No live NVD API calls.
 """
+from unittest.mock import patch
+from urllib.error import URLError
+
 from modules.cve_lookup import (
-    CVEResult, CVELookupResult, _normalise_service_version,
+    CVEResult, CVELookupResult, _normalise_service_version, lookup,
 )
 
 
@@ -69,6 +72,51 @@ class TestCVELookupResult:
     def test_from_cache_flag(self):
         result = CVELookupResult(keyword="test", from_cache=True)
         assert result.from_cache is True
+
+    def test_not_testable_defaults_false(self):
+        result = CVELookupResult(keyword="test")
+        assert result.not_testable is False
+        assert result.not_testable_reason == ""
+
+
+# ── lookup() — network-unreachable is not_testable, not a false-clean result ───
+
+class TestLookupNotTestable:
+    def setup_method(self):
+        # Force a cache miss on every test regardless of run order.
+        from modules import cve_lookup as _m
+        _m._cache.clear()
+
+    def test_url_error_marks_not_testable(self):
+        """Sprint 5b (A): the NVD API being unreachable must not read as
+        'genuinely zero CVEs for this service' — both currently return an
+        empty .cves list with no way to distinguish them."""
+        with patch("modules.cve_lookup._nvd_request", side_effect=URLError("timed out")):
+            result = lookup("OpenSSH 8.9p1 Ubuntu")
+        assert result.cves == []
+        assert result.not_testable is True
+        assert result.not_testable_reason != ""
+
+    def test_generic_exception_stays_plain_error_not_not_testable(self):
+        """A non-network exception (e.g. malformed NVD response) is a genuine
+        tool-level defect, not a target-unreachable signal — must stay a plain
+        .error, unchanged from today's behavior."""
+        with patch("modules.cve_lookup._nvd_request", side_effect=ValueError("bad json")):
+            result = lookup("OpenSSH 8.9p1 Ubuntu")
+        assert result.error != ""
+        assert result.not_testable is False
+
+    def test_no_parseable_version_stays_plain_error(self):
+        """An unparseable banner is an input problem, not network unreachability."""
+        result = lookup("")
+        assert result.error != ""
+        assert result.not_testable is False
+
+    def test_successful_lookup_is_not_not_testable(self):
+        with patch("modules.cve_lookup._nvd_request", return_value=[]):
+            result = lookup("OpenSSH 8.9p1 Ubuntu")
+        assert result.error == ""
+        assert result.not_testable is False
 
 
 # ── _normalise_service_version ─────────────────────────────────────────────────

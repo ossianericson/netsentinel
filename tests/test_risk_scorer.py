@@ -239,3 +239,85 @@ class TestScoreDevicesCredentialHosts:
         results = {a.ip: a for a in score_devices([_Dev("10.0.0.5")], credential_hosts={"10.0.0.5"})}
         cred_findings = [f for f in results["10.0.0.5"].findings if "credentials" in f.title.lower()]
         assert len(cred_findings) == 1
+
+
+# ── score_device — coverage awareness (L3 / not_testable) ──────────────────────
+
+class TestScoreDeviceCoverageAwareness:
+    def test_clean_device_default_has_no_not_testable_inputs(self):
+        result = score_device("192.168.1.1")
+        assert result.not_testable_inputs == []
+
+    def test_port_scan_not_testable_recorded_and_changes_summary(self):
+        result = score_device("192.168.1.1", port_scan_not_testable=True)
+        assert "Port Scan" in result.not_testable_inputs
+        assert "Insufficient data" in result.plain_summary
+        assert "No significant risks detected" not in result.plain_summary
+
+    def test_os_detect_not_testable_recorded_and_changes_summary(self):
+        result = score_device("192.168.1.1", os_detect_not_testable=True)
+        assert "OS Detection" in result.not_testable_inputs
+        assert "Insufficient data" in result.plain_summary
+
+    def test_both_not_testable_lists_both_in_summary(self):
+        result = score_device(
+            "192.168.1.1", port_scan_not_testable=True, os_detect_not_testable=True,
+        )
+        assert result.not_testable_inputs == ["Port Scan", "OS Detection"]
+        assert "Insufficient data" in result.plain_summary
+
+    def test_not_testable_with_real_findings_keeps_normal_summary(self):
+        """A device with actual findings must NOT get the 'insufficient data' caveat —
+        there's no false CLEAN verdict to invent here, real risk was found."""
+        result = score_device("192.168.1.1", open_ports=[23], port_scan_not_testable=True)
+        assert "Insufficient data" not in result.plain_summary
+        assert "Telnet" in result.plain_summary or "risk" in result.plain_summary.lower()
+
+    def test_not_testable_with_only_unknown_vendor_finding_still_shows_insufficient_data(self):
+        """Live-walk regression (Sprint 5a RULE-T6): DeviceInfo.risk_level defaults to
+        'UNKNOWN' for any device not matched in the offenders/OUI database
+        (modules/rogue_device.py DeviceInfo.risk_level default) — the common case for
+        most real devices, not an edge case. score_device()'s vendor-risk check always
+        adds a 3-point 'Vendor risk (UNKNOWN)' finding whenever m1_risk_level ==
+        'UNKNOWN', so `findings` was never actually empty for a real not_testable
+        device scored with its real M1 default, and the 'Insufficient data' branch
+        was unreachable in production — confirmed live: a stubbed not_testable host
+        rendered as a green 'INFO risk (score 3/100)' row instead."""
+        result = score_device(
+            "192.168.1.1", vendor="Acme Corp", m1_risk_level="UNKNOWN",
+            port_scan_not_testable=True,
+        )
+        assert "Insufficient data" in result.plain_summary
+        assert result.insufficient_data is True
+        assert "INFO risk" not in result.plain_summary
+
+    def test_insufficient_data_flag_false_for_normal_result(self):
+        result = score_device("192.168.1.1", open_ports=[23])
+        assert result.insufficient_data is False
+
+    def test_insufficient_data_flag_false_for_clean_result(self):
+        result = score_device("192.168.1.1")
+        assert result.insufficient_data is False
+
+
+# ── score_devices — not_testable host-set wiring ────────────────────────────────
+
+class TestScoreDevicesNotTestableHosts:
+    def test_port_scan_not_testable_hosts_threaded_through(self):
+        devices = [{"ip": "192.168.1.50"}, {"ip": "192.168.1.51"}]
+        results = {
+            a.ip: a for a in score_devices(
+                devices, port_scan_not_testable_hosts={"192.168.1.50"},
+            )
+        }
+        assert "Port Scan" in results["192.168.1.50"].not_testable_inputs
+        assert results["192.168.1.51"].not_testable_inputs == []
+
+    def test_os_detect_not_testable_hosts_threaded_through(self):
+        devices = [{"ip": "192.168.1.50"}]
+        results = {
+            a.ip: a for a in score_devices(
+                devices, os_detect_not_testable_hosts={"192.168.1.50"},
+            )
+        }
+        assert "OS Detection" in results["192.168.1.50"].not_testable_inputs

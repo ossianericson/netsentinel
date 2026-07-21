@@ -1,5 +1,7 @@
 """Tests for modules/os_fingerprint.py — OS fingerprinting via TTL/TCP."""
-from modules.os_fingerprint import OSGuess, _ttl_to_os, _banner_to_os, _window_to_os
+from unittest.mock import patch
+
+from modules.os_fingerprint import OSGuess, _ttl_to_os, _banner_to_os, _window_to_os, fingerprint_host
 
 
 def test_import():
@@ -70,3 +72,24 @@ def test_merge_ports_none_falls_back_to_defaults():
 def test_merge_ports_empty_list_falls_back_to_defaults():
     from modules.os_fingerprint import _merge_ports
     assert _merge_ports([]) == [80, 443, 22, 8080]
+
+
+def test_fingerprint_host_no_signal_is_not_testable():
+    """Ping, banner grab, and TCP-stack all silent -> not a confirmed unknown OS."""
+    with patch("modules.os_fingerprint._ping_ttl", return_value=0), \
+         patch("modules.os_fingerprint._grab_banner", return_value=""), \
+         patch("modules.os_fingerprint._tcp_stack_fingerprint", return_value={}):
+        guess = fingerprint_host("192.168.1.50")
+
+    assert guess.not_testable is True
+    assert guess.not_testable_reason != ""
+
+
+def test_fingerprint_host_with_ttl_signal_is_testable():
+    """A real TTL response is a confirmed (if low-confidence) result, not not_testable."""
+    with patch("modules.os_fingerprint._ping_ttl", return_value=64), \
+         patch("modules.os_fingerprint._grab_banner", return_value=""), \
+         patch("modules.os_fingerprint._tcp_stack_fingerprint", return_value={}):
+        guess = fingerprint_host("192.168.1.50")
+
+    assert guess.not_testable is False

@@ -33,6 +33,9 @@ class TrackedDevice:
     hostname:    str
     vendor:      str
     device_type: str
+    # Part 2/L8: True (the safe default) unless the source explicitly marks a
+    # TTL cache hit — see DeviceInfo.name_resolved_fresh in rogue_device.py.
+    name_resolved_fresh: bool = True
 
 
 @dataclass
@@ -57,12 +60,14 @@ def _normalise(d) -> Optional[TrackedDevice]:
         hn  = d.get("hostname", "") or ""
         vnd = d.get("vendor", "") or ""
         dt  = d.get("device_type", "") or d.get("connection_type", "") or ""
+        fresh = d.get("name_resolved_fresh", True)
     else:
         mac = getattr(d, "mac", "") or ""
         ip  = getattr(d, "ip",  "") or ""
         hn  = getattr(d, "hostname", "") or ""
         vnd = getattr(d, "vendor",  "") or ""
         dt  = getattr(d, "device_type", "") or getattr(d, "connection_type", "") or ""
+        fresh = getattr(d, "name_resolved_fresh", True)
     mac = mac.lower().strip()
     if not mac or mac in ("?", "00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
         return None
@@ -73,7 +78,10 @@ def _normalise(d) -> Optional[TrackedDevice]:
         vnd = ""
     if dt.lower() in ("unknown device", "unknown"):
         dt = ""
-    return TrackedDevice(mac=mac, ip=ip, hostname=hn, vendor=vnd, device_type=dt)
+    return TrackedDevice(
+        mac=mac, ip=ip, hostname=hn, vendor=vnd, device_type=dt,
+        name_resolved_fresh=bool(fresh),
+    )
 
 
 # ── Main class ────────────────────────────────────────────────────────────────
@@ -166,6 +174,10 @@ class DeviceTracker:
                 is_authorized=None,   # do not override existing flag
                 ts=now,
                 services=services_json,
+                # Part 2/L8: only stamp when this scan actually resolved the
+                # name (fresh=True). None on a cache hit lets COALESCE preserve
+                # the original timestamp so the TTL clock doesn't reset.
+                hostname_resolved_at=(now if td.name_resolved_fresh else None),
             )
             known_macs.add(td.mac)
 

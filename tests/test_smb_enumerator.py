@@ -131,6 +131,37 @@ def test_enumerate_smb_tier1_propagates_domain_controller_flag(monkeypatch):
     assert "Domain Controller" in " ".join(result.risk_flags)
 
 
+def test_enumerate_smb_tier1_all_probes_empty_is_not_testable(monkeypatch):
+    """NetBIOS, SMB banner, and share listing all silent -> port 445 may be
+    blocked, so this must not read as a confirmed 'no shares' clean result."""
+    monkeypatch.setattr(
+        "modules.smb_enumerator._netbios_name_query",
+        lambda host, timeout=3.0: NetBIOSInfo(),
+    )
+    monkeypatch.setattr(
+        "modules.smb_enumerator._smb_anonymous_banner",
+        lambda host, timeout=5.0: ("", False),
+    )
+    monkeypatch.setattr("modules.smb_enumerator._net_view_shares", lambda host: [])
+    result = enumerate_smb("10.0.0.1", timeout=0.2)
+    assert result.not_testable is True
+    assert result.not_testable_reason != ""
+
+
+def test_enumerate_smb_tier1_with_machine_name_is_still_testable(monkeypatch):
+    monkeypatch.setattr(
+        "modules.smb_enumerator._netbios_name_query",
+        lambda host, timeout=3.0: NetBIOSInfo(machine_name="WORKSTATION1"),
+    )
+    monkeypatch.setattr(
+        "modules.smb_enumerator._smb_anonymous_banner",
+        lambda host, timeout=5.0: ("", False),
+    )
+    monkeypatch.setattr("modules.smb_enumerator._net_view_shares", lambda host: [])
+    result = enumerate_smb("10.0.0.1", timeout=0.2)
+    assert result.not_testable is False
+
+
 # ── F-88: SMB share risk flag auth-state awareness ─────────────────────────────
 
 def test_smb_share_visible_anonymous_defaults_false():

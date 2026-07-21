@@ -368,11 +368,13 @@ class _MonitorTabsMixin:
         if self._sched_worker and self._sched_worker.isRunning():
             return
         from PyQt6.QtCore import QSettings as _QS
+        from ui.scan_settings import effective_flush_caches
         _qs = _QS("NetSentinel", "NetSentinel")
         self._sched_worker = SchedulerWorker(
             interval_minutes=self._sched_interval.value(),
             offenders_path=self._offenders_path,
             notify_desktop=_qs.value("tray/notify_new_device", False, type=bool),
+            flush_caches=effective_flush_caches(),
         )
         self._sched_worker.status.connect(self._on_sched_status)
         self._sched_worker.alert.connect(lambda t, m: self._sched_log.append(f"🔔 {t}: {m}"), Qt.ConnectionType.QueuedConnection)

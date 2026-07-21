@@ -142,6 +142,72 @@ def synthesize_mesh_only_clients(
     return out
 
 
+_COLLAPSE_THRESHOLD_DEFAULT = 150
+
+
+def collapse_to_segments(
+    devices: list,
+    gateway_ip: str = "",
+    expanded: Optional[set] = None,
+    threshold: int = _COLLAPSE_THRESHOLD_DEFAULT,
+) -> list:
+    """
+    Collapse *devices* to one synthetic placeholder per /24 subnet once the
+    total device count exceeds *threshold* — so a large corporate ARP table
+    (hundreds of devices) renders as a readable handful of segment nodes
+    instead of an unreadable single-row wall (Part 1/D). Below the threshold,
+    *devices* is returned unchanged — the home-network render path is untouched.
+
+    Any CIDR in *expanded* is left un-collapsed (its real devices are returned
+    individually) — this is how double-clicking a segment node expands it.
+
+    Each placeholder is a plain dict shaped enough like a device (ip/mac/
+    hostname/device_type/risk_level) to flow through build_cytoscape_elements()
+    and the classic matplotlib view with no further changes. Its "ip" is the
+    CIDR string itself — unique, never collides with a real dotted-quad IP,
+    and is what a click on the node reports back (so the caller can toggle it
+    into *expanded* and re-render).
+
+    A device with no usable IPv4 address is always returned individually —
+    there is nothing to group it by.
+    """
+    devices = list(devices)
+    if len(devices) <= threshold:
+        return devices
+
+    expanded = expanded or set()
+    from modules.network_segments import auto_detect_segments, classify_device_segment
+
+    segments = auto_detect_segments(devices, gateway_ip)
+    result: List[dict] = []
+    counts: Dict[str, int] = {}
+
+    for d in devices:
+        ip = _attr(d, "ip", "") or ""
+        seg = classify_device_segment(ip, segments) if ip else None
+        if seg is None or seg.cidr in expanded:
+            result.append(d)
+            continue
+        counts[seg.cidr] = counts.get(seg.cidr, 0) + 1
+
+    for seg in segments:
+        n = counts.get(seg.cidr, 0)
+        if n == 0:
+            continue
+        result.append({
+            "ip": seg.cidr,
+            "mac": "",
+            "hostname": f"{seg.cidr} — {n} devices",
+            "vendor": "",
+            "risk_level": "UNKNOWN",
+            "device_type": "segment",
+            "segment_cidr": seg.cidr,
+            "segment_count": n,
+        })
+
+    return result
+
+
 def build_cytoscape_elements(
     devices: list,
     edges: Optional[list] = None,                  # list[TopologyEdge]

@@ -215,6 +215,43 @@ class TestConcentric:
         delta = min(delta, 2 * math.pi - delta)
         assert abs(math.degrees(delta) - 180.0) < 1.0
 
+    # ── Part 1/D: outer ring scales for large child counts ──────────────────
+
+    @staticmethod
+    def _single_parent_topology(n_children: int) -> list:
+        elems = [
+            _node("__internet__", "internet", "Internet"),
+            _node("192.168.1.1", "gateway", "Gateway"),
+            _node("sat-a", "mesh-sat", "Mesh-A"),
+            _edge("__internet__", "192.168.1.1"),
+            _edge("192.168.1.1", "sat-a"),
+        ]
+        for i in range(n_children):
+            nid = f"192.168.1.{10 + i}"
+            elems.append(_node(nid, "risk-clean", f"Client{i}"))
+            elems.append(_edge("sat-a", nid))
+        return elems
+
+    def test_outer_ring_unscaled_at_or_below_twelve_children(self):
+        """12 or fewer children per parent stay at the original fixed 420 radius."""
+        cx, cy = _CANVAS_W / 2, _CANVAS_H / 2
+        elems = self._single_parent_topology(12)
+        pos = compute_geometric_positions("geo_concentric", elems)
+        r = math.hypot(pos["192.168.1.10"]["x"] - cx, pos["192.168.1.10"]["y"] - cy)
+        assert abs(r - 420) < 5.0, f"expected unscaled radius 420, got {r:.1f}"
+
+    def test_outer_ring_scales_for_large_child_count(self):
+        """A parent with >12 children must push its ring outward (sqrt(n/12)
+        scaling) so leaves don't overlap -- safety net for an expanded large
+        segment on the Network Map (Part 1/D)."""
+        cx, cy = _CANVAS_W / 2, _CANVAS_H / 2
+        n_children = 20
+        elems = self._single_parent_topology(n_children)
+        pos = compute_geometric_positions("geo_concentric", elems)
+        expected_r = 420 * math.sqrt(n_children / 12)
+        r = math.hypot(pos["192.168.1.10"]["x"] - cx, pos["192.168.1.10"]["y"] - cy)
+        assert abs(r - expected_r) < 5.0, f"expected scaled radius {expected_r:.1f}, got {r:.1f}"
+
 
 # ── geo_grid ──────────────────────────────────────────────────────────────────
 

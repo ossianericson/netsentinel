@@ -228,6 +228,11 @@ def _headless() -> None:
                         help="Output HTML report path (default: netsentinel_report.html)")
     parser.add_argument("--cidr", default=None,
                         help="CIDR range to scan (e.g. 192.168.1.0/24). Defaults to local /24.")
+    parser.add_argument("--flush-caches", dest="flush_caches", action="store_true", default=None,
+                        help="Force-flush DNS/ARP/IPv6 caches before scanning "
+                             "(default: on for home networks, off for VPN/corporate/large subnets)")
+    parser.add_argument("--no-flush-caches", dest="flush_caches", action="store_false",
+                        help="Never flush caches before scanning")
     args, _ = parser.parse_known_args()
 
     print("NetSentinel — headless scan")
@@ -241,8 +246,15 @@ def _headless() -> None:
         from modules.rogue_device import scan as m1_scan
         from modules.report_exporter import generate_html
 
-        print("[1/4] Flushing caches…")
-        flush_network_caches()
+        do_flush = args.flush_caches
+        if do_flush is None:
+            from modules.network_environment import detect_environment
+            do_flush = detect_environment().kind == "home"
+        if do_flush:
+            print("[1/4] Flushing caches…")
+            flush_network_caches()
+        else:
+            print("[1/4] Skipping cache flush (non-home network, or disabled via --no-flush-caches)…")
 
         if args.cidr:
             print(f"[2/4] CIDR sweep: {args.cidr}…")
@@ -799,9 +811,21 @@ def _wire_cross_page(window):
     def _on_threat_intel_scan_error(msg: str) -> None:
         window._nav_set_scan_state("Threat Intel", "error", error=msg)
 
+    def _on_threat_intel_scan_not_testable(msg: str) -> None:
+        # A not_testable result is a completed operation with an honest
+        # coverage caveat, not a stuck/erroring one — advance the audit queue
+        # the same way _on_threat_intel_scan_complete does.
+        if getattr(window, "_pending_security_tools", []):
+            window._advance_security_audit()
+        window._nav_set_scan_state("Threat Intel", "not_testable", error=msg)
+
     window._cert_page.scan_complete.connect(_on_cert_scan_complete)
+    window._threat_intel_page.scan_started.connect(
+        lambda: window._nav_set_scan_state("Threat Intel", "running")
+    )
     window._threat_intel_page.scan_complete.connect(_on_threat_intel_scan_complete)
     window._threat_intel_page.scan_error.connect(_on_threat_intel_scan_error)
+    window._threat_intel_page.scan_not_testable.connect(_on_threat_intel_scan_not_testable)
     window._service_diagnostics_page.scan_started.connect(
         lambda: window._nav_set_scan_state("Service Diagnostics", "running")
     )
@@ -937,7 +961,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.37")
+    app.setApplicationVersion("2.1.38")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1088,7 +1112,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.37")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.38")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)

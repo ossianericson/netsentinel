@@ -63,11 +63,15 @@ def _table(headers: list) -> QTableWidget:
     return t
 
 
-def _add_row(table: QTableWidget, values: list, level: str = "CLEAN"):
+def _add_row(table: QTableWidget, values: list, level: str = "CLEAN", row: "int | None" = None):
+    """Insert a new row (row=None, the default) or overwrite an existing one in
+    place (row=<index>) — the latter lets a live-preview upsert reuse the same
+    coloring logic instead of duplicating it (Part 2/L7)."""
     from PyQt6.QtGui import QColor
     from ui.styles import RISK_COLORS as _RC, TEXT_SECONDARY as _TS
-    row = table.rowCount()
-    table.insertRow(row)
+    if row is None:
+        row = table.rowCount()
+        table.insertRow(row)
     color = _RC.get(level.upper(), _TS)
     for col, val in enumerate(values):
         item = QTableWidgetItem(str(val))

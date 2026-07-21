@@ -35,7 +35,7 @@ from pathlib import Path
 # Allow running from the project root without installation.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-_VERSION = "2.1.37"
+_VERSION = "2.1.38"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,8 +99,15 @@ def cmd_scan(args) -> None:
         if not args.quiet:
             print(msg)
 
-    _log("[1/4] Flushing network caches…")
-    flush_network_caches()
+    do_flush = getattr(args, "flush_caches", None)
+    if do_flush is None:
+        from modules.network_environment import detect_environment
+        do_flush = detect_environment().kind == "home"
+    if do_flush:
+        _log("[1/4] Flushing network caches…")
+        flush_network_caches()
+    else:
+        _log("[1/4] Skipping cache flush (non-home network, or disabled via --no-flush-caches)…")
 
     if args.cidr:
         _log(f"[2/4] CIDR sweep: {args.cidr}…")
@@ -496,6 +503,11 @@ def main() -> None:
                         help="Output file path (default: netsentinel_scan.<format>)")
     p_scan.add_argument("--ipv6",   action="store_true",
                         help="Also run IPv6 link-local sweep (cache + active ping6)")
+    p_scan.add_argument("--flush-caches", dest="flush_caches", action="store_true", default=None,
+                        help="Force-flush DNS/ARP/IPv6 caches before scanning "
+                             "(default: on for home networks, off for VPN/corporate/large subnets)")
+    p_scan.add_argument("--no-flush-caches", dest="flush_caches", action="store_false",
+                        help="Never flush caches before scanning")
     p_scan.set_defaults(func=cmd_scan)
 
     # ── diagnose ─────────────────────────────────────────────────────────────

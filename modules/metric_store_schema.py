@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 20
+_SCHEMA_VERSION = 21
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -79,7 +79,12 @@ CREATE TABLE IF NOT EXISTS known_device (
     ip_stability  REAL    NOT NULL DEFAULT 0.0,
     inferred_role TEXT,
     -- Per-device alert opt-in (schema v19)
-    alert_opt_in  INTEGER NOT NULL DEFAULT 0
+    alert_opt_in  INTEGER NOT NULL DEFAULT 0,
+    -- Hostname TTL cache (schema v21) — epoch seconds of the last ACTIVE name
+    -- resolution attempt for this MAC (NULL = never actively resolved).
+    -- Distinct from last_seen, which updates on every scan regardless of
+    -- whether resolution ran that cycle.
+    hostname_resolved_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_known_device_last_seen ON known_device(last_seen DESC);
 
@@ -380,6 +385,8 @@ _MIGRATIONS = [
     # schema v19 — opt-in device alert scope + stable rule_type on fired alerts
     "ALTER TABLE known_device ADD COLUMN alert_opt_in INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE alert_fired ADD COLUMN rule_type TEXT NOT NULL DEFAULT ''",
+    # schema v21 — hostname TTL cache (Part 2/L8)
+    "ALTER TABLE known_device ADD COLUMN hostname_resolved_at INTEGER",
 ]
 
 
@@ -532,6 +539,7 @@ class KnownDevice:
     ip_stability: float = 0.0
     inferred_role: Optional[str] = None
     alert_opt_in: bool = False
+    hostname_resolved_at: Optional[int] = None
 
 
 @dataclass

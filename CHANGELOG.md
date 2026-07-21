@@ -4,6 +4,34 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.38
+
+**Added**
+- `modules/network_environment.py` — detects home/VPN/corporate/large-subnet networks and derives real scan scope (`scope_cidr`) and a per-network authorization fingerprint
+- `modules/adaptive_timing.py` — derives probe timeouts from measured gateway RTT instead of a fixed home-LAN constant, so large/high-latency networks stop timing out prematurely
+- `ui/widgets/environment_banner.py` plus a one-time pre-scan "Scan Anyway / Cancel" notice — warns before scanning an unfamiliar or large network
+- `ui/scan_settings.py` — environment-aware scan defaults (cache-flush, scan scope, SYN rate cap, host exclusion list), all overridable in Settings → Network Scanning
+- Real `n/total` scan progress and an honest watchdog that no longer falsely reports "took too long and was stopped" while a scan is still running on a large network
+- Network Map now collapses subnets above 150 devices into one node per /24 (double-click to expand)
+- 7-day hostname-resolution cache (`known_device.hostname_resolved_at`, schema v21) so repeat scans on large/VPN networks skip re-resolving unchanged hostnames
+- Streaming device discovery — devices now appear in the scan table as soon as ARP identifies them, filling in hostname/vendor as resolution completes, instead of waiting for the whole scan to finish
+- A new "Could not test" (`not_testable`) scan state, distinct from both "clean" and "error", across Port Scan (TCP/UDP), CVE Lookup, Threat Intel, TLS & Exposure, Login Test, OS Detection, and Full Device Discovery — the Security Overview grade and Device Risk Score now say "Insufficient data" instead of reporting a blocked probe as a clean result
+
+**Changed**
+- Cache flush before scanning now defaults on for home networks (unchanged) and off for VPN/corporate/large-subnet networks, overridable in Settings
+- Active probing now asks for authorization on an unrecognized network: Port Scan (TCP/UDP) soft-caps its rate if declined, Login Test refuses to run at all (a login attempt has no safe "reduced" form)
+- Scan scope is now bounded to the real local subnet width on non-home networks instead of assuming every network is a /24; out-of-scope devices are counted, never silently dropped
+
+**Fixed**
+- Onboarding coach mark losing its screen anchor and reappearing on every launch instead of staying dismissed
+- `syn_scanner.py`: a stale placeholder variable silently dropped every genuinely-filtered (no-response) port from scan results
+- `internet_exposure.py`: a failed WAN-IP lookup could still show the green "no exposed services" verdict instead of reporting the check couldn't run
+- `risk_scorer.py`: a device with only the generic "Vendor risk (UNKNOWN)" placeholder finding showed "No significant risks detected" instead of "Insufficient data" when its actual scans were blocked
+- `tls_checker.py`: an unreachable host's certificate check was silently dropped instead of being recorded as could-not-test
+- `credentialed_scan.py`: an SSH connection failure (host unreachable) was indistinguishable from a genuine wrong-password result
+
+---
+
 ### v2.1.37
 
 **Added**

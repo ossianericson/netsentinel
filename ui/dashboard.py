@@ -259,6 +259,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._scan_watchdog = QTimer(self)
         self._scan_watchdog.setSingleShot(True)
         self._scan_watchdog.timeout.connect(self._on_scan_watchdog_timeout)
+        self._scan_started_at: float = 0.0
 
         # Cached results
         self._net_info: dict = {}
@@ -267,6 +268,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._last_scan_devices: list = []    # for NetworkDocPage port_data accumulation
         self._port_data_cache:   dict = {}    # {ip: [port_dict, ...]} across scan types
         self._cred_access_hosts: set  = set()  # hosts where Login Test confirmed working creds (F-46)
+        self._port_scan_not_testable_hosts: set = set()  # hosts a blocked SYN scan could not reach (L3)
+        self._os_detect_not_testable_hosts: set = set()  # hosts OS fingerprinting got no signal from (L3)
         self._auto_report_pending:   bool = False  # True while full-report run is in progress
         self._auto_report_scan_done: bool = False
         self._auto_report_diag_done: bool = False
@@ -945,11 +948,16 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         from ui.onboarding import should_show_onboarding, mark_onboarding_done
         if not should_show_onboarding():
             return
+        # Mark done as soon as we decide to show it — not on interaction. The
+        # Step-1 card's position can lose its anchor if Home-page mode state
+        # (recurring vs first-run) flips right after creation, which used to
+        # leave the card stranded and unclicked forever, so the interaction-only
+        # flag never got set and the tour kept reappearing on every launch.
+        mark_onboarding_done()
         self._nav_rail_go_to(L.HOME)
         from ui.widgets.coach_mark import CoachMarkChain
 
         def _step1_done() -> None:
-            mark_onboarding_done()
             from PyQt6.QtCore import QSettings as _QS
             # Mark tour as done immediately so scan-result handler doesn't also trigger it
             _QS("NetSentinel", "NetSentinel").setValue("tour/post_scan_done", True)
@@ -970,8 +978,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             # User pressed × on the initial coach mark — respect the dismissal.
             # tour/post_scan_done is NOT set here so the 9-step tour still fires
             # after the user's first manual scan from the Home page.
-            mark_onboarding_done()
-            # Don't start scan or tour; stay on current page
+            pass  # nothing further to do; onboarding already marked done above
 
         # Store reference on self — prevents Python GC from collecting the chain
         # before the 400 ms delay fires and the signal connections are alive.
@@ -993,6 +1000,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 "auto_dismiss_ms": 0,   # stays until user explicitly clicks action button
                 "target":        _pick_home_scan_btn,
                 "extra_targets": [lambda: getattr(self, "_header_scan_btn", None)],
+                # Card anchors to the header button specifically (not the Home-page
+                # button _pick_home_scan_btn resolves) — the header button is a
+                # permanent top-bar element, never hidden by recurring/first-run
+                # mode toggles, so the card can never lose its anchor and fall
+                # back to the disconnected bottom-right corner of the window.
+                "card_target":   lambda: getattr(self, "_header_scan_btn", None),
                 "prefer_side":   "below",
                 "action_text":   "Start Scan →",
             }],
@@ -1352,20 +1365,58 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             1 for r in results
             if not r.get("is_expired") and (r.get("days_remaining") if r.get("days_remaining") is not None else 999) < 30
         )
-        if not results:
-            verdict = "no hosts monitored"
-        elif expired or expiring:
-            verdict = f"{expired} expired, {expiring} expiring soon"
+        # Sprint 5b (C): every monitored host being unreachable must not read
+        # as "no hosts monitored" (idle) or a clean cert-OK verdict -- both
+        # currently look identical to a genuinely empty/healthy config.
+        if results and all(r.get("not_testable") for r in results):
+            _reason = next((r.get("not_testable_reason") for r in results if r.get("not_testable_reason")), "")
+            self._nav_set_scan_state(L.TLS_EXPOSURE, "not_testable", ts=_time.time(), error=_reason)
         else:
-            verdict = f"{len(results)} cert(s) OK"
-        self._nav_set_scan_state(L.TLS_EXPOSURE, "fresh", ts=_time.time(), verdict=verdict)
+            if not results:
+                verdict = "no hosts monitored"
+            elif expired or expiring:
+                verdict = f"{expired} expired, {expiring} expiring soon"
+            else:
+                verdict = f"{len(results)} cert(s) OK"
+            self._nav_set_scan_state(L.TLS_EXPOSURE, "fresh", ts=_time.time(), verdict=verdict)
         if getattr(self, "_awaiting_tls_check", False):
             self._awaiting_tls_check = False
             self._advance_security_audit()
 
+    def _maybe_confirm_scan_environment(self) -> bool:
+        """
+        One-time pre-scan notice on a non-home network (VPN/corporate/large subnet).
+        Returns False if the user cancels — the caller must not start the scan.
+        """
+        from modules.network_environment import NetworkEnvironment
+        env = getattr(self, "_net_env", None)
+        if not isinstance(env, NetworkEnvironment) or env.kind == "home":
+            return True
+        qs = QSettings("NetSentinel", "NetSentinel")
+        ack_key = f"scan/env_ack/{env.fingerprint()}"
+        if qs.value(ack_key, False, type=bool):
+            return True
+        from PyQt6.QtWidgets import QMessageBox
+        lines = [env.title, ""] + [f"• {r}" for r in env.reasons] + [""] + \
+            [f"• {e}" for e in env.effects]
+        box = QMessageBox(self)
+        box.setWindowTitle("Different network detected")
+        box.setText("\n".join(lines))
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.addButton("Scan Anyway", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        proceed = clicked is not None and clicked.text() == "Scan Anyway"
+        if proceed:
+            qs.setValue(ack_key, True)
+        return proceed
+
     @pyqtSlot()
     def _start_full_scan(self):
         if self._is_scanning:
+            return
+        if not self._maybe_confirm_scan_environment():
             return
         # Track whether this scan was triggered from the home page so we can
         # auto-navigate to Overview once device results arrive.
@@ -1391,21 +1442,32 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._m5_outage_table.setRowCount(0)
         self._net_devices_table.setRowCount(0)
         self._graph.reset()
-        self._verdict.update("Pre-scan in progress (flushing caches & sweeping subnet)…", "UNKNOWN")
+        from ui.scan_settings import effective_flush_caches
+        _will_flush = effective_flush_caches()
+        _prescan_msg = (
+            "Pre-scan in progress (flushing caches & sweeping subnet)…" if _will_flush
+            else "Pre-scan in progress (sweeping subnet)…"
+        )
+        self._verdict.update(_prescan_msg, "UNKNOWN")
         self._set_scanning(True)
         self._active_count = 0
 
         # Run pre-scan first (flush + ping sweep), then kick off modules
         from workers.scan_worker import PreScanWorker
-        self._prescan_worker = PreScanWorker(flush_caches=True)
+        self._prescan_worker = PreScanWorker(flush_caches=_will_flush)
         self._prescan_worker.status.connect(self._on_prescan_status)
         self._prescan_worker.done.connect(self._launch_modules)
         self._prescan_worker.error.connect(self._on_prescan_error)
         self._prescan_worker.start()
 
-        # (Re)start the watchdog for this scan attempt — 120s covers pre-scan
-        # + module launch; _on_worker_done cancels it once modules complete.
-        self._scan_watchdog.start(120_000)
+        # (Re)start the watchdog for this scan attempt — base 120s + a per-device
+        # allowance (scaled to the last known device count), covers pre-scan +
+        # module launch; _on_worker_done cancels it once modules complete.
+        # _on_scan_watchdog_timeout() extends it further, honestly, while
+        # workers are still actually running (Part 1/C3).
+        import time as _time
+        self._scan_started_at = _time.time()
+        self._scan_watchdog.start(self._scan_watchdog_budget_ms())
 
     @pyqtSlot(str)
     def _on_prescan_status(self, m: str):

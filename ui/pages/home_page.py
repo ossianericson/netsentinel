@@ -38,6 +38,7 @@ from ui.widgets.usage_insights_card import UsageInsightsCard
 from ui.widgets.weekly_report_card import WeeklyReportCard
 from ui.widgets.scan_radar_widget import ScanRadarWidget
 from ui.widgets.device_detail_pane import _wire_close_icon
+from ui.widgets.environment_banner import EnvironmentBanner
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -332,6 +333,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         # ── Hardware nudge (post-onboarding, until first plugin configured) ──
         self._hw_nudge_bar = self._build_hw_nudge_bar()
         outer.addWidget(self._hw_nudge_bar)
+        # ─────────────────────────────────────────────────────────────────────
+
+        # ── Network environment banner (VPN / corporate / large subnet) ───────
+        self._env_banner = EnvironmentBanner()
+        outer.addWidget(self._env_banner)
         # ─────────────────────────────────────────────────────────────────────
 
         # ── Freshness strip — always visible above scroll area ────────────────

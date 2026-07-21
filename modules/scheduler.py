@@ -103,6 +103,7 @@ class ScanScheduler:
         on_status: Optional[Callable[[str], None]] = None,
         stop_event: Optional[threading.Event] = None,
         notify_desktop: bool = True,
+        flush_caches: bool = True,
     ):
         self.interval_s     = interval_minutes * 60
         self.offenders_path = offenders_path
@@ -111,6 +112,7 @@ class ScanScheduler:
         self.on_status      = on_status  or (lambda m: None)
         self.stop_event     = stop_event or threading.Event()
         self.notify_desktop = notify_desktop
+        self.flush_caches   = flush_caches
         self._baseline: dict = {}   # mac → device info dict
 
     def _run_scan(self) -> dict:
@@ -118,8 +120,9 @@ class ScanScheduler:
         from modules.utils import get_offenders_path, flush_network_caches, get_local_ip, ping_sweep_subnet
 
         path = self.offenders_path or get_offenders_path()
-        self.on_status("Scheduled scan: flushing caches…")
-        flush_network_caches()
+        if self.flush_caches:
+            self.on_status("Scheduled scan: flushing caches…")
+            flush_network_caches()
         local_ip = get_local_ip()
         self.on_status("Scheduled scan: discovering devices…")
         ping_sweep_subnet(local_ip)

@@ -85,6 +85,8 @@ class RiskAssessment:
     findings: List[RiskFinding] = field(default_factory=list)
     plain_summary: str = ""
     top_remediation: str = ""
+    not_testable_inputs: List[str] = field(default_factory=list)
+    insufficient_data: bool = False           # True iff plain_summary is the "Insufficient data" verdict
 
 
 # ── Scorer ────────────────────────────────────────────────────────────────────
@@ -100,6 +102,8 @@ def score_device(
     m1_risk_level: str = "",
     known_issues: Optional[List[str]] = None,
     credential_access: bool = False,
+    port_scan_not_testable: bool = False,
+    os_detect_not_testable: bool = False,
 ) -> RiskAssessment:
     """
     Produce a RiskAssessment for a single device.
@@ -176,8 +180,29 @@ def score_device(
     total = min(total, 100)
     severity = _band(total)
 
+    not_testable_inputs: List[str] = []
+    if port_scan_not_testable:
+        not_testable_inputs.append("Port Scan")
+    if os_detect_not_testable:
+        not_testable_inputs.append("OS Detection")
+
+    # "Vendor risk (UNKNOWN)" fires whenever the vendor simply isn't in the
+    # offenders/OUI database (modules/rogue_device.py DeviceInfo.risk_level
+    # defaults to "UNKNOWN" for exactly this — the common case for most real
+    # devices). It's an admission of missing data, not a confirmed risk
+    # signal, so it must not mask a genuine not_testable coverage gap behind
+    # a false "no significant risks" or normal-risk verdict.
+    substantive_findings = [f for f in findings if not f.title.startswith("Vendor risk (UNKNOWN)")]
+
     # Plain summary
-    if not findings:
+    insufficient_data = not substantive_findings and bool(not_testable_inputs)
+    if insufficient_data:
+        plain_summary = (
+            f"{ip} — Insufficient data — {' and '.join(not_testable_inputs)} could not reach "
+            "this device, so this is not a confirmed clean result."
+        )
+        top_remediation = "Re-run the scan from a network path that can reach this device."
+    elif not findings:
         plain_summary = f"{ip} — No significant risks detected."
         top_remediation = "No action required."
     else:
@@ -195,18 +220,30 @@ def score_device(
         findings=findings,
         plain_summary=plain_summary,
         top_remediation=top_remediation,
+        not_testable_inputs=not_testable_inputs,
+        insufficient_data=insufficient_data,
     )
 
 
-def score_devices(devices: list, credential_hosts: Optional[set] = None) -> List[RiskAssessment]:
+def score_devices(
+    devices: list,
+    credential_hosts: Optional[set] = None,
+    port_scan_not_testable_hosts: Optional[set] = None,
+    os_detect_not_testable_hosts: Optional[set] = None,
+) -> List[RiskAssessment]:
     """
     Score a list of DeviceInfo objects (or dicts) from Module 1.
 
     credential_hosts: IPs where Login Test confirmed working credentials
         (see score_device's credential_access parameter).
+    port_scan_not_testable_hosts / os_detect_not_testable_hosts: IPs where the
+        respective scan could not reach the device (see score_device's
+        port_scan_not_testable / os_detect_not_testable parameters).
     Returns assessments sorted by total_score descending.
     """
     credential_hosts = credential_hosts or set()
+    port_scan_not_testable_hosts = port_scan_not_testable_hosts or set()
+    os_detect_not_testable_hosts = os_detect_not_testable_hosts or set()
     assessments = []
     for d in devices:
         if isinstance(d, dict):
@@ -222,6 +259,8 @@ def score_devices(devices: list, credential_hosts: Optional[set] = None) -> List
                 m1_risk_level=d.get("risk_level", ""),
                 known_issues=d.get("known_issues", []),
                 credential_access=ip in credential_hosts,
+                port_scan_not_testable=ip in port_scan_not_testable_hosts,
+                os_detect_not_testable=ip in os_detect_not_testable_hosts,
             ))
         else:
             ip = getattr(d, "ip", "")
@@ -236,6 +275,8 @@ def score_devices(devices: list, credential_hosts: Optional[set] = None) -> List
                 m1_risk_level=getattr(d, "risk_level", ""),
                 known_issues=getattr(d, "known_issues", []) or [],
                 credential_access=ip in credential_hosts,
+                port_scan_not_testable=ip in port_scan_not_testable_hosts,
+                os_detect_not_testable=ip in os_detect_not_testable_hosts,
             ))
     return sorted(assessments, key=lambda a: a.total_score, reverse=True)
 

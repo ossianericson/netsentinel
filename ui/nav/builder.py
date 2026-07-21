@@ -803,6 +803,8 @@ class _NavBuilderMixin:
         ----------
         label:   canonical nav label string (e.g. ``"Port Scan (TCP)"``)
         state:   one of ``"never"`` | ``"running"`` | ``"fresh"`` | ``"stale"`` | ``"error"``
+                 | ``"not_testable"`` (a scan ran but could not reach the target — distinct
+                 from ``"error"``, which is reserved for genuine tool failures)
         ts:      Unix timestamp of the transition; defaults to ``time.time()``
         error:   human-readable error string (only meaningful when state is ``"error"``)
         verdict: short result summary stored in registry for tooltip display
@@ -816,11 +818,12 @@ class _NavBuilderMixin:
             self._scan_registry = registry
 
         _dot_map = {
-            "fresh":   _s.GREEN,
-            "stale":   _s.AMBER,
-            "running": _s.ACCENT,
-            "error":   _s.RED,
-            "never":   "",
+            "fresh":        _s.GREEN,
+            "stale":        _s.AMBER,
+            "running":      _s.ACCENT,
+            "error":        _s.RED,
+            "not_testable": _s.VIOLET,
+            "never":        "",
         }
         color = _dot_map.get(state, "")
 
@@ -848,7 +851,7 @@ class _NavBuilderMixin:
         _page_to_sec = getattr(self, "_nav_page_to_section", {})
         section = _page_to_sec.get(label, "")
         if section and hasattr(self, "_nav_rail_buttons"):
-            _priority = {"": 0, _s.GREEN: 1, _s.ACCENT: 2, _s.AMBER: 3, _s.RED: 4}
+            _priority = {"": 0, _s.GREEN: 1, _s.ACCENT: 2, _s.VIOLET: 3, _s.AMBER: 4, _s.RED: 5}
             worst_color = ""
             for lbl, col in getattr(self, "_flyout_dots", {}).items():
                 if _page_to_sec.get(lbl) == section:
