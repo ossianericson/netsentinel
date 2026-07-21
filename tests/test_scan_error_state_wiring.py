@@ -108,6 +108,19 @@ class _FakeHost(_ReconTabsMixin):
         self._disc_passive_chk = MagicMock(isChecked=lambda: False)
         self._on_discovery_result = MagicMock()
 
+        # Windows Shares (SMB) — L3: closes a pre-existing RULE-SS1 gap where
+        # this Security Audit page never called _nav_set_scan_state at all.
+        self._smb_host = MagicMock(text=lambda: "10.0.0.5")
+        self._smb_user = MagicMock(text=lambda: "")
+        self._smb_pass = MagicMock(text=lambda: "")
+        self._smb_domain = MagicMock(text=lambda: "")
+        self._smb_worker = None
+        self._recon_smb_shares_table = _table(["Share", "Type", "Comment", "Risk"])
+        self._recon_smb_users_table = _table(["Username", "Flags", "Full Name", "Last Logon"])
+        self._smb_status = MagicMock()
+        self._smb_verdict = MagicMock()
+        self._on_smb_result = MagicMock()
+
 
 class TestOnDemandScanErrorsReachScanRegistry:
     def test_syn_scan_error_sets_registry_error(self):
@@ -158,6 +171,20 @@ class TestOnDemandScanErrorsReachScanRegistry:
             mock_cls.return_value = MagicMock()
             host._start_discovery()
         _fires_nav_error(mock_cls.return_value, host._nav_set_scan_state, L.FULL_DEVICE_DISCOVERY)
+
+    def test_smb_enum_error_sets_registry_error(self):
+        host = _FakeHost()
+        with patch("workers.scan_worker.SMBEnumWorker") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            host._start_smb_enum()
+        _fires_nav_error(mock_cls.return_value, host._nav_set_scan_state, L.WINDOWS_SHARES_SMB)
+
+    def test_smb_enum_running_state_set_on_start(self):
+        host = _FakeHost()
+        with patch("workers.scan_worker.SMBEnumWorker") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            host._start_smb_enum()
+        host._nav_set_scan_state.assert_any_call(L.WINDOWS_SHARES_SMB, "running")
 
 
 class TestCVELookupWorkerErrorSignal:

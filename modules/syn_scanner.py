@@ -105,6 +105,8 @@ class SYNScanResult:
     error:        str = ""
     plain_verdict: str = ""
     requires_admin: bool = True
+    not_testable: bool = False
+    not_testable_reason: str = ""
 
 
 # ── Service name lookup (common ports) ───────────────────────────────────────
@@ -277,7 +279,7 @@ def syn_scan(
                 port_states[dport] = "closed"
 
     # Unanswered → filtered
-    for sent in _:
+    for sent in unanswered:
         dport = sent[TCP].dport
         if dport not in port_states:
             port_states[dport] = "filtered"
@@ -302,9 +304,21 @@ def syn_scan(
     result.closed       = closed_count
     result.duration_s   = time.monotonic() - t_start
 
+    if result.total_probed > 0 and not open_ports and closed_count == 0 and filtered_count == result.total_probed:
+        result.not_testable = True
+        result.not_testable_reason = (
+            f"All {result.total_probed} probed port(s) were filtered — no response of any kind "
+            f"came back from {host}. A firewall between NetSentinel and this host may be silently "
+            "dropping every probe, so this scan cannot confirm the host has no open ports."
+        )
+
     # Plain-English verdict
     high_risk_open = [p for p in open_ports if p.port in _HIGH_RISK]
-    if not open_ports:
+    if result.not_testable:
+        result.plain_verdict = (
+            f"⚠ Could not test {host} — {result.not_testable_reason}"
+        )
+    elif not open_ports:
         result.plain_verdict = (
             f"SYN scan complete — no open ports found on {host} "
             f"({filtered_count} filtered, {result.duration_s:.1f}s)"
@@ -429,11 +443,30 @@ def udp_scan(
     result.duration_s = time.monotonic() - t_start
 
     definite_open = [p for p in open_ports if p.state == "open"]
-    result.plain_verdict = (
-        f"UDP scan: {len(definite_open)} open, "
-        f"{len(open_ports) - len(definite_open)} open|filtered, "
-        f"{closed_count} closed. ({result.duration_s:.1f}s)"
-    )
+
+    # Ordinary UDP open|filtered ambiguity (no response) is expected and NOT
+    # itself a not_testable signal. But zero ICMP-closed AND zero explicit-open
+    # across the ENTIRE scan means no packet got a response in either
+    # direction — the UDP equivalent of syn_scan()'s "100% filtered" check —
+    # which suggests a firewall dropping everything rather than a confirmed
+    # picture of this host's UDP ports.
+    if result.total_probed > 0 and closed_count == 0 and not definite_open:
+        result.not_testable = True
+        result.not_testable_reason = (
+            f"None of the {result.total_probed} probed UDP port(s) produced any response "
+            f"— no ICMP port-unreachable and no data back — from {host}. A firewall between "
+            "NetSentinel and this host may be silently dropping every probe in both "
+            "directions, so this scan cannot confirm anything about this host's UDP ports."
+        )
+
+    if result.not_testable:
+        result.plain_verdict = f"⚠ Could not test {host} — {result.not_testable_reason}"
+    else:
+        result.plain_verdict = (
+            f"UDP scan: {len(definite_open)} open, "
+            f"{len(open_ports) - len(definite_open)} open|filtered, "
+            f"{closed_count} closed. ({result.duration_s:.1f}s)"
+        )
 
     if progress_cb:
         progress_cb(result.plain_verdict)

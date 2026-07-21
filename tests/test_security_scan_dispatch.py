@@ -94,3 +94,35 @@ class TestTlsExposureDispatch:
         fake = _FakeSelf()
         fake._on_tls_check_done([])
         fake._set_status.assert_not_called()
+
+    def test_check_done_all_not_testable_sets_not_testable_state(self):
+        """Sprint 5b (C): every monitored host being unreachable must not read
+        as 'no hosts monitored' or a clean cert-OK verdict -- both currently
+        look identical to a genuinely idle/empty config."""
+        fake = _FakeSelf()
+        fake._on_tls_check_done([
+            {"host": "10.0.0.5", "is_expired": False, "days_remaining": None,
+             "not_testable": True, "not_testable_reason": "Could not connect to 10.0.0.5:443"},
+        ])
+        not_testable_calls = [
+            c for c in fake._nav_set_scan_state.call_args_list
+            if c.args[:2] == (L.TLS_EXPOSURE, "not_testable")
+        ]
+        assert len(not_testable_calls) == 1
+        assert not_testable_calls[0].kwargs["error"] == "Could not connect to 10.0.0.5:443"
+
+    def test_check_done_partial_not_testable_stays_fresh(self):
+        """One reachable host among the batch is still a real, informative
+        result -- must not be masked as not_testable."""
+        fake = _FakeSelf()
+        fake._on_tls_check_done([
+            {"host": "10.0.0.5", "is_expired": False, "days_remaining": None,
+             "not_testable": True, "not_testable_reason": "Could not connect"},
+            {"host": "10.0.0.6", "is_expired": False, "days_remaining": 90,
+             "not_testable": False},
+        ])
+        fresh_calls = [
+            c for c in fake._nav_set_scan_state.call_args_list
+            if c.args[:2] == (L.TLS_EXPOSURE, "fresh")
+        ]
+        assert len(fresh_calls) == 1

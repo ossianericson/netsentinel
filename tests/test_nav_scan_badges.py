@@ -75,3 +75,20 @@ class TestFlyoutDotStateMapping(unittest.TestCase):
         assert self.dash._flyout_dots["Threat Intel"] == ACCENT
         self.dash._nav_set_scan_state("Threat Intel", "fresh")
         assert self.dash._flyout_dots["Threat Intel"] == GREEN
+
+    def test_not_testable_maps_to_violet_distinct_from_other_states(self):
+        # A blocked check isn't a tool failure (RED), staleness (AMBER), or a
+        # scan in progress (ACCENT) — it's a distinct, neutral "could not test"
+        # signal, and must render as a genuinely different colour from all of
+        # them (not just ACCENT's twin — BLUE is defined equal to ACCENT in
+        # both themes today, so reusing it would make "not testable" visually
+        # indistinguishable from "running").
+        from ui.styles import VIOLET, RED, AMBER, GREEN, ACCENT
+        self.dash._nav_set_scan_state("Port Scan (TCP)", "not_testable", error="Firewall blocked all probes")
+        color = self.dash._flyout_dots["Port Scan (TCP)"]
+        assert color == VIOLET
+        assert color not in (RED, AMBER, GREEN, ACCENT)
+
+    def test_not_testable_registry_stores_reason_as_error(self):
+        self.dash._nav_set_scan_state("Port Scan (TCP)", "not_testable", error="Firewall blocked all probes")
+        assert self.dash._scan_registry["Port Scan (TCP)"]["error"] == "Firewall blocked all probes"

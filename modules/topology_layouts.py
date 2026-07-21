@@ -236,7 +236,10 @@ def _geo_concentric(
             "y": cy + R1 * math.sin(angle),
         }
 
-    # Level-4 nodes on outer ring, restricted to parent's angular slice
+    # Level-4 nodes on outer ring, restricted to parent's angular slice.
+    # A parent with more than 12 children pushes its ring outward (sqrt scaling)
+    # so a large expanded segment doesn't cram its leaves into overlapping
+    # points (Part 1/D safety net).
     half_slice = angle_step / 2
     for pid in level3:
         ch = sorted(
@@ -246,6 +249,7 @@ def _geo_concentric(
         n_ch = len(ch)
         if not ch:
             continue
+        r2 = R2 * math.sqrt(n_ch / 12) if n_ch > 12 else R2
         parent_angle = level3_angles[pid]
         if n_ch == 1:
             angles = [parent_angle]
@@ -259,8 +263,8 @@ def _geo_concentric(
         for j, cid in enumerate(ch):
             a = angles[j]
             positions[cid] = {
-                "x": cx + R2 * math.cos(a),
-                "y": cy + R2 * math.sin(a),
+                "x": cx + r2 * math.cos(a),
+                "y": cy + r2 * math.sin(a),
             }
 
     return positions

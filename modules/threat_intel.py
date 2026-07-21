@@ -47,6 +47,13 @@ class ThreatEntry:
     comment:   str = ""
 
 
+class AbuseIpDbUnreachableError(Exception):
+    """The AbuseIPDB API itself could not be reached (network error, timeout,
+    rate-limit, malformed response) — distinct from a missing API key or a
+    private IP, both of which are expected, by-design "nothing to check"
+    outcomes that lookup_abuseipdb() still returns as a plain None."""
+
+
 @dataclass
 class AbuseIpDbResult:
     ip:             str
@@ -455,6 +462,6 @@ def lookup_abuseipdb(
             total_reports=data.get("totalReports", 0),
             is_public=data.get("isPublic", True),
         )
-    except Exception:
-        return None
+    except Exception as exc:
+        raise AbuseIpDbUnreachableError(str(exc)) from exc
 

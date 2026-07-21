@@ -92,28 +92,57 @@ def _storm_scan_process_target(duration, warn_threshold, storm_threshold,
             pass  # non-fatal
 
 
+def _device_to_found_dict(d) -> dict:
+    def _get(key: str, default: str = ""):
+        return d.get(key, default) if isinstance(d, dict) else getattr(d, key, default)
+    return {
+        "ip":         _get("ip"),
+        "name":       _get("hostname"),
+        "type":       _get("device_type"),
+        "mac":        _get("mac"),
+        "vendor":     _get("vendor"),
+        "risk_level": _get("risk_level"),
+        "verdict":    _get("verdict"),
+    }
+
+
 class Module1Worker(QThread):
     """Rogue Device Fingerprinter."""
     result       = pyqtSignal(dict)
     status       = pyqtSignal(str)
     error        = pyqtSignal(str)
-    device_found = pyqtSignal(dict)  # {"ip": str, "name": str, "type": str}
+    # {"ip", "name", "type", "mac", "vendor", "risk_level", "verdict"} — see
+    # _device_to_found_dict(). Emitted live as ARP entries are found and again
+    # as each resolves (Part 2/L7), then once more for every device after
+    # scan() returns so a mocked/fake scan() without device_cb still populates
+    # listeners correctly.
+    device_found = pyqtSignal(dict)
 
-    def __init__(self, offenders_path: Path, parent=None):
+    def __init__(self, offenders_path: Path, known_devices: Optional[dict] = None,
+                 scope_cidr: Optional[str] = None, parent=None):
         super().__init__(parent)
         self.offenders_path = offenders_path
+        # Part 2/L8: {mac: KnownDevice} snapshot fetched by the caller (see
+        # ui/plugin_page_mixin.py) so scan() can skip re-resolving names still
+        # within the TTL cache window.
+        self.known_devices = known_devices
+        # Part 2/L5: CIDR to bound the ARP-table pass to (see ui/tabs_network.py) —
+        # None reproduces pre-L5 unfiltered behaviour.
+        self.scope_cidr = scope_cidr
 
     def run(self):
         try:
             from modules.rogue_device import scan
             self.status.emit("Scanning ARP table and fingerprinting devices...")
-            data = scan(self.offenders_path)
+            data = scan(
+                self.offenders_path,
+                progress_cb=lambda m: self.status.emit(m),
+                device_cb=lambda d: self.device_found.emit(_device_to_found_dict(d)),
+                known_devices=self.known_devices,
+                scope_cidr=self.scope_cidr,
+            )
             for d in data.get("devices", []):
-                self.device_found.emit({
-                    "ip":   d.get("ip",   "") if isinstance(d, dict) else getattr(d, "ip",          ""),
-                    "name": d.get("hostname", "") if isinstance(d, dict) else getattr(d, "hostname",     ""),
-                    "type": d.get("device_type", "") if isinstance(d, dict) else getattr(d, "device_type",  ""),
-                })
+                self.device_found.emit(_device_to_found_dict(d))
             self.result.emit(data)
         except Exception as exc:
             self.error.emit(f"Module 1 error: {exc}")
@@ -740,12 +769,14 @@ class SchedulerWorker(QThread):
         interval_minutes: int = 15,
         offenders_path=None,
         notify_desktop: bool = True,
+        flush_caches: bool = True,
         parent=None,
     ):
         super().__init__(parent)
         self.interval_minutes = interval_minutes
         self.offenders_path   = offenders_path
         self.notify_desktop   = notify_desktop
+        self.flush_caches     = flush_caches
         self._stop            = threading.Event()
         self._scheduler       = None
 
@@ -760,6 +791,7 @@ class SchedulerWorker(QThread):
                 on_status=lambda m: self.status.emit(m),
                 stop_event=self._stop,
                 notify_desktop=self.notify_desktop,
+                flush_caches=self.flush_caches,
             )
             self._scheduler.run()
         except Exception as exc:

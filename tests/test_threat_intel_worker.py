@@ -81,3 +81,36 @@ def test_abuse_ip_lifecycle():
     assert not w.isRunning()
     _cleanup(w)
     # Errors are expected in CI (invalid key / no network).
+
+
+def test_abuse_ip_worker_has_not_testable_signal():
+    from workers.threat_intel_worker import AbuseIpDbWorker
+    w = AbuseIpDbWorker(ip="8.8.8.8", api_key="dummy")
+    assert hasattr(w, "not_testable")
+    _cleanup(w)
+
+
+def test_abuse_ip_worker_emits_not_testable_on_unreachable_api(monkeypatch):
+    """Sprint 5b (B): an unreachable AbuseIPDB API must not be mislabeled as
+    'private/local address' -- it must emit the dedicated not_testable
+    signal instead of no_result."""
+    from workers.threat_intel_worker import AbuseIpDbWorker
+    from modules.threat_intel import AbuseIpDbUnreachableError
+
+    def _raise(*a, **kw):
+        raise AbuseIpDbUnreachableError("timed out")
+
+    monkeypatch.setattr("workers.threat_intel_worker.lookup_abuseipdb", _raise)
+
+    w = AbuseIpDbWorker(ip="1.1.1.1", api_key="fake-key")
+    not_testable_msgs = []
+    no_result_msgs = []
+    w.not_testable.connect(not_testable_msgs.append)
+    w.no_result.connect(no_result_msgs.append)
+    w.start()
+    finished = w.wait(5000)
+    assert finished, "AbuseIpDbWorker did not finish within 5 s"
+    _cleanup(w)
+
+    assert len(not_testable_msgs) == 1
+    assert no_result_msgs == []

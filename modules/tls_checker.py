@@ -26,6 +26,8 @@ class CertInfo:
     is_expired: bool = False
     error: str = ""
     verdict: str = ""
+    not_testable:        bool = False
+    not_testable_reason: str  = ""
 
 
 def _parse_cert_field(cert_dict: dict, field_name: str) -> str:
@@ -50,7 +52,13 @@ def check_cert(host: str, port: int = 443, timeout: float = 5.0) -> CertInfo:
                 cert = tls.getpeercert()
 
         if not cert:
-            info.error = "No certificate returned"
+            info.not_testable = True
+            info.not_testable_reason = (
+                f"{host}:{port} completed a TLS handshake but presented no certificate to "
+                "inspect, so this scan cannot confirm anything about its certificate."
+            )
+            info.error   = "No certificate returned"
+            info.verdict = f"⚠ Could not test {host}:{port} — {info.not_testable_reason}"
             return info
 
         subject = _parse_cert_field(cert, "subject")
@@ -91,8 +99,18 @@ def check_cert(host: str, port: int = 443, timeout: float = 5.0) -> CertInfo:
     except ssl.SSLError as exc:
         info.error   = str(exc)
         info.verdict = f"🟡 TLS error on {host}:{port}: {exc}"
-    except (ConnectionRefusedError, OSError):
+    except (ConnectionRefusedError, OSError) as exc:
+        # The host was never reached (refused, unreachable, timed out, or
+        # unresolvable) -- distinct from ssl.SSLError above, which means the
+        # host WAS reached and responded with a genuine TLS-level problem.
         info.error   = "Connection refused"
+        info.not_testable = True
+        info.not_testable_reason = (
+            f"Could not connect to {host}:{port} — {exc}. The host may be offline, "
+            "blocking this port, or unreachable from this network, so this scan "
+            "cannot confirm anything about its TLS certificate."
+        )
+        info.verdict = f"⚠ Could not test {host}:{port} — {info.not_testable_reason}"
     except Exception as exc:
         info.error   = str(exc)
         info.verdict = f"Error checking {host}:{port}: {exc}"
@@ -112,6 +130,8 @@ def check_host_certs(
     for port in ports:
         _cb(f"Checking TLS cert on {host}:{port}…")
         info = check_cert(host, port)
-        if not info.error or info.verdict:
+        # CertInfo-drop bug (Sprint 5b C): a not_testable result must never be
+        # silently discarded, even on the rare path where verdict wasn't set.
+        if not info.error or info.verdict or info.not_testable:
             results.append(info)
     return results

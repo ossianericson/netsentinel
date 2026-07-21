@@ -7,9 +7,21 @@ section reload, and the launch-modules scan-start wiring.
 """
 from __future__ import annotations
 
+import re
+import time
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings, pyqtSlot
+
+# Part 1/C3 — scan watchdog budget. A fixed 120s timeout was sized for a home
+# /24 and fired a false "took too long" on a large corporate ARP table while
+# the scan was still genuinely working. Base + a per-device allowance (derived
+# from the last known "n/total" progress message) scales the budget to the
+# network actually being scanned; the hard ceiling bounds how long a single
+# scan attempt is ever allowed to keep extending itself.
+_WATCHDOG_BASE_MS = 120_000
+_WATCHDOG_PER_DEVICE_MS = 400
+_WATCHDOG_CEILING_MS = 15 * 60_000
 
 
 class _PluginPageMixin:
@@ -307,16 +319,57 @@ class _PluginPageMixin:
         self._set_status(f"Pre-scan failed: {msg}")
         self._verdict.update(f"Pre-scan failed: {msg}", "UNKNOWN")
 
+    def _known_device_count_hint(self) -> int:
+        """Best-known device count from the status bar's last "n/total" message
+        (e.g. resolve_batch's "Identifying devices: n/total…", C1/C2) — 0 if unknown."""
+        msg = ""
+        if hasattr(self, "_status_bar"):
+            try:
+                msg = self._status_bar.currentMessage()
+            except RuntimeError:
+                msg = ""  # status bar already destroyed -- fall back to unknown
+        m = re.search(r"(\d+)\s*/\s*(\d+)", msg or "")
+        return int(m.group(2)) if m else 0
+
+    def _scan_watchdog_budget_ms(self) -> int:
+        """Base 120s + a per-device allowance, clamped to a 15-minute ceiling."""
+        budget = _WATCHDOG_BASE_MS + self._known_device_count_hint() * _WATCHDOG_PER_DEVICE_MS
+        return min(budget, _WATCHDOG_CEILING_MS)
+
     def _on_scan_watchdog_timeout(self) -> None:
-        """Scan took too long (G5) — clear the scanning state so the UI never
-        shows a permanent spinner. Does not attempt to kill the underlying
-        worker thread; it simply stops waiting on it."""
+        """
+        Guards against a scan leaving the UI stuck on "Scanning…" forever — but
+        must never CLAIM a stop that did not happen (G5's original defect, seen
+        live on a large corporate network: the watchdog fired and said "took too
+        long and was stopped" while Module 1 was still resolving names and
+        delivered a complete 715-device result about a minute later).
+
+        If any scan worker is still actually running, extend the deadline and
+        report honestly instead of clearing state — up to a hard ceiling, past
+        which we do stop waiting (but say a worker may still be running, not
+        that the scan "was stopped").
+        """
         if not self._is_scanning:
             return  # scan already finished normally; stale timer, ignore
+
+        still_running = any(w.isRunning() for w in getattr(self, "_workers", []))
+        elapsed_ms = (time.time() - getattr(self, "_scan_started_at", 0.0)) * 1000
+
+        if still_running and elapsed_ms < _WATCHDOG_CEILING_MS:
+            device_count = self._known_device_count_hint()
+            note = f" ({device_count} devices found so far)" if device_count else ""
+            self._set_status(f"Still scanning — this network is large{note}. This can take several minutes.")
+            self._scan_watchdog.start(self._scan_watchdog_budget_ms())
+            return
+
         self._active_count = 0
         self._set_scanning(False)
-        self._set_status("Scan took too long and was stopped.")
-        self._verdict.update("Scan took too long and was stopped.", "UNKNOWN")
+        if still_running:
+            msg = "Scan is taking unusually long and may still be running in the background."
+        else:
+            msg = "Scan took too long and was stopped."
+        self._set_status(msg)
+        self._verdict.update(msg, "UNKNOWN")
 
     def _launch_modules_impl(self):
         from workers.scan_worker import (
@@ -342,7 +395,24 @@ class _PluginPageMixin:
         self._refresh_network_info()
 
         # Module 1 — always runs
-        w1 = Module1Worker(self._offenders_path)
+        if hasattr(self, "_m1_table"):
+            # Clear the previous scan's rows and disable sorting before the
+            # live-preview stream starts inserting -- _m1_populate_device_table
+            # re-enables sorting once the authoritative rebuild runs (Part 2/L7).
+            self._m1_table.setSortingEnabled(False)
+            self._m1_table.setRowCount(0)
+            self._m1_stream_rows = {}
+
+        # Part 2/L8: fetch the known_device snapshot here (before the worker
+        # starts) so rogue_device.scan() can skip re-resolving any MAC whose
+        # hostname was actively resolved within the last 7 days. No MetricStore
+        # import in modules/rogue_device.py -- this is the one read for it.
+        _known_for_cache = self._store.get_known_devices() if getattr(self, "_store", None) else None
+        # Part 2/L5: bound the ARP-table pass to the declared scope (computed in
+        # ui/tabs_network.py::_update_net_info_ui alongside self._net_env) — None
+        # when unbounded (home network, or the user disabled bounding in Settings).
+        _scope_cidr = getattr(self, "_scan_scope_cidr", None)
+        w1 = Module1Worker(self._offenders_path, known_devices=_known_for_cache, scope_cidr=_scope_cidr)
         w1.result.connect(self._on_m1_result)
         w1.status.connect(lambda m: (
             self._set_status(m), self._m1_status.setText(m),
@@ -352,6 +422,8 @@ class _PluginPageMixin:
         w1.finished.connect(self._on_worker_done)
         if hasattr(self, "_home_page"):
             w1.device_found.connect(self._home_page.on_device_found)
+        if hasattr(self, "_m1_table"):
+            w1.device_found.connect(self._m1_stream_device_row)
         self._workers.append(w1)
         self._active_count += 1
 

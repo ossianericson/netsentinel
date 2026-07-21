@@ -66,5 +66,5 @@ def test_start_full_scan_proceeds_when_idle(monkeypatch):
     fake._set_scanning.assert_called_once_with(True)
     fake._verdict.update.assert_called_once()
     fake._graph.reset.assert_called_once()
-    fake._scan_watchdog.start.assert_called_once_with(120_000)
+    fake._scan_watchdog.start.assert_called_once()  # exact budget covered by test_dashboard_scan_watchdog.py
     assert isinstance(fake._prescan_worker, _FakePreScanWorker)

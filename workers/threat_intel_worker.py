@@ -14,6 +14,7 @@ from PyQt6.QtCore import pyqtSignal
 
 from modules.threat_intel import (
     AbuseIpDbResult,
+    AbuseIpDbUnreachableError,
     ThreatEntry,
     ThreatIntelDB,
     lookup_abuseipdb,
@@ -52,12 +53,14 @@ class AbuseIpDbWorker(BaseWorker):
 
     Signals:
         result_ready(AbuseIpDbResult)  — emitted on success
-        no_result(str)                 — emitted when IP is private or lookup returned nothing
+        no_result(str)                 — emitted when the IP is private or no API key is configured
+        not_testable(str)              — emitted when the AbuseIPDB API itself could not be reached
         error(str)                     — inherited from BaseWorker
     """
 
     result_ready: pyqtSignal = pyqtSignal(object)
     no_result:    pyqtSignal = pyqtSignal(str)
+    not_testable: pyqtSignal = pyqtSignal(str)
 
     def __init__(self, ip: str, api_key: str, parent=None):
         super().__init__(parent)
@@ -65,12 +68,19 @@ class AbuseIpDbWorker(BaseWorker):
         self._api_key = api_key
 
     def work(self) -> None:
-        result: Optional[AbuseIpDbResult] = lookup_abuseipdb(
-            self._ip, self._api_key
-        )
+        try:
+            result: Optional[AbuseIpDbResult] = lookup_abuseipdb(
+                self._ip, self._api_key
+            )
+        except AbuseIpDbUnreachableError as exc:
+            # Distinct from "private IP" / "no API key" below -- the API
+            # itself could not be reached, so nothing about this IP was
+            # confirmed either way.
+            self.not_testable.emit(str(exc))
+            return
         if result is None:
             self.no_result.emit(
-                f"{self._ip} is a private/local address or lookup returned no data."
+                f"{self._ip} is a private/local address or no API key is configured."
             )
         else:
             self.result_ready.emit(result)

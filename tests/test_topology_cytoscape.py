@@ -494,6 +494,82 @@ class TestSynthesizeMeshOnlyClients:
         assert synthesize_mesh_only_clients(devices, {"x": object()}, None) is devices
 
 
+# ── collapse_to_segments() (Part 1/D) ────────────────────────────────────────
+
+class TestCollapseToSegments:
+    def _devices_across_subnets(self, n_per_subnet: int, n_subnets: int) -> list:
+        devices = []
+        for s in range(n_subnets):
+            for i in range(1, n_per_subnet + 1):
+                devices.append(_make_device(f"10.{s}.0.{i}", mac=f"aa:bb:cc:{s:02x}:00:{i:02x}"))
+        return devices
+
+    def test_below_threshold_returns_devices_unchanged(self):
+        from modules.topology_cytoscape import collapse_to_segments
+        devices = self._devices_across_subnets(5, 3)  # 15 total, well under default 150
+        out = collapse_to_segments(devices, gateway_ip="10.0.0.1")
+        assert out == devices
+
+    def test_above_threshold_collapses_to_one_node_per_subnet(self):
+        from modules.topology_cytoscape import collapse_to_segments
+        devices = self._devices_across_subnets(80, 3)  # 240 total, over default 150
+        out = collapse_to_segments(devices, gateway_ip="10.0.0.1")
+        assert len(out) == 3, f"expected one placeholder per /24, got {len(out)}: {out}"
+
+    def test_placeholder_shape_and_count(self):
+        from modules.topology_cytoscape import collapse_to_segments
+        devices = self._devices_across_subnets(200, 1)
+        out = collapse_to_segments(devices, gateway_ip="10.0.0.1")
+        assert len(out) == 1
+        placeholder = out[0]
+        assert placeholder["ip"] == "10.0.0.0/24"
+        assert "200" in placeholder["hostname"]
+        assert "10.0.0.0/24" in placeholder["hostname"]
+        assert placeholder["device_type"] == "segment"
+        assert placeholder["mac"] == ""
+
+    def test_custom_threshold_respected(self):
+        from modules.topology_cytoscape import collapse_to_segments
+        devices = self._devices_across_subnets(5, 1)  # 5 devices
+        assert collapse_to_segments(devices, threshold=10) == devices
+        collapsed = collapse_to_segments(devices, threshold=3)
+        assert len(collapsed) == 1
+
+    def test_expanded_segment_keeps_real_devices(self):
+        from modules.topology_cytoscape import collapse_to_segments
+        devices = self._devices_across_subnets(80, 2)  # 160 total, 2 subnets, over threshold
+        expanded = {"10.0.0.0/24"}
+        out = collapse_to_segments(devices, gateway_ip="10.1.0.1", expanded=expanded)
+        # subnet 0 expanded -> 80 real devices; subnet 1 collapsed -> 1 placeholder
+        assert len(out) == 81
+        real_ips = {d["ip"] for d in out if d["ip"] != "10.1.0.0/24"}
+        assert all(ip.startswith("10.0.") for ip in real_ips)
+        placeholder = next(d for d in out if d["ip"] == "10.1.0.0/24")
+        assert "80" in placeholder["hostname"]
+
+    def test_devices_without_ip_always_pass_through(self):
+        from modules.topology_cytoscape import collapse_to_segments
+        devices = self._devices_across_subnets(200, 1)
+        devices.append({"ip": "", "mac": "00:00:00:00:00:99", "hostname": "no-ip-device"})
+        out = collapse_to_segments(devices)
+        no_ip = [d for d in out if d.get("hostname") == "no-ip-device"]
+        assert len(no_ip) == 1, "a device with no IP must never be silently dropped"
+
+    def test_total_device_count_preserved_across_expand_toggle(self):
+        """Sanity: no device is ever lost, whichever segments are expanded --
+        every real device is either shown individually or counted in exactly
+        one placeholder."""
+        from modules.topology_cytoscape import collapse_to_segments
+        devices = self._devices_across_subnets(60, 4)
+        for expanded in (set(), {"10.0.0.0/24"}, {"10.0.0.0/24", "10.1.0.0/24"}):
+            out = collapse_to_segments(devices, expanded=expanded)
+            real_count = sum(1 for d in out if d.get("device_type") != "segment")
+            placeholder_count = sum(
+                d.get("segment_count", 0) for d in out if d.get("device_type") == "segment"
+            )
+            assert real_count + placeholder_count == len(devices), expanded
+
+
 class TestSynthesizedClientFeedsCytoscapeElements:
     """Confirms the augmented list produced by synthesize_mesh_only_clients()
     flows correctly through build_cytoscape_elements(): a real node + an edge

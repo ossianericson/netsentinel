@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-5774%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-6064%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**5,774+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**6,064+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -155,7 +155,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**5,774 automated tests** across 441 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**6,064 automated tests** across 455 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -201,13 +201,13 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.37 (current)
+### v2.1.38 (current)
 
-- Lab Mode gets an in-app Achievements panel — earned/locked badge medallions and per-certification (Network+/CCNA/Security+) objective coverage, replacing the PNG badge download
-- Store/MSIX builds now use the proper Windows StartupTask API for "run at startup" instead of the registry Run key, fixing a setting that silently didn't take effect
-- Fixed unbounded memory growth on the Inventory Changes page from a background auto-refresh that kept rebuilding its table even while another page was showing
-- Saved window position is now validated against your currently connected screens before being restored, so it can no longer reopen off-screen after a monitor change
-- Fixed a tray-only Store launch always starting maximized, plus a curriculum-badge data gap and a rare crash in the nav sidebar's progress bar
+- Scans now recognize when you're on a VPN, corporate, or large network and adapt automatically — longer timeouts, bounded scope, and a one-time "scan anyway?" prompt instead of silently misbehaving
+- Device discovery streams results live as they're found, and very large networks (150+ devices) collapse into a manageable map you can expand
+- Security scans blocked by a firewall or VPN now honestly show "Could not test" instead of reporting a device as clean
+- Repeat scans on large networks are faster thanks to a 7-day hostname cache
+- Fixed the onboarding coach mark reappearing on every launch
 
 ---
 

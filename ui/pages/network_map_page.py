@@ -177,6 +177,9 @@ class NetworkMapPage(QWidget):
         # can run against a zero-size container if the Interactive tab isn't
         # the active one yet, and an incremental updateTopology() never fits.
         self._auto_fit_done = False
+        # CIDRs the user has double-clicked open — their real devices are shown
+        # individually instead of collapsed into one segment node (Part 1/D).
+        self._expanded_segments: set = set()
 
         self._build_ui()
 
@@ -271,7 +274,7 @@ class NetworkMapPage(QWidget):
 
         # Classic tab: TopologyWidget (matplotlib)
         self._classic_widget = TopologyWidget()
-        self._classic_widget.node_clicked.connect(self.node_clicked)
+        self._classic_widget.node_clicked.connect(self._on_node_clicked)
 
         self._inner_tab.addTab(self._interactive_container, "◆  Interactive")
         self._inner_tab.addTab(self._classic_widget,         "◇  Classic")
@@ -418,6 +421,12 @@ class NetworkMapPage(QWidget):
         _s.themed_ss(self._stale_label, "color:{TEXT_MUTED};font-size:11px;font-style:italic;padding:0 6px;")
         self._stale_label.setVisible(False)
 
+        # Segment-collapse note — shown when a large network is grouped by
+        # subnet (Part 1/D). Text/visibility set from render().
+        self._segment_note_label = QLabel("")
+        _s.themed_ss(self._segment_note_label, "color:{TEXT_MUTED};font-size:11px;padding:0 6px;")
+        self._segment_note_label.setVisible(False)
+
         toolbar.addWidget(self._layout_combo)
         toolbar.addWidget(btn_fit)
         toolbar.addWidget(btn_zin)
@@ -429,6 +438,7 @@ class NetworkMapPage(QWidget):
         toolbar.addWidget(self._btn_traffic)
         toolbar.addWidget(self._bw_legend)
         toolbar.addWidget(self._stale_label)
+        toolbar.addWidget(self._segment_note_label)
         toolbar.addStretch()
         toolbar.addWidget(btn_export)
         toolbar.addWidget(btn_share)
@@ -472,7 +482,7 @@ class NetworkMapPage(QWidget):
             )
 
             self._bridge = _CytoscapeBridge(parent=self)
-            self._bridge.node_clicked_signal.connect(self.node_clicked)
+            self._bridge.node_clicked_signal.connect(self._on_node_clicked)
             self._bridge.export_ready.connect(self._on_export_data)
 
             self._web_channel = QWebChannel(self._web_view.page())
@@ -508,6 +518,32 @@ class NetworkMapPage(QWidget):
             log.warning("WebEngine init failed: %s: %s", type(exc).__name__, exc)
             traceback.print_exc()
             # non-fatal — classic view only; placeholder stays visible
+
+    # ── Segment collapse (Part 1/D) ────────────────────────────────────────────
+
+    def _effective_devices(self) -> List[Any]:
+        """The device list actually fed to both views: collapse_to_segments()
+        applied to the last render() call's real devices. On a normal
+        home-network device count this returns the list unchanged."""
+        from modules.topology_cytoscape import collapse_to_segments  # noqa: PLC0415
+        kw = self._last_render_kwargs
+        return collapse_to_segments(
+            kw.get("devices", []), kw.get("gateway_ip") or "", self._expanded_segments,
+        )
+
+    def _on_node_clicked(self, ip: str) -> None:
+        """Route a click: a synthetic segment placeholder toggles expand/collapse
+        and re-renders; a real device re-emits node_clicked as before (opens the
+        device detail drawer)."""
+        if "/" in ip:  # segment placeholder id is its CIDR, e.g. "10.4.2.0/24"
+            if ip in self._expanded_segments:
+                self._expanded_segments.discard(ip)
+            else:
+                self._expanded_segments.add(ip)
+            if self._last_render_kwargs:
+                self.render(**self._last_render_kwargs, persist_cache=False)
+            return
+        self.node_clicked.emit(ip)
 
     # ── Public render API (mirrors TopologyWidget) ────────────────────────────
 
@@ -573,10 +609,18 @@ class NetworkMapPage(QWidget):
         # Show LLDP admin hint on Interactive tab when rights needed and no neighbors
         self._lldp_hint_label.setVisible(lldp_admin_needed and not lldp_neighbors)
 
-        # Classic view (always rendered)
+        # Classic view (always rendered) — collapsed to segments above threshold
+        render_devices = self._effective_devices()
+        n_segments = sum(1 for d in render_devices if isinstance(d, dict) and d.get("device_type") == "segment")
+        if hasattr(self, "_segment_note_label"):
+            if n_segments:
+                self._segment_note_label.setText(
+                    f"Grouped by subnet ({len(devices)} devices) — double-click a segment to expand"
+                )
+            self._segment_note_label.setVisible(bool(n_segments))
         try:
             self._classic_widget.render(
-                devices, gateway_ip, gateway_mac,
+                render_devices, gateway_ip, gateway_mac,
                 mesh_units=mesh_units,
                 mesh_enrichment=mesh_enrichment,
                 modem_data=modem_data,
@@ -664,7 +708,7 @@ class NetworkMapPage(QWidget):
 
         kw = self._last_render_kwargs
         result = build_cytoscape_elements(
-            devices=kw.get("devices", []),
+            devices=self._effective_devices(),
             gateway_ip=kw.get("gateway_ip"),
             gateway_mac=kw.get("gateway_mac"),
             mesh_units=kw.get("mesh_units"),
@@ -694,7 +738,7 @@ class NetworkMapPage(QWidget):
 
             kw     = self._last_render_kwargs
             result = build_cytoscape_elements(
-                devices=kw.get("devices", []),
+                devices=self._effective_devices(),
                 gateway_ip=kw.get("gateway_ip"),
                 gateway_mac=kw.get("gateway_mac"),
                 mesh_units=kw.get("mesh_units"),
@@ -776,7 +820,7 @@ class NetworkMapPage(QWidget):
             # saved layout is reused verbatim instead of recomputed.
             try:
                 id_probe = build_cytoscape_elements(
-                    devices=kw.get("devices", []),
+                    devices=self._effective_devices(),
                     edges=kw.get("edges"),
                     diff=diff,
                     lldp_neighbors=kw.get("lldp_neighbors"),
@@ -827,7 +871,7 @@ class NetworkMapPage(QWidget):
 
             try:
                 html = build_cytoscape_html(
-                    devices=kw.get("devices", []),
+                    devices=self._effective_devices(),
                     edges=kw.get("edges"),
                     diff=diff,
                     lldp_neighbors=kw.get("lldp_neighbors"),
@@ -852,7 +896,7 @@ class NetworkMapPage(QWidget):
             # ── Incremental update — preserves all node positions ─────────────
             try:
                 elements = build_elements_for_update(
-                    devices=kw.get("devices", []),
+                    devices=self._effective_devices(),
                     edges=kw.get("edges"),
                     diff=diff,
                     lldp_neighbors=kw.get("lldp_neighbors"),
@@ -992,7 +1036,7 @@ class NetworkMapPage(QWidget):
             try:
                 kw_diff = kw.get("diff") if checked else None
                 self._classic_widget.render(
-                    kw.get("devices", []),
+                    self._effective_devices(),
                     kw.get("gateway_ip"),
                     kw.get("gateway_mac"),
                     mesh_units=kw.get("mesh_units"),
@@ -1176,7 +1220,7 @@ class NetworkMapPage(QWidget):
             return
         try:
             render_sanitized_topology_png(
-                kwargs.get("devices") or [],
+                self._effective_devices(),
                 gateway_ip=kwargs.get("gateway_ip"),
                 gateway_mac=kwargs.get("gateway_mac"),
                 edges=kwargs.get("edges") or [],

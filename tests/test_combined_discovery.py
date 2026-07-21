@@ -117,6 +117,72 @@ def test_discover_function_exists():
     assert "cidr" in sig.parameters
 
 
+def test_discovery_result_not_testable_defaults_false():
+    from modules.combined_discovery import DiscoveryResult
+    r = DiscoveryResult()
+    assert r.not_testable is False
+    assert r.not_testable_reason == ""
+
+
+def test_discover_zero_devices_from_every_method_is_not_testable(monkeypatch):
+    """Sprint 5b (E): zero devices from EVERY method (passive ARP cache +
+    all 4 active methods) must not read as a genuinely empty network — even
+    an empty /24 should see its own gateway via ARP in virtually all real
+    environments. Zero signal from everything suggests something is
+    blocking discovery, not a confirmed empty subnet."""
+    from modules import combined_discovery as m
+
+    monkeypatch.setattr(m, "_arp_cache_scan", lambda: {})
+    monkeypatch.setattr(m, "_arp_sweep", lambda cidr, timeout: {})
+    monkeypatch.setattr(m, "_icmp_sweep", lambda hosts, timeout: {})
+    monkeypatch.setattr(m, "_tcp_sweep", lambda hosts, ports, timeout: {})
+    monkeypatch.setattr(m, "_mdns_query", lambda timeout: {})
+
+    result = m.discover(cidr="192.168.250.0/30", resolve_hostnames=False, timeout=0.01)
+
+    assert result.count == 0
+    assert result.not_testable is True
+    assert result.not_testable_reason != ""
+    assert "Could not test" in result.plain_verdict
+
+
+def test_discover_with_any_device_found_is_not_not_testable(monkeypatch):
+    """Even a single confirmed device (e.g. only the gateway responds) proves
+    discovery reached the network — a genuinely small/quiet network must not
+    be flagged not_testable."""
+    from modules import combined_discovery as m
+    from modules.combined_discovery import DiscoveredDevice
+
+    monkeypatch.setattr(m, "_arp_cache_scan", lambda: {
+        "192.168.250.1": DiscoveredDevice(ip="192.168.250.1", discovery_methods=["arp-cache"]),
+    })
+    monkeypatch.setattr(m, "_arp_sweep", lambda cidr, timeout: {})
+    monkeypatch.setattr(m, "_icmp_sweep", lambda hosts, timeout: {})
+    monkeypatch.setattr(m, "_tcp_sweep", lambda hosts, ports, timeout: {})
+    monkeypatch.setattr(m, "_mdns_query", lambda timeout: {})
+
+    result = m.discover(cidr="192.168.250.0/30", resolve_hostnames=False, timeout=0.01)
+
+    assert result.count == 1
+    assert result.not_testable is False
+
+
+def test_discover_cancelled_scan_is_not_flagged_not_testable(monkeypatch):
+    """A deliberate user cancellation (stop_event set) is not an environment
+    failure and must not be reported as not_testable."""
+    from modules import combined_discovery as m
+
+    monkeypatch.setattr(m, "_arp_cache_scan", lambda: {})
+
+    stop = threading.Event()
+    stop.set()
+    result = m.discover(
+        cidr="192.168.250.0/30", passive_only=True, resolve_hostnames=False,
+        timeout=0, stop_event=stop,
+    )
+    assert result.not_testable is False
+
+
 def test_discover_passive_only_no_crash():
     """discover() in passive-only mode should not raise."""
     from modules.combined_discovery import discover, DiscoveryResult

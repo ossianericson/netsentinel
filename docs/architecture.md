@@ -64,7 +64,7 @@ Key modules and their roles:
 | Module | Role |
 |---|---|
 | `modules/combined_discovery.py` | Main scan orchestrator — coordinates ARP, ICMP, SYN, mDNS sweeps |
-| `modules/metric_store.py` | SQLite time-series DB (singleton, WAL mode, schema v20) |
+| `modules/metric_store.py` | SQLite time-series DB (singleton, WAL mode, schema v21) |
 | `modules/metric_store_schema.py` | DDL, schema version, column migrations, dataclasses |
 | `modules/metric_store_queries.py` | cert/service/device/HA/snapshot/grade query methods |
 | `modules/metric_store_queries_uptime.py` | uptime/device-state query methods |
@@ -86,6 +86,8 @@ Key modules and their roles:
 | `modules/topology_cytoscape.py` | Cytoscape.js element builder + stylesheet (pure Python) |
 | `modules/topology_cytoscape_html.py` | HTML/JS page template for the Cytoscape map |
 | `modules/topology_snapshot.py` | TopologySnapshot + TopologyDiff — change detection |
+| `modules/network_environment.py` | home/vpn/corporate/large_subnet detection; scan scope + authorization fingerprinting |
+| `modules/adaptive_timing.py` | Gateway-RTT-derived probe timeout profile for large/high-latency networks |
 | `modules/health_score.py` | HealthScoreCalculator — ambient score from always-on monitor data |
 | `modules/plugin_system.py` | Plugin loader + sandbox execution engine |
 | `modules/plugin_registry.py` | Plugin discovery, metadata, enable/disable state |
@@ -133,7 +135,7 @@ The installed binary lives in `C:\Program Files\NetSentinel\` — a read-only di
 
 ## Test architecture
 
-The test suite has 5,774 tests across 441 files. Key categories:
+The test suite has 6,064 tests across 455 files. Key categories:
 
 | Category | Files | What it catches |
 |---|---|---|

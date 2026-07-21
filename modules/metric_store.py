@@ -32,6 +32,11 @@ Single-writer invariant for scan-driven device inventory (Phase 3c):
   • known_device.scan_count / ip_stability / inferred_role are derived from
     device_ip_history and recomputed at the end of every
     DeviceTracker.process_scan() call — never written elsewhere.
+  • known_device.hostname_resolved_at (schema v21, Part 2/L8) is stamped by
+    process_scan() only when TrackedDevice.name_resolved_fresh is True (a real
+    name-resolution probe ran this scan); it passes hostname_resolved_at=None
+    on a TTL cache hit so COALESCE preserves the original timestamp instead of
+    resetting the 7-day clock on every scan.
   • No transaction wrapper across these writes: they stay sequential under
     _write_lock. Telemetry is tolerably lossy and stability derives read-only
     from device_ip_history, so a crash between steps self-heals on the next

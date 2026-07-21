@@ -74,6 +74,8 @@ class CertWorker(BaseWorker):
                         "is_self_signed": r.is_self_signed,
                         "error":          r.error,
                         "verdict":        r.verdict,
+                        "not_testable":        r.not_testable,
+                        "not_testable_reason": r.not_testable_reason,
                     }
                     for r in results
                 ])

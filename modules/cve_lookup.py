@@ -65,6 +65,8 @@ class CVELookupResult:
     cves:       List[CVEResult] = field(default_factory=list)
     from_cache: bool = False
     error:      str  = ""
+    not_testable:        bool = False
+    not_testable_reason: str  = ""
 
     @property
     def critical_count(self) -> int:
@@ -230,7 +232,14 @@ def lookup(service_version: str, max_results: int = 8) -> CVELookupResult:
             _cache[keyword] = cves
         return CVELookupResult(keyword=keyword, cves=cves)
     except URLError as exc:
-        return CVELookupResult(keyword=keyword, error=f"Network error: {exc.reason}")
+        # The NVD API being unreachable (network down, DNS failure, timeout,
+        # rate-limit) must not read as "genuinely zero CVEs" — both otherwise
+        # return an identical empty .cves list.
+        reason = f"NVD API unreachable — {exc.reason}"
+        return CVELookupResult(
+            keyword=keyword, error=f"Network error: {exc.reason}",
+            not_testable=True, not_testable_reason=reason,
+        )
     except Exception as exc:
         return CVELookupResult(keyword=keyword, error=str(exc))
 

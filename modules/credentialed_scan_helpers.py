@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import re
 import shutil
+import socket
 import subprocess
 import threading
 from dataclasses import dataclass, field
@@ -30,11 +31,20 @@ ProgressCB = Optional[Callable[[str], None]]
 __all__ = [
     "PARAMIKO_AVAILABLE", "ProgressCB",
     "SoftwareEntry", "ServiceEntry", "UserEntry", "PatchInfo",
-    "ListeningPort", "CredScanResult",
+    "ListeningPort", "CredScanResult", "SSHUnreachableError",
     "_LINUX_CMDS", "_WINDOWS_CMDS",
     "_parse_linux", "_parse_windows",
     "_run_ssh_paramiko", "_run_ssh_subprocess",
 ]
+
+
+class SSHUnreachableError(Exception):
+    """The SSH connection itself could not be established (refused,
+    unreachable, timed out, or DNS failure) — distinct from an authentication
+    failure, which means the host WAS reached and the scan produced a real,
+    meaningful (if negative) result. Always importable regardless of whether
+    paramiko is installed, so callers never need a conditional import to
+    catch it specifically."""
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
@@ -85,6 +95,8 @@ class CredScanResult:
     host: str
     os_type: str = ""   # "linux" | "windows" | "macos" | "unknown"
     error: str = ""
+    not_testable:        bool = False
+    not_testable_reason: str  = ""
 
     software: List[SoftwareEntry] = field(default_factory=list)
     services: List[ServiceEntry] = field(default_factory=list)
@@ -114,6 +126,8 @@ class CredScanResult:
 
     @property
     def plain_verdict(self) -> str:
+        if self.not_testable:
+            return f"⚠ Could not test {self.host} — {self.not_testable_reason}"
         if self.error:
             return f"⚠  Scan failed: {self.error}"
         parts = [
@@ -161,7 +175,14 @@ def _run_ssh_paramiko(
 
         if progress:
             progress(f"SSH connecting to {host}:{port} as {username}…")
-        client.connect(**connect_kwargs)
+        try:
+            client.connect(**connect_kwargs)
+        except (paramiko.ssh_exception.NoValidConnectionsError,
+                socket.timeout, socket.gaierror, TimeoutError) as exc:
+            # The host was never reached — refused, unreachable, timed out, or
+            # unresolvable. Distinct from AuthenticationException below, which
+            # means the host WAS reached and answered.
+            raise SSHUnreachableError(str(exc)) from exc
 
         for cmd in commands:
             if stop.is_set():

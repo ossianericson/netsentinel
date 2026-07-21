@@ -156,6 +156,8 @@ class OSGuess:
     confidence: str = "Low"   # Low / Medium / High
     banner_hint: str = ""
     tcp_window: str = ""       # NEW — shown in Recon OS tab
+    not_testable: bool = False
+    not_testable_reason: str = ""
 
 
 def _ping_ttl(ip: str) -> int:
@@ -244,6 +246,13 @@ def fingerprint_host(ip: str, ports: Optional[List[int]] = None) -> OSGuess:
                 if any(part in stack_os for part in ("Windows", "Linux", "macOS")):
                     if any(part in guess.os_family for part in ("Windows", "Linux", "macOS")):
                         guess.confidence = "High"
+
+    if guess.ttl <= 0 and not banner and not stack:
+        guess.not_testable = True
+        guess.not_testable_reason = (
+            "Ping, banner grab, and TCP-stack fingerprinting all received no response — "
+            "OS could not be determined. This is not a confirmed unusual/unknown OS."
+        )
 
     return guess
 

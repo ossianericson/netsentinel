@@ -143,6 +143,65 @@ class _ReconTabsMixin:
         lay.addWidget(self._syn_stack, 1)
         return w
 
+    def _active_probe_fingerprint(self) -> str:
+        """L6: physical-network identity for the authorization gate — gateway MAC
+        + subnet, NOT environment kind, so two different physical networks of the
+        same kind are asked about separately."""
+        from modules.network_environment import network_fingerprint
+        return network_fingerprint(net_info=getattr(self, "_net_info", None) or None)
+
+    def _ensure_active_probe_authorization(self) -> bool:
+        """L6: whether THIS physical network is authorized for active probing
+        (Port Scan / Login Test). Home networks always return True WITHOUT ever
+        showing a dialog — zero behaviour change for the common case. On any
+        other kind, shows a one-time modal the first time this fingerprint
+        (gateway MAC + subnet) is probed; the answer persists via
+        ui.scan_settings and is never asked again for this physical network."""
+        kind = getattr(getattr(self, "_net_env", None), "kind", "home")
+        if kind == "home":
+            return True
+        from ui.scan_settings import is_network_authorized, set_network_authorized
+        fp = self._active_probe_fingerprint()
+        authorized = is_network_authorized(fp)
+        if authorized is None:
+            from PyQt6.QtWidgets import QMessageBox
+            box = QMessageBox(self)
+            box.setWindowTitle("Authorize active network scanning?")
+            box.setText(
+                "This doesn't look like your home network. Active probing (port "
+                "scanning, login testing) can trip intrusion-detection systems or "
+                "violate an acceptable-use policy on a network you don't manage.\n\n"
+                "Are you authorized to actively scan this network?"
+            )
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.addButton("Yes, I'm authorized", QMessageBox.ButtonRole.AcceptRole)
+            box.addButton("No / Not sure", QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            clicked = box.clickedButton()
+            authorized = clicked is not None and clicked.text() == "Yes, I'm authorized"
+            set_network_authorized(fp, authorized)
+        return authorized
+
+    def _confirm_credential_test_on_managed_network(self, host: str) -> bool:
+        """L6: on top of the general authorization gate, a managed (vpn/corporate)
+        network gets an ADDITIONAL confirmation before every credentialed login
+        attempt — never persisted, since account lockout risk is per-attempt, not
+        a one-time posture like port-scan rate."""
+        from PyQt6.QtWidgets import QMessageBox
+        box = QMessageBox(self)
+        box.setWindowTitle("Confirm credential test")
+        box.setText(
+            f"This will attempt real logins against {host} on a network that "
+            "looks managed (VPN/corporate). Failed attempts can lock accounts.\n\n"
+            "Continue?"
+        )
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.addButton("Continue", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        return clicked is not None and clicked.text() == "Continue"
+
     @pyqtSlot()
     def _start_syn_scan(self):
         from workers.scan_worker import SYNScanWorker
@@ -151,6 +210,12 @@ class _ReconTabsMixin:
             return
         if self._syn_worker and self._syn_worker.isRunning():
             return
+        from ui.scan_settings import is_host_excluded
+        if is_host_excluded(host):
+            self._syn_status.setText(
+                f"⚠ {host} is on your scan exclusion list (Settings → Network Scanning)."
+            )
+            return
         self._record_recent_action(
             action_id=f"syn:{host}",
             label=f"Port Scan (TCP) · {host}",
@@ -158,7 +223,6 @@ class _ReconTabsMixin:
             params={"host": host},
         )
         self._recon_syn_table.setRowCount(0)
-        self._syn_status.setText("⏳  Scanning ports…  this may take up to 30 seconds")
         self._nav_set_scan_state(L.PORT_SCAN_TCP, "running")
         mode_text = self._syn_ports_combo.currentText()
         if "Full range" in mode_text:
@@ -169,7 +233,22 @@ class _ReconTabsMixin:
         else:
             from modules.syn_scanner import TOP_1000_PORTS
             ports = TOP_1000_PORTS
-        rate = self._syn_rate.value()
+        # L6: soft gate — an unauthorized/undecided network never blocks the
+        # scan, it only caps the rate. authorized is always True on a home
+        # network (no dialog shown), so effective_syn_rate_cap() is a no-op
+        # there and this whole block reproduces today's behaviour exactly.
+        authorized = self._ensure_active_probe_authorization()
+        kind = getattr(getattr(self, "_net_env", None), "kind", "home")
+        from ui.scan_settings import effective_syn_rate_cap
+        requested_rate = self._syn_rate.value()
+        rate = effective_syn_rate_cap(requested_rate, authorized, kind)
+        if rate != requested_rate:
+            self._syn_status.setText(
+                f"⏳  Running at {rate} pps (reduced from {requested_rate} — "
+                f"{'network not yet authorized for active scanning' if not authorized else 'this looks like a managed network'})."
+            )
+        else:
+            self._syn_status.setText("⏳  Scanning ports…  this may take up to 30 seconds")
         self._syn_worker = SYNScanWorker(host=host, ports=ports, rate_pps=rate)
         self._syn_worker.result.connect(self._on_syn_result)
         self._syn_worker.status.connect(self._syn_status.setText)
@@ -277,6 +356,15 @@ class _ReconTabsMixin:
             return
         if self._udp_worker and self._udp_worker.isRunning():
             return
+        from ui.scan_settings import is_host_excluded
+        if is_host_excluded(host):
+            self._udp_status.setText(
+                f"⚠ {host} is on your scan exclusion list (Settings → Network Scanning)."
+            )
+            return
+        # L6: shares the same one-time-per-fingerprint ask as Port Scan (TCP) —
+        # UDP has no rate to soften, so the result isn't otherwise acted on here.
+        self._ensure_active_probe_authorization()
         self._recon_udp_table.setRowCount(0)
         self._udp_status.setText("⏳  Scanning UDP ports…  this may take 1–2 minutes")
         self._nav_set_scan_state(L.PORT_SCAN_UDP, "running")
@@ -401,15 +489,21 @@ class _ReconTabsMixin:
             assessments = score_devices(
                 self._m1_result.get("devices", []),
                 credential_hosts=getattr(self, "_cred_access_hosts", None),
+                port_scan_not_testable_hosts=getattr(self, "_port_scan_not_testable_hosts", None),
+                os_detect_not_testable_hosts=getattr(self, "_os_detect_not_testable_hosts", None),
             )
             self._risk_assessments = assessments
             self._recon_risk_table.setRowCount(0)
             for a in assessments:
                 row = self._recon_risk_table.rowCount()
                 self._recon_risk_table.insertRow(row)
-                color = (_s.RED if a.severity in ("CRITICAL", "HIGH") else
+                color = (_s.VIOLET if a.insufficient_data else
+                         _s.RED if a.severity in ("CRITICAL", "HIGH") else
                          _s.AMBER if a.severity == "MEDIUM" else _s.GREEN)
-                top_finding = a.findings[0].title if a.findings else "—"
+                if a.insufficient_data:
+                    top_finding = f"⚠ Could not test — {'/'.join(a.not_testable_inputs)} could not reach this device"
+                else:
+                    top_finding = a.findings[0].title if a.findings else "—"
                 for col, val in enumerate([
                     a.ip, a.device_type or a.vendor,
                     str(a.total_score), a.severity,
@@ -433,12 +527,14 @@ class _ReconTabsMixin:
         if row < 0 or row >= len(assessments):
             return
         a = assessments[row]
-        if not a.findings:
+        if not a.findings and not a.insufficient_data:
             return
         from PyQt6.QtWidgets import QMessageBox
         lines = [
             f"{a.ip} ({a.device_type or a.vendor}) — {a.severity}, score {a.total_score}\n"
         ]
+        if a.insufficient_data:
+            lines.append(f"⚠ {a.plain_summary}")
         for f in sorted(a.findings, key=lambda f: f.score_contribution, reverse=True):
             lines.append(f"• {f.title}  (+{f.score_contribution})\n   {f.impact}\n   Fix: {f.remediation}")
         QMessageBox.information(self, "Contributing findings", "\n\n".join(lines))
@@ -518,6 +614,7 @@ class _ReconTabsMixin:
             return
 
         self._recon_cve_table.setRowCount(0)
+        self._cve_batch_results: list = []
         self._nav_set_scan_state(L.CVE_LOOKUP, "running")
         self._cve_worker = CVELookupWorker(service_versions=list(set(versions)))
         self._cve_worker.cve_result.connect(self._on_cve_result)
@@ -534,6 +631,16 @@ class _ReconTabsMixin:
 
     @pyqtSlot()
     def _on_cve_finished(self) -> None:
+        # Sprint 5b (A): _on_cve_result() sets "fresh" per item as it streams
+        # in (last one wins); the batch-level not_testable verdict can only be
+        # known here, once every service version has reported back, mirroring
+        # OS Detection's "all guesses not_testable" aggregation (Sprint 5a).
+        batch = getattr(self, "_cve_batch_results", [])
+        if batch and all(getattr(r, "not_testable", False) for r in batch):
+            _reason = next(
+                (r.not_testable_reason for r in batch if getattr(r, "not_testable_reason", "")), ""
+            )
+            self._nav_set_scan_state(L.CVE_LOOKUP, "not_testable", error=_reason)
         # Auto-refresh Device Risk Score now that CVE findings are in (F-47).
         # _run_risk_scorer() itself no-ops safely if M1 hasn't run yet.
         try:
@@ -700,6 +807,24 @@ class _ReconTabsMixin:
             self._cred_status.setText("⚠ Enter a host IP or hostname.")
             return
         if self._cred_worker and self._cred_worker.isRunning():
+            return
+        from ui.scan_settings import is_host_excluded
+        if is_host_excluded(host):
+            self._cred_status.setText(
+                f"⚠ {host} is on your scan exclusion list (Settings → Network Scanning)."
+            )
+            return
+        # L6: HARD gate — unlike Port Scan's soft rate cap, a login attempt has
+        # no meaningful "reduced" form, and account lockout is a sharper, less
+        # recoverable harm than a slow scan. Unauthorized -> refuse to run at all.
+        if not self._ensure_active_probe_authorization():
+            self._cred_status.setText(
+                "⚠ Login Test needs authorization on this network first — see the "
+                "confirmation dialog on Port Scan (TCP), or confirm you manage this network."
+            )
+            return
+        kind = getattr(getattr(self, "_net_env", None), "kind", "home")
+        if kind in ("vpn", "corporate") and not self._confirm_credential_test_on_managed_network(host):
             return
         self._recon_cred_sw_table.setRowCount(0)
         self._recon_cred_svc_table.setRowCount(0)
@@ -871,6 +996,7 @@ class _ReconTabsMixin:
         self._recon_smb_shares_table.setRowCount(0)
         self._recon_smb_users_table.setRowCount(0)
         self._smb_verdict.hide()
+        self._nav_set_scan_state(L.WINDOWS_SHARES_SMB, "running")
         self._smb_worker = SMBEnumWorker(
             host=host,
             username=self._smb_user.text().strip(),
@@ -880,6 +1006,10 @@ class _ReconTabsMixin:
         self._smb_worker.result.connect(self._on_smb_result)
         self._smb_worker.status.connect(self._smb_status.setText)
         self._smb_worker.error.connect(lambda e: self._smb_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._smb_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.WINDOWS_SHARES_SMB, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._smb_worker.start()
 
     def _build_recon_plugin_tab(self) -> QWidget:

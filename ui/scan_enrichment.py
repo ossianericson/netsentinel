@@ -582,18 +582,28 @@ class ScanEnrichmentMixin:
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.on_cred_result(res)
         flags = res.risk_flags
+        not_testable = getattr(res, "not_testable", False)
         self._cred_verdict.setText(res.plain_verdict + (f"\n⚠ {' | '.join(flags)}" if flags else ""))
-        _s.themed_ss(self._cred_verdict, lambda f=bool(flags): (
-            f"color:{_s.RED if f else _s.GREEN};font-size:11px;font-weight:bold;padding:4px;"
+        _s.themed_ss(self._cred_verdict, lambda nt=not_testable, f=bool(flags): (
+            f"color:{_s.VIOLET if nt else (_s.RED if f else _s.GREEN)};"
+            f"font-size:11px;font-weight:bold;padding:4px;"
             f"background:{_s.BG_CARD};border-radius:4px;"
         ))
         self._cred_verdict.show()
         self._cred_status.setText("Credentialed scan complete.")
-        self._nav_set_scan_state(L.LOGIN_TEST, "fresh", ts=time.time(), verdict=res.plain_verdict)
+        if getattr(res, "not_testable", False):
+            self._nav_set_scan_state(
+                L.LOGIN_TEST, "not_testable", ts=time.time(), error=res.not_testable_reason,
+            )
+        else:
+            self._nav_set_scan_state(L.LOGIN_TEST, "fresh", ts=time.time(), verdict=res.plain_verdict)
 
         # Feed Device Risk Score: a successful login is a real risk signal
         # (F-46). _run_risk_scorer() itself no-ops safely if M1 hasn't run yet.
-        if not res.error and res.host:
+        # A not_testable result also has an empty .error (connection was never
+        # made, so there's nothing to report as a tool error) — must not be
+        # misread as "no error occurred, therefore credentials worked."
+        if not res.error and not getattr(res, "not_testable", False) and res.host:
             self._cred_access_hosts.add(res.host)
         if hasattr(self, "_run_risk_scorer"):
             try:
@@ -648,7 +658,12 @@ class ScanEnrichmentMixin:
     def _on_discovery_result(self, res):
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
         self._disc_status.setText(res.plain_verdict)
-        self._nav_set_scan_state(L.FULL_DEVICE_DISCOVERY, "fresh", ts=time.time(), verdict=res.plain_verdict)
+        if getattr(res, "not_testable", False):
+            self._nav_set_scan_state(
+                L.FULL_DEVICE_DISCOVERY, "not_testable", ts=time.time(), error=res.not_testable_reason,
+            )
+        else:
+            self._nav_set_scan_state(L.FULL_DEVICE_DISCOVERY, "fresh", ts=time.time(), verdict=res.plain_verdict)
         _store_ref = getattr(self, "_store", None)
         for dev in res.devices:
             r = self._recon_disc_table.rowCount()
@@ -674,6 +689,14 @@ class ScanEnrichmentMixin:
         ))
         self._smb_verdict.show()
         self._smb_status.setText("SMB enumeration complete.")
+        if getattr(res, "not_testable", False):
+            self._nav_set_scan_state(
+                L.WINDOWS_SHARES_SMB, "not_testable", ts=time.time(), error=res.not_testable_reason,
+            )
+        else:
+            self._nav_set_scan_state(
+                L.WINDOWS_SHARES_SMB, "fresh", ts=time.time(), verdict=res.plain_verdict,
+            )
 
         high_risk = {"DISK"}
         for share in res.shares:

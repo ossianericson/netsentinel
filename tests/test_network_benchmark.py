@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from modules.network_benchmark import grade, _letter, BenchmarkResult
+from modules.network_benchmark import grade, _letter, BenchmarkResult, _WEIGHTS
 
 
 # ── _letter() ─────────────────────────────────────────────────────────────────
@@ -195,3 +195,38 @@ class TestPartialData:
     def test_overall_score_is_float(self):
         result = grade(log_summary=_log_summary())
         assert isinstance(result.overall_score, float)
+
+
+# ── Coverage awareness (L3 / not_testable) ───────────────────────────────────
+
+class TestCoverageAwareness:
+    def test_no_data_leaves_coverage_fields_at_default(self):
+        """The all-empty branch (line ~410) is explicitly untouched by this feature."""
+        result = grade()
+        assert result.dimensions_total == 0
+        assert result.dimensions_skipped == []
+
+    def test_full_coverage_has_no_skipped_dimensions(self):
+        result = grade(
+            log_summary=_log_summary(),
+            diag_result=_diag_result(),
+            m1_result=_m1_result(),
+            m2_result=_m2_result(),
+            m3_result=_m3_result(),
+        )
+        assert result.dimensions_total == len(_WEIGHTS)
+        assert result.dimensions_skipped == []
+        assert "checks available" not in result.overall_verdict
+
+    def test_partial_coverage_lists_skipped_dimension_names(self):
+        result = grade(m1_result=_m1_result(high_risk_count=0))
+        assert result.dimensions_total == len(_WEIGHTS)
+        assert set(result.dimensions_skipped) == set(_WEIGHTS) - {"Network Device Safety"}
+
+    def test_partial_coverage_verdict_gets_coverage_prefix(self):
+        result = grade(m1_result=_m1_result(high_risk_count=0))
+        expected_prefix = (
+            f"{result.overall_grade} — {len(result.dimensions)} of {result.dimensions_total} "
+            "checks available"
+        )
+        assert result.overall_verdict.startswith(expected_prefix)

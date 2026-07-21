@@ -11,10 +11,14 @@ animation + the WM_NCHITTEST native callback in ui/header.py) could fault.
 """
 import json
 import time
+from unittest.mock import patch
+
+import pytest
 
 from modules.threat_intel import (
     ThreatEntry, ThreatIntelDB, _is_public_ip,
     _parse_feodo_json, _parse_urlhaus_text, _parse_plain_ip_list,
+    lookup_abuseipdb, AbuseIpDbUnreachableError,
 )
 
 
@@ -54,6 +58,53 @@ def test_is_public_ip_loopback():
 def test_is_public_ip_public():
     assert _is_public_ip("1.1.1.1") is True
     assert _is_public_ip("8.8.4.4") is True
+
+
+# ── lookup_abuseipdb — network-unreachable is distinguishable (Sprint 5b B) ─────
+
+class TestLookupAbuseIpDbNotTestable:
+    """Before the fix, `except Exception: return None` conflated three causes
+    (no API key / private IP / the API itself being unreachable) into an
+    identical None return -- AbuseIpDbWorker then told the user a legitimate
+    public IP was 'private/local or lookup returned no data', which is wrong
+    when the real cause was a network/API failure."""
+
+    def test_network_failure_raises_unreachable_error(self):
+        with patch("urllib.request.urlopen", side_effect=OSError("timed out")):
+            with pytest.raises(AbuseIpDbUnreachableError):
+                lookup_abuseipdb("1.1.1.1", api_key="fake-key")
+
+    def test_no_api_key_returns_none_not_error(self):
+        """A missing API key is an expected, by-design 'nothing to check'
+        outcome -- not a coverage gap -- so it must stay a plain None."""
+        assert lookup_abuseipdb("1.1.1.1", api_key="") is None
+
+    def test_private_ip_returns_none_not_error(self):
+        """A private IP was never meant to be queried against a public
+        database -- correct-by-design, not a testing gap."""
+        assert lookup_abuseipdb("192.168.1.1", api_key="fake-key") is None
+
+    def test_successful_lookup_returns_result_not_raising(self):
+        fake_body = json.dumps({"data": {
+            "abuseConfidenceScore": 0, "countryCode": "US", "isp": "Test ISP",
+            "reports": [], "categories": [], "lastReportedAt": "", "totalReports": 0,
+            "isPublic": True,
+        }}).encode("utf-8")
+
+        class _FakeResp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return fake_body
+
+        with patch("urllib.request.urlopen", return_value=_FakeResp()):
+            result = lookup_abuseipdb("1.1.1.1", api_key="fake-key")
+        assert result is not None
+        assert result.ip == "1.1.1.1"
 
 
 def test_parse_feodo_json_valid():

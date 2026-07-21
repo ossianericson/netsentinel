@@ -151,6 +151,8 @@ class ThreatIntelPage(QWidget):
     show_in_connections = pyqtSignal(str)   # IP → navigate to Connections + filter
     scan_complete       = pyqtSignal()      # emitted when a feed load cycle finishes
     scan_error          = pyqtSignal(str)   # emitted when a feed refresh fails (F-80)
+    scan_not_testable   = pyqtSignal(str)   # emitted when every feed failed with no cached fallback (Sprint 5b B)
+    scan_started        = pyqtSignal()      # emitted when a live feed refresh begins (Sprint 5b B)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -541,6 +543,7 @@ class ThreatIntelPage(QWidget):
     def _run_refresh(self) -> None:
         if self._refresh_worker and self._refresh_worker.isRunning():
             return
+        self.scan_started.emit()
         self._refresh_btn.setEnabled(False)
         self._refresh_btn.setText("Running…")
         self._cache_btn.setEnabled(False)
@@ -591,7 +594,18 @@ class ThreatIntelPage(QWidget):
             f"Last updated {self._last_updated}."
         )
         self.entries_updated.emit(self._threat_entries)
-        self.scan_complete.emit()
+        if not from_cache and len(db) == 0:
+            # _fetch_one_feed() already falls back to a stale local cache file
+            # on download failure, so a truly empty combined list from a LIVE
+            # refresh means every feed failed AND none had cached data --
+            # public OSINT blocklists always carry entries when reachable, so
+            # this is a coverage gap, not a genuine "0 threats today" result.
+            self.scan_not_testable.emit(
+                "Every threat feed failed to download and none had cached data — "
+                "this scan cannot confirm whether any indicators are current."
+            )
+        else:
+            self.scan_complete.emit()
 
     # ── Table population ──────────────────────────────────────────────────────
 
@@ -740,6 +754,7 @@ class ThreatIntelPage(QWidget):
         self._abuse_worker.no_result.connect(
             lambda msg: self._on_abuse_no_result(msg, local_hit)
         )
+        self._abuse_worker.not_testable.connect(self._on_abuse_not_testable)
         self._abuse_worker.error.connect(self._on_abuse_error)
         self._abuse_worker.start()
 
@@ -761,6 +776,12 @@ class ThreatIntelPage(QWidget):
         self._lookup_btn.setText("Check IP")
         base = self._lookup_result.text()
         self._lookup_result.setText(f"{base} | AbuseIPDB: {msg}")
+
+    def _on_abuse_not_testable(self, msg: str) -> None:
+        self._lookup_btn.setEnabled(True)
+        self._lookup_btn.setText("Check IP")
+        base = self._lookup_result.text()
+        self._lookup_result.setText(f"{base} | AbuseIPDB: ⚠ Could not test — {msg}")
 
     def _on_abuse_error(self, msg: str) -> None:
         self._lookup_btn.setEnabled(True)

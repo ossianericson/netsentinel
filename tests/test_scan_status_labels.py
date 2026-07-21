@@ -132,20 +132,39 @@ class TestNavSetScanState(unittest.TestCase):
 
 class _FakeResult:
     """Minimal scan result stub accepted by ScanResultMixin handlers."""
-    def __init__(self, verdict="All clear", error=None):
+    def __init__(self, verdict="All clear", error=None, host="10.0.0.5",
+                 not_testable=False, not_testable_reason=""):
         self.plain_verdict = verdict
         self.error = error
         self.open_ports = []
+        self.host = host
+        self.ip = host
+        self.not_testable = not_testable
+        self.not_testable_reason = not_testable_reason
 
 
 class _FakeExposureResult:
-    def __init__(self):
+    def __init__(self, not_testable=False, not_testable_reason=""):
         self.plain_verdict = "No exposure"
         self.error = None
         self.risk = "LOW"
         self.wan_ip = "1.2.3.4"
         self.cgnat = False
         self.upnp_mappings = []
+        self.not_testable = not_testable
+        self.not_testable_reason = not_testable_reason
+
+
+class _FakeOSGuess:
+    def __init__(self, ip, not_testable=False, not_testable_reason=""):
+        self.ip = ip
+        self.ttl = 0
+        self.os_family = "Unknown"
+        self.confidence = "Low"
+        self.tcp_window = ""
+        self.banner_hint = ""
+        self.not_testable = not_testable
+        self.not_testable_reason = not_testable_reason
 
 
 class TestStatusLabelAfterSynResult(unittest.TestCase):
@@ -217,6 +236,70 @@ class TestStatusLabelAfterSynResult(unittest.TestCase):
             except Exception:
                 pass  # non-fatal cleanup
 
+    def test_syn_not_testable_result_sets_not_testable_state_and_host(self):
+        """A blocked SYN scan must set 'not_testable' (not 'fresh') and record
+        the host so the risk scorer can exclude it from the score math (L3)."""
+        try:
+            from PyQt6.QtWidgets import QApplication, QLabel, QTableWidget, QStackedWidget
+        except ImportError:
+            self.skipTest("PyQt6 not available")
+            return  # unreachable: skipTest raises, but needed for static analysis
+        app = QApplication.instance()
+
+        from ui.scan_wiring import ScanResultMixin
+        from ui.nav.builder import _NavBuilderMixin
+
+        states: list = []
+
+        class _Stub(ScanResultMixin, _NavBuilderMixin):
+            def __init__(self):
+                self._scan_registry: dict = {}
+                self._flyout_dots: dict = {}
+                self._nav_flyout = types.SimpleNamespace(
+                    apply_dot=lambda l, c: None,
+                    set_item_tooltip=lambda l, t: None,
+                )
+                self._syn_status = QLabel()
+                self._recon_syn_table = QTableWidget(0, 7)
+                self._syn_stack = QStackedWidget()
+                self._syn_stack.addWidget(QLabel("empty"))
+                self._syn_stack.addWidget(QLabel("table"))
+                self._store = None
+                self._last_scan_devices = []
+                self._port_data_cache = {}
+                self._pending_security_tools = []
+                self._port_scan_not_testable_hosts: set = set()
+
+            def _nav_set_scan_state(self, label, state, ts=None, error=None, verdict=None):
+                states.append((label, state))
+                super()._nav_set_scan_state(label, state, ts=ts, error=error, verdict=verdict)
+
+            def _advance_security_audit(self):
+                pass
+
+        try:
+            stub = _Stub()
+            result = _FakeResult(
+                "Could not test", host="10.0.0.9",
+                not_testable=True, not_testable_reason="All ports filtered",
+            )
+            stub._on_syn_result(result)
+
+            assert any(lbl == "Port Scan (TCP)" and st == "not_testable" for lbl, st in states), (
+                f"Expected ('Port Scan (TCP)', 'not_testable') in states={states}"
+            )
+            assert not any(lbl == "Port Scan (TCP)" and st == "fresh" for lbl, st in states)
+            assert "10.0.0.9" in stub._port_scan_not_testable_hosts
+        finally:
+            try:
+                stub._syn_stack.deleteLater()
+                stub._recon_syn_table.deleteLater()
+                if app:
+                    for _ in range(3):
+                        app.processEvents()
+            except Exception:
+                pass  # non-fatal cleanup
+
 
 class TestStatusLabelAfterUdpResult(unittest.TestCase):
     def test_udp_status_updated_after_result(self):
@@ -256,6 +339,64 @@ class TestStatusLabelAfterUdpResult(unittest.TestCase):
             assert "No filtered ports" in stub._udp_status.text()
             assert "Last run:" in stub._udp_status.text() or "Never run" in stub._udp_status.text()
             assert any(lbl == "Port Scan (UDP)" and st == "fresh" for lbl, st in states)
+        finally:
+            try:
+                stub._udp_stack.deleteLater()
+                stub._recon_udp_table.deleteLater()
+                if app:
+                    for _ in range(3):
+                        app.processEvents()
+            except Exception:
+                pass  # non-fatal cleanup
+
+    def test_udp_not_testable_result_sets_not_testable_state_and_host(self):
+        """Sprint 5b (F): a UDP scan with zero response of any kind must set
+        'not_testable' (not 'fresh') and record the host for the risk scorer,
+        mirroring the syn (TCP) behavior from Sprint 5a."""
+        try:
+            from PyQt6.QtWidgets import QApplication, QLabel, QTableWidget, QStackedWidget
+        except ImportError:
+            self.skipTest("PyQt6 not available")
+            return  # unreachable: skipTest raises, but needed for static analysis
+        app = QApplication.instance()
+
+        from ui.scan_wiring import ScanResultMixin
+        from ui.nav.builder import _NavBuilderMixin
+
+        states: list = []
+
+        class _Stub(ScanResultMixin, _NavBuilderMixin):
+            def __init__(self):
+                self._scan_registry: dict = {}
+                self._flyout_dots: dict = {}
+                self._nav_flyout = types.SimpleNamespace(
+                    apply_dot=lambda l, c: None,
+                    set_item_tooltip=lambda l, t: None,
+                )
+                self._udp_status = QLabel()
+                self._recon_udp_table = QTableWidget(0, 3)
+                self._udp_stack = QStackedWidget()
+                self._udp_stack.addWidget(QLabel("empty"))
+                self._udp_stack.addWidget(QLabel("table"))
+                self._port_scan_not_testable_hosts: set = set()
+
+            def _nav_set_scan_state(self, label, state, ts=None, error=None, verdict=None):
+                states.append((label, state))
+                super()._nav_set_scan_state(label, state, ts=ts, error=error, verdict=verdict)
+
+        try:
+            stub = _Stub()
+            result = _FakeResult(
+                "Could not test", host="10.0.0.9",
+                not_testable=True, not_testable_reason="No response of any kind",
+            )
+            stub._on_udp_result(result)
+
+            assert any(lbl == "Port Scan (UDP)" and st == "not_testable" for lbl, st in states), (
+                f"Expected ('Port Scan (UDP)', 'not_testable') in states={states}"
+            )
+            assert not any(lbl == "Port Scan (UDP)" and st == "fresh" for lbl, st in states)
+            assert "10.0.0.9" in stub._port_scan_not_testable_hosts
         finally:
             try:
                 stub._udp_stack.deleteLater()
@@ -315,6 +456,94 @@ class TestStatusLabelAfterOsResult(unittest.TestCase):
             except Exception:
                 pass  # non-fatal cleanup
 
+    def _make_os_stub(self, states):
+        from PyQt6.QtWidgets import QLabel, QTableWidget, QStackedWidget
+        from ui.scan_wiring import ScanResultMixin
+        from ui.nav.builder import _NavBuilderMixin
+
+        class _Stub(ScanResultMixin, _NavBuilderMixin):
+            def __init__(self):
+                self._scan_registry: dict = {}
+                self._flyout_dots: dict = {}
+                self._nav_flyout = types.SimpleNamespace(
+                    apply_dot=lambda l, c: None,
+                    set_item_tooltip=lambda l, t: None,
+                )
+                self._os_status = QLabel()
+                self._recon_os_table = QTableWidget(0, 6)
+                self._os_stack = QStackedWidget()
+                self._os_stack.addWidget(QLabel("empty"))
+                self._os_stack.addWidget(QLabel("table"))
+                self._os_detect_not_testable_hosts: set = set()
+
+            def _nav_set_scan_state(self, label, state, ts=None, error=None, verdict=None):
+                states.append((label, state))
+                super()._nav_set_scan_state(label, state, ts=ts, error=error, verdict=verdict)
+
+        return _Stub()
+
+    def test_os_all_not_testable_sets_not_testable_state_and_hosts(self):
+        """Every host in the batch got no signal at all -> the OS Detection scan
+        state itself must read 'not_testable', not a false-confident 'fresh'."""
+        try:
+            from PyQt6.QtWidgets import QApplication
+        except ImportError:
+            self.skipTest("PyQt6 not available")
+            return  # unreachable: skipTest raises, but needed for static analysis
+        app = QApplication.instance()
+
+        states: list = []
+        stub = self._make_os_stub(states)
+        try:
+            guesses = [
+                _FakeOSGuess("10.0.0.1", not_testable=True, not_testable_reason="no response"),
+                _FakeOSGuess("10.0.0.2", not_testable=True, not_testable_reason="no response"),
+            ]
+            stub._on_os_result({"guesses": guesses})
+            assert any(lbl == "OS Detection" and st == "not_testable" for lbl, st in states)
+            assert not any(lbl == "OS Detection" and st == "fresh" for lbl, st in states)
+            assert stub._os_detect_not_testable_hosts == {"10.0.0.1", "10.0.0.2"}
+        finally:
+            try:
+                stub._os_stack.deleteLater()
+                stub._recon_os_table.deleteLater()
+                if app:
+                    for _ in range(3):
+                        app.processEvents()
+            except Exception:
+                pass  # non-fatal cleanup
+
+    def test_os_partial_not_testable_stays_fresh_but_still_records_host(self):
+        """Only some hosts in the batch were unreachable -> the overall scan
+        state stays 'fresh' (a real result was obtained), but the specific
+        not_testable host is still recorded for the risk scorer."""
+        try:
+            from PyQt6.QtWidgets import QApplication
+        except ImportError:
+            self.skipTest("PyQt6 not available")
+            return  # unreachable: skipTest raises, but needed for static analysis
+        app = QApplication.instance()
+
+        states: list = []
+        stub = self._make_os_stub(states)
+        try:
+            guesses = [
+                _FakeOSGuess("10.0.0.1", not_testable=True, not_testable_reason="no response"),
+                _FakeOSGuess("10.0.0.2", not_testable=False),
+            ]
+            stub._on_os_result({"guesses": guesses})
+            assert any(lbl == "OS Detection" and st == "fresh" for lbl, st in states)
+            assert stub._os_detect_not_testable_hosts == {"10.0.0.1"}
+        finally:
+            try:
+                stub._os_stack.deleteLater()
+                stub._recon_os_table.deleteLater()
+                if app:
+                    for _ in range(3):
+                        app.processEvents()
+            except Exception:
+                pass  # non-fatal cleanup
+
 
 class TestStatusLabelAfterExposureResult(unittest.TestCase):
     def test_exposure_status_updated_after_result(self):
@@ -364,6 +593,112 @@ class TestStatusLabelAfterExposureResult(unittest.TestCase):
                         app.processEvents()
             except Exception:
                 pass  # non-fatal cleanup
+
+    def test_exposure_not_testable_result_sets_not_testable_state(self):
+        """A blocked WAN-IP lookup must not read as a clean 'fresh' result."""
+        try:
+            from PyQt6.QtWidgets import QApplication, QLabel, QTableWidget
+        except ImportError:
+            self.skipTest("PyQt6 not available")
+            return  # unreachable: skipTest raises, but needed for static analysis
+        app = QApplication.instance()
+
+        from ui.scan_wiring import ScanResultMixin
+        from ui.nav.builder import _NavBuilderMixin
+
+        states: list = []
+
+        class _Stub(ScanResultMixin, _NavBuilderMixin):
+            def __init__(self):
+                self._scan_registry: dict = {}
+                self._flyout_dots: dict = {}
+                self._nav_flyout = types.SimpleNamespace(
+                    apply_dot=lambda l, c: None,
+                    set_item_tooltip=lambda l, t: None,
+                )
+                self._exposure_status = QLabel()
+                self._exposure_verdict = QLabel()
+                self._recon_exposure_table = QTableWidget(0, 6)
+                self._pending_security_tools = []
+
+            def _nav_set_scan_state(self, label, state, ts=None, error=None, verdict=None):
+                states.append((label, state))
+                super()._nav_set_scan_state(label, state, ts=ts, error=error, verdict=verdict)
+
+            def _advance_security_audit(self):
+                pass
+
+        try:
+            stub = _Stub()
+            stub._on_exposure_result(_FakeExposureResult(
+                not_testable=True, not_testable_reason="Could not determine WAN IP",
+            ))
+            assert any(lbl == "Exposed to Internet" and st == "not_testable" for lbl, st in states)
+            assert not any(lbl == "Exposed to Internet" and st == "fresh" for lbl, st in states)
+        finally:
+            try:
+                stub._recon_exposure_table.deleteLater()
+                if app:
+                    for _ in range(3):
+                        app.processEvents()
+            except Exception:
+                pass  # non-fatal cleanup
+
+
+class _FakeSMBResult:
+    def __init__(self, not_testable=False, not_testable_reason=""):
+        self.plain_verdict = "SMB scan complete"
+        self.risk_flags: list = []
+        self.shares: list = []
+        self.users: list = []
+        self.not_testable = not_testable
+        self.not_testable_reason = not_testable_reason
+
+
+class TestStatusLabelAfterSmbResult(unittest.TestCase):
+    """L3: closes a pre-existing RULE-SS1 gap — _on_smb_result never called
+    _nav_set_scan_state at all, so this page's flyout dot/rail badge stayed on
+    'Never run' forever even after a real scan completed."""
+
+    def _make_stub(self, states):
+        from PyQt6.QtWidgets import QLabel
+        from ui.scan_wiring import ScanResultMixin
+        from ui.nav.builder import _NavBuilderMixin
+        from ui.tabs_helpers import _table
+
+        class _Stub(ScanResultMixin, _NavBuilderMixin):
+            def __init__(self):
+                self._scan_registry: dict = {}
+                self._flyout_dots: dict = {}
+                self._nav_flyout = types.SimpleNamespace(
+                    apply_dot=lambda l, c: None,
+                    set_item_tooltip=lambda l, t: None,
+                )
+                self._smb_verdict = QLabel()
+                self._smb_status = QLabel()
+                self._recon_smb_shares_table = _table(["Share", "Type", "Comment", "Risk"])
+                self._recon_smb_users_table = _table(["Username", "Flags", "Full Name", "Last Logon"])
+
+            def _nav_set_scan_state(self, label, state, ts=None, error=None, verdict=None):
+                states.append((label, state))
+                super()._nav_set_scan_state(label, state, ts=ts, error=error, verdict=verdict)
+
+        return _Stub()
+
+    def test_smb_result_sets_fresh_state(self):
+        states: list = []
+        stub = self._make_stub(states)
+        stub._on_smb_result(_FakeSMBResult())
+        assert any(lbl == "Windows Shares (SMB)" and st == "fresh" for lbl, st in states)
+
+    def test_smb_not_testable_result_sets_not_testable_state(self):
+        states: list = []
+        stub = self._make_stub(states)
+        stub._on_smb_result(_FakeSMBResult(
+            not_testable=True, not_testable_reason="SMB could not be reached",
+        ))
+        assert any(lbl == "Windows Shares (SMB)" and st == "not_testable" for lbl, st in states)
+        assert not any(lbl == "Windows Shares (SMB)" and st == "fresh" for lbl, st in states)
 
 
 # ── B-4: Rail badge aggregate and flyout tooltip tests ────────────────────────
@@ -432,6 +767,20 @@ class TestRailBadgeAggregate(unittest.TestCase):
         dash._nav_set_scan_state("Port Scan (UDP)", "never")
         dash._nav_set_scan_state("CVE Lookup", "never")
         assert dash._badge_calls[-1] == ""
+
+    def test_badge_not_testable_wins_over_fresh(self):
+        from ui.styles import VIOLET
+        dash = _make_mock_dashboard_with_rail()
+        dash._nav_set_scan_state("Port Scan (TCP)", "fresh")
+        dash._nav_set_scan_state("Port Scan (UDP)", "not_testable")
+        assert dash._badge_calls[-1] == VIOLET
+
+    def test_badge_error_wins_over_not_testable(self):
+        from ui.styles import RED
+        dash = _make_mock_dashboard_with_rail()
+        dash._nav_set_scan_state("Port Scan (TCP)", "not_testable")
+        dash._nav_set_scan_state("CVE Lookup", "error")
+        assert dash._badge_calls[-1] == RED
 
 
 class TestFlyoutTooltip(unittest.TestCase):

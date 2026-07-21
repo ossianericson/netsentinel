@@ -11,6 +11,7 @@ import pytest
 
 from modules.cert_monitor import CertMonitor, CertTarget
 from modules.metric_store import MetricStore
+from modules.metric_store_schema import _SCHEMA_VERSION
 from modules.tls_checker import CertInfo
 
 
@@ -133,7 +134,7 @@ class TestMetricStoreCert:
 
     def test_schema_version_is_2(self, store):
         rows = store._execute_read("SELECT value FROM meta WHERE key='schema_version'", ())
-        assert rows[0]["value"] == "20"
+        assert rows[0]["value"] == str(_SCHEMA_VERSION)
 
 
 # ── CertMonitor ───────────────────────────────────────────────────────────────

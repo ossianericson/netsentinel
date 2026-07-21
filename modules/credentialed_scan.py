@@ -31,7 +31,7 @@ from typing import Optional
 from modules.credentialed_scan_helpers import (
     PARAMIKO_AVAILABLE, ProgressCB,
     SoftwareEntry, ServiceEntry, UserEntry, PatchInfo,
-    ListeningPort, CredScanResult,
+    ListeningPort, CredScanResult, SSHUnreachableError,
     _run_ssh_paramiko, _run_ssh_subprocess,
     _LINUX_CMDS, _WINDOWS_CMDS,
     _parse_linux, _parse_windows,
@@ -47,6 +47,14 @@ __all__ = [
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
+def _unreachable_reason(host: str, ssh_port: int, exc: Exception) -> str:
+    return (
+        f"Could not establish an SSH connection to {host}:{ssh_port} — {exc}. "
+        "The host may be offline, blocking this port, or unreachable from this "
+        "network, so this scan cannot confirm any login credentials for it."
+    )
+
 
 def credentialed_ssh_scan(
     host: str,
@@ -85,6 +93,10 @@ def credentialed_ssh_scan(
         else:
             probe = _run_ssh_subprocess(host, ssh_port, username, password, key_path,
                                         probe_cmd, timeout, progress_cb, stop)
+    except SSHUnreachableError as exc:
+        result.not_testable = True
+        result.not_testable_reason = _unreachable_reason(host, ssh_port, exc)
+        return result
     except Exception as exc:
         result.error = str(exc)
         return result
@@ -114,6 +126,10 @@ def credentialed_ssh_scan(
         else:
             outputs = _run_ssh_subprocess(host, ssh_port, username, password, key_path,
                                           cmds, timeout, progress_cb, stop)
+    except SSHUnreachableError as exc:
+        result.not_testable = True
+        result.not_testable_reason = _unreachable_reason(host, ssh_port, exc)
+        return result
     except Exception as exc:
         result.error = str(exc)
         return result

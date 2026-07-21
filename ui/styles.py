@@ -78,6 +78,7 @@ _ARCTIC_CLEAN = {
     "AMBER":              "#F59E0B",
     "GREEN":              "#2E7D32",
     "BLUE":               "#2C6CB0",
+    "VIOLET":             "#6D4FC4",   # not_testable / "could not test" — distinct from ACCENT
     # Status badge backgrounds
     "RED_BG":             "#FDF2F2",
     "AMBER_BG":           "#FFFBF0",
@@ -204,6 +205,7 @@ _DARK_PRO = {
     "AMBER":              "#F5B942",
     "GREEN":              "#4CAF50",
     "BLUE":               "#3B82F6",
+    "VIOLET":             "#A78BFA",   # not_testable / "could not test" — distinct from ACCENT
     # Status badge backgrounds
     "RED_BG":             "rgba(217,48,37,0.12)",
     "AMBER_BG":           "rgba(245,158,11,0.12)",

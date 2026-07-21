@@ -238,6 +238,12 @@ class _NetworkTabsMixin:
     def _update_net_info_ui(self, info: dict):
         """Populate the Network Info tab from a get_network_info() dict."""
         self._net_info = info
+        from modules.network_environment import detect_environment
+        self._net_env = detect_environment(net_info=info, adapters=info.get("adapters", []))
+        from ui.scan_settings import effective_scan_scope_cidr
+        self._scan_scope_cidr = effective_scan_scope_cidr(self._net_env)
+        if hasattr(self, "_home_page"):
+            self._home_page.set_network_environment(self._net_env)
         self._feed_protocol_viz_context(
             net_info=self._net_info,
             devices=self._m1_result.get("devices", []) if self._m1_result else [],

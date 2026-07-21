@@ -122,18 +122,20 @@ _AUDIT_SCAN_LABELS: tuple[str, ...] = (
 # Values are theme-token NAMES resolved live via _state_color (below) so the
 # Scan Status pills restyle on a theme switch, not only on the next refresh.
 _STATE_COLORS: dict[str, str] = {
-    "fresh":   "GREEN",
-    "stale":   "AMBER",
-    "running": "ACCENT",
-    "error":   "RED",
-    "never":   "TEXT_MUTED",
+    "fresh":        "GREEN",
+    "stale":        "AMBER",
+    "running":      "ACCENT",
+    "error":        "RED",
+    "not_testable": "VIOLET",
+    "never":        "TEXT_MUTED",
 }
 _STATE_LABELS: dict[str, str] = {
-    "fresh":   "Fresh",
-    "stale":   "Stale",
-    "running": "Running",
-    "error":   "Error",
-    "never":   "Never run",
+    "fresh":        "Fresh",
+    "stale":        "Stale",
+    "running":      "Running",
+    "error":        "Error",
+    "not_testable": "Could not test",
+    "never":        "Never run",
 }
 
 
@@ -505,8 +507,19 @@ class SecurityOverviewPage(QWidget):
         model: 100 pts minus 10/finding (capped 30) per KPI dimension that has
         actually run. Idle (nothing scanned yet) leaves the ring in its
         constructed neutral state rather than forcing a misleading grade."""
+        registry = getattr(self, "_scan_registry_data", {}) or {}
+        port_scan_not_testable = registry.get(L.PORT_SCAN_TCP, {}).get("state") == "not_testable"
+        not_testable_count = sum(
+            1 for label in _AUDIT_SCAN_LABELS
+            if registry.get(label, {}).get("state") == "not_testable"
+        )
+        coverage_note = (
+            f" — {not_testable_count} of {len(_AUDIT_SCAN_LABELS)} checks could not run "
+            "in this environment." if not_testable_count else ""
+        )
+
         dims: list[int] = []
-        if self._port_scan_done:
+        if self._port_scan_done and not port_scan_not_testable:
             dims.append(len(self._port_findings))
         if self._store is not None:
             dims.append(len(set(e.get("host", "") for e in self._cve_entries if e.get("host"))))
@@ -515,7 +528,7 @@ class SecurityOverviewPage(QWidget):
             dims.append(len(self._cred_flags))
 
         if not dims:
-            self._grade_verdict_lbl.setText("Run a security scan to see your grade.")
+            self._grade_verdict_lbl.setText("Run a security scan to see your grade." + coverage_note)
             return
 
         score = 100.0
@@ -536,10 +549,11 @@ class SecurityOverviewPage(QWidget):
         self._grade_ring.set_grade(letter, score)
 
         total = sum(dims)
-        self._grade_verdict_lbl.setText(
+        base_text = (
             "No findings across completed scans." if total == 0
             else f"{total} finding(s) across completed scans."
         )
+        self._grade_verdict_lbl.setText(base_text + coverage_note)
 
     # ── Security Scan KPI row ──────────────────────────────────────────────────
 

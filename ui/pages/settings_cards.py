@@ -602,6 +602,61 @@ class _SettingsCardsMixin:
         vendor_note.setWordWrap(True)
         _styles.themed_ss(vendor_note, lambda: _styles.qss_muted_label(10))
         bl.addWidget(vendor_note)
+
+        from ui.scan_settings import effective_flush_caches
+        self._chk_flush_caches = QCheckBox(
+            "Flush DNS / ARP / IPv6 caches before each scan"
+        )
+        _styles.themed_ss(self._chk_flush_caches, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
+        self._chk_flush_caches.setChecked(effective_flush_caches())
+        self._chk_flush_caches.toggled.connect(self._on_flush_caches_toggled)
+        bl.addWidget(self._chk_flush_caches)
+        flush_note = QLabel(
+            "Clears stale entries so the scan sees current devices and names, at the cost "
+            "of briefly disrupting other apps' DNS/ARP lookups on this PC. Automatically on "
+            "for home networks and off for VPN/corporate/large networks unless you set this "
+            "yourself."
+        )
+        flush_note.setWordWrap(True)
+        _styles.themed_ss(flush_note, lambda: _styles.qss_muted_label(10))
+        bl.addWidget(flush_note)
+
+        from modules.network_environment import detect_environment
+        from ui.scan_settings import effective_scan_scope_cidr
+        _env = detect_environment()
+        self._chk_bound_scope = QCheckBox(
+            "Only scan devices within my local subnet (excludes other VLANs/subnets seen in ARP)"
+        )
+        _styles.themed_ss(self._chk_bound_scope, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
+        self._chk_bound_scope.setChecked(effective_scan_scope_cidr(_env) is not None)
+        self._chk_bound_scope.toggled.connect(self._on_bound_scope_toggled)
+        bl.addWidget(self._chk_bound_scope)
+        scope_note = QLabel(
+            f"Current subnet: {_env.scope_cidr or 'unknown'}. On by default on VPN/corporate/large "
+            "networks — a flat network keeps its full width (nothing outside it is missed), only "
+            "addresses on a genuinely different subnet are excluded."
+        )
+        scope_note.setWordWrap(True)
+        _styles.themed_ss(scope_note, lambda: _styles.qss_muted_label(10))
+        bl.addWidget(scope_note)
+
+        from ui.scan_settings import get_excluded_hosts
+        self._txt_excluded_hosts = QLineEdit(", ".join(get_excluded_hosts()))
+        self._txt_excluded_hosts.setPlaceholderText("192.168.1.50, printer.local, …")
+        _styles.themed_ss(
+            self._txt_excluded_hosts,
+            "font-size:11px;color:{TEXT_PRIMARY};border:1px solid {BORDER};padding:2px 6px;",
+        )
+        self._txt_excluded_hosts.editingFinished.connect(self._on_excluded_hosts_edited)
+        bl.addWidget(QLabel("Never actively port-scan or credential-test these hosts:"))
+        bl.addWidget(self._txt_excluded_hosts)
+        excl_note = QLabel(
+            "Comma-separated IPs or hostnames. Applies to Port Scan (TCP/UDP) and Login Test — "
+            "useful for fragile printers/embedded devices that can crash when probed."
+        )
+        excl_note.setWordWrap(True)
+        _styles.themed_ss(excl_note, lambda: _styles.qss_muted_label(10))
+        bl.addWidget(excl_note)
         return card
 
     def _on_auto_snap_toggled(self, checked: bool) -> None:
@@ -610,6 +665,20 @@ class _SettingsCardsMixin:
 
     def _on_vendor_lookup_toggled(self, checked: bool) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("privacy/mac_vendor_online_lookup", checked)
+        self._flash_saved()
+
+    def _on_flush_caches_toggled(self, checked: bool) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("scan/flush_caches", checked)
+        self._flash_saved()
+
+    def _on_bound_scope_toggled(self, checked: bool) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("scan/bound_scope", checked)
+        self._flash_saved()
+
+    def _on_excluded_hosts_edited(self) -> None:
+        from ui.scan_settings import set_excluded_hosts
+        hosts = [h.strip() for h in self._txt_excluded_hosts.text().split(",")]
+        set_excluded_hosts(hosts)
         self._flash_saved()
 
     # ── Scheduled scan ────────────────────────────────────────────────────────

@@ -10,13 +10,16 @@ Covers:
 """
 from __future__ import annotations
 
+from unittest.mock import patch
 
 from modules.credentialed_scan import (
     CredScanResult, SoftwareEntry, ServiceEntry, UserEntry,
     ListeningPort,
     _parse_windows, _parse_linux,
     _WINDOWS_CMDS,
+    credentialed_ssh_scan,
 )
+from modules.credentialed_scan_helpers import SSHUnreachableError
 
 
 # ── CredScanResult: defaults ──────────────────────────────────────────────────
@@ -83,6 +86,61 @@ def test_plain_verdict_ok():
     assert "1 services" in v
     assert "1 users" in v
     assert "1 listening" in v
+
+
+def test_not_testable_defaults_false():
+    r = CredScanResult(host="x")
+    assert r.not_testable is False
+    assert r.not_testable_reason == ""
+
+
+def test_plain_verdict_not_testable():
+    r = CredScanResult(host="10.0.0.9", not_testable=True, not_testable_reason="refused")
+    v = r.plain_verdict
+    assert "Could not test" in v
+    assert "refused" in v
+    assert "Scan failed" not in v
+
+
+# ── credentialed_ssh_scan(): connection-refused vs auth-failure (Sprint 5b D) ──
+
+class TestCredentialedSshScanNotTestable:
+    """SSH connection-refused/unreachable is genuinely not_testable -- the host
+    was never reached, so nothing about its credentials was confirmed. Wrong
+    credentials (AuthenticationException) is a REAL, meaningful, testable
+    result -- it must keep routing through the existing .error/plain-verdict
+    path unchanged, per explicit user decision (Sprint 5b design question)."""
+
+    def test_connection_refused_sets_not_testable(self):
+        with patch("modules.credentialed_scan.PARAMIKO_AVAILABLE", True), \
+             patch("modules.credentialed_scan._run_ssh_paramiko",
+                   side_effect=SSHUnreachableError("Unable to connect to port 22")):
+            result = credentialed_ssh_scan("10.0.0.9", password="x")
+
+        assert result.not_testable is True
+        assert result.not_testable_reason != ""
+        assert "10.0.0.9" in result.not_testable_reason
+
+    def test_authentication_failure_stays_plain_error_not_not_testable(self):
+        """A real auth failure is a confirmed result, not a coverage gap."""
+        with patch("modules.credentialed_scan.PARAMIKO_AVAILABLE", True), \
+             patch("modules.credentialed_scan._run_ssh_paramiko",
+                   side_effect=Exception("Authentication failed.")):
+            result = credentialed_ssh_scan("10.0.0.9", password="wrong")
+
+        assert result.not_testable is False
+        assert result.error != ""
+
+    def test_successful_probe_is_not_not_testable(self):
+        with patch("modules.credentialed_scan.PARAMIKO_AVAILABLE", True), \
+             patch("modules.credentialed_scan._run_ssh_paramiko",
+                   return_value={"uname -s": "Linux"}), \
+             patch("modules.credentialed_scan._parse_linux") as mock_parse:
+            mock_parse.return_value = CredScanResult(host="")
+            result = credentialed_ssh_scan("10.0.0.9", password="x")
+
+        assert result.not_testable is False
+        assert result.error == ""
 
 
 # ── _WINDOWS_CMDS: serial and session commands present ───────────────────────

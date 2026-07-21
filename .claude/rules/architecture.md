@@ -15,7 +15,7 @@ paths:
 | Packaging | PyInstaller (produces single-exe builds) |
 | Distribution | Inno Setup installer + WinGet (Ookla.Speedtest.CLI as ExternalDependencies) |
 | Config persistence | QSettings / INI file (NetSentinel.ini) |
-| Data persistence | SQLite via MetricStore (WAL mode, schema v20) |
+| Data persistence | SQLite via MetricStore (WAL mode, schema v21) |
 | Secrets | OS keychain via `keyring` (RULE 22-A) |
 | Logging | Python `logging` module + custom CSV logger |
 
@@ -46,6 +46,8 @@ netsentinel/
 │   ├── alert_*.py / notification_*.py  # Alert engine, baselines, suppression, channels, router
 │   ├── device_*.py / *_scanner.py / *_monitor.py  # Detection & classification families
 │   ├── topology_*.py / report_*.py / service_*.py  # Map, export, and service-diagnostics families
+│   ├── network_environment.py  # home/vpn/corporate/large_subnet detection + scope/authorization fingerprinting (ARCH RULE 26)
+│   ├── adaptive_timing.py      # Gateway-RTT-derived probe timeout profile (ARCH RULE 26)
 │   ├── colours.py              # Chart/report colour constants (RULE-AH3 module source)
 │   └── utils.py / utils_net.py / utils_platform.py  # Core helpers incl. get_app_data_dir() (RULE 23)
 │
@@ -53,6 +55,7 @@ netsentinel/
 │   ├── styles.py               # SINGLE SOURCE OF TRUTH for all colours and QSS (RULE 1 / RULE-AH3)
 │   ├── dashboard.py            # Main window shell (~1,754 lines) — inherits the mixins below
 │   ├── scan_wiring.py / scan_enrichment.py / header.py / monitor_state.py / plugin_page_mixin.py / export_mixin.py  # Dashboard mixins
+│   ├── scan_settings.py        # Env-aware scan defaults — flush-caches, scan scope, authorization, rate caps (ARCH RULE 26)
 │   ├── native_chrome.py / uia_warmup.py  # Win32 window/startup plumbing — ctypes only, zero Qt objects in the
 │   │                           # native callbacks. native_chrome = the DEFAULT window on Windows since
 │   │                           # v2.1.30 (WM_NCCALCSIZE; gives real Aero Snap). Non-Windows keeps the
@@ -60,7 +63,7 @@ netsentinel/
 │   ├── tabs*.py                # TabBuilderMixin + _*TabsMixin sub-mixins (page factory / sidebar assembly)
 │   ├── nav/                    # Activity-rail nav package — rail.py (widgets) + builder.py (_NavBuilderMixin, scan registry)
 │   ├── pages/                  # One widget per nav page (Devices, Speed Test, Security Overview, …)
-│   └── widgets/                # Reusable widgets, tiles, cards, dialogs, overlays
+│   └── widgets/                # Reusable widgets, tiles, cards, dialogs, overlays (incl. environment_banner.py)
 │
 ├── workers/                # QThread wrappers — emit result_ready/error, NO blocking I/O on main thread (RULE 4)
 │
@@ -135,6 +138,46 @@ row with one commit per burst.
 
 Frontend (`SpeedTestResult` dataclass) is identical regardless of backend.
 
+### Network environment detection & scan authorization (ARCH RULE 26)
+`modules/network_environment.py` classifies the active network before any active probe runs —
+`NetworkEnvironment.kind`: `"home"` / `"vpn"` / `"corporate"` / `"large_subnet"` — and derives
+`scope_cidr` (the real local subnet, whatever width; never forced to `/24`, so a flat corporate
+L2 keeps scanning all its devices) plus `network_fingerprint()` (gateway MAC + subnet, used as
+the per-network authorization key — two different physical "home" networks are asked about
+separately).
+
+`ui/scan_settings.py` is the single control surface for environment-aware scan defaults, all
+overridable via Settings → Network Scanning:
+- `effective_flush_caches()` — default ON for home, OFF for vpn/corporate/large_subnet
+- `effective_scan_scope_cidr()` — bounds active probing to `scope_cidr` on non-home networks
+- `is_network_authorized()` / `set_network_authorized()` — QSettings `scan/net_auth/<fingerprint>`
+- `effective_syn_rate_cap()` — 50 pps unauthorized, 150 pps authorized+managed (vpn/corporate),
+  unrestricted authorized+home/large_subnet
+- shared `get_excluded_hosts()`/`set_excluded_hosts()`/`is_host_excluded()` host exclusion list,
+  read by the SYN/UDP/Credentialed scan workers alike
+
+**Authorization gate is intentionally asymmetric.** Port Scan (TCP/UDP) is a SOFT gate — an
+unauthorized network never blocks the scan, only caps its rate, behind a one-time-per-fingerprint
+modal (`ui/tabs_recon.py::_ensure_active_probe_authorization()`). Login Test is a HARD gate —
+refuses to run at all when unauthorized, plus an always-shown, never-persisted extra confirmation
+specifically on vpn/corporate networks — because a login attempt has no meaningful "reduced" form
+and account lockout is a sharper, less-recoverable harm than an extra port probe. Home networks
+never see either dialog.
+
+`modules/adaptive_timing.py::measure_gateway_rtt()` (median of 3 ICMP pings to the gateway) +
+`derive_profile()` derive a per-probe `TimingProfile` (`timeout = clamp(rtt_ms/1000 * 8, floor,
+ceiling)`) so probe timeouts scale with real network latency instead of a fixed home-LAN
+constant — threaded into `rogue_device.scan()` and `name_resolver.resolve()`.
+
+`ui/widgets/environment_banner.py` shows a dismissible Home banner (keyed per environment
+fingerprint) plus a one-time pre-scan "Scan Anyway / Cancel" notice when the detected network
+looks unfamiliar or large.
+
+`known_device.hostname_resolved_at` (schema v21) backs a 7-day hostname-resolution TTL cache in
+`rogue_device.scan()` — a cache-hit device skips `resolve_batch()` entirely (still runs through
+vendor/device-type reclassification) so repeat scans on large/VPN networks don't re-pay full
+resolution cost every time.
+
 ### Dashboard navigation model
 Main window: permanent 48 px activity rail (`_nav_rail`) + 280 px animated flyout (`_FlyoutPanel`) + `QStackedWidget` (`_stack`).
 
@@ -169,7 +212,7 @@ Add new icons to `_LUCIDE` before using them in `_nav_begin_section()`. Do not u
 ```python
 self._nav_set_scan_state(
     label: str,      # exact nav page label, e.g. "Port Scan (TCP)"
-    state: str,      # "never" | "running" | "fresh" | "stale" | "error"
+    state: str,      # "never" | "running" | "fresh" | "stale" | "error" | "not_testable"
     ts: float = None,    # epoch seconds of last completion (None → now)
     verdict: str = None, # one-line result summary for tooltip / Scan Status card
     error: str = None,   # error message when state == "error"
@@ -181,6 +224,11 @@ self._nav_set_scan_state(
 - `"stale"` → `AMBER`
 - `"running"` → `ACCENT`
 - `"error"` → `RED`
+- `"not_testable"` → `VIOLET` — the probe was structurally blocked (e.g. a VPN/firewall dropped
+  every packet) rather than run-and-clean; kept distinct from `"error"` so risk scoring and the
+  Security Overview grade don't read a blocked probe as a confirmed-safe result. Set on the
+  dataclass result (`not_testable: bool` / `not_testable_reason: str`) by the module, read by the
+  UI result handler — never inferred in the UI layer.
 - `"never"` → `""` (dot hidden)
 
 **Freshness thresholds** (`_FRESH_SECONDS` class dict on `_NavBuilderMixin`):
@@ -240,6 +288,7 @@ BORDER      = "rgba(255,255,255,0.08)"   # QSS-only — see RULE 10
 RED    = "#F85149"
 AMBER  = "#F5B942"
 GREEN  = "#4CAF50"
+VIOLET = "#A78BFA"   # not_testable / "could not test" — distinct from ACCENT
 ```
 
 **Arctic Clean (light, alternate):**
@@ -259,6 +308,7 @@ BORDER      = "#D4D4D4"
 RED    = "#D93025"
 AMBER  = "#F59E0B"
 GREEN  = "#2E7D32"
+VIOLET = "#6D4FC4"   # not_testable / "could not test" — distinct from ACCENT
 ```
 
 ## WinGet Distribution

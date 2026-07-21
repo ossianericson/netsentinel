@@ -61,6 +61,8 @@ class ExposureResult:
     upnp_available: bool = False
     upnp_mappings:  List[UPnPMapping] = field(default_factory=list)
     error:          str = ""
+    not_testable:        bool = False
+    not_testable_reason: str = ""
 
     # Per-device exposure summary
     # device_ip → list of exposed ports
@@ -87,6 +89,8 @@ class ExposureResult:
     def plain_verdict(self) -> str:
         if self.error:
             return f"⚠ Exposure check failed: {self.error}"
+        if self.not_testable:
+            return f"⚠ Could not test — {self.not_testable_reason}"
         if self.cgnat:
             return (
                 f"✅  Behind carrier-grade NAT (CGNAT) — WAN IP {self.wan_ip} is shared. "
@@ -292,6 +296,11 @@ def check_exposure(
         else:
             _cb(f"WAN IP: {wan_ip}")
     else:
+        result.not_testable = True
+        result.not_testable_reason = (
+            "Could not determine the public WAN IP address (offline, or a firewall/VPN is "
+            "blocking the outbound lookup). Internet-exposure cannot be confirmed without it."
+        )
         _cb("Could not determine WAN IP (offline or API unavailable)")
 
     # Stage 2: UPnP discovery

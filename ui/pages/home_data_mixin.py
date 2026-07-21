@@ -602,6 +602,11 @@ class _HomeDataMixin:
             self._scan_progress_lbl.setVisible(bool(message))
         self._freshness_strip.set_scan_progress("")
 
+    def set_network_environment(self, env) -> None:
+        """Forward the detected NetworkEnvironment to the Home page banner."""
+        if hasattr(self, "_env_banner"):
+            self._env_banner.set_environment(env)
+
     # ── Data preload ──────────────────────────────────────────────────────────
 
     def _preload_from_store(self) -> None:

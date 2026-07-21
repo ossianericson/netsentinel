@@ -66,6 +66,8 @@ class BenchmarkResult:
     overall_color: str
     overall_verdict: str
     dimensions: List[DimensionResult] = field(default_factory=list)
+    dimensions_total: int = 0
+    dimensions_skipped: List[str] = field(default_factory=list)
 
 
 # ── Dimension scorers ─────────────────────────────────────────────────────────
@@ -422,6 +424,10 @@ def grade(
     grade_letter = _letter(overall_score)
     color        = _score_to_color(overall_score)
 
+    dimensions_total   = len(_WEIGHTS)
+    scored_names       = {d.name for d in dims}
+    dimensions_skipped = [name for name in _WEIGHTS if name not in scored_names]
+
     if grade_letter == "A":
         verdict = (
             "Your network is performing excellently across all measured dimensions. "
@@ -447,10 +453,18 @@ def grade(
             "See individual grades below for fix steps."
         )
 
+    if dimensions_skipped:
+        verdict = (
+            f"{grade_letter} — {len(dims)} of {dimensions_total} checks available "
+            f"({', '.join(dimensions_skipped)} weren't run). {verdict}"
+        )
+
     return BenchmarkResult(
         overall_score=round(overall_score, 1),
         overall_grade=grade_letter,
         overall_color=color,
         overall_verdict=verdict,
         dimensions=dims,
+        dimensions_total=dimensions_total,
+        dimensions_skipped=dimensions_skipped,
     )

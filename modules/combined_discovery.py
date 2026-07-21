@@ -62,6 +62,8 @@ class DiscoveryResult:
     duration_s: float = 0.0
     methods_used: List[str] = field(default_factory=list)
     error: str = ""
+    not_testable:        bool = False
+    not_testable_reason: str  = ""
 
     @property
     def count(self) -> int:
@@ -69,6 +71,8 @@ class DiscoveryResult:
 
     @property
     def plain_verdict(self) -> str:
+        if self.not_testable:
+            return f"⚠ Could not test {self.cidr or 'this network'} — {self.not_testable_reason}"
         if self.error:
             return f"⚠ Discovery failed: {self.error}"
         return (
@@ -227,6 +231,21 @@ def _mdns_query(timeout: float = 2.0) -> Dict[str, DiscoveredDevice]:
     return devices
 
 
+# ── not_testable helper ────────────────────────────────────────────────────────
+
+def _zero_device_not_testable_reason(cidr: str) -> str:
+    """Zero devices from EVERY method (passive ARP cache read + all active
+    probes) is a near-impossible outcome for a genuinely connected network —
+    even an empty /24 should see its own gateway respond to ARP. This is not
+    a confirmed empty subnet; something is blocking discovery entirely."""
+    return (
+        f"No devices were found on {cidr or 'this network'} by any discovery method — "
+        "not even the gateway responded to ARP. This network interface may be "
+        "disconnected, isolated, or blocked from all forms of local discovery, so "
+        "this scan cannot confirm the network actually has no devices."
+    )
+
+
 # ── Merge helper ──────────────────────────────────────────────────────────────
 
 def _merge(base: Dict[str, DiscoveredDevice], additions: Dict[str, DiscoveredDevice]) -> None:
@@ -288,10 +307,14 @@ def discover(
 
     if passive_only or stop.is_set():
         duration = time.monotonic() - t0
-        return DiscoveryResult(
+        result = DiscoveryResult(
             devices=sorted(devices.values(), key=lambda d: ipaddress.ip_address(d.ip)),
             cidr=cidr, duration_s=duration, methods_used=methods_used,
         )
+        if not devices and not stop.is_set():
+            result.not_testable = True
+            result.not_testable_reason = _zero_device_not_testable_reason(cidr)
+        return result
 
     # ── Stage 2: Active (parallel) ────────────────────────────────────────────
     if progress_cb:
@@ -359,9 +382,13 @@ def discover(
     if progress_cb:
         progress_cb(f"Discovery complete — {len(sorted_devs)} device(s) in {duration:.1f} s")
 
-    return DiscoveryResult(
+    result = DiscoveryResult(
         devices=sorted_devs,
         cidr=cidr,
         duration_s=duration,
         methods_used=methods_used,
     )
+    if not sorted_devs and not stop.is_set():
+        result.not_testable = True
+        result.not_testable_reason = _zero_device_not_testable_reason(cidr)
+    return result
