@@ -1411,6 +1411,46 @@ Enforced by `tests/test_app_settings.py` (source-order guard: the fix call must
 come AFTER `showMaximized()`; asserts `app.py` no longer defers it past
 `_splash.close()`).
 
+### RULE-WIN13 (blocking): A stored QThread handle must guard every post-finish call with try/except RuntimeError — `finished.connect(deleteLater)` destroys the C++ object out from under it
+
+**Mechanism.** Wiring `worker.finished.connect(worker.deleteLater)` is the standard one-shot
+worker cleanup pattern (used by `AutostartWorker` and others) — but `deleteLater()` destroys
+the C++ `QThread` object as soon as the event loop next processes its deferred-delete event,
+which can be well before the widget that started the worker does anything else. If that widget
+cached the worker on `self` (`self._autostart_worker = worker`) and never clears the attribute
+once `finished` fires, the Python wrapper survives as a **dangling handle** — `self._x is not
+None` stays true forever, but any method call on it (`isRunning()`, `wait()`, any slot) raises
+`RuntimeError: wrapped C/C++ object of type X has been deleted` the moment the user re-triggers
+the same action.
+
+This shipped live in a Microsoft Store build: `ui/pages/settings_cards.py`'s
+`_start_autostart_worker()` guarded re-entry with `if existing is not None and
+existing.isRunning(): return`, correct in shape but missing the deletion guard — toggling
+"Start NetSentinel automatically" a second time (any time after the first worker's `finished`
+had already run) crashed with an unhandled-error dialog on every subsequent toggle.
+
+```python
+# WRONG — existing may be a dangling handle; isRunning() dereferences dead C++ state
+existing = getattr(self, "_autostart_worker", None)
+if existing is not None and existing.isRunning():
+    return  # a query/set is already in flight; let it finish
+
+# CORRECT — mirrors the existing settings_page.py::_flash_saved() convention
+# for the identical mechanism on a QTimer handle
+existing = getattr(self, "_autostart_worker", None)
+if existing is not None:
+    try:
+        if existing.isRunning():
+            return  # a query/set is already in flight; let it finish
+    except RuntimeError:
+        pass  # prior worker's C++ object already deleted via finished -> deleteLater()
+```
+
+Applies to any `self._x = worker` pattern where `worker.finished.connect(worker.deleteLater)`
+(or an equivalent auto-cleanup) is wired and the handle is read again later without first
+re-assigning it. Regression coverage: `tests/test_settings_startup_card.py::
+test_toggle_after_prior_worker_deleted_does_not_raise`.
+
 ---
 
 ## QSettings State Hygiene
@@ -2086,6 +2126,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN10 → `test_uia_warmup.py` (AST guard that app.py calls the warmup + `monkey`-marked e2e)
 - RULE-WIN11 → `test_store_update_flow.py` (raw `GetPackageFamilyName` code must be 122/15700, never 6)
 - RULE-WIN12 → `test_app_settings.py` (placement-fix-before-showMaximized source-order guard)
+- RULE-WIN13 → `test_settings_startup_card.py` (regression: toggle after prior worker's `deleteLater()` must not raise)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 
 Rules that should be converted to tool enforcement (future work):

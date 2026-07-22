@@ -4,6 +4,15 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.40
+
+**Fixed**
+- `ui/pages/settings_cards.py`: toggling "Start NetSentinel automatically" a second time after the first query/set completed raised a "wrapped C/C++ object ... has been deleted" crash (reported from the Microsoft Store build) — `_start_autostart_worker()`'s re-entry guard now tolerates the prior `AutostartWorker`'s C++ object already having been destroyed via its own `finished`->`deleteLater()` wiring
+- `ui/widgets/alert_drawer.py`: the alert drawer's action-button row (Acknowledge / Snooze / Network Logger / Fix this / Troubleshoot) rendered with clipped text because up to 5 buttons no longer fit one row in the fixed 320px drawer; the row now wraps to additional lines instead of clipping
+- `ui/pages/inventory_page.py`: Current Devices on the Inventory Change History page was hard-capped at 200px regardless of window size while the change-history table below it took all the remaining space; the two now share a resizable splitter
+
+---
+
 ### v2.1.39
 
 **Changed**

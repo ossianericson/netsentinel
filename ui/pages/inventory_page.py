@@ -24,7 +24,7 @@ from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QMenu, QPlainTextEdit, QPushButton,
-    QScrollArea, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
+    QScrollArea, QSizePolicy, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -902,7 +902,6 @@ class InventoryPage(QWidget):
             self._snap_table_context_menu
         )
         self._snap_table.itemClicked.connect(self._on_snap_row_clicked)
-        self._snap_table.setMaximumHeight(200)
         snap_card_lay.addWidget(self._snap_table)
 
         self._snap_empty_lbl = QLabel("Run a scan to see discovered devices here.")
@@ -911,7 +910,17 @@ class InventoryPage(QWidget):
         snap_card_lay.addWidget(self._snap_empty_lbl)
         self._snap_table.setVisible(False)
 
-        cl.addWidget(snap_card)
+        # Current Devices vs. change-history below share a user-resizable splitter
+        # instead of a fixed max-height — Current Devices was previously capped at
+        # 200px regardless of window size while the history table below took all
+        # remaining space via a stretch factor.
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(snap_card)
+
+        bottom_pane = QWidget()
+        bl = QVBoxLayout(bottom_pane)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setSpacing(8)
 
         ctrl_row = QHBoxLayout()
         ctrl_row.addStretch()
@@ -940,7 +949,7 @@ class InventoryPage(QWidget):
             "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         btn_compare.clicked.connect(self._open_compare_dialog)
         ctrl_row.addWidget(btn_compare)
-        cl.addLayout(ctrl_row)
+        bl.addLayout(ctrl_row)
 
         # ACT-3: compare mode banner (hidden when in live view)
         self._compare_banner = QFrame()
@@ -975,7 +984,7 @@ class InventoryPage(QWidget):
         )
         _export_diff_btn.clicked.connect(self._export_diff_csv)
         _cb_lay.addWidget(_export_diff_btn)
-        cl.addWidget(self._compare_banner)
+        bl.addWidget(self._compare_banner)
 
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
@@ -988,7 +997,7 @@ class InventoryPage(QWidget):
                   self._kpi_down, self._kpi_devices):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
-        cl.addLayout(kpi_row)
+        bl.addLayout(kpi_row)
 
         filter_row = QHBoxLayout()
         filter_row.setSpacing(12)
@@ -1025,7 +1034,7 @@ class InventoryPage(QWidget):
             "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
         btn_export_inv.clicked.connect(self._export_csv)
         filter_row.addWidget(btn_export_inv)
-        cl.addLayout(filter_row)
+        bl.addLayout(filter_row)
 
         # Tag-chip filter row (FILTER-11)
         tag_row_lay = QHBoxLayout()
@@ -1038,7 +1047,7 @@ class InventoryPage(QWidget):
         tag_row_lay.addLayout(self._tag_chip_area)
         tag_row_lay.addStretch()
         self._tag_chips: dict[str, QPushButton] = {}
-        cl.addLayout(tag_row_lay)
+        bl.addLayout(tag_row_lay)
 
         card = QFrame()
         _s.themed_ss(card, "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}")
@@ -1212,7 +1221,13 @@ class InventoryPage(QWidget):
             _b.clicked.connect(getattr(self, _slot))
             _bb_lay.addWidget(_b)
         card_lay.addWidget(self._bulk_bar)
-        cl.addWidget(card, 1)
+        bl.addWidget(card, 1)
+
+        splitter.addWidget(bottom_pane)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([320, 480])
+        cl.addWidget(splitter, 1)
         self._content_stack.addWidget(content)
 
         # ── Page 2: scan comparison view ──────────────────────────────────────
