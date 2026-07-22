@@ -70,3 +70,26 @@ def test_scan_does_not_raise():
         scan()
     except Exception as exc:
         pytest.fail(f"scan() raised unexpectedly: {exc}")
+
+
+def test_windows_arp_leases_survives_missing_create_no_window(monkeypatch):
+    """`subprocess.CREATE_NO_WINDOW` is Windows-only.
+
+    `_windows_arp_leases()` built its `creationflags` kwarg unconditionally at the
+    top of the function — outside the try block — so on a platform without the
+    attribute it raised AttributeError instead of returning []. That breaks both
+    the module docstring's "safe to import on all platforms" contract and
+    `scan()`'s documented "Never raises". Same shape as the smb_enumerator fix.
+    """
+    import subprocess as _sp
+    from modules import dhcp_lease_scanner
+
+    monkeypatch.delattr(_sp, "CREATE_NO_WINDOW", raising=False)
+    monkeypatch.setattr(dhcp_lease_scanner, "get_arp_snapshot", lambda: {})
+
+    def _no_ipconfig(*_a, **_k):
+        raise OSError("ipconfig not available on this platform")
+
+    monkeypatch.setattr(_sp, "check_output", _no_ipconfig)
+
+    assert dhcp_lease_scanner._windows_arp_leases() == []

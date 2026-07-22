@@ -25,7 +25,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from modules.colours import EXPORT_GREEN_FG, EXPORT_AMBER_FG, EXPORT_RED_FG
+from modules.colours import (
+    EXPORT_GREEN_FG, EXPORT_AMBER_FG, EXPORT_RED_FG, EXPORT_NEUTRAL_GRAY,
+)
 
 
 # ── Grade bands ────────────────────────────────────────────────────────────────
@@ -412,7 +414,7 @@ def grade(
     if not dims:
         return BenchmarkResult(
             overall_score=0, overall_grade="N/A",
-            overall_color="#888",
+            overall_color=EXPORT_NEUTRAL_GRAY,
             overall_verdict="No scan data available — run at least one scan first.",
         )
 

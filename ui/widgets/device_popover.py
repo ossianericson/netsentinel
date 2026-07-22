@@ -112,7 +112,7 @@ class DevicePopover(QFrame):
             " background:transparent; border:none;")
 
         self._alert_badge = QLabel()
-        _s.themed_ss(self._alert_badge, "color:white; font-size:9px; font-weight:bold;"
+        _s.themed_ss(self._alert_badge, "color:{WHITE}; font-size:9px; font-weight:bold;"
             " background:{RED}; border-radius:3px; padding:1px 5px; border:none;")
         self._alert_badge.setVisible(False)
 
@@ -260,7 +260,10 @@ class DevicePopover(QFrame):
     def _reposition(self, global_pos: QPoint) -> None:
         self.adjustSize()
         from PyQt6.QtWidgets import QApplication
-        screen = QApplication.primaryScreen()
+        # global_pos is a virtual-desktop coordinate, so it may sit on any
+        # monitor — clamp against the screen it actually lands on, not the
+        # primary (which would drag the popover back onto the wrong monitor).
+        screen = QApplication.screenAt(global_pos) or QApplication.primaryScreen()
         if screen:
             geo = screen.availableGeometry()
             x = min(global_pos.x() + 8, geo.right() - self.width() - 4)

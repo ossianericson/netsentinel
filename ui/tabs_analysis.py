@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
+from ui.nav.labels import NavLabel as L
 from ui.npcap_banner import NpcapMissingBanner
 from ui.tabs_helpers import _page_header, _table
 from ui import styles as _s
@@ -148,6 +149,7 @@ class _AnalysisTabsMixin:
         self._cloud_network_table.setRowCount(0)
         self._btn_cloud_scan.setEnabled(False)
         self._cloud_status.setText("Probing IMDS endpoints…")
+        self._nav_set_scan_state(L.CLOUD_METADATA_PROBE, "running")
         # Pass in last known devices if available
         devices = getattr(self, "_last_scan_devices", [])
         self._cloud_worker = CloudMetadataWorker(devices=devices)
@@ -156,6 +158,10 @@ class _AnalysisTabsMixin:
         self._cloud_worker.status.connect(self._cloud_status.setText)
         self._cloud_worker.error.connect(
             lambda e: self._cloud_status.setText(f"⚠ {e}"),
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self._cloud_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.CLOUD_METADATA_PROBE, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
         )
         self._cloud_worker.finished.connect(

@@ -28,6 +28,8 @@ class _FakeHost(_ReconTabsMixin):
         self._m1_result = {"devices": []}
         self._cred_access_hosts = None
         self._risk_status = MagicMock()
+        # RULE-SS1: _run_risk_scorer now records its scan state on the nav registry
+        self._nav_set_scan_state = MagicMock()
         self._recon_risk_table = _table(
             ["IP", "Device Type", "Score", "Severity", "Primary Finding", "Remediation"]
         )

@@ -783,12 +783,12 @@ class TopologyWidget(QWidget):
         legend_items = []
         if diff.added_ips:
             legend_items.append(
-                _L2D([0], [0], marker="o", color="w",
+                _L2D([0], [0], marker="o", color=_s.TEXT_SECONDARY,
                      markerfacecolor=_s.TEAL, markersize=8, label="New device")
             )
         if diff.removed_ips:
             legend_items.append(
-                _L2D([0], [0], marker="o", color="w",
+                _L2D([0], [0], marker="o", color=_s.TEXT_SECONDARY,
                      markerfacecolor=_s.TEXT_MUTED, markersize=8,
                      alpha=0.4, label="Device gone")
             )
@@ -915,13 +915,13 @@ class TopologyWidget(QWidget):
         lldp_items = []
         if infra_nodes:
             lldp_items.append(
-                _L2D([0], [0], marker="s", color="w",
+                _L2D([0], [0], marker="s", color=_s.TEXT_SECONDARY,
                      markerfacecolor=_lldp_node_color(), markersize=8,
                      label="LLDP switch/router")
             )
         if leaf_nodes:
             lldp_items.append(
-                _L2D([0], [0], marker="D", color="w",
+                _L2D([0], [0], marker="D", color=_s.TEXT_SECONDARY,
                      markerfacecolor=_lldp_node_color(), markersize=8,
                      label="LLDP device")
             )
@@ -947,7 +947,7 @@ class TopologyWidget(QWidget):
         if mesh:
             items.append((_mesh_sat_color(), "Mesh satellite"))
         handles = [
-            _L2D([0], [0], marker="o", color="w", markerfacecolor=c,
+            _L2D([0], [0], marker="o", color=_s.TEXT_SECONDARY, markerfacecolor=c,
                  markersize=9, label=lbl)
             for c, lbl in items
         ]
