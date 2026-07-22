@@ -341,9 +341,8 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Fixed autostart crash", "Toggling \"Start NetSentinel automatically\" a second time in Settings no longer crashes."),
-        ("Fixed clipped alert drawer buttons", "Action buttons in the alert detail drawer (Acknowledge, Snooze, etc.) now always show their full text."),
-        ("Current Devices is now resizable", "The Inventory Change History page's Current Devices table was stuck at a small fixed height — drag the new divider to give it more room."),
+        ("Fixed tray-menu autostart crash", "Right-clicking the tray icon a second time after Windows answered the autostart query no longer crashes."),
+        ("Fixed tray icon tooltip", "Hovering the tray icon no longer shows raw HTML markup, and hides the \"Grade: ?\" placeholder until a scan has run."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

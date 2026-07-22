@@ -35,7 +35,16 @@ UI_ROOT = ROOT / "ui"
 # originally suspected -- a plain QPushButton tooltip turned out to have the
 # identical bug). Only ever raise this number (when more call sites are
 # fixed); never lower it.
-_MIN_CALL_SITES = 220
+#
+# Lowered 220 -> 218: ui/system_tray.py's two QSystemTrayIcon.setToolTip()
+# calls were unwrapped. Unlike a QWidget tooltip, QSystemTrayIcon's tooltip
+# is the native OS tray tip (NOTIFYICONDATA szTip on Windows) -- plain text
+# only, no rich-text renderer -- so safe_tooltip()'s HTML <span> wrapper was
+# printing raw markup to the user instead of styling anything (live bug
+# report: tray hover showed literal "<span style='color:#E6EDF3;'>..."
+# text). This is a legitimate removal, not a regression -- see the docstring
+# above for the case where lowering the floor is correct.
+_MIN_CALL_SITES = 218
 
 _SAFE_TOOLTIP_CALL_RE = re.compile(r"\.safe_tooltip\(")
 

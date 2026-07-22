@@ -4,6 +4,14 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.41
+
+**Fixed**
+- `ui/system_tray.py`: right-clicking the tray icon a second time after the autostart query finished raised the same "wrapped C/C++ object ... has been deleted" crash previously fixed only in `settings_cards.py` — `_start_autostart_worker()`'s own separate copy of the pattern now tolerates the prior `AutostartWorker`'s C++ object already having been destroyed via `finished`->`deleteLater()`
+- `ui/system_tray.py`: hovering the tray icon showed raw `<span style='color:...'>` HTML markup instead of styled text, because `QSystemTrayIcon.setToolTip()`'s native OS tooltip is plain-text-only and was wrapped in `safe_tooltip()`'s HTML `<span>` (meant for widget tooltips); also drops the "Grade: ?" segment when no scan has run yet instead of showing an unhelpful placeholder
+
+---
+
 ### v2.1.40
 
 **Fixed**

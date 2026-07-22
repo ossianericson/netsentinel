@@ -163,6 +163,37 @@ def test_on_startup_toggled_disables_action_and_starts_worker(window, monkeypatc
     assert started["enable"] is True
 
 
+def test_start_autostart_worker_after_prior_worker_deleted_does_not_raise(window, monkeypatch):
+    """Regression (live MS Store crash, right-clicking the tray icon a 2nd
+    time): 'RuntimeError: wrapped C/C++ object of type AutostartWorker has
+    been deleted'. worker.finished is wired to worker.deleteLater(); once
+    that deferred delete is processed, self._autostart_worker is a dangling
+    handle. _on_menu_about_to_show() calls _start_autostart_worker() on every
+    menu open, so a 2nd open after the 1st worker finished must not
+    dereference it via a bare isRunning() (RULE-WIN13 — same mechanism
+    already fixed in settings_cards.py, but this is a separate copy of the
+    pattern in system_tray.py that the earlier fix missed)."""
+    from modules import autostart
+    from ui.system_tray import SystemTrayManager
+
+    monkeypatch.setattr(autostart, "autostart_backend", lambda: "run_key")
+    monkeypatch.setattr(autostart, "set_run_on_startup", lambda enabled: None)
+    monkeypatch.setattr(autostart, "get_run_on_startup", lambda: True)
+
+    app = QApplication.instance()
+    mgr = SystemTrayManager(window)
+
+    mgr._start_autostart_worker(enable=True)
+    assert mgr._autostart_worker.wait(5000)
+    for _ in range(5):
+        app.processEvents()  # process the finished -> deleteLater() deferred delete
+
+    mgr._start_autostart_worker(enable=False)  # must not raise RuntimeError
+    assert mgr._autostart_worker.wait(5000)
+    for _ in range(5):
+        app.processEvents()
+
+
 def test_startup_toggle_full_sequence_reflects_actual_result(window, monkeypatch):
     """RULE-T5: the toggle -> worker -> result_ready chain, driven end to end
     with a real AutostartWorker QThread, not just the individual methods in
