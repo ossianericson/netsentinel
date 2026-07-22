@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.39**
+Current version: **v2.1.40**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -35,6 +35,7 @@ not kill the process, so "no crash" alone is not evidence of a clean run.
 | June 2026 | 9 h overnight | 10,001 interactions, seeds 1/42/99 — clean; the Store-readiness baseline |
 | 2026-07-13 | 1 h, 7 phases | 1,230 interactions + 2 full 62-page systematic sweeps — clean, **zero crash-log growth**. First run to survive the UIA warmup fix (RULE-WIN10); every prior run aborted its phase on a new `0x8001010d` entry. Peak RSS 509–574 MB, no upward trend. |
 | 2026-07-13/14 | ~7 h overnight (8 h budget, user-interrupted mid-wild) | 9,729 interactions across mild/moderate/wild soak laps (1,291 / 3,397 / 5,041) — clean, **zero crash-log growth** (baseline unchanged at 6,775,780 bytes from before the run to after). Zero exceptions logged at every progress checkpoint. Peak RSS 674 → 775 → 750 MB across the three laps — flat, no leak trend. |
+| 2026-07-21/22 (v2.1.39) | ~10 h overnight (15:26–01:23), 1 coverage cycle + soak lap 1 | 13,612 interactions across mild/moderate/wild/real-mouse-wild/scan-navigate + a full mild→moderate→wild soak lap (1,498 / 1,441 / 8,351) + 2 full 62-page systematic sweeps — clean, **zero crash-log growth** (`netsentinel_crash.log` byte-identical, mtime unchanged from before the run to after). Zero exceptions in every phase. One self-healed hang (47 s stall at iter 1535) mid-wild-soak — health monitor auto-restarted the app and the phase continued cleanly to iter 8,351. Three "shutdown hang" flags in the raw phase table were a `monkey_test.py` false positive, not an app defect: the titlebar-X click missed after a Win+Down chaos action resized the window, confirmed via `netsentinel_shutdown.log` showing no `closeEvent` entry at any of those three timestamps (vs. a clean, logged 2.39 s exit for the one phase that closed normally). **Open lead, unlike the flat 07-13/14 run:** Peak RSS rose across the soak ladder — mild 690 → moderate 967 → wild 1,432 MB — and tracemalloc's Python-level snapshots don't account for the growth, so it is very likely a native Qt/matplotlib-side leak (the same invisible-to-tracemalloc class as the already-fixed command-palette/dialog leaks), not yet isolated. |
 
 The full version history lives in `CHANGELOG.md` (and the highlights in
 `README.md`). It is not duplicated here — a per-version chain in this file only

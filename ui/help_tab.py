@@ -341,11 +341,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Fixed dialogs leaking memory", "Every confirmation, picker, and other dialog now cleans up properly when closed — the single biggest contributor to memory growth over long sessions."),
-        ("Fixed illegible tooltips in Arctic Clean", "Tooltips rendered black-on-black in the light theme; they're readable in both themes now."),
-        ("Fixed Alert History getting stuck loading", "Opening it from the alert badge or another shortcut could leave it stuck on placeholder rows until you switched tabs and back."),
-        ("Fixed a rare crash", "Could occur before a device's gateway MAC address had finished resolving."),
-        ("Feature Guide reordered", "Protocol Visualizer and Lab Mode now lead \"Start here\" instead of outdated \"what's new\" callouts."),
+        ("Fixed autostart crash", "Toggling \"Start NetSentinel automatically\" a second time in Settings no longer crashes."),
+        ("Fixed clipped alert drawer buttons", "Action buttons in the alert detail drawer (Acknowledge, Snooze, etc.) now always show their full text."),
+        ("Current Devices is now resizable", "The Inventory Change History page's Current Devices table was stuck at a small fixed height — drag the new divider to give it more room."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

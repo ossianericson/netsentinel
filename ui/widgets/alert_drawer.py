@@ -12,11 +12,12 @@ from __future__ import annotations
 import re
 import time
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QThread, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, QSize, QThread, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QPushButton,
     QScrollArea,
@@ -262,6 +263,92 @@ class _EvidenceWorker(QThread):
         except Exception:
             pass  # non-fatal
         self.done.emit(result)
+
+
+# ── Wrapping button row ──────────────────────────────────────────────────────
+
+class _FlowLayout(QLayout):
+    """Lays out child widgets left-to-right, wrapping to a new line when the next
+    widget would not fit the available width.
+
+    Used for the drawer's action-button row: the set of visible buttons (and their
+    text) varies per alert, so a fixed single-row QHBoxLayout clips button text
+    whenever the combined width exceeds the 320px drawer. Wrapping instead of
+    clipping keeps every label fully readable regardless of which buttons are
+    visible or how long their text is.
+    """
+
+    def __init__(self, parent=None, margin: int = 0, hspacing: int = 6, vspacing: int = 6):
+        super().__init__(parent)
+        self._hspacing = hspacing
+        self._vspacing = vspacing
+        self._items: list = []
+        self.setContentsMargins(margin, margin, margin, margin)
+
+    def addItem(self, item) -> None:
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int):
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index: int):
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def expandingDirections(self) -> Qt.Orientation:
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect: QRect) -> None:
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self) -> QSize:
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        margins = self.contentsMargins()
+        size += QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+        return size
+
+    def _do_layout(self, rect: QRect, test_only: bool) -> int:
+        margins = self.contentsMargins()
+        effective = rect.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom())
+        x = effective.x()
+        y = effective.y()
+        line_height = 0
+
+        for item in self._items:
+            widget = item.widget()
+            if widget is not None and not widget.isVisible():
+                continue
+            item_size = item.sizeHint()
+            next_x = x + item_size.width() + self._hspacing
+            if next_x - self._hspacing > effective.right() + 1 and line_height > 0:
+                x = effective.x()
+                y = y + line_height + self._vspacing
+                next_x = x + item_size.width() + self._hspacing
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(x, y, item_size.width(), item_size.height()))
+            x = next_x
+            line_height = max(line_height, item_size.height())
+
+        return y + line_height - rect.y() + margins.bottom()
 
 
 # ── Widget ────────────────────────────────────────────────────────────────────
@@ -543,12 +630,12 @@ class AlertDrawer(QFrame):
         root.addWidget(scroll, 1)
 
         # ── Actions row ───────────────────────────────────────────────────────
+        # Wraps to multiple lines instead of a fixed-height single row: the set of
+        # visible buttons (and their text) varies per alert, and a plain QHBoxLayout
+        # clips button text whenever the combined width exceeds the 320px drawer.
         acts = QFrame()
-        acts.setFixedHeight(48)
         _s.themed_ss(acts, "background:{BG_DARK}; border-top:1px solid {BORDER};")
-        alay = QHBoxLayout(acts)
-        alay.setContentsMargins(8, 0, 8, 0)
-        alay.setSpacing(6)
+        alay = _FlowLayout(acts, margin=8, hspacing=6, vspacing=4)
 
         self._ack_btn = QPushButton("✓ Acknowledge")
         self._ack_btn.setFixedHeight(26)

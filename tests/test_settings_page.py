@@ -124,6 +124,40 @@ class TestSettingsHandlersStillPersist:
         assert not self.page._saved_lbl.isHidden()
         assert not self.page._saved_lbl.isHidden()
 
+    def test_tray_toggle_persists_and_flashes(self, monkeypatch):
+        from unittest.mock import MagicMock
+        mock_qs = MagicMock()
+        monkeypatch.setattr("ui.pages.settings_cards.QSettings", lambda *a: mock_qs)
+        self.page._on_tray_toggled(False)
+        mock_qs.setValue.assert_called_once_with("tray/minimize_to_tray", False)
+        assert not self.page._saved_lbl.isHidden()
+
+    def test_tray_toggle_syncs_live_tray_manager(self, monkeypatch):
+        """When the active window exposes a real _tray_manager (Dashboard does),
+        toggling this checkbox must propagate the new value into it immediately
+        so the tray icon's click-to-restore behaviour and the checkbox agree
+        mid-session, not just after the next restart re-reads QSettings."""
+        from unittest.mock import MagicMock
+
+        from PyQt6.QtWidgets import QApplication
+        mock_win = MagicMock()
+        monkeypatch.setattr(QApplication, "activeWindow", lambda self: mock_win)
+        self.page._on_tray_toggled(True)
+        mock_win._tray_manager.set_minimize_to_tray.assert_called_once_with(True)
+
+    def test_tray_toggle_does_not_raise_with_no_active_window(self, monkeypatch):
+        from PyQt6.QtWidgets import QApplication
+        monkeypatch.setattr(QApplication, "activeWindow", lambda self: None)
+        self.page._on_tray_toggled(True)  # must not raise even with no Dashboard present
+
+    def test_minimize_tray_toggle_persists_and_flashes(self, monkeypatch):
+        from unittest.mock import MagicMock
+        mock_qs = MagicMock()
+        monkeypatch.setattr("ui.pages.settings_cards.QSettings", lambda *a: mock_qs)
+        self.page._on_minimize_tray_toggled(True)
+        mock_qs.setValue.assert_called_once_with("tray/minimize_window_to_tray", True)
+        assert not self.page._saved_lbl.isHidden()
+
 
 class TestNavGuardRemoved:
 

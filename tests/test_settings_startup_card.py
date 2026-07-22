@@ -108,3 +108,25 @@ def test_in_flight_state_shows_asking_windows_tooltip(monkeypatch):
     _pump()
     page.deleteLater()
     _pump()
+
+
+def test_toggle_after_prior_worker_deleted_does_not_raise(monkeypatch):
+    """Regression: 'RuntimeError: wrapped C/C++ object of type AutostartWorker
+    has been deleted'. worker.finished is wired to worker.deleteLater(); once
+    that deferred delete is processed, self._autostart_worker is a dangling
+    handle. A second toggle must not dereference it via a bare isRunning()."""
+    monkeypatch.setattr(autostart, "autostart_backend", lambda: "run_key")
+    monkeypatch.setattr(autostart, "set_run_on_startup", lambda enabled: None)
+    monkeypatch.setattr(autostart, "get_run_on_startup", lambda: True)
+
+    page = SettingsPage()
+    page._start_autostart_worker(enable=True)
+    assert page._autostart_worker.wait(5000)
+    _pump()  # process the finished -> deleteLater() deferred delete
+
+    page._start_autostart_worker(enable=False)  # must not raise RuntimeError
+    assert page._autostart_worker.wait(5000)
+    _pump()
+
+    page.deleteLater()
+    _pump()

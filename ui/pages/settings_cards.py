@@ -917,8 +917,12 @@ class _SettingsCardsMixin:
         GUI thread — never call modules.autostart's setter synchronously
         (RULE 4); the WinRT backend hard-guards against main-thread calls."""
         existing = getattr(self, "_autostart_worker", None)
-        if existing is not None and existing.isRunning():
-            return  # a query/set is already in flight; let it finish
+        if existing is not None:
+            try:
+                if existing.isRunning():
+                    return  # a query/set is already in flight; let it finish
+            except RuntimeError:
+                pass  # prior worker's C++ object already deleted via finished -> deleteLater()
         from workers.autostart_worker import AutostartWorker
         worker = AutostartWorker(enable=enable, parent=self)
         worker.result_ready.connect(self._on_autostart_result)
