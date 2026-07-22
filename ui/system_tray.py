@@ -151,7 +151,12 @@ class SystemTrayManager:
 
         self._base_icon = self._load_icon()
         self._tray = QSystemTrayIcon(self._base_icon, self._window)
-        self._tray.setToolTip(_s.safe_tooltip("NetSentinel — Network Guardian"))
+        # QSystemTrayIcon.setToolTip() is the native OS tray tooltip
+        # (NOTIFYICONDATA szTip on Windows) — plain text only, unlike a
+        # QWidget's QToolTip-rendered tooltip. safe_tooltip()'s HTML <span>
+        # wrapper (RULE-UX7) is for widget tooltips; here it would print the
+        # raw markup instead of styling it, so pass plain text directly.
+        self._tray.setToolTip("NetSentinel — Network Guardian")
 
         menu = self._build_menu()
         menu.aboutToShow.connect(self._on_menu_about_to_show)
@@ -428,8 +433,13 @@ class SystemTrayManager:
         """Query (enable=None) or set (enable=True/False) autostart off the
         GUI thread. Never calls the setter synchronously (RULE 4 / RULE-UX2) —
         the WinRT backend hard-guards against main-thread calls outright."""
-        if self._autostart_worker is not None and self._autostart_worker.isRunning():
-            return  # a query/set is already in flight; let it finish
+        existing = self._autostart_worker
+        if existing is not None:
+            try:
+                if existing.isRunning():
+                    return  # a query/set is already in flight; let it finish
+            except RuntimeError:
+                pass  # prior worker's C++ object already deleted via finished -> deleteLater() (RULE-WIN13)
         from workers.autostart_worker import AutostartWorker
         worker = AutostartWorker(enable=enable, parent=self._window)
         worker.result_ready.connect(self._on_autostart_result)
@@ -489,9 +499,16 @@ class SystemTrayManager:
         icon = _build_badge_icon(self._base_icon, self._badge_count)
         icon = _overlay_health_dot(icon, self._health_state)
         self._tray.setIcon(icon)
-        parts = [f"Grade: {self._grade}"]
+        parts = []
+        if self._grade != "?":
+            # "?" is the unset default (set_grade() never called yet, i.e. no
+            # security scan has run) — showing "Grade: ?" tells the user
+            # nothing, so omit the segment entirely until a real grade exists.
+            parts.append(f"Grade: {self._grade}")
         if self._badge_count:
             parts.append(f"{self._badge_count} alert{'s' if self._badge_count != 1 else ''}")
         if self._health_state != "unknown" and self._health_headline:
             parts.append(self._health_headline[:50])
-        self._tray.setToolTip(_s.safe_tooltip(f"NetSentinel — {' | '.join(parts)}"))
+        # Plain text — see the native-tooltip note in setup() above.
+        tip = f"NetSentinel — {' | '.join(parts)}" if parts else "NetSentinel — Network Guardian"
+        self._tray.setToolTip(tip)
