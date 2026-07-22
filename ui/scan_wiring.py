@@ -203,6 +203,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for finding in result.findings:
             lines.append(f"<br><span style='color:{_s.AMBER}'>⚠ {finding}</span>")
         self._cloud_local_box.setHtml("<br>".join(lines))
+        # RULE-SS1 — an unreachable IMDS legitimately means "not a cloud VM", so
+        # this is a genuine clean result rather than not_testable.
+        self._nav_set_scan_state(
+            L.CLOUD_METADATA_PROBE, "fresh",
+            ts=time.time(),
+            verdict=result.plain_verdict,
+        )
 
     def _on_cloud_network_result(self, results: list):
         from PyQt6.QtGui import QColor
@@ -226,6 +233,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 else:
                     item.setForeground(QColor(_s.TEXT_SECONDARY if not r.exposed else _s.RED))
                 self._cloud_network_table.setItem(row, col, item)
+        _exposed = sum(1 for r in results if r.exposed)
+        self._nav_set_scan_state(
+            L.CLOUD_METADATA_PROBE, "fresh",
+            ts=time.time(),
+            verdict=(f"{_exposed} of {len(results)} devices expose cloud metadata"
+                     if _exposed else f"No cloud metadata exposure ({len(results)} checked)"),
+        )
 
     def _on_snmp_result(self, result):
         if not result.reachable:
@@ -1424,6 +1438,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._plugin_result_text.setPlainText("\n".join(lines))
             self._plugin_status.setText(f"'{res.plugin_name}' failed — see output below.")
             _s.themed_ss(self._plugin_status, "color:{RED};font-size:11px;")
+            self._nav_set_scan_state(
+                L.RECON_PLUGINS, "error",
+                error=f"{res.plugin_name}: {tb_lines[-1] if tb_lines else 'plugin failed'}",
+            )
             return
         lines = [f"Plugin: {res.plugin_name}", f"Risk: {risk_to_label(res.risk_level)}"]
         if res.findings:
@@ -1441,6 +1459,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
             f"color:{_s.RED if rl in ('HIGH', 'CRITICAL') else (_s.AMBER if rl == 'MEDIUM' else _s.GREEN)};"
             f"font-size:11px;"
         ))
+        self._nav_set_scan_state(
+            L.RECON_PLUGINS, "fresh",
+            ts=time.time(),
+            verdict=(f"{res.plugin_name}: {risk_to_label(res.risk_level)} "
+                     f"({len(res.findings)} finding"
+                     f"{'s' if len(res.findings) != 1 else ''})"),
+        )
 
     # ── Startup cache restore ─────────────────────────────────────────────────
 

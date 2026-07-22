@@ -335,6 +335,43 @@ def test_geometry_is_reapplied_after_the_chrome_is_installed():
     )
 
 
+def test_show_event_refreshes_chrome_rects_unconditionally():
+    """Regression: minimize-to-tray then restore left the minimize button unclickable.
+
+    changeEvent() calls _refresh_chrome_rects() on every WindowStateChange, including
+    the one Qt fires mid-showNormal() while restoring a window that SystemTrayManager
+    previously hid with a real .hide() (minimize-to-tray). At that exact point the
+    header's child widgets still report isVisible() == False (the explicit-hidden flag
+    hasn't cleared yet), so refresh_chrome_rects()'s isVisible() filter writes an EMPTY
+    state["client"] — dropping every header button, including minimize, from the
+    native hit-test cache. Nothing corrects it until something else forces a
+    resizeEvent() (e.g. maximizing), which is why maximizing "fixes" the symptom.
+
+    showEvent() only fires once the window is genuinely visible again, so a call to
+    _refresh_chrome_rects() there is guaranteed correct — but it must be unconditional.
+    _install_window_chrome() is a one-time no-op after the first show (gated by
+    self._snap_subclass_installed), so nesting the refresh inside it would only ever
+    fire on the very first show and never correct the tray-restore case.
+    """
+    source = (REPO / "ui" / "header.py").read_text(encoding="utf-8")
+    show_event = _find_function(source, "showEvent")
+
+    top_level_calls = {
+        node.value.func.attr
+        for node in show_event.body
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+    }
+    assert "_refresh_chrome_rects" in top_level_calls, (
+        "showEvent() no longer calls self._refresh_chrome_rects() unconditionally at "
+        "its top level. Without it, restoring from the system tray (or any hide()-then-"
+        "showNormal() path) leaves the native hit-test cache stale/empty until the next "
+        "resize, making header buttons like minimize unclickable on the first click "
+        "after restore."
+    )
+
+
 # ── WinIdChange reinstall (Network Map QWebEngineView recreates the HWND) ─────────
 
 def test_reinstall_decision_fires_only_on_a_genuine_hwnd_change():

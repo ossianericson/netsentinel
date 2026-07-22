@@ -58,6 +58,63 @@ def _hermetic_expanduser(self: Path) -> Path:
 
 Path.expanduser = _hermetic_expanduser  # type: ignore[method-assign]
 
+# --- Hermetic QSettings (runs at import time, before any test runs) ---
+#   The LOCALAPPDATA/HOME redirect above only covers *file* writes. On Windows
+#   QSettings defaults to NativeFormat, i.e. the REGISTRY
+#   (HKCU\Software\NetSentinel\NetSentinel), which that redirect cannot reach.
+#
+#   Production code constructs QSettings("NetSentinel", "NetSentinel") directly,
+#   and ui/styles.py::apply_theme() ends by calling set_active_theme_name(),
+#   which persists "ui/theme". tests/test_charts_theme_switch.py and
+#   tests/test_badge_medallion.py drive the REAL apply_theme("Arctic Clean"),
+#   so a full suite run rewrote the developer's own saved theme (verified live:
+#   Midnight Pro before a run, Arctic Clean after). Those tests restore the
+#   previous value only if the file runs to completion — any mid-file failure
+#   left the developer stuck on the wrong theme. The same hole let
+#   test_lab_mode_page.py / test_protocol_viz_page.py write real QSettings flags.
+#
+#   Qt offers no way to redirect this on Windows: QSettings(organization,
+#   application) hard-selects NativeFormat and ignores setDefaultFormat(), and
+#   setPath() has no effect for NativeFormat on Windows (both verified
+#   experimentally, 2026-07-22). So the store cannot be sandboxed — instead the
+#   _preserve_real_theme fixture below snapshots and restores the one key the
+#   suite is known to clobber.
+#   Guarded by tests/test_qsettings_isolation.py.
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _preserve_real_theme():
+    """Restore the developer's real `ui/theme` after the suite finishes.
+
+    `ui/styles.py::apply_theme()` calls `set_active_theme_name()`, which writes
+    "ui/theme" to the real QSettings store (the Windows registry — see the
+    import-time note above for why it cannot be sandboxed).
+    `tests/test_charts_theme_switch.py` and `tests/test_badge_medallion.py`
+    drive the REAL `apply_theme("Arctic Clean")`, so before this fixture a full
+    suite run left the developer on Arctic Clean (verified live: Midnight Pro
+    before a run, Arctic Clean after).
+
+    Those tests do restore the prior value themselves, but only when the file
+    runs to completion — a mid-file failure skipped it. This session finalizer
+    runs even when tests fail, so the value survives a red suite.
+    """
+    try:
+        from PyQt6.QtCore import QSettings
+    except ImportError:
+        yield
+        return
+
+    original = QSettings("NetSentinel", "NetSentinel").value("ui/theme")
+    try:
+        yield
+    finally:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if original is None:
+            qs.remove("ui/theme")      # key did not exist before the run
+        else:
+            qs.setValue("ui/theme", original)
+        qs.sync()
+
 
 @pytest.fixture(scope="session", autouse=True)
 def qt_app():

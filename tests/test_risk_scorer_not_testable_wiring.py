@@ -24,6 +24,8 @@ class _FakeHost(_ReconTabsMixin):
         self._port_scan_not_testable_hosts = {"10.0.0.5"}
         self._os_detect_not_testable_hosts = {"10.0.0.6"}
         self._risk_status = MagicMock()
+        # RULE-SS1: _run_risk_scorer now records its scan state on the nav registry
+        self._nav_set_scan_state = MagicMock()
         self._recon_risk_table = _table(
             ["IP", "Device Type", "Score", "Severity", "Primary Finding", "Remediation"]
         )
@@ -59,6 +61,8 @@ def test_run_risk_scorer_defaults_to_empty_sets_when_not_populated(monkeypatch):
             self._m1_result = {"devices": []}
             self._cred_access_hosts = None
             self._risk_status = MagicMock()
+            # RULE-SS1: _run_risk_scorer now records its scan state
+            self._nav_set_scan_state = MagicMock()
             self._recon_risk_table = _table(
                 ["IP", "Device Type", "Score", "Severity", "Primary Finding", "Remediation"]
             )

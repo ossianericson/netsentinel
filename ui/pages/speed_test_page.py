@@ -331,7 +331,7 @@ class SpeedGaugeWidget(QWidget):
             tip_y = cy + tip_r * math.sin(math.radians(fill_end_deg))
             ax.plot(
                 tip_x, tip_y, "o",
-                color="white", markersize=5.5, zorder=4,
+                color=_s.WHITE, markersize=5.5, zorder=4,
             )
 
         # --- Scale tick marks ---

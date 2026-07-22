@@ -484,6 +484,11 @@ class _ReconTabsMixin:
         from PyQt6.QtGui import QColor
         if not self._m1_result:
             self._risk_status.setText("No scan data — run Device Fingerprint first.")
+            # Deliberately records NO scan state: the precondition was never met,
+            # so the scan did not run. That is "never", not "not_testable" (which
+            # means a probe ran and was structurally blocked). This path is also
+            # reached by chained callers (e.g. after a CVE scan), and marking a
+            # scan the user never started would light its badge misleadingly.
             return
         try:
             from modules.risk_scorer import score_devices
@@ -517,8 +522,19 @@ class _ReconTabsMixin:
             self._risk_status.setText(
                 f"Scored {len(assessments)} device(s) — {critical} HIGH/CRITICAL risk."
             )
+            # Every device scored purely on blocked inputs is NOT a clean result —
+            # report it as "could not test" so the badge can't read false-clean.
+            _blocked = assessments and all(a.insufficient_data for a in assessments)
+            self._nav_set_scan_state(
+                L.DEVICE_RISK_SCORE,
+                "not_testable" if _blocked else "fresh",
+                verdict=("Insufficient data — scans could not reach these devices"
+                         if _blocked else
+                         f"{len(assessments)} device(s) scored, {critical} HIGH/CRITICAL"),
+            )
         except Exception as exc:
             self._risk_status.setText(f"⚠ Risk scoring failed: {exc}")
+            self._nav_set_scan_state(L.DEVICE_RISK_SCORE, "error", error=str(exc))
 
     @pyqtSlot(int, int)
     def _on_risk_cell_clicked(self, row: int, _col: int) -> None:
@@ -1679,11 +1695,16 @@ class _ReconTabsMixin:
         self._pe_table.setRowCount(0)
         self._pe_status.setText(f"Checking {len(specs)} endpoint(s)…")
         self._btn_pe_run.setEnabled(False)
+        self._nav_set_scan_state(L.PRIVATE_ENDPOINT_CHECK, "running")
 
         self._pe_worker = PrivateEndpointWorker(specs)
         self._pe_worker.result.connect(self._on_pe_result)
         self._pe_worker.status.connect(self._pe_status.setText)
         self._pe_worker.error.connect(lambda e: self._pe_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._pe_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.PRIVATE_ENDPOINT_CHECK, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._pe_worker.finished_all.connect(self._on_pe_done)
         self._pe_worker.start()
 
@@ -1696,6 +1717,12 @@ class _ReconTabsMixin:
         )
         self._pe_status.setText(
             f"✓ Done — {total} endpoint(s), {fails} FAIL, {total - fails} OK."
+        )
+        self._nav_set_scan_state(
+            L.PRIVATE_ENDPOINT_CHECK,
+            "fresh" if total else "not_testable",
+            verdict=(f"{fails} of {total} endpoint(s) reachable from outside"
+                     if total else "No endpoints were checked"),
         )
         self._btn_pe_run.setEnabled(True)
 

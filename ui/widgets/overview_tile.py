@@ -739,7 +739,10 @@ class _AlertRow(QFrame):
 
     def enterEvent(self, e) -> None:
         if self._active:
-            self.setStyleSheet("background: rgba(255,255,255,0.06); border-radius:3px;")
+            # Read BG_HOVER at hover time (not via themed_ss, which would register
+            # this transient style for live re-application on a theme switch).
+            # A hardcoded white-alpha tint is invisible on Arctic Clean's light surface.
+            self.setStyleSheet(f"background: {_s.BG_HOVER}; border-radius:3px;")
         super().enterEvent(e)
 
     def leaveEvent(self, e) -> None:
@@ -859,10 +862,14 @@ class EventFeedTile(_BaseTile):
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Handle tint derives from TEXT_SECONDARY so it stays visible in both
+        # themes; a hardcoded white-alpha handle vanished on Arctic Clean.
+        _handle = _s.alpha(_s.TEXT_SECONDARY, 0x60)
         self._scroll.setStyleSheet(
             "QScrollArea { background: transparent; border: none; }"
             "QScrollBar:vertical { width: 4px; background: transparent; }"
-            "QScrollBar::handle:vertical { background: rgba(255,255,255,0.15); border-radius:2px; }"
+            "QScrollBar::handle:vertical { background: " + _handle
+            + "; border-radius:2px; }"
         )
         inner = QWidget()
         inner.setStyleSheet("background: transparent;")

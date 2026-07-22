@@ -122,7 +122,10 @@ def _windows_arp_leases() -> List[DhcpLease]:
     other clients on the subnet are not visible from this host.
     """
     leases: List[DhcpLease] = []
-    extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
+    # CREATE_NO_WINDOW is Windows-only — getattr fallback keeps this importable
+    # and callable on macOS/Linux (matches service_diagnostics_probes.py /
+    # smb_enumerator.py).
+    extra = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
     try:
         server   = ""
         expires  = 0

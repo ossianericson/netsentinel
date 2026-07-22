@@ -4,6 +4,18 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.42
+
+**Fixed**
+- `ui/header.py`: the minimize button (and other header buttons) stopped responding after restoring the window from the system tray — `changeEvent()`'s native hit-test cache refresh ran mid-`showNormal()` while child widgets still reported `isVisible() == False`, writing an empty client-rect cache; `showEvent()` now unconditionally refreshes the cache once the window is genuinely visible again
+- `ui/nav/builder.py` / `ui/scan_wiring.py` / `ui/tabs_analysis.py` / `ui/tabs_recon.py`: Cloud Metadata Probe, Private Endpoint Check, Recon Plugins, and Device Risk Score never called `_nav_set_scan_state()` (RULE-SS1), so their flyout dot stayed dark ("Never run") even after a genuine HIGH/FAIL finding — the Security Audit rail badge could read clean while a real finding sat unread on the page; all three scan-state slots (start/result/error) are now wired on each
+- `ui/widgets/device_popover.py`: right-clicking a device row on a secondary monitor dragged the popover back onto the primary monitor because the cursor position was clamped against `primaryScreen().availableGeometry()` instead of `screenAt(global_pos)` — fixed at all five call sites
+- `modules/dhcp_lease_scanner.py`: raised `AttributeError` instead of returning `[]` on platforms lacking the Windows-only `CREATE_NO_WINDOW` flag, because the `creationflags` value was built outside the module's own try/except fallback
+- Arctic Clean contrast: fixed several near-invisible colours that skip the RULE-AH3 hex scan by using named-colour/`rgba()` literals — the speed-gauge tip dot, overview tile hover background and scrollbar handle, five topology legend proxy lines, and the device-popover alert badge foreground; `modules/network_benchmark.py`'s raw `#888` literal now routes through `modules/colours.py`
+- `tests/conftest.py`: the full test suite was silently overwriting the developer's real saved theme setting to Arctic Clean — `apply_theme()` makes a real `QSettings` write, and per-test restores were skipped whenever a test failed mid-file; a new session-scoped autouse fixture snapshots and restores the real theme in a `finally` block regardless of suite outcome
+
+---
+
 ### v2.1.41
 
 **Fixed**

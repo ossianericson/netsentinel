@@ -447,6 +447,14 @@ class AppHeaderMixin:
         # _restore_settings() has applied the saved geometry, the install has to
         # re-apply that geometry itself — see _install_window_chrome().
         self._install_window_chrome()
+        # Correct the native hit-test cache: changeEvent()'s WindowStateChange handler
+        # can fire mid-showNormal() (e.g. restoring from the system tray) while child
+        # widgets still report isVisible() == False, writing a stale/empty rect cache
+        # that leaves header buttons like minimize unclickable until the next resize.
+        # showEvent() only fires once the window is genuinely visible, so refresh again
+        # here — unconditionally, since _install_window_chrome() above is a one-time
+        # no-op after the first show.
+        self._refresh_chrome_rects()
         # Attach toast manager once window is visible
         from ui.widgets.toast import ToastManager
         ToastManager.instance().attach(self)
