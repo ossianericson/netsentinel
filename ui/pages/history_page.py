@@ -608,6 +608,16 @@ class HistoryPage(QWidget):
         selected = self._host_combo.currentText()
         self._set_controls_enabled(False)
 
+        # RULE-WIN8: the previous worker is a child of self and is not freed
+        # merely by reassigning this reference -- delete it explicitly before
+        # replacing it, or it leaks one instance per navigation into this page.
+        stale = self._refresh_worker
+        if stale is not None:
+            try:
+                stale.deleteLater()
+            except RuntimeError:
+                pass  # already gone
+
         self._refresh_worker = _HistoryRefreshWorker(
             self._store, self._window_h, selected, parent=self
         )

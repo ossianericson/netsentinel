@@ -438,8 +438,10 @@ class _RailButton(QPushButton):
         self.setIconSize(QSize(20, 20))
 
     def setChecked(self, checked: bool):
+        changed = self.isChecked() != checked
         super().setChecked(checked)
-        self._refresh_icon()
+        if changed:
+            self._refresh_icon()
 
     def refresh_theme(self) -> None:
         from ui import styles as _s

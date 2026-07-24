@@ -368,6 +368,86 @@ def test_history_page_refresh_coalesces_concurrent_requests(qt_app, monkeypatch)
         qt_app.processEvents()
 
 
+# ── Worker leak on repeated navigation (RULE-WIN8) ──────────────────────────────
+# _start_refresh_worker() reassigns self._refresh_worker to a fresh
+# _HistoryRefreshWorker(parent=self) on every navigation into the page without
+# ever deleteLater()-ing the previous one -- the RULE-WIN8 general-case shape
+# (a parented QObject whose only Python handle is reassigned is not freed)
+# applied to a worker QThread instead of a QDialog. Quantified live via
+# docs/spikes/history-worker-leak-repro.py: confirmed real (live worker count
+# grows exactly 1:1 with navigations, unbounded) but too small in magnitude
+# (~1.5 KB/nav) to be the driver of the 2026-07-23 wild-soak RSS growth --
+# still worth fixing on its own merits.
+
+def test_history_page_does_not_leak_refresh_worker_across_repeated_refreshes(qt_app, monkeypatch):
+    """Every stale _refresh_worker must be deleteLater()'d before being
+    replaced by the next navigation's worker -- only the current (in-flight or
+    just-finished) worker may remain undestroyed."""
+    if qt_app is None:
+        pytest.skip("No QApplication")
+
+    from ui.pages import history_page as hp_mod
+    from PyQt6.QtCore import QThread, pyqtSignal
+
+    destroyed_flags: list = []
+
+    class _FakeWorker(QThread):
+        result_ready = pyqtSignal(dict)
+
+        def __init__(self, store, window_h, selected, parent=None):
+            super().__init__(parent)
+            self._running = False
+            flag = {"destroyed": False}
+            destroyed_flags.append(flag)
+            self.destroyed.connect(lambda _obj=None, f=flag: f.__setitem__("destroyed", True))
+
+        def start(self, *a, **kw):
+            self._running = True
+
+        def isRunning(self):
+            return self._running
+
+        def finish(self):
+            self._running = False
+            self.result_ready.emit({"hosts": []})
+            self.finished.emit()
+
+    monkeypatch.setattr(hp_mod, "_HistoryRefreshWorker", _FakeWorker)
+
+    page = hp_mod.HistoryPage(store=None)  # store=None skips __init__'s own _refresh()
+    monkeypatch.setattr(page, "isVisible", lambda: True)
+    page._store = MagicMock()
+
+    from PyQt6.QtCore import QEvent
+
+    for _ in range(5):
+        page._refresh()
+        page._refresh_worker.finish()
+        # DeferredDelete events (from deleteLater()) are NOT flushed by a plain
+        # processEvents() -- Qt special-cases them out of the generic "process
+        # all posted events" pass, so they must be requested explicitly.
+        qt_app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        qt_app.processEvents()
+
+    for _ in range(3):
+        qt_app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        qt_app.processEvents()
+
+    assert len(destroyed_flags) == 5, "expected exactly one worker per refresh"
+    assert all(f["destroyed"] for f in destroyed_flags[:-1]), (
+        "a stale _refresh_worker was never deleteLater()'d after being replaced "
+        "by the next navigation's worker -- RULE-WIN8 leak: the previous worker "
+        "stays alive as a child of the page forever"
+    )
+
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal — widget may already be cleaned up
+    for _ in range(3):
+        qt_app.processEvents()
+
+
 # ── HistoryPage smoke ─────────────────────────────────────────────────────────
 
 def test_history_page_no_blocking_refresh_attribute(qt_app):

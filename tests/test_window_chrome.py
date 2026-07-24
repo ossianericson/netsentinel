@@ -174,3 +174,52 @@ def test_changeevent_swaps_glyph_and_tooltip_on_maximize(host):
 
     assert host._maximize_btn.text() == CHROME_MAXIMIZE
     assert "Maximize" in host._maximize_btn.toolTip()
+
+
+def test_changeevent_reshows_window_when_native_restore_leaves_it_hidden(host, monkeypatch):
+    """Regression: RULE-WIN14 / docs/spikes/minimize-restore-repaint-failure.md (2026-07-23).
+
+    Live-reproduced and root-caused: a native ShowWindow(SW_RESTORE) that bypasses
+    Qt's own showNormal() (the chaos harness's focus-reclaim; some OS window-
+    management paths) leaves the top-level QWidget's isVisible() stuck False even
+    though the Win32 window is back on screen and exposed. Qt gates both painting AND
+    the accessibility tree on QWidget visibility, so the window returned as a blank
+    unpainted rectangle with an empty UIA tree (166 real controls collapsed to 6
+    native-frame ones) and would not repaint on invalidate/resize. changeEvent() must
+    re-sync visibility with self.show() on the minimized -> not-minimized transition
+    WHEN the widget is stuck hidden -- and must NOT fire on entering minimized, on an
+    unrelated state change, or on a normal restore where the widget is already visible.
+    """
+    calls = []
+    monkeypatch.setattr(host, "show", lambda: calls.append("show"))
+    # host is constructed but never shown, so isVisible() is naturally False --
+    # exactly the stuck-hidden state the native restore leaves behind.
+
+    # 1. Entering minimized must NOT re-show (nothing has been restored yet).
+    host.setWindowState(Qt.WindowState.WindowMinimized)
+    host.changeEvent(QEvent(QEvent.Type.WindowStateChange))
+    assert calls == []
+
+    # 2. Restore that left the widget hidden -> must re-sync visibility with show().
+    host.setWindowState(Qt.WindowState.WindowNoState)
+    host.changeEvent(QEvent(QEvent.Type.WindowStateChange))
+    assert calls == ["show"], (
+        "changeEvent() did not re-show the window on a restore that left the QWidget "
+        "hidden -- the exact desync that left the client area blank and the UIA tree "
+        "empty in the live repro."
+    )
+
+    # 3. A restore where the widget is already visible must NOT re-show it (the guard
+    #    keeps the fix targeted to the broken state, off every normal restore).
+    monkeypatch.setattr(host, "isVisible", lambda: True)
+    host.setWindowState(Qt.WindowState.WindowMinimized)
+    host.changeEvent(QEvent(QEvent.Type.WindowStateChange))
+    host.setWindowState(Qt.WindowState.WindowNoState)
+    host.changeEvent(QEvent(QEvent.Type.WindowStateChange))
+    assert calls == ["show"], "re-showed a window that was already visible"
+
+    # 4. An unrelated WindowStateChange (maximize) must not re-show either.
+    monkeypatch.setattr(host, "isVisible", lambda: False)
+    host.setWindowState(Qt.WindowState.WindowMaximized)
+    host.changeEvent(QEvent(QEvent.Type.WindowStateChange))
+    assert calls == ["show"]

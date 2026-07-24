@@ -547,6 +547,51 @@ def _is_netsentinel_window(win, expected_pid: Optional[int] = None) -> bool:
     return True
 
 
+def _hwnd_still_ours(win, expected_pid: Optional[int]) -> bool:
+    """Cheap raw-win32 liveness check for a cached UIA wrapper's HWND.
+
+    UIAWrapper (the real return type of Desktop().windows()) has no .exists()
+    method at all -- IsWindow + PID match is the actual equivalent. Unlike a
+    fresh Desktop(backend="uia").windows() re-scan, this still works whether
+    or not the window is currently minimized (see _is_minimized_and_alive's
+    docstring for why a UIA re-scan can't tell the two apart).
+    """
+    if win is None:
+        return False
+    try:
+        hwnd = win.handle
+    except Exception:
+        return False
+    try:
+        user32 = ctypes.windll.user32
+        if not user32.IsWindow(hwnd):
+            return False
+        pid = ctypes.c_ulong(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return expected_pid is None or pid.value == expected_pid
+    except Exception:
+        return False
+
+
+def _is_minimized_and_alive(win, expected_pid: Optional[int]) -> bool:
+    """True when *win*'s cached HWND still belongs to expected_pid and is minimized.
+
+    Minimizing the real native-chrome window clears WS_VISIBLE (live-confirmed via
+    ctypes IsWindowVisible flipping 1 -> 0 across a real Win+Down chaos action),
+    which drops it out of Desktop(backend="uia").windows() entirely -- rather than
+    merely failing _is_main_window()'s size check, it is never enumerated at all,
+    so a fresh UIA re-scan can never find it while minimized. The HWND cached on
+    *win* from a prior successful match is still a valid identity check via raw
+    win32 state even though the UIA element itself has gone stale.
+    """
+    if not _hwnd_still_ours(win, expected_pid):
+        return False
+    try:
+        return bool(ctypes.windll.user32.IsIconic(win.handle))
+    except Exception:
+        return False
+
+
 def _window_title_ok(win) -> bool:
     """True when the window title matches _WINDOW_RE (used only in --connect fallback)."""
     try:
@@ -1043,8 +1088,9 @@ class MonkeyTester:
         """
         while not self._stop.is_set():
             self._stop.wait(self.cfg.focus_interval)
+            target_pid = self._proc.pid if self._proc else None
             try:
-                if self._win is not None and self._win.exists():
+                if self._win is not None and _hwnd_still_ours(self._win, target_pid):
                     hwnd = getattr(self._win, "handle", 0) or 0
                     if hwnd:
                         _force_foreground(hwnd)
@@ -1679,7 +1725,7 @@ class MonkeyTester:
         for i in range(retries):
             # Fast path: cached reference — verify it's still OUR main window
             try:
-                if (self._win is not None and self._win.exists()
+                if (self._win is not None and _hwnd_still_ours(self._win, target_pid)
                         and _is_netsentinel_window(self._win, target_pid)):
                     return True
             except Exception:
@@ -1703,6 +1749,11 @@ class MonkeyTester:
                     return True
             except Exception:
                 self.log.debug("UIA desktop scan failed")
+            # Fallback: the window may simply be minimized, which a UIA re-scan
+            # can never find (see _is_minimized_and_alive docstring) -- check the
+            # last-known HWND directly via raw win32 state instead.
+            if _is_minimized_and_alive(self._win, target_pid):
+                return True
             if i < retries - 1:
                 time.sleep(0.5)
         return False
@@ -2192,6 +2243,23 @@ class MonkeyTester:
 
         self.log.info("=" * 70)
         self.log.info("[quit] real-quit phase: clicking titlebar X (_quit_app path)")
+
+        # RULE-CHAOS3: a prior chaos action (_chrome_maximize_toggle's Win+Down)
+        # may have left the window minimized. rectangle() on a minimized window is
+        # not its visible on-screen rect, so a coords= click computed from it lands
+        # nowhere near the real close button -- WM_CLOSE is never delivered, and
+        # 25s later this phase wrongly reports a "shutdown hang" that never
+        # happened (confirmed via netsentinel_shutdown.log showing no closeEvent
+        # entry at all for the run). Restore before clicking so the window is
+        # always in a known, visible state.
+        try:
+            hwnd = self._win.handle
+            if ctypes.windll.user32.IsIconic(hwnd):
+                self.log.info("[quit] window is minimized — restoring before close click")
+                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                time.sleep(0.4)
+        except Exception:
+            pass  # non-fatal — best-effort; click below still attempts normally
 
         try:
             self._win.set_focus()
