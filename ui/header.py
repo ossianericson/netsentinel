@@ -400,6 +400,21 @@ class AppHeaderMixin:
                 self._refresh_chrome_rects()
         # Minimize-to-tray opt-in — uses cached _minimize_to_tray to avoid QSettings I/O
         from PyQt6.QtCore import QEvent, Qt
+        if event.type() == QEvent.Type.WindowStateChange:
+            is_minimized_now = bool(self.windowState() & Qt.WindowState.WindowMinimized)
+            was_minimized = getattr(self, "_was_minimized", False)
+            if was_minimized and not is_minimized_now and not self.isVisible():
+                # RULE-WIN14 — a native ShowWindow(SW_RESTORE) that bypasses Qt's own
+                # showNormal() (the chaos harness's focus-reclaim SW_RESTORE, and some
+                # OS window-management paths) leaves the top-level QWidget's
+                # isVisible() stuck False even though the Win32 window is back on
+                # screen and exposed. Qt gates BOTH painting and the accessibility
+                # tree on QWidget visibility, so the window returns as a blank
+                # unpainted rectangle with an empty UIA tree and will not repaint on
+                # invalidate/resize. Re-sync Qt's visibility to the real window state.
+                # docs/spikes/minimize-restore-repaint-failure.md.
+                self.show()
+            self._was_minimized = is_minimized_now
         if (event.type() == QEvent.Type.WindowStateChange
                 and bool(self.windowState() & Qt.WindowState.WindowMinimized)
                 and getattr(self, "_tray_manager", None) is not None

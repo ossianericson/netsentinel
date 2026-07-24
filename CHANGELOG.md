@@ -4,6 +4,18 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.43
+
+**Fixed**
+- `ui/header.py`: a native `SW_RESTORE` that bypasses Qt's own `showNormal()` (the chaos harness's focus-reclaim path, and some OS window-management flows) left the top-level QWidget's `isVisible()` stuck `False` even though the window was back on screen — Qt painted nothing and collapsed the accessibility tree to the 6 native-frame scaffolding controls; `changeEvent()` now calls `self.show()` on the minimized→restored edge whenever the widget is still marked hidden (RULE-WIN14)
+- `ui/pages/history_page.py`: `_start_refresh_worker()` overwrote the previous `QThread` refresh worker on every page navigation without `deleteLater()`-ing it, leaking a worker per visit (~1.5 KB/navigation)
+- `ui/nav/rail.py`: `_nav_rail_toggle()` rebuilt all 9 rail button icons (`QSvgRenderer`/`QPixmap`/`QPainter`/`QIcon` from scratch) on every toggle even though only one button's checked state actually changed; `setChecked()` now skips the icon rebuild when the value is unchanged
+- `tools/monkey_test.py`: `_window_ok()` and `_focus_heartbeat()` both called `self._win.exists()`, a method `UIAWrapper` doesn't have, inside a broad except-and-continue — both silently no-op'd on every call, forcing a full window re-enumeration on each liveness check and leaving the proactive focus-reassertion thread dead since it was written; both now use a shared `_hwnd_still_ours()` (`IsWindow` + PID match)
+- `tools/monkey_test.py`: minimizing the native-chrome window clears `WS_VISIBLE`, dropping it out of `Desktop(backend="uia").windows()` entirely rather than just failing the size check, so a minimized window falsely restarted the app under test (5 of 6 restarts in the 2026-07-23 wild-soak run); `_window_ok()` now falls back to the cached HWND plus `IsWindow`/PID/`IsIconic` to recognize "same window, just minimized"
+- `tools/monkey_test.py`: the real-quit phase computed the titlebar-X click from a minimized window's `rectangle()`, which isn't its on-screen rect, so the click missed and shutdown was misreported as a 25s "shutdown hang"; the window is now restored before the close click
+
+---
+
 ### v2.1.42
 
 **Fixed**

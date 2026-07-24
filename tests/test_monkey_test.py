@@ -186,3 +186,180 @@ def test_assert_focus_system_window_escalates_and_never_dismisses(monkeypatch):
     assert escalate_calls == [app_hwnd]   # escalation was attempted on our window
     assert dismiss_calls == []            # thief was never WM_CLOSE'd
     assert result is True                 # escalation reported reclaim -> proceed
+
+
+# ── Minimized-window false-restart (2026-07-23 wild-soak finding) ────────────
+
+def test_window_ok_accepts_minimized_but_alive_window(monkeypatch):
+    """A minimized-but-alive window must still pass _window_ok().
+
+    Live-confirmed mechanism (RULE-DBG3): minimizing the real native-chrome window
+    clears WS_VISIBLE, which drops it out of Desktop(backend="uia").windows()
+    entirely -- there's no rectangle to size-check against toast popups, the
+    window just isn't enumerated. A fresh UIA scan can never find it while
+    minimized, so _window_ok() must fall back to the last-known cached HWND +
+    raw win32 state (IsWindow + PID match + IsIconic) instead."""
+    import types
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    app_hwnd = 0x1234
+    target_pid = 4242
+
+    # No .exists() attribute -- matches the real UIAWrapper (it has none either;
+    # the "fast path" always raises AttributeError today, caught by the method).
+    t._win = types.SimpleNamespace(handle=app_hwnd)
+    t._proc = types.SimpleNamespace(pid=target_pid)
+
+    monkeypatch.setattr(mod.time, "sleep", lambda *_a, **_k: None)
+    # Fresh UIA scan finds nothing -- reproduces the live-confirmed vanishing
+    # act, not a size-check failure.
+    monkeypatch.setattr(mod, "Desktop", lambda backend: types.SimpleNamespace(windows=lambda: []))
+
+    user32 = mod.ctypes.windll.user32
+    monkeypatch.setattr(user32, "IsWindow", lambda h: 1)
+
+    def _fake_get_pid(hwnd, ref):
+        mod.ctypes.cast(ref, mod.ctypes.POINTER(mod.ctypes.c_ulong))[0] = target_pid
+
+    monkeypatch.setattr(user32, "GetWindowThreadProcessId", _fake_get_pid)
+    monkeypatch.setattr(user32, "IsIconic", lambda h: 1)
+
+    assert t._window_ok() is True
+
+
+def test_window_ok_rejects_dead_pid_even_if_handle_reused(monkeypatch):
+    """A stale HWND whose PID no longer matches ours must NOT be accepted --
+    e.g. the value was recycled by an unrelated window after a real crash."""
+    import types
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    app_hwnd = 0x1234
+    target_pid = 4242
+    other_pid = 9999
+
+    t._win = types.SimpleNamespace(handle=app_hwnd)
+    t._proc = types.SimpleNamespace(pid=target_pid)
+
+    monkeypatch.setattr(mod.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(mod, "Desktop", lambda backend: types.SimpleNamespace(windows=lambda: []))
+
+    user32 = mod.ctypes.windll.user32
+    monkeypatch.setattr(user32, "IsWindow", lambda h: 1)
+
+    def _fake_get_pid(hwnd, ref):
+        mod.ctypes.cast(ref, mod.ctypes.POINTER(mod.ctypes.c_ulong))[0] = other_pid
+
+    monkeypatch.setattr(user32, "GetWindowThreadProcessId", _fake_get_pid)
+    monkeypatch.setattr(user32, "IsIconic", lambda h: 1)
+
+    assert t._window_ok(retries=1) is False
+
+
+# ── _window_ok/_focus_heartbeat .exists() AttributeError (2026-07-23 chaos-script fix) ──
+
+def test_window_ok_fast_path_skips_slow_scan_for_live_cached_window(monkeypatch):
+    """A still-alive cached window must be accepted by the FAST path alone --
+    the real UIAWrapper (Desktop().windows()'s return type) has no .exists()
+    method at all, so `self._win.exists()` always raised AttributeError,
+    silently swallowed, forcing every single check onto the slow full
+    Desktop(backend="uia").windows() re-enumeration even when the cached
+    handle is perfectly valid. Asserting Desktop() is never called is what
+    catches the regression -- both paths return True either way."""
+    import types
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    app_hwnd = 0x1234
+    target_pid = 4242
+
+    class _FakeRect:
+        left, top, right, bottom = 0, 0, 1000, 800
+
+    class _FakeProc:
+        def name(self):
+            return "netsentinel.exe"
+
+    # No .exists() attribute -- matches the real UIAWrapper.
+    t._win = types.SimpleNamespace(
+        handle=app_hwnd,
+        rectangle=lambda: _FakeRect(),
+        element_info=types.SimpleNamespace(process_id=target_pid),
+    )
+    t._proc = types.SimpleNamespace(pid=target_pid)
+
+    monkeypatch.setattr(mod.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(mod.psutil, "Process", lambda pid: _FakeProc())
+
+    # Deliberately finds nothing -- if the fast path fails to short-circuit
+    # (the bug), _window_ok() falls through to False; the desktop_calls list
+    # is the clean, exception-swallow-proof signal either way.
+    desktop_calls = []
+
+    def _record_desktop(backend):
+        desktop_calls.append(backend)
+        return types.SimpleNamespace(windows=lambda: [])
+
+    monkeypatch.setattr(mod, "Desktop", _record_desktop)
+
+    user32 = mod.ctypes.windll.user32
+    monkeypatch.setattr(user32, "IsWindow", lambda h: 1)
+
+    def _fake_get_pid(hwnd, ref):
+        mod.ctypes.cast(ref, mod.ctypes.POINTER(mod.ctypes.c_ulong))[0] = target_pid
+
+    monkeypatch.setattr(user32, "GetWindowThreadProcessId", _fake_get_pid)
+
+    result = t._window_ok()
+
+    assert desktop_calls == [], (
+        "slow Desktop() re-scan ran even though the cached window is alive -- "
+        "the fast path is not short-circuiting"
+    )
+    assert result is True
+
+
+class _FakeStopEvent:
+    """Stands in for threading.Event -- stops the heartbeat loop after one tick."""
+
+    def __init__(self):
+        self._flag = False
+        self.wait_calls = 0
+
+    def is_set(self):
+        return self._flag
+
+    def wait(self, timeout=None):
+        self.wait_calls += 1
+        self._flag = True  # exit the while-loop after this iteration
+        return True
+
+
+def test_focus_heartbeat_reasserts_foreground_on_valid_cached_window(monkeypatch):
+    """The heartbeat's per-tick liveness check must actually call
+    _force_foreground() for a valid cached window -- not silently no-op
+    forever via the same swallowed .exists() AttributeError as _window_ok()."""
+    import types
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    app_hwnd = 0x1234
+    target_pid = 4242
+
+    t._win = types.SimpleNamespace(handle=app_hwnd)
+    t._proc = types.SimpleNamespace(pid=target_pid)
+    t.cfg = types.SimpleNamespace(focus_interval=0.0)
+    t._stop = _FakeStopEvent()
+
+    user32 = mod.ctypes.windll.user32
+    monkeypatch.setattr(user32, "IsWindow", lambda h: 1)
+
+    def _fake_get_pid(hwnd, ref):
+        mod.ctypes.cast(ref, mod.ctypes.POINTER(mod.ctypes.c_ulong))[0] = target_pid
+
+    monkeypatch.setattr(user32, "GetWindowThreadProcessId", _fake_get_pid)
+
+    force_calls = []
+    monkeypatch.setattr(mod, "_force_foreground", lambda h: force_calls.append(h))
+
+    t._focus_heartbeat()
+
+    assert force_calls == [app_hwnd]
+    assert t._stop.wait_calls == 1

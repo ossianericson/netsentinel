@@ -1451,6 +1451,38 @@ Applies to any `self._x = worker` pattern where `worker.finished.connect(worker.
 re-assigning it. Regression coverage: `tests/test_settings_startup_card.py::
 test_toggle_after_prior_worker_deleted_does_not_raise`.
 
+### RULE-WIN14 (blocking): A native `ShowWindow(SW_RESTORE)` that bypasses Qt's `showNormal()` leaves the QWidget's `isVisible()` stuck False — re-sync in `changeEvent()` or the window comes back blank with no accessibility tree
+
+**Mechanism.** Minimizing a top-level Qt window makes Qt drop the QWidget's visible
+flag. Restoring it through Qt (`showNormal()`, taskbar-driven `WM_SYSCOMMAND`) re-sets that
+flag. But restoring it with a raw `ctypes` `ShowWindow(hwnd, SW_RESTORE)` — bypassing Qt's own
+API — brings the *Win32* window back (visible, `IsWindowVisible==1`, `QWindow.isExposed()==True`)
+while **the QWidget's `isVisible()` stays False**. Qt gates *both* client-area painting *and*
+the QAccessible tree on QWidget visibility, so a "hidden" widget yields a **blank, unpainted
+client rect** (whatever the backend last cleared it to — white or black) and an **empty UIA
+tree** (the real control tree collapses to only Windows' own native-frame scaffolding). It will
+not recover on `InvalidateRect`+`UpdateWindow` or even a real `SetWindowPos` resize — Qt refuses
+to paint a widget it believes is hidden; the problem is the visibility flag, not a missed paint
+message, and the thread is not hung (`IsHungAppWindow==0`).
+
+This shipped the "app went 100% black mid-run" chaos report (2026-07-23): the monkey harness's
+`win+down` minimized a non-maximized window, then its own focus-reclaim called native
+`ShowWindow(SW_RESTORE)`. The QWebEngineView `WinIdChange` path is unrelated here — the HWND
+never changes (confirmed live), so nothing re-syncs visibility. Some OS window-management flows
+(Win+D, task-view, session reconnect) can drive the same native restore.
+
+```python
+# CORRECT — in AppHeaderMixin.changeEvent(), on the minimized -> not-minimized edge
+if was_minimized and not is_minimized_now and not self.isVisible():
+    self.show()   # re-sync Qt's visibility to the already-restored Win32 window
+```
+
+The `not self.isVisible()` guard keeps it off every normal (Qt-driven) restore, where the flag
+is already True. Validate any change to this against the live repro
+(`docs/spikes/minimize-restore-black-window-repro.py`) on **both** axes — client brightness AND
+UIA descendant count — never "the symptom stopped" alone (RULE-WIN10). Enforced by
+`tests/test_window_chrome.py::test_changeevent_reshows_window_when_native_restore_leaves_it_hidden`.
+
 ---
 
 ## QSettings State Hygiene
@@ -2127,6 +2159,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN11 → `test_store_update_flow.py` (raw `GetPackageFamilyName` code must be 122/15700, never 6)
 - RULE-WIN12 → `test_app_settings.py` (placement-fix-before-showMaximized source-order guard)
 - RULE-WIN13 → `test_settings_startup_card.py` (regression: toggle after prior worker's `deleteLater()` must not raise)
+- RULE-WIN14 → `test_window_chrome.py` (regression: restore that leaves the QWidget hidden must re-show it)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 
 Rules that should be converted to tool enforcement (future work):
