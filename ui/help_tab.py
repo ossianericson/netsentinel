@@ -341,10 +341,8 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Fixed minimize button after tray restore", "Header buttons, including minimize, no longer stop responding after restoring the window from the system tray."),
-        ("Fixed unreported Security Audit findings", "Cloud Metadata Probe, Private Endpoint Check, Recon Plugins, and Device Risk Score now correctly update their scan status so a real finding is never missed."),
-        ("Fixed device popover on secondary monitors", "Right-clicking a device row on a secondary monitor no longer jumps the popover to the primary monitor."),
-        ("Fixed Arctic Clean contrast issues", "Several low-contrast colours (speed gauge, overview tile hover, topology legend, popover badge) are now legible in the Arctic Clean theme."),
+        ("Fixed Network Map Traffic Overlay memory leak", "Leaving the Network Map page no longer leaves its background packet sniffer and browser renderer process running and growing in the background."),
+        ("Fixed Live Bandwidth memory leak", "Leaving the Live Bandwidth page now properly stops its background polling instead of leaving it running for the rest of the session."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

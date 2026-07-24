@@ -1059,20 +1059,33 @@ class NetworkMapPage(QWidget):
             f"window.lockLayout && window.lockLayout({'true' if checked else 'false'});"
         )
 
+    def _start_bw_worker(self) -> None:
+        """(Re)start the background bandwidth sniffer if it isn't already
+        running. Shared by _on_traffic_toggled(True) and showEvent() (which
+        resumes it after a prior hideEvent() stopped it — RULE-WIN15)."""
+        if self._bw_worker is None or not self._bw_worker.isRunning():
+            self._bw_worker = BandwidthOverlayWorker(interval_s=5.0, parent=self)
+            self._bw_worker.snapshot_ready.connect(self._on_bw_snapshot)
+            self._bw_worker.error.connect(self._on_bw_error)
+            self._bw_worker.start()
+
+    def _stop_bw_worker(self) -> None:
+        """Stop the background bandwidth sniffer without touching the user's
+        Traffic Overlay checkbox/`_traffic_overlay` state — showEvent()
+        restarts it on the next visit if the overlay is still enabled."""
+        if self._bw_worker is not None and self._bw_worker.isRunning():
+            self._bw_worker.stop()
+            self._bw_worker.wait(300)
+        self._bw_worker = None
+
     @pyqtSlot(bool)
     def _on_traffic_toggled(self, checked: bool) -> None:
         self._traffic_overlay = checked
         self._bw_legend.setVisible(checked)
         if checked:
-            if self._bw_worker is None or not self._bw_worker.isRunning():
-                self._bw_worker = BandwidthOverlayWorker(interval_s=5.0, parent=self)
-                self._bw_worker.snapshot_ready.connect(self._on_bw_snapshot)
-                self._bw_worker.error.connect(self._on_bw_error)
-                self._bw_worker.start()
+            self._start_bw_worker()
         else:
-            if self._bw_worker is not None and self._bw_worker.isRunning():
-                self._bw_worker.stop()
-                self._bw_worker = None
+            self._stop_bw_worker()
             self._bw_by_mac.clear()
             if self._last_render_kwargs:
                 self._refresh_web_view(
@@ -1138,12 +1151,31 @@ class NetworkMapPage(QWidget):
         # if Scapy or admin rights are absent.
         if not self._traffic_overlay_defaulted:
             self._traffic_overlay_defaulted = True
-            self._btn_traffic.setChecked(True)
+            self._btn_traffic.setChecked(True)  # triggers _on_traffic_toggled(True) -> _start_bw_worker()
+        elif self._traffic_overlay:
+            # Resume the sniffer after a prior hideEvent() stopped it — the
+            # checkbox is already checked so setChecked() above wouldn't fire.
+            self._start_bw_worker()
         if self._outer_stack.currentIndex() == 1 and self._topology_loaded:
             _t = QTimer(self)
             _t.setSingleShot(True)
             _t.timeout.connect(self.fit_view)
             _t.start(200)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        """Stop the background bandwidth sniffer while the page isn't visible.
+
+        RULE-WIN15: a QStackedWidget page switch does not free anything on its
+        own — showEvent() started BandwidthOverlayWorker (a Scapy sniffer
+        QThread pushing a runJavaScript() update into the Interactive view
+        every 5s), and nothing stopped it on navigation away, so a single
+        visit to Network Map left it running — and, for a real
+        QWebEngineView, the renderer process growing — for the rest of the
+        app session. Traffic Overlay's own checked state is left untouched;
+        showEvent() resumes the worker on the next visit if still enabled.
+        """
+        self._stop_bw_worker()
+        super().hideEvent(event)
 
     @pyqtSlot(int)
     def _on_view_tab_changed(self, index: int) -> None:

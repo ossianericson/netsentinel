@@ -4,6 +4,14 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.44
+
+**Fixed**
+- `ui/pages/network_map_page.py`: the Traffic Overlay's Scapy `AsyncSniffer` worker (default-on the first time the page is shown) had no `hideEvent()`, so it kept pushing `runJavaScript()` updates into the embedded `QWebEngineView` every 5s for the rest of the app session after a single visit to the page — an unbounded ~46 KB/push leak in the `QtWebEngineProcess.exe` child process, invisible to `tools/monkey_test.py`'s RSS sampling (RULE-WIN15). `hideEvent()` now stops/resumes the worker across navigation, and `monkey_test.py`'s RSS sampling now sums child processes too (RULE-DBG4), closing the blind spot for this whole class of leak
+- `ui/pages/live_bandwidth_page.py`: `IfaceBwPoller` started unconditionally in `__init__` with no `hideEvent()`, so its 1Hz poll + full matplotlib redraw kept running in the main process for the rest of the app session after a single visit (same RULE-WIN15 shape as the Network Map fix); now stopped on `hideEvent()` and resumed on `showEvent()`
+
+---
+
 ### v2.1.43
 
 **Fixed**
