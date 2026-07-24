@@ -1629,9 +1629,9 @@ class MonkeyTester:
                 self._stop.set()
                 return
 
-            # Memory leak guard
+            # Memory leak guard — total RSS includes child processes (RULE-DBG4)
             try:
-                rss = self._proc.memory_info().rss / (1024 * 1024)
+                rss = self._total_rss_mb()
                 if rss > self.stats.peak_rss_mb:
                     self.stats.peak_rss_mb = rss
                 if rss > self.cfg.mem_limit_mb:
@@ -1686,6 +1686,29 @@ class MonkeyTester:
         self._crash_log_size0 = size
         self._crash_report("native fault written to netsentinel_crash.log")
         return True
+
+    def _total_rss_mb(self) -> float:
+        """Main process RSS plus every child process (e.g. QtWebEngineProcess.exe
+        for the Network Map Interactive view) — RULE-DBG4. A single-PID sample
+        is structurally blind to any leak inside a spawned child process; a
+        live repro (docs/spikes/network-map-bandwidth-worker-leak-repro.py)
+        measured +107.72 MB in a WebEngine renderer child against only +0.71 MB
+        in the main process for the identical workload."""
+        if self._proc is None:
+            return 0.0
+        try:
+            total = self._proc.memory_info().rss
+        except psutil.NoSuchProcess:
+            return 0.0
+        try:
+            for child in self._proc.children(recursive=True):
+                try:
+                    total += child.memory_info().rss
+                except psutil.NoSuchProcess:
+                    pass  # child exited between children() and memory_info() -- skip, not fatal
+        except psutil.NoSuchProcess:
+            pass  # main process exited mid-enumeration -- return what we already summed
+        return total / (1024 * 1024)
 
     def _alive(self) -> bool:
         # When attached without a process handle, fall back to window check only
@@ -2135,7 +2158,7 @@ class MonkeyTester:
             if i % 25 == 0:
                 rss = 0.0
                 try:
-                    rss = self._proc.memory_info().rss / (1024 * 1024)
+                    rss = self._total_rss_mb()  # main + children, RULE-DBG4
                 except Exception:
                     self.log.debug("memory_info() unavailable")
                 if self.cfg.duration_secs:

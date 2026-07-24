@@ -911,6 +911,42 @@ reaching for logs, code reading, or static analysis alone. Static archaeology is
 when live reproduction is genuinely not possible (e.g. CI-only failure), not the default
 starting point.
 
+### RULE-DBG4 (required): A memory-soak RSS metric must include every child process, not just the main PID — a single-process sample is structurally blind to any multi-process leak
+
+**Mechanism.** `QWebEngineView` (Network Map's Interactive view) spawns a genuinely separate OS
+process, `QtWebEngineProcess.exe` — confirmed live even under a headless/offscreen QPA
+platform, for a trivial page with no real content. `tools/monkey_test.py` samples memory via
+`self._proc.memory_info().rss` on the single main PID only (no `.children()` call anywhere in
+the sampling code). A live repro
+(`docs/spikes/network-map-bandwidth-worker-leak-repro.py`) drove 2,400 background updates into
+a real `QWebEngineView` and measured **+107.72 MB in the child renderer process against only
++0.71 MB in the main process** — a real, unbounded, ~46 KB/push leak that every wild-soak
+number collected to date was structurally incapable of seeing, because the harness never looks
+past the main PID.
+
+This is not specific to WebEngine — any future subprocess-based worker (a helper `.exe`, a
+sandboxed plugin process, anything spawned rather than threaded) would be equally invisible to
+the current sampling. A soak run reporting a flat/clean RSS trend proves only that the **main
+process** stayed flat; it says nothing about children.
+
+```python
+# WRONG — blind to any leak inside a child process (tools/monkey_test.py, pre-fix)
+rss = self._proc.memory_info().rss / (1024 * 1024)
+
+# CORRECT — sums the main process and every descendant
+def _total_rss_mb(proc: psutil.Process) -> float:
+    total = proc.memory_info().rss
+    for child in proc.children(recursive=True):
+        try:
+            total += child.memory_info().rss
+        except psutil.NoSuchProcess:
+            pass  # child exited between children() and memory_info() — skip, not fatal
+    return total / (1024 * 1024)
+```
+
+Applies to any future memory-soak or leak-repro script, not only `monkey_test.py` — check
+`proc.children(recursive=True)` before trusting a single-PID RSS number as "the app's memory."
+
 ---
 
 ## Network Info Contracts
@@ -1482,6 +1518,48 @@ is already True. Validate any change to this against the live repro
 (`docs/spikes/minimize-restore-black-window-repro.py`) on **both** axes — client brightness AND
 UIA descendant count — never "the symptom stopped" alone (RULE-WIN10). Enforced by
 `tests/test_window_chrome.py::test_changeevent_reshows_window_when_native_restore_leaves_it_hidden`.
+
+---
+
+### RULE-WIN15 (blocking): Every page that starts a background worker/timer on `showEvent()` must stop it in `hideEvent()` — a `QStackedWidget` page switch does not free anything on its own
+
+**Mechanism.** `QStackedWidget.setCurrentWidget()` delivers a real `hideEvent()` to the outgoing
+page, but Qt does nothing else automatically — any `QThread`/`QTimer` the page started on
+`showEvent()` (or defaulted on) keeps running exactly as before, because it is parented to the
+long-lived page widget, not to "being the visible stack member." `history_page.py`,
+`speed_test_page.py`, `geo_map_page.py`, `overview_tile.py`, and `page_header.py` all implement
+`hideEvent()` for exactly this reason — it is an established codebase convention, not an
+optional nicety.
+
+`ui/pages/network_map_page.py` violated it: `showEvent()` defaults "Traffic Overlay" to CHECKED
+the first time the page is ever shown, starting a `BandwidthOverlayWorker` (a Scapy
+`AsyncSniffer` QThread) that emits a snapshot every 5s **forever** — no `hideEvent()` existed to
+stop it. Confirmed live (`docs/spikes/network-map-bandwidth-worker-leak-repro.py`, RULE-DBG3):
+the worker was still `isRunning()==True` after the page was hidden. Every snapshot pushes a
+`runJavaScript()` update into the embedded `QWebEngineView`, and — separately confirmed in the
+same repro — that call is not free: 2,400 simulated background pushes while the page was hidden
+grew the WebEngine renderer's own process by +107.72 MB with no plateau (~46 KB/push,
+unbounded across the whole run, unlike a one-time cache warm-up). So a single visit to Network
+Map left a packet sniffer running and a Chromium process growing for the rest of the app
+session, regardless of what page the user was actually looking at.
+
+```python
+# WRONG — network_map_page.py had no hideEvent() at all; _bw_worker survives every navigation away
+def showEvent(self, event) -> None:
+    ...
+    if not self._traffic_overlay_defaulted:
+        self._traffic_overlay_defaulted = True
+        self._btn_traffic.setChecked(True)   # starts _bw_worker, nothing ever stops it
+
+# CORRECT — mirrors speed_test_page.py's existing hideEvent() convention
+def hideEvent(self, event) -> None:
+    if self._bw_worker is not None and self._bw_worker.isRunning():
+        self._bw_worker.stop()
+        self._bw_worker.wait(300)
+    super().hideEvent(event)
+```
+
+Enforced by `tests/test_network_map_page.py::test_hide_stops_bandwidth_worker`.
 
 ---
 

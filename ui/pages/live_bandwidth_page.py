@@ -97,7 +97,7 @@ class LiveBandwidthPage(QWidget):
         self._slide_timer.setInterval(50)   # 4 × 50 ms = 200 ms total
         self._slide_timer.timeout.connect(self._slide_tick)
         self._setup_ui()
-        self._start_worker()
+        # Worker starts in showEvent() instead of here — see RULE-WIN15.
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -247,18 +247,44 @@ class LiveBandwidthPage(QWidget):
     # ── Worker ────────────────────────────────────────────────────────────────
 
     def _start_worker(self) -> None:
-        from workers.iface_bw_worker import IfaceBwPoller
-        self._worker = IfaceBwPoller(interval_s=1.0, parent=self)
-        self._worker.stats_ready.connect(self._on_stats)
-        self._worker.error.connect(
-            lambda e: self._ax.set_title(f"⚠  {e}", color=_s.RED, fontsize=9)
-        )
-        self._worker.start()
+        """(Re)start the background bandwidth poller if it isn't already
+        running. Shared by the empty-state "Start Monitoring" button and
+        showEvent() (which resumes it after a prior hideEvent() stopped it —
+        RULE-WIN15)."""
+        if self._worker is None or not self._worker.isRunning():
+            from workers.iface_bw_worker import IfaceBwPoller
+            self._worker = IfaceBwPoller(interval_s=1.0, parent=self)
+            self._worker.stats_ready.connect(self._on_stats)
+            self._worker.error.connect(
+                lambda e: self._ax.set_title(f"⚠  {e}", color=_s.RED, fontsize=9)
+            )
+            self._worker.start()
+
+    def _stop_worker(self) -> None:
+        """Stop the background poller. Cached history/session/table state is
+        left untouched — showEvent() resumes polling into the same state on
+        the next visit."""
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.stop()
+            self._worker.wait(300)
+        self._worker = None
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._start_worker()
+
+    def hideEvent(self, event) -> None:
+        """RULE-WIN15: a QStackedWidget page switch does not stop anything on
+        its own — the poller (workers/iface_bw_worker.py) drives a full
+        matplotlib Axes rebuild every 1s, and nothing stopped it on
+        navigation away, so a single visit left it running (and repainting a
+        hidden chart) for the rest of the app session. See
+        docs/spikes/live-bandwidth-chart-leak-repro.py."""
+        self._stop_worker()
+        super().hideEvent(event)
 
     def closeEvent(self, event):
-        if self._worker:
-            self._worker.stop()
-            self._worker.wait(2000)
+        self._stop_worker()
         super().closeEvent(event)
 
     # ── Data handling ─────────────────────────────────────────────────────────

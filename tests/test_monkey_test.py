@@ -363,3 +363,59 @@ def test_focus_heartbeat_reasserts_foreground_on_valid_cached_window(monkeypatch
 
     assert force_calls == [app_hwnd]
     assert t._stop.wait_calls == 1
+
+
+# ── RULE-DBG4: RSS sampling must include child processes ──────────────────────
+
+def test_total_rss_mb_sums_main_and_children():
+    """A single-PID sample is structurally blind to any leak inside a spawned
+    child process (e.g. QtWebEngineProcess.exe for Network Map's Interactive
+    view) — a live repro (docs/spikes/network-map-bandwidth-worker-leak-repro.py)
+    found a real, unbounded leak that would have been invisible to every prior
+    wild-soak RSS number, which sampled the main PID only."""
+    import types
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+
+    def _mem(rss_bytes):
+        return types.SimpleNamespace(rss=rss_bytes)
+
+    main = types.SimpleNamespace(
+        memory_info=lambda: _mem(200 * 1024 * 1024),
+        children=lambda recursive=True: [
+            types.SimpleNamespace(memory_info=lambda: _mem(50 * 1024 * 1024)),
+            types.SimpleNamespace(memory_info=lambda: _mem(30 * 1024 * 1024)),
+        ],
+    )
+    t._proc = main
+
+    assert t._total_rss_mb() == pytest.approx(280.0)
+
+
+def test_total_rss_mb_skips_a_child_that_vanishes():
+    """A child exiting between children() and memory_info() must not crash
+    the sample — it's excluded from that checkpoint's total, not fatal."""
+    import types
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+
+    def _mem(rss_bytes):
+        return types.SimpleNamespace(rss=rss_bytes)
+
+    def _vanished():
+        raise mod.psutil.NoSuchProcess(pid=999)
+
+    main = types.SimpleNamespace(
+        memory_info=lambda: _mem(100 * 1024 * 1024),
+        children=lambda recursive=True: [types.SimpleNamespace(memory_info=_vanished)],
+    )
+    t._proc = main
+
+    assert t._total_rss_mb() == pytest.approx(100.0)
+
+
+def test_total_rss_mb_returns_zero_with_no_process():
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    t._proc = None
+    assert t._total_rss_mb() == 0.0

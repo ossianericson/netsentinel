@@ -413,3 +413,62 @@ def test_mesh_only_client_appears_in_both_interactive_and_classic_views(page):
     assert "11:22:33:44:55:66" in page._classic_widget._pos_map, (
         "Mesh-only client missing from the Classic view"
     )
+
+
+# ── RULE-WIN15: background bandwidth worker must stop when the page is hidden ─
+#
+# Bug: showEvent() defaults Traffic Overlay to checked on first show, starting
+# a BandwidthOverlayWorker (Scapy sniffer QThread) that pushes a
+# runJavaScript() update into the Interactive view every 5s forever.
+# network_map_page.py had no hideEvent() override, so navigating away left the
+# worker running (and, for a real QWebEngineView, growing the renderer
+# process — see docs/spikes/network-map-bandwidth-worker-leak-repro.py) for
+# the rest of the app session.
+
+def test_hide_stops_bandwidth_worker(qt_app):
+    """A real QStackedWidget page switch (setCurrentWidget away from the page,
+    firing hideEvent()) must stop the background bandwidth worker."""
+    from PyQt6.QtWidgets import QStackedWidget, QWidget
+
+    class _FakeWorker:
+        """Stands in for BandwidthOverlayWorker's stop lifecycle without
+        needing a real QThread/Scapy — only isRunning()/stop()/wait() are
+        touched by hideEvent()."""
+
+        def __init__(self):
+            self.stop_calls = 0
+            self._running = True
+
+        def isRunning(self):
+            return self._running
+
+        def stop(self):
+            self.stop_calls += 1
+            self._running = False
+
+        def wait(self, ms=0):
+            return True
+
+    other = QWidget()
+    stack = QStackedWidget()
+    page = NetworkMapPage()
+    stack.addWidget(other)
+    stack.addWidget(page)
+
+    worker = _FakeWorker()
+    page._bw_worker = worker
+    page._traffic_overlay = True
+
+    stack.setCurrentWidget(page)
+    assert worker.isRunning()
+
+    stack.setCurrentWidget(other)  # fires hideEvent() on `page`
+
+    assert worker.stop_calls == 1, "hideEvent() must stop the background bandwidth worker"
+    assert not worker.isRunning()
+
+    page.deleteLater()
+    other.deleteLater()
+    stack.deleteLater()
+    for _ in range(3):
+        qt_app.processEvents()
