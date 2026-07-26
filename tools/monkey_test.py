@@ -345,6 +345,8 @@ class Config:
     focus_interval: float = 1.5     # seconds between focus-heartbeat pulses
     prevent_sleep: bool = True       # suppress Windows sleep/screensaver
     tracemalloc: bool = False        # enable in-process tracemalloc snapshots in app
+    gc_census: bool = False          # enable in-process gc.get_objects() class-count census in app
+    vmem_census: bool = False        # enable in-process VirtualQuery region-type census in app
     max_restarts: int = 3            # auto-restart app when window vanishes unexpectedly
     warmup_secs: float = 5.0        # seconds to wait after overlay dismissal before first click
 
@@ -1285,11 +1287,18 @@ class MonkeyTester:
         self.log.info("Launching source: python %s", entry)
         try:
             env = None
-            if self.cfg.tracemalloc:
+            if self.cfg.tracemalloc or self.cfg.gc_census or self.cfg.vmem_census:
                 import os as _os
                 env = _os.environ.copy()
-                env["NETSENTINEL_TRACEMALLOC"] = "1"
-                self.log.info("tracemalloc enabled — snapshots every 60s in app log")
+                if self.cfg.tracemalloc:
+                    env["NETSENTINEL_TRACEMALLOC"] = "1"
+                    self.log.info("tracemalloc enabled — snapshots every 60s in app log")
+                if self.cfg.gc_census:
+                    env["NETSENTINEL_GC_CENSUS"] = "1"
+                    self.log.info("gc census enabled — class-count snapshots every 60s in app log")
+                if self.cfg.vmem_census:
+                    env["NETSENTINEL_VMEM_CENSUS"] = "1"
+                    self.log.info("vmem census enabled — region-type snapshots every 60s in vmem_census.log")
             raw = subprocess.Popen([sys.executable, str(entry)], cwd=str(repo), env=env)
             self._proc = psutil.Process(raw.pid)
             self.log.info("PID: %d", raw.pid)
@@ -2373,6 +2382,17 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Enable tracemalloc profiling inside the app (sets NETSENTINEL_TRACEMALLOC=1; "
                         "requires --source; writes top-20 allocation snapshots to the app's debug log "
                         "every 60 s so you can identify the retained object type)")
+    p.add_argument("--gc-census", action="store_true",
+                   help="Enable gc.get_objects() class-count census inside the app (sets "
+                        "NETSENTINEL_GC_CENSUS=1; requires --source; writes top-30 live-object "
+                        "class counts to gc_census.log every 60 s — complements --tracemalloc by "
+                        "seeing retained Python-side QWidget/QObject wrappers, not just raw bytes)")
+    p.add_argument("--vmem-census", action="store_true",
+                   help="Enable VirtualQuery region-type census inside the app (sets "
+                        "NETSENTINEL_VMEM_CENSUS=1; requires --source; writes committed bytes bucketed "
+                        "by Private/Mapped/Image region type to vmem_census.log every 60 s — the native "
+                        "counterpart to --tracemalloc/--gc-census, showing WHICH native region grows "
+                        "when the Python-heap byte and object-count views both stay flat)")
     p.add_argument("--max-restarts", type=int, default=3, metavar="N",
                    help="Max auto-restarts when the app window vanishes unexpectedly (default 3; 0 = disabled)")
     p.add_argument("--warmup-secs", type=float, default=5.0, metavar="SECS",
@@ -2395,6 +2415,14 @@ def main() -> None:
         print("WARNING: --tracemalloc only works with --source (ignored for exe/connect mode)",
               file=sys.stderr)
 
+    if args.gc_census and not args.source:
+        print("WARNING: --gc-census only works with --source (ignored for exe/connect mode)",
+              file=sys.stderr)
+
+    if args.vmem_census and not args.source:
+        print("WARNING: --vmem-census only works with --source (ignored for exe/connect mode)",
+              file=sys.stderr)
+
     cfg = Config(
         exe_path=args.exe_path,
         use_source=args.source,
@@ -2410,6 +2438,8 @@ def main() -> None:
         focus_interval=args.focus_interval,
         prevent_sleep=not args.no_prevent_sleep,
         tracemalloc=args.tracemalloc and args.source,
+        gc_census=args.gc_census and args.source,
+        vmem_census=args.vmem_census and args.source,
         max_restarts=args.max_restarts,
         warmup_secs=args.warmup_secs,
     )

@@ -210,6 +210,7 @@ hiddenimports: list = [
     "modules.proactive_digest",
     "modules.digest_bullets",
     "modules.scheduled_speed_test",
+    "modules.single_instance",
     "modules.smb_enumerator",
     "modules.snmp_poller",
     "modules.snmp_trap_receiver",

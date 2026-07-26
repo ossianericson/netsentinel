@@ -1563,6 +1563,68 @@ Enforced by `tests/test_network_map_page.py::test_hide_stops_bandwidth_worker`.
 
 ---
 
+### RULE-WIN16 (blocking): A single-instance guard must use an atomic OS primitive as the gate — a client-probe-then-become-server dance has a TOCTOU race
+
+**Mechanism.** The original guard (`app.py`, shipped v2.1.13) worked by having each launch probe
+a `QLocalSocket` for a running `QLocalServer`; if nothing answered within 500ms, it assumed no
+instance was running and tried to become the server itself:
+
+```python
+# WRONG — the gap between "nobody answered the probe" and "I bound the server"
+# is not atomic across processes
+_probe.connectToServer(_INSTANCE_KEY)
+if _probe.waitForConnected(500):
+    sys.exit(0)                                # someone answered — bail out
+_instance_server = QLocalServer()
+if not _instance_server.listen(_INSTANCE_KEY):
+    _instance_server = None                     # "run without instance guard rather than crashing"
+```
+
+Two processes launched close together can both pass the "nobody answered" probe before either
+calls `.listen()`. Whichever process loses the ensuing `.listen()` race hit the fallback
+comment's stated intent literally — it kept running as a **fully independent second instance**,
+with no retry and no exit. Live-reported: a user could open five separate NetSentinel windows by
+clicking the Start-menu tile five times (MS Store / MSIX build) — cold-start latency on a
+packaged build is exactly the condition that invites repeated impatient clicks within the race
+window, but the race itself is timing-dependent, not packaging-specific, and reproduces from
+source with two `python app.py` launches issued back-to-back.
+
+**Fix.** A named OS mutex (`CreateMutexW`) is atomic — the kernel resolves "who got here first"
+with no client/server handshake required, so there is no TOCTOU gap to lose. Make the mutex the
+sole, authoritative gate, checked **before** any GUI subsystem is touched (before `QApplication`
+is even constructed) so a losing process pays almost no startup cost:
+
+```python
+# CORRECT — modules/single_instance.py; RULE-WIN11 explicit restype/argtypes,
+# Global\ namespace so the check isn't sensitive to any per-session/per-package
+# object-namespace redirection a packaged build might be subject to
+is_first_instance, handle = acquire_instance_mutex("NetSentinel_SingleInstance_v1")
+if not is_first_instance:
+    # signal the running instance best-effort (QLocalSocket), then exit —
+    # unconditionally, regardless of whether the signal was delivered
+    sys.exit(0)
+```
+
+`QLocalServer`/`QLocalSocket` are still used, but demoted to a pure courtesy signal ("bring the
+running window to the front") sent *after* the mutex has already decided the outcome — never
+again the thing deciding whether a duplicate is allowed to run. The mutex handle is never closed;
+Windows releases it automatically on process exit, including a crash, which is the desired
+self-healing behaviour for a prior instance that died without cleaning up.
+
+**Corollary — a graceful-degradation fallback can silently become the vulnerability.** "If
+`listen()` fails, run without the guard rather than crashing" reads like defensive coding, but
+when `.listen()` failure is the *expected* outcome of losing a legitimate race (not a rare
+permissions edge case), the fallback path becomes the normal path for the loser. Prefer an
+atomic primitive that cannot "fail" from a race in the first place over a fallback that quietly
+accepts the failure mode you were trying to prevent.
+
+Enforced by `tests/test_single_instance.py` (real, unmocked `CreateMutexW` double-acquire
+round-trip) and `tests/test_single_instance_race.py::
+test_app_exits_promptly_when_instance_mutex_already_held` (RED before the fix — the old code let
+`app.py` boot fully even with the mutex pre-held; GREEN after).
+
+---
+
 ## QSettings State Hygiene
 
 ### RULE-QS1 (blocking): Never gate data access on QSettings-persisted mode — use always-populated sources
@@ -2238,6 +2300,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN12 → `test_app_settings.py` (placement-fix-before-showMaximized source-order guard)
 - RULE-WIN13 → `test_settings_startup_card.py` (regression: toggle after prior worker's `deleteLater()` must not raise)
 - RULE-WIN14 → `test_window_chrome.py` (regression: restore that leaves the QWidget hidden must re-show it)
+- RULE-WIN16 → `test_single_instance.py` (real CreateMutexW round-trip) + `test_single_instance_race.py` (RED/GREEN regression)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 
 Rules that should be converted to tool enforcement (future work):

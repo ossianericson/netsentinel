@@ -341,8 +341,7 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Fixed Network Map Traffic Overlay memory leak", "Leaving the Network Map page no longer leaves its background packet sniffer and browser renderer process running and growing in the background."),
-        ("Fixed Live Bandwidth memory leak", "Leaving the Live Bandwidth page now properly stops its background polling instead of leaving it running for the rest of the session."),
+        ("Fixed duplicate app windows from repeated icon clicks", "Clicking the taskbar or Start-menu icon several times in a row now brings the existing window to the front instead of sometimes opening a second copy of NetSentinel."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
