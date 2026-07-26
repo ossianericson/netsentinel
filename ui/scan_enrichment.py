@@ -65,7 +65,7 @@ class ScanEnrichmentMixin:
         # of whether Monitor logging is enabled below.
         if unit_count > 0 and self._alert_engine is not None:
             for a in self._alert_engine.evaluate_mesh_checks(unit_count, online_count, worst_name, worst_rssi):
-                self._show_alert_toast(a)
+                self._surface_alert_in_app(a)
                 self._home_page.on_alert(a)
                 if self._store is not None:
                     try:

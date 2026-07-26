@@ -52,6 +52,28 @@ def test_alert_fired_fields():
     assert af.value is None
 
 
+def test_alert_fired_remediation_field_defaults_empty():
+    """Phase 7.4 -- per-alert remediation override; '' means 'use the
+    alert_remediation table'. Added as the LAST field so every existing
+    positional/keyword construction stays valid."""
+    from modules.alert_types import AlertFired
+    af = AlertFired(
+        rule_name="r", rule_type="HOST_DOWN", host="192.168.1.1",
+        message="down", severity="CRITICAL", ts=1000,
+    )
+    assert af.remediation == ""
+
+
+def test_alert_fired_remediation_field_can_be_set():
+    from modules.alert_types import AlertFired
+    af = AlertFired(
+        rule_name="r", rule_type="IOT_BEHAVIOR", host="192.168.1.1",
+        message="new destination", severity="WARNING", ts=1000,
+        remediation="Block this device in your router.",
+    )
+    assert af.remediation == "Block this device in your router."
+
+
 def test_alert_types_re_exported_from_alert_engine():
     """alert_engine.py must still export AlertRule, AlertFired, RULE_TYPES for backward compat."""
     from modules.alert_engine import AlertRule, AlertFired, RULE_TYPES

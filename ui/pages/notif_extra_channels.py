@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, QSettings, QTimer
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QCompleter,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -23,7 +24,9 @@ from PyQt6.QtWidgets import (
 from ui.pages.notif_channel_panels import (
     _KR_PUSHOVER_TOKEN_KEY, _KR_PUSHOVER_USER_KEY,
     _KR_NTFY_TOKEN_KEY, _KR_TELEGRAM_TOKEN_KEY, _card, _field_row, _lineedit, _severity_combo,
+    _ALERT_RULE_DEFS,
 )
+from modules.quiet_notifier import ENABLED_KEY as _QUIET_ENABLED_KEY, NOTIFY_HOUR_KEY as _QUIET_HOUR_KEY
 from ui import styles as _s
 
 
@@ -234,10 +237,18 @@ class _NotifExtraChannelsMixin:
             "Host Down, High RTT  (comma-separated, blank = all)"
         )
         _s.themed_ss(self._txt_escalation_rules, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;")
+        _completer = QCompleter([name for name, _rt, _desc in _ALERT_RULE_DEFS], self._txt_escalation_rules)
+        _completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._txt_escalation_rules.setCompleter(_completer)
         self._txt_escalation_rules.editingFinished.connect(self._save)
         rules_row.addWidget(rules_lbl)
         rules_row.addWidget(self._txt_escalation_rules, 1)
         body_lay.addLayout(rules_row)
+
+        self._escalation_rules_warning = QLabel("")
+        _s.themed_ss(self._escalation_rules_warning, "font-size:10px; color:{AMBER}; border:none; padding-top:2px;")
+        self._escalation_rules_warning.setVisible(False)
+        body_lay.addWidget(self._escalation_rules_warning)
 
         bl.addWidget(self._escalation_body)
         self._escalation_expand_btn.clicked.connect(self._toggle_escalation_body)
@@ -370,17 +381,63 @@ class _NotifExtraChannelsMixin:
         _s.themed_ss(extra_hint, "color:{TEXT_MUTED}; font-size:10px; border:none;")
         bl.addWidget(extra_hint)
 
+        quiet_row = QHBoxLayout()
+        quiet_row.setSpacing(10)
+        self._chk_quiet_notify = QCheckBox(
+            "Also send an \"all quiet\" summary when nothing happened, at"
+        )
+        _s.themed_ss(self._chk_quiet_notify, "QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
+            "QCheckBox::indicator {{ width:12px; height:12px;"
+            " border:1px solid {BORDER}; border-radius:2px; background:{BG_CARD}; }}"
+            "QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}")
+        self._chk_quiet_notify.toggled.connect(self._save_quiet_notify_settings)
+        self._spin_quiet_notify_hour = QSpinBox()
+        self._spin_quiet_notify_hour.setRange(0, 23)
+        self._spin_quiet_notify_hour.setValue(8)
+        self._spin_quiet_notify_hour.setSuffix(":00")
+        self._spin_quiet_notify_hour.setFixedWidth(_s.SPINBOX_WIDTH_WITH_SUFFIX)
+        # background-color/color/font-size ONLY -- border/padding make the
+        # +/- buttons unclickable under windows11 (see style_spinbox() docstring).
+        _s.themed_ss(self._spin_quiet_notify_hour, "font-size:11px; color:{TEXT_PRIMARY}; background:{BG_DARK};")
+        _s.style_spinbox(self._spin_quiet_notify_hour)
+        self._spin_quiet_notify_hour.valueChanged.connect(self._save_quiet_notify_settings)
+        quiet_row.addWidget(self._chk_quiet_notify)
+        quiet_row.addWidget(self._spin_quiet_notify_hour)
+        quiet_row.addStretch()
+        bl.addLayout(quiet_row)
+
+        quiet_hint = QLabel(
+            "Only fires when nothing happened -- no critical or warning alerts in the "
+            "previous 24 hours. Separate from the briefing above, which always sends."
+        )
+        quiet_hint.setWordWrap(True)
+        _s.themed_ss(quiet_hint, "color:{TEXT_MUTED}; font-size:10px; border:none;")
+        bl.addWidget(quiet_hint)
+
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_morning_briefing.setChecked(
             qs.value("briefing/enabled", False, type=bool)
         )
         self._spin_briefing_hour.setValue(int(qs.value("briefing/hour", 8)))
+        # Read both values before touching either widget -- setChecked() below
+        # fires _save_quiet_notify_settings() immediately, which would otherwise
+        # write the spinbox's still-default value and clobber the real saved
+        # hour before setValue() gets a chance to read it back.
+        _quiet_enabled = qs.value(_QUIET_ENABLED_KEY, False, type=bool)
+        _quiet_hour = int(qs.value(_QUIET_HOUR_KEY, 8))
+        self._chk_quiet_notify.setChecked(_quiet_enabled)
+        self._spin_quiet_notify_hour.setValue(_quiet_hour)
         return card
 
     def _save_morning_briefing_settings(self) -> None:
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("briefing/enabled", self._chk_morning_briefing.isChecked())
         qs.setValue("briefing/hour", self._spin_briefing_hour.value())
+
+    def _save_quiet_notify_settings(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue(_QUIET_ENABLED_KEY, self._chk_quiet_notify.isChecked())
+        qs.setValue(_QUIET_HOUR_KEY, self._spin_quiet_notify_hour.value())
 
     def _generate_weekly_summary(self) -> str:
         import datetime as _dt2

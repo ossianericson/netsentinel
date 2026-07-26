@@ -18,11 +18,38 @@ def test_import():
 
 
 def test_keyring_keys_never_exported():
-    """Verify that known keyring keys are in the exclusion set."""
+    """Verify that the REAL keyring keys are in the exclusion set.
+
+    Phase 3.3 regression guard: _KEYRING_KEYS previously listed
+    notifications/smtp_password, notifications/pushover_token, and
+    notifications/telegram_token -- QSettings keys nothing in the app has
+    ever written (NotificationsPage uses notif/* via the keyring, not
+    notifications/*). The real secret-bearing keys were never in this set at
+    all, so a stale pre-migration notif/email_pass value was exportable."""
     from modules.settings_io import _KEYRING_KEYS
-    assert "notifications/smtp_password" in _KEYRING_KEYS
+    assert "notif/email_pass" in _KEYRING_KEYS
+    assert "notif/pushover_token" in _KEYRING_KEYS
+    assert "notif/pushover_user" in _KEYRING_KEYS
+    assert "notif/ntfy_token" in _KEYRING_KEYS
+    assert "notif/telegram_token" in _KEYRING_KEYS
     assert "rest_api/api_key" in _KEYRING_KEYS
-    assert "notifications/pushover_token" in _KEYRING_KEYS
+    assert "snmp/community" in _KEYRING_KEYS
+    assert "mqtt/password" in _KEYRING_KEYS
+    # The old orphan names are gone -- nothing in the app ever wrote them.
+    assert "notifications/smtp_password" not in _KEYRING_KEYS
+    assert "notifications/pushover_token" not in _KEYRING_KEYS
+    assert "notifications/telegram_token" not in _KEYRING_KEYS
+
+
+def test_real_email_pass_key_never_exported(tmp_path):
+    """A stale pre-migration notif/email_pass surviving in QSettings must
+    never be exportable, even though the migration (NotificationsPage._restore())
+    normally moves it into the keychain and removes it."""
+    from modules.settings_io import export_settings
+    out = tmp_path / "settings_export.json"
+    export_settings(out, {"notif/email_pass": "hunter2", "ui/theme": "Midnight Pro"})
+    text = out.read_text(encoding="utf-8")
+    assert "hunter2" not in text
 
 
 def test_export_creates_valid_json(tmp_path):
@@ -32,7 +59,7 @@ def test_export_creates_valid_json(tmp_path):
     raw = {
         "display/compact_rows": True,
         "ui/theme": "Arctic Clean",
-        "notifications/smtp_password": "secret",
+        "notif/email_pass": "secret",
     }
     export_settings(out, raw)
 
@@ -43,7 +70,7 @@ def test_export_creates_valid_json(tmp_path):
     assert data["settings"]["display/compact_rows"] is True
     assert data["settings"]["ui/theme"] == "Arctic Clean"
     # Secret must NOT be in the export file
-    assert "notifications/smtp_password" not in data["settings"]
+    assert "notif/email_pass" not in data["settings"]
 
 
 def test_export_skips_none_and_coerces_types(tmp_path):

@@ -144,3 +144,4 @@ class AlertFired:
     cta_filter:    Optional[str]  = None   # opaque filter string passed to that page (e.g. IP)
     is_resolution: bool           = False  # True when this alert clears a previous one
     downtime_s:    Optional[int]  = None   # seconds the host/service was down (resolutions only)
+    remediation:   str            = ""     # per-alert override; "" = use alert_remediation table

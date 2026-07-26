@@ -3,7 +3,14 @@ scripts/update_release_body.py — Prepend a security section to an existing Git
 
 Usage (called from release.yml):
     python scripts/update_release_body.py <release_id> <version> <sha256sums_url> \\
-        [--vt-permalink <url>] [--bundle-name <filename>] [--msix-bundle-name <filename>]
+        [--vt-permalink <url>] [--vt-status clean|flagged|blocked|timeout] \\
+        [--vt-detections <malicious>/<total>] [--vt-engines "<name>; <name>"] \\
+        [--human-override <note>] [--bundle-name <filename>] [--msix-bundle-name <filename>]
+
+Manual-override usage (docs/internal/vt-false-positive-runbook.md): after a human has reviewed
+a "blocked" VT verdict and judged it a false positive, re-run this script locally with
+--human-override "reviewed <date> by <name>: <verdict>" to patch the release notes with
+a visible reviewer note — never silently drop the VT status.
 
 Requires:
     GITHUB_TOKEN environment variable (automatically provided by GitHub Actions)
@@ -39,12 +46,42 @@ def _api(path: str, method: str = "GET", body: dict | None = None) -> dict:
         return json.loads(r.read())
 
 
+def _vt_row(
+    vt_permalink: str,
+    vt_status: str | None,
+    vt_detections: str | None,
+    vt_engines: str | None,
+) -> str:
+    """One markdown table row summarizing the VT verdict — status-aware (RULE-REL1).
+
+    A bare "here's a link" row lets a flagged or blocked build look identical to a
+    clean one in the release notes; every non-clean status must say so plainly
+    rather than making the reader click through to find out.
+    """
+    label = vt_permalink.rstrip("/").split("/")[-1][:12] + "…"
+    detail = ""
+    if vt_detections:
+        detail = f" ({vt_detections} engines" + (f": {vt_engines}" if vt_engines else "") + ")"
+
+    if vt_status == "flagged":
+        return f"| VirusTotal scan | ⚠️ Flagged, reviewed non-blocking{detail} — [report]({vt_permalink}) |"
+    if vt_status == "blocked":
+        return f"| VirusTotal scan | 🛑 Blocked{detail} — [report]({vt_permalink}) |"
+    if vt_status == "timeout":
+        return f"| VirusTotal scan | ⏱️ Scan did not complete — not confirmed clean — [report]({vt_permalink}) |"
+    return f"| VirusTotal scan | [{label}]({vt_permalink}) |"
+
+
 def build_security_section(
     version: str,
     sha256sums_url: str,
     vt_permalink: str | None,
     bundle_name: str | None,
     msix_bundle_name: str | None = None,
+    vt_status: str | None = None,
+    vt_detections: str | None = None,
+    vt_engines: str | None = None,
+    human_override: str | None = None,
 ) -> str:
     lines = [
         "## Security & Verification",
@@ -57,10 +94,15 @@ def build_security_section(
         lines += [
             f"| Check | Result |",
             f"|---|---|",
-            f"| VirusTotal scan | [{vt_permalink.split('/')[-1][:12]}…]({vt_permalink}) |",
+            _vt_row(vt_permalink, vt_status, vt_detections, vt_engines),
             f"| SHA256 checksums | [SHA256SUMS.txt]({sha256sums_url}) |",
             "",
         ]
+        if vt_status == "blocked" and human_override:
+            lines += [
+                f"> **Manually reviewed:** {human_override}",
+                "",
+            ]
     else:
         lines += [
             f"- SHA256 checksums: [SHA256SUMS.txt]({sha256sums_url})",
@@ -114,6 +156,10 @@ def main() -> None:
     p.add_argument("version")
     p.add_argument("sha256sums_url")
     p.add_argument("--vt-permalink", default=None)
+    p.add_argument("--vt-status", default=None, choices=["clean", "flagged", "blocked", "timeout"])
+    p.add_argument("--vt-detections", default=None)
+    p.add_argument("--vt-engines", default=None)
+    p.add_argument("--human-override", default=None)
     p.add_argument("--bundle-name", default=None)
     p.add_argument("--msix-bundle-name", default=None)
     args = p.parse_args()
@@ -128,6 +174,10 @@ def main() -> None:
         vt_permalink=args.vt_permalink,
         bundle_name=args.bundle_name,
         msix_bundle_name=args.msix_bundle_name,
+        vt_status=args.vt_status,
+        vt_detections=args.vt_detections,
+        vt_engines=args.vt_engines,
+        human_override=args.human_override,
     )
 
     new_body = security_section + existing_body

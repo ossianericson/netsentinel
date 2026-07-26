@@ -197,3 +197,197 @@ def test_alert_fired_defaults_not_resolution():
     )
     assert a.is_resolution is False
     assert a.downtime_s is None
+
+
+# ── Phase 4 — severity vocabulary and resolution routing ─────────────────────
+#
+# Two defects fixed here:
+#   1. "HEALTHY" was absent from _SEVERITY_ORDER -> scored 0 (same as INFO) ->
+#      a resolution was silently dropped by every channel with a min_severity
+#      above INFO, even though the user had opted into the very rule that
+#      fired the original alert.
+#   2. 7 resolution call sites constructed AlertFired directly, bypassing
+#      _fire_if_cooled's warmup / maintenance-window / device-scope checks --
+#      a resolution for a host under maintenance, or out of the per-device
+#      opt-in scope, still reached the router.
+
+from unittest.mock import MagicMock  # noqa: E402
+
+
+def _alert(severity="WARNING", rule_type="RTT_THRESHOLD", host="10.0.0.1", is_resolution=False):
+    return AlertFired(
+        rule_name="Test Rule", rule_type=rule_type, host=host,
+        message="test message", severity=severity, ts=int(time.time()),
+        is_resolution=is_resolution,
+    )
+
+
+class TestSeverityVocabulary:
+    def test_healthy_ranked_with_warning(self):
+        from modules.notification_router import _SEVERITY_ORDER
+        assert _SEVERITY_ORDER["HEALTHY"] == _SEVERITY_ORDER["WARNING"]
+
+    def test_high_ranked_with_critical(self):
+        from modules.notification_router import _SEVERITY_ORDER
+        assert _SEVERITY_ORDER["HIGH"] == _SEVERITY_ORDER["CRITICAL"]
+
+    def test_medium_ranked_with_warning(self):
+        from modules.notification_router import _SEVERITY_ORDER
+        assert _SEVERITY_ORDER["MEDIUM"] == _SEVERITY_ORDER["WARNING"]
+
+    def test_user_selectable_severity_levels_unchanged(self):
+        from modules.notification_router import SEVERITY_LEVELS
+        assert SEVERITY_LEVELS == ["INFO", "WARNING", "CRITICAL"]
+
+
+class TestResolutionRouting:
+    def test_healthy_resolution_reaches_a_warning_toast_channel(self):
+        from modules.notification_router import NotificationRouter, ToastChannel
+
+        r = NotificationRouter()
+        cb = MagicMock()
+        r.set_toast_callback(cb)
+        r.set_channels([ToastChannel(enabled=True, min_severity="WARNING")])
+        r.dispatch(_alert(severity="HEALTHY", is_resolution=True))
+        cb.assert_called_once()
+
+    def test_healthy_resolution_still_bypasses_a_critical_floor_channel(self):
+        """Resolutions skip the severity floor entirely -- same reasoning
+        dispatch_escalation() already uses for escalations."""
+        from modules.notification_router import NotificationRouter, ToastChannel
+
+        r = NotificationRouter()
+        cb = MagicMock()
+        r.set_toast_callback(cb)
+        r.set_channels([ToastChannel(enabled=True, min_severity="CRITICAL")])
+        r.dispatch(_alert(severity="HEALTHY", is_resolution=True))
+        cb.assert_called_once()
+
+    def test_non_resolution_healthy_still_gated_by_rule_types(self):
+        from modules.notification_router import _matches_channel
+        alert = _alert(severity="HEALTHY", rule_type="HOST_DOWN", is_resolution=True)
+        assert _matches_channel(alert, "CRITICAL", ["CERT_EXPIRY"]) is False
+        assert _matches_channel(alert, "CRITICAL", ["HOST_DOWN"]) is True
+
+    def test_non_resolution_alert_still_respects_the_severity_floor(self):
+        from modules.notification_router import _matches_channel
+        alert = _alert(severity="INFO", is_resolution=False)
+        assert _matches_channel(alert, "WARNING", []) is False
+
+
+class TestFireResolution:
+    def _rule(self, **kw):
+        return AlertRule(name="Host Down", rule_type="HOST_DOWN", enabled=True, **kw)
+
+    def test_returns_alert_fired_with_healthy_severity(self):
+        eng = AlertEngine(store=None, rules=[])
+        rule = self._rule()
+        result = eng._fire_resolution(rule, "10.0.0.1", int(time.time()), "back online")
+        assert result is not None
+        assert result.severity == "HEALTHY"
+        assert result.is_resolution is True
+        assert result.rule_name == "Host Down"
+
+    def test_suppressed_during_boot_warmup(self):
+        eng = AlertEngine(store=None, rules=[])
+        eng.set_warmup_period(60)
+        rule = self._rule()
+        result = eng._fire_resolution(rule, "10.0.0.1", int(time.time()), "back online")
+        assert result is None
+
+    def test_suppressed_during_maintenance_window(self):
+        eng = AlertEngine(store=None, rules=[])
+        eng.set_maintenance_checker(lambda host: "Weekend Window")
+        rule = self._rule()
+        result = eng._fire_resolution(rule, "10.0.0.1", int(time.time()), "back online")
+        assert result is None
+
+    def test_suppressed_when_out_of_device_scope(self):
+        eng = AlertEngine(store=None, rules=[])
+        eng.set_alert_scope_checker(lambda host: False)
+        rule = self._rule()
+        result = eng._fire_resolution(rule, "10.0.0.1", int(time.time()), "back online")
+        assert result is None
+
+    def test_not_gated_by_the_rules_cooldown(self):
+        """A resolution must fire even immediately after the alert it closes
+        -- unlike _fire_if_cooled, _fire_resolution must not consult
+        self._last_fired at all."""
+        eng = AlertEngine(store=None, rules=[])
+        rule = self._rule(cooldown_s=999999)
+        now = int(time.time())
+        eng._last_fired[f"{rule.name}::10.0.0.1"] = now  # simulate "just fired"
+        result = eng._fire_resolution(rule, "10.0.0.1", now, "back online")
+        assert result is not None
+
+    def test_carries_downtime_and_cta_through_verbatim(self):
+        eng = AlertEngine(store=None, rules=[])
+        rule = self._rule()
+        result = eng._fire_resolution(
+            rule, "10.0.0.1", int(time.time()), "back online",
+            downtime_s=120, cta_page="Inventory", cta_filter="10.0.0.1",
+        )
+        assert result.downtime_s == 120
+        assert result.cta_page == "Inventory"
+        assert result.cta_filter == "10.0.0.1"
+
+
+class TestResolutionSitesRespectMaintenanceWindow:
+    """End-to-end guard: the 7 resolution call sites previously constructed
+    AlertFired directly, with zero gating -- a resolution for a host under
+    maintenance reached the router regardless. Covers the HOST_DOWN site in
+    alert_engine.py (outside the rule loop -- the trickiest of the 7) plus
+    the SERVICE_DOWN site in alert_engine_checks.py."""
+
+    def test_host_down_resolution_respects_maintenance_window(self):
+        eng = AlertEngine(store=None, rules=None)
+        for rule in eng.get_rules():
+            rule.enabled = rule.rule_type == "HOST_DOWN"
+        eng.set_warmup_period(0)
+
+        down_result = eng.evaluate_cycle({"ts": 1000, "states": {"10.0.0.1": "DOWN"}, "rtts": {}})
+        assert any(a.rule_type == "HOST_DOWN" and not a.is_resolution for a in down_result)
+
+        eng.set_maintenance_checker(lambda host: "Weekend Window")
+        up_result = eng.evaluate_cycle({"ts": 2000, "states": {"10.0.0.1": "UP"}, "rtts": {}})
+        assert not any(a.is_resolution for a in up_result)
+
+    def test_host_down_resolution_fires_normally_without_maintenance(self):
+        eng = AlertEngine(store=None, rules=None)
+        for rule in eng.get_rules():
+            rule.enabled = rule.rule_type == "HOST_DOWN"
+        eng.set_warmup_period(0)
+
+        eng.evaluate_cycle({"ts": 1000, "states": {"10.0.0.1": "DOWN"}, "rtts": {}})
+        up_result = eng.evaluate_cycle({"ts": 2000, "states": {"10.0.0.1": "UP"}, "rtts": {}})
+        resolutions = [a for a in up_result if a.is_resolution]
+        assert len(resolutions) == 1
+        assert resolutions[0].host == "10.0.0.1"
+        assert resolutions[0].rule_name == "Host Down"
+
+    def test_host_down_resolution_skipped_when_rule_disabled_mid_downtime(self):
+        """The HOST_DOWN resolution site is outside the rule loop -- it must
+        look the rule up and skip cleanly if disabled while the host was
+        down, rather than firing with a synthetic rule name."""
+        eng = AlertEngine(store=None, rules=None)
+        for rule in eng.get_rules():
+            rule.enabled = rule.rule_type == "HOST_DOWN"
+        eng.set_warmup_period(0)
+
+        eng.evaluate_cycle({"ts": 1000, "states": {"10.0.0.1": "DOWN"}, "rtts": {}})
+        for rule in eng.get_rules():
+            if rule.rule_type == "HOST_DOWN":
+                rule.enabled = False
+        up_result = eng.evaluate_cycle({"ts": 2000, "states": {"10.0.0.1": "UP"}, "rtts": {}})
+        assert not any(a.is_resolution for a in up_result)
+
+    def test_service_down_resolution_respects_maintenance_window(self):
+        eng = AlertEngine(store=None, rules=[
+            AlertRule(name="Service Down", rule_type="SERVICE_DOWN", cooldown_s=0, enabled=True)
+        ])
+        down = [{"host": "192.168.1.1", "port": 80, "up": False, "label": "HTTP"}]
+        up = [{"host": "192.168.1.1", "port": 80, "up": True, "label": "HTTP"}]
+        eng.evaluate_service_checks(down)
+        eng.set_maintenance_checker(lambda host: "Weekend Window")
+        fired = eng.evaluate_service_checks(up)
+        assert not any(a.is_resolution for a in fired)

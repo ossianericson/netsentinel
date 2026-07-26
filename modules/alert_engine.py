@@ -293,6 +293,15 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         ]
         for host in recovered:
             down_ts = self._host_down_since.pop(host)
+            # This site sits outside the rule loop above, so the rule must be
+            # looked up explicitly — it may have been disabled while the host
+            # was down, in which case there is no rule left to attribute the
+            # resolution to.
+            rule = next(
+                (r for r in self._rules if r.rule_type == "HOST_DOWN" and r.enabled), None
+            )
+            if rule is None:
+                continue
             downtime = now - down_ts
             mins, secs = divmod(downtime, 60)
             if mins >= 60:
@@ -301,23 +310,17 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
                 duration = f"{mins}m {secs}s"
             else:
                 duration = f"{secs}s"
-            resolution = AlertFired(
-                rule_name="Host Down",
-                rule_type="HOST_DOWN",
-                host=host,
-                message=(
-                    f"{host} is back online — was unreachable for {duration}."
-                ),
-                severity="HEALTHY",
-                ts=now,
-                is_resolution=True,
+            resolution = self._fire_resolution(
+                rule, host, now,
+                message=f"{host} is back online — was unreachable for {duration}.",
                 downtime_s=downtime,
                 cta_page="Inventory",
                 cta_filter=host,
             )
-            fired.append(resolution)
-            if self._on_alert:
-                self._on_alert(resolution)
+            if resolution:
+                fired.append(resolution)
+                if self._on_alert:
+                    self._on_alert(resolution)
 
         # Track hosts newly going down (not consolidated)
         for alert in down_alerts:
@@ -502,6 +505,45 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
             severity=severity,
             ts=now,
             value=value,
+            cta_page=cta_page,
+            cta_filter=cta_filter,
+        )
+
+    def _fire_resolution(
+        self,
+        rule: AlertRule,
+        host: str,
+        now: int,
+        message: str,
+        *,
+        downtime_s: Optional[int] = None,
+        cta_page: Optional[str] = None,
+        cta_filter: Optional[str] = None,
+        scope_host: Optional[str] = None,
+    ) -> Optional[AlertFired]:
+        """Return a resolution AlertFired unless boot warmup, a maintenance
+        window, or device-scope opt-in suppresses it.
+
+        Deliberately does NOT apply the per-rule cooldown _fire_if_cooled
+        does — a resolution fires at most once per down-state (the caller
+        pops its own `_since`-style tracking dict before calling this) and
+        must never be swallowed by the cooldown of the alert it closes.
+        """
+        if time.time() < self._suppress_until:
+            return None
+        if self._maintenance_suppresses(host, rule.name, "HEALTHY", message):
+            return None
+        if self._out_of_scope(scope_host if scope_host is not None else host, rule.rule_type):
+            return None
+        return AlertFired(
+            rule_name=rule.name,
+            rule_type=rule.rule_type,
+            host=host,
+            message=message,
+            severity="HEALTHY",
+            ts=now,
+            is_resolution=True,
+            downtime_s=downtime_s,
             cta_page=cta_page,
             cta_filter=cta_filter,
         )

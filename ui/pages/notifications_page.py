@@ -37,10 +37,12 @@ from ui.pages.notif_channel_panels import (
 from ui.pages.notif_extra_channels import _NotifExtraChannelsMixin
 from ui.pages.notif_alert_history import _NotifAlertHistoryMixin
 from ui.pages.notif_dep_card import _NotifDepMixin
+from ui.pages.notif_routing_matrix import _NotifRoutingMatrixMixin
 
 
 class NotificationsPage(
-    _NotifDepMixin, _NotifAlertHistoryMixin, _NotifExtraChannelsMixin, _NotifChannelsMixin, QWidget
+    _NotifDepMixin, _NotifAlertHistoryMixin, _NotifExtraChannelsMixin,
+    _NotifRoutingMatrixMixin, _NotifChannelsMixin, QWidget
 ):
     """Notification routing configuration and delivery log page."""
 
@@ -112,6 +114,7 @@ class NotificationsPage(
         il.addWidget(self._build_ntfy_card())
         il.addWidget(self._build_telegram_card())
         il.addWidget(self._build_escalation_card())
+        il.addWidget(self._build_routing_matrix_card())
         il.addWidget(self._build_morning_briefing_card())
         il.addWidget(self._build_weekly_digest_card())
         il.addWidget(self._build_dep_card())
@@ -197,12 +200,9 @@ class NotificationsPage(
         qs.setValue("notif/escalation_channel",  self._combo_escalation_channel.currentText())
         qs.setValue("notif/escalation_rules",    self._txt_escalation_rules.text().strip())
         qs.setValue("notif/service_escalation_enabled", self._chk_service_escalation.isChecked())
-        any_rule_on = False
+        self._save_routing_matrix()
         for name, chk in self._rule_checkboxes.items():
             qs.setValue(_rule_key(name), chk.isChecked())
-            if chk.isChecked():
-                any_rule_on = True
-        qs.setValue("notif/any_rule_enabled", any_rule_on)
         qs.setValue("alerts/sensitivity", self._combo_sensitivity.currentData())
         self._update_rules_badge()
         self._apply_to_engine()
@@ -317,63 +317,87 @@ class NotificationsPage(
         )
         channels = []
         channels.append(ToastChannel(
-            enabled=self._chk_toast.isChecked(),
+            enabled=self._chk_toast.isChecked() and not self._route_channel_disabled("toast"),
             min_severity=self._toast_severity.currentText(),
+            rule_types=self._route_types_for("toast"),
         ))
         url = self._webhook_url.text().strip()
         channels.append(WebhookChannel(
-            enabled=self._chk_webhook.isChecked() and bool(url),
+            enabled=self._chk_webhook.isChecked() and bool(url)
+                    and not self._route_channel_disabled("webhook"),
             url=url,
             min_severity=self._webhook_severity.currentText(),
+            rule_types=self._route_types_for("webhook"),
         ))
         try:
             port = int(self._email_port.text().strip() or "587")
         except ValueError:
             port = 587
         to_addrs = [a.strip() for a in self._email_to.text().split(",") if a.strip()]
+        # Keychain-backed fields read "" from .text() on every restart (the
+        # widget shows only a masked placeholder) -- _kr_value() falls back to
+        # the live keychain value the placeholder stands in for (Phase 5).
+        _email_pw = self._kr_value(_KR_EMAIL_PASS_KEY, self._email_pass)
         channels.append(EmailChannel(
-            enabled=self._chk_email.isChecked() and bool(self._email_host.text().strip()),
+            enabled=self._chk_email.isChecked() and bool(self._email_host.text().strip())
+                    and not self._route_channel_disabled("email"),
             smtp_host=self._email_host.text().strip(),
             smtp_port=port,
             use_tls=port != 465,
             username=self._email_user.text().strip(),
-            password=self._email_pass.text(),
+            password=_email_pw,
             from_addr=self._email_from.text().strip(),
             to_addrs=to_addrs,
             min_severity=self._email_severity.currentText(),
+            rule_types=self._route_types_for("email"),
         ))
+        _po_token = self._kr_value(_KR_PUSHOVER_TOKEN_KEY, self._pushover_token)
+        _po_user  = self._kr_value(_KR_PUSHOVER_USER_KEY,  self._pushover_user)
         channels.append(PushoverChannel(
-            enabled=self._chk_pushover.isChecked()
-                    and bool(self._pushover_token.text())
-                    and bool(self._pushover_user.text()),
-            api_token=self._pushover_token.text(),
-            user_key=self._pushover_user.text(),
+            enabled=self._chk_pushover.isChecked() and bool(_po_token) and bool(_po_user)
+                    and not self._route_channel_disabled("pushover"),
+            api_token=_po_token,
+            user_key=_po_user,
             min_severity=self._pushover_severity.currentText(),
+            rule_types=self._route_types_for("pushover"),
         ))
+        _ntfy_token = self._kr_value(_KR_NTFY_TOKEN_KEY, self._ntfy_token)
         channels.append(NtfyChannel(
-            enabled=self._chk_ntfy.isChecked() and bool(self._ntfy_url.text().strip()),
+            enabled=self._chk_ntfy.isChecked() and bool(self._ntfy_url.text().strip())
+                    and not self._route_channel_disabled("ntfy"),
             topic_url=self._ntfy_url.text().strip(),
-            access_token=self._ntfy_token.text(),
+            access_token=_ntfy_token,
             min_severity=self._ntfy_severity.currentText(),
+            rule_types=self._route_types_for("ntfy"),
         ))
+        _tg_token = self._kr_value(_KR_TELEGRAM_TOKEN_KEY, self._telegram_token)
         channels.append(TelegramChannel(
             enabled=self._chk_telegram.isChecked()
-                    and bool(self._telegram_token.text())
-                    and bool(self._telegram_chat.text().strip()),
-            bot_token=self._telegram_token.text(),
+                    and bool(_tg_token)
+                    and bool(self._telegram_chat.text().strip())
+                    and not self._route_channel_disabled("telegram"),
+            bot_token=_tg_token,
             chat_id=self._telegram_chat.text().strip(),
             min_severity=self._telegram_severity.currentText(),
+            rule_types=self._route_types_for("telegram"),
         ))
         self._router.set_channels(channels)
 
     def _apply_to_engine(self) -> None:
         if self._alert_engine is None:
             return
-        rules = self._alert_engine.get_rules()
+        # apply_sensitivity() mutates AlertRule objects in place and is NOT
+        # idempotent (calling it twice compounds: 200 -> 140 -> 98), so the
+        # live rule set must be rebuilt from _default_rules() on every save
+        # rather than re-scaling the already-scaled objects -- same sequence
+        # app.py's own startup bootstrap uses.
+        from modules.alert_suppressor import _default_rules
+        from modules.alert_sensitivity import apply_sensitivity
+        rules = _default_rules()
+        apply_sensitivity(rules, self._combo_sensitivity.currentData())
         for rule in rules:
             chk = self._rule_checkboxes.get(rule.name)
-            if chk is not None:
-                rule.enabled = chk.isChecked()
+            rule.enabled = bool(chk is not None and chk.isChecked())
         self._alert_engine.set_rules(rules)
 
         from modules.alert_suppressor import EscalationPolicy
@@ -381,8 +405,22 @@ class NotificationsPage(
         channel = self._combo_escalation_channel.currentText()
         enabled = self._chk_escalation.isChecked()
         rules_text = self._txt_escalation_rules.text().strip()
+        # alert_engine.py::check_escalations() compares rule_name
+        # case-sensitively, so free text like "host down" previously
+        # escalated nothing. Canonicalise against the live rule set and
+        # surface any token that doesn't match one.
+        name_lookup = {r.name.casefold(): r.name for r in rules}
+        unknown: list[str] = []
         if rules_text:
-            rule_names = [r.strip() for r in rules_text.split(",") if r.strip()]
+            rule_names = []
+            for token in (t.strip() for t in rules_text.split(",")):
+                if not token:
+                    continue
+                canonical = name_lookup.get(token.casefold())
+                if canonical:
+                    rule_names.append(canonical)
+                else:
+                    unknown.append(token)
         else:
             rule_names = [r.name for r in rules if r.enabled]
         policies = [
@@ -393,3 +431,11 @@ class NotificationsPage(
             for name in rule_names
         ]
         self._alert_engine.set_escalation_policies(policies)
+        if hasattr(self, "_escalation_rules_warning"):
+            if unknown:
+                self._escalation_rules_warning.setText(
+                    "Not a known rule: " + ", ".join(unknown)
+                )
+                self._escalation_rules_warning.setVisible(True)
+            else:
+                self._escalation_rules_warning.setVisible(False)

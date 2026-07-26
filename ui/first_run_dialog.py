@@ -344,7 +344,7 @@ class WelcomeOverlay(QWidget):
         lay.addWidget(title_lbl)
         lay.addSpacing(16)
 
-        self._notif_desktop_chk = QCheckBox("Desktop notifications (recommended)")
+        self._notif_desktop_chk = QCheckBox("Desktop alerts for common problems (recommended)")
         self._notif_desktop_chk.setChecked(True)
         self._notif_desktop_chk.setStyleSheet(
             f"color:{_s.OVERLAY_FG2}; font-size:12px; background:transparent; border:none;"
@@ -389,7 +389,18 @@ class WelcomeOverlay(QWidget):
         """Persist notification preferences from the onboarding slide."""
         qs = QSettings("NetSentinel", "NetSentinel")
         if hasattr(self, "_notif_desktop_chk"):
-            qs.setValue("notif/toast_enabled", self._notif_desktop_chk.isChecked())
+            desktop_enabled = self._notif_desktop_chk.isChecked()
+            qs.setValue("notif/toast_enabled", desktop_enabled)
+            if desktop_enabled:
+                # A toast channel with nothing to deliver is an incoherent
+                # grant -- every rule defaults disabled, so opt into the
+                # recommended set too (modules.alert_suppressor, not
+                # modules.alert_engine -- the import ban covers only that
+                # module path).
+                from modules.alert_suppressor import rule_settings_key
+                from ui.pages.notif_channel_panels import _RECOMMENDED_RULES
+                for _name in _RECOMMENDED_RULES:
+                    qs.setValue(rule_settings_key(_name), True)
         if hasattr(self, "_notif_email_chk") and self._notif_email_chk.isChecked():
             addr = self._notif_email_edit.text().strip()
             if addr:

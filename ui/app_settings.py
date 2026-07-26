@@ -375,10 +375,6 @@ def restore_settings(window) -> None:
     _t2a.setSingleShot(True)
     _t2a.timeout.connect(window._compute_last_visit_summary)
     _t2a.start(2000)
-    _t2b = _QT2(window)
-    _t2b.setSingleShot(True)
-    _t2b.timeout.connect(window._maybe_send_weekly_digest)
-    _t2b.start(4000)
 
     # Cache minimize-to-tray setting once so changeEvent() has no QSettings I/O
     window._minimize_to_tray = QSettings("NetSentinel", "NetSentinel").value(

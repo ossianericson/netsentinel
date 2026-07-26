@@ -32,15 +32,71 @@ def drawer():
     _cleanup(d)
 
 
-def _alert(rule_name: str, message: str) -> dict:
+def _alert(rule_name: str, message: str, rule_type: str = "") -> dict:
     return {
         "id": 1,
         "severity": "WARNING",
         "rule_name": rule_name,
+        "rule_type": rule_type,
         "host": "192.168.1.10",
         "ts": int(time.time()),
         "message": message,
     }
+
+
+class TestRemediationTextUsesCanonicalModule:
+    """Phase 7.3 -- _RULE_FIX / _rule_to_fix moved to modules/alert_remediation.py
+    (remediation_for). The drawer must pass rule_type from the alert row, not
+    just rule_name -- a row written after schema v19 always carries rule_type,
+    so this is the primary lookup key; rule_name substring matching is only the
+    legacy fallback for pre-v19 rows."""
+
+    def test_fix_label_uses_canonical_rule_type_over_legacy_name(self, drawer):
+        from modules.alert_remediation import REMEDIATION
+        drawer.show()
+        drawer.open(_alert("Some Made Up Display Name", "msg", rule_type="HOST_DOWN"))
+        assert drawer._fix_lbl.text() == REMEDIATION["HOST_DOWN"]
+        assert drawer._fix_lbl.isVisible() is True
+        assert drawer._no_fix_lbl.isVisible() is False
+
+    def test_fix_label_falls_back_to_legacy_rule_name_match(self, drawer):
+        """A pre-schema-v19 row has rule_type='' but a rule_name substring
+        match still resolves via the legacy table."""
+        drawer.show()
+        drawer.open(_alert("ARP Spoof Detected", "msg", rule_type=""))
+        assert drawer._fix_lbl.text() != ""
+        assert drawer._fix_lbl.isVisible() is True
+
+    def test_no_fix_label_shown_when_nothing_matches(self, drawer):
+        drawer.show()
+        drawer.open(_alert("Totally Unknown Alert", "msg", rule_type=""))
+        assert drawer._fix_lbl.isVisible() is False
+        assert drawer._no_fix_lbl.isVisible() is True
+
+    def test_legacy_rule_fix_table_removed_from_the_drawer(self):
+        """_RULE_FIX/_rule_to_fix moved to modules/alert_remediation.py."""
+        from ui.widgets import alert_drawer as ad
+        assert not hasattr(ad, "_RULE_FIX")
+        assert not hasattr(ad, "_rule_to_fix")
+
+    def test_live_per_alert_remediation_overrides_the_table(self, drawer):
+        """AlertFired.remediation (e.g. IOT_BEHAVIOR's signal-specific text)
+        takes priority when present in the alert dict -- not persisted, so
+        history rows loaded from the DB simply never carry this key and fall
+        back to the table as before."""
+        drawer.show()
+        alert = _alert("IoT Behavior Anomaly", "msg", rule_type="IOT_BEHAVIOR")
+        alert["remediation"] = "Block device's internet access temporarily."
+        drawer.open(alert)
+        assert drawer._fix_lbl.text() == "Block device's internet access temporarily."
+
+    def test_empty_live_remediation_falls_back_to_the_table(self, drawer):
+        from modules.alert_remediation import REMEDIATION
+        drawer.show()
+        alert = _alert("Host Down", "msg", rule_type="HOST_DOWN")
+        alert["remediation"] = ""
+        drawer.open(alert)
+        assert drawer._fix_lbl.text() == REMEDIATION["HOST_DOWN"]
 
 
 class TestActionRowNoClipping:

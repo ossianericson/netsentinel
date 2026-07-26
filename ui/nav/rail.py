@@ -793,6 +793,9 @@ class _SmoothProgressBar(QProgressBar):
         anim.valueChanged.connect(lambda v: self.setValue(int(v)))
 
         def _on_finished(a=anim):
+            self.setValue(target)  # land on the exact target — InOutSine's cos(pi) can be
+            # a hair off -1.0 on some platforms (e.g. macOS libm), leaving the last
+            # int(v)-truncated frame one tick short of target
             a.deleteLater()  # self-clean when animation completes normally
             if self._anim is a:
                 self._anim = None  # RULE-WIN8-class fix: drop the now-dead handle so the

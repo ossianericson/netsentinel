@@ -127,7 +127,7 @@ def _deliver_pushover(channel, alert: AlertFired) -> None:
     """POST to the Pushover API. Requires api_token + user_key."""
     if not channel.api_token or not channel.user_key:
         return
-    priority = {"INFO": -1, "WARNING": 0, "CRITICAL": 1}.get(alert.severity, 0)
+    priority = {"INFO": -1, "HEALTHY": -1, "WARNING": 0, "CRITICAL": 1}.get(alert.severity, 0)
     payload = json.dumps({
         "token":    channel.api_token,
         "user":     channel.user_key,
@@ -152,7 +152,7 @@ def _deliver_ntfy(channel, alert: AlertFired) -> None:
     """POST to ntfy.sh (or self-hosted). topic_url is the full topic endpoint."""
     if not channel.topic_url:
         return
-    priority = {"INFO": "2", "WARNING": "3", "CRITICAL": "5"}.get(alert.severity, "3")
+    priority = {"INFO": "2", "HEALTHY": "2", "WARNING": "3", "CRITICAL": "5"}.get(alert.severity, "3")
     headers = {
         "Title":    f"NetSentinel — {alert.rule_name}",
         "Priority": priority,
@@ -212,7 +212,7 @@ def _deliver_pushover_tracked(
     if not channel.api_token or not channel.user_key:
         on_err(entry, "Pushover not configured (missing api_token or user_key)")
         return
-    priority = {"INFO": -1, "WARNING": 0, "CRITICAL": 1}.get(alert.severity, 0)
+    priority = {"INFO": -1, "HEALTHY": -1, "WARNING": 0, "CRITICAL": 1}.get(alert.severity, 0)
     payload = json.dumps({
         "token":    channel.api_token,
         "user":     channel.user_key,
@@ -244,7 +244,7 @@ def _deliver_ntfy_tracked(
     if not channel.topic_url:
         on_err(entry, "ntfy not configured (missing topic_url)")
         return
-    priority = {"INFO": "2", "WARNING": "3", "CRITICAL": "5"}.get(alert.severity, "3")
+    priority = {"INFO": "2", "HEALTHY": "2", "WARNING": "3", "CRITICAL": "5"}.get(alert.severity, "3")
     headers = {
         "Title":    f"NetSentinel — {alert.rule_name}",
         "Priority": priority,

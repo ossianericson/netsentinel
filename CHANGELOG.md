@@ -4,6 +4,29 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.46
+
+**Added**
+- `modules/alert_audit.py` — pure-Python invariant self-test for the alert/notification pipeline, driven by `python app.py --audit-alerts` (13/13 invariants)
+- `modules/alert_remediation.py` — canonical per-rule-type remediation text for all 25 `RULE_TYPES`, moved out of `ui/widgets/alert_drawer.py` so it is unit-testable and reusable
+- `ui/pages/notif_routing_matrix.py` — collapsed-by-default per-rule x per-channel advanced routing matrix card on the Notifications page
+- `docs/internal/vt-false-positive-runbook.md` — manual override procedure for a VirusTotal false-positive release flag
+
+**Changed**
+- `scripts/vt_scan.py` (RULE-REL1): the release VirusTotal gate no longer fails on any single engine's nonzero hit — it now classifies by combined malicious+suspicious hit count, surfacing `<=2` as a non-blocking "flagged" warning (with engine names) and only blocking the release when hits exceed that threshold
+- `.github/workflows/release.yml`: the "Prepend security section" step now runs with `if: always()` so the VirusTotal verdict is never silently dropped from release notes when the scan step itself fails
+- `scripts/update_release_body.py`: release notes now render the VirusTotal verdict status-aware instead of a bare link that looked identical regardless of outcome
+- Settings -> Active Integrations dropped its three duplicate, non-functional "Send test" rows (Email/Webhook/Pushover) in favour of a single link to the real Notifications page config
+
+**Fixed**
+- `modules/notification_router.py`: desktop toast balloons and default-on channels were reaching users who never opted into notifications across 17 call sites plus 3 ungated tray balloons; all in-app toast delivery now routes exclusively through the router-gated callback
+- 8 of 25 alert rule types had no remediation text; every rule type now resolves to actionable "how to fix" guidance
+- HEALTHY-severity alerts now route resolution notifications while still respecting maintenance windows and per-device scope
+- Notification channel secrets (SMTP, Pushover, Telegram, ntfy) now survive an app restart via the OS keychain restore path
+- Removed the write-only `notif/any_rule_enabled` QSettings key that nothing ever read
+
+---
+
 ### v2.1.45
 
 **Added**

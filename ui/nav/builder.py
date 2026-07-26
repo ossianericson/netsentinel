@@ -965,14 +965,16 @@ class _NavBuilderMixin:
 
     @pyqtSlot(str)
     def _on_config_drift_detected(self, message: str) -> None:
-        """Show a status-bar and tray notification when snapshot comparison finds drift."""
+        """Update the status bar and badges when snapshot comparison finds drift.
+
+        No tray balloon here -- CONFIG_DRIFT is a real, gated rule type
+        (ui/scan_wiring.py evaluates it via AlertEngine.evaluate_config_drift_checks()
+        and surfaces it through _surface_alert_in_app() / the router). A second raw
+        show_notification() here would have duplicated that gated balloon.
+        """
         self._baseline_has_drift = True
         self._refresh_section_badges()
         self._set_status(f"⚠ {message}")
-        if self._tray_manager.is_available():
-            self._tray_manager.show_notification(
-                "Config Drift Detected", message, "WARNING"
-            )
 
     # ── Help panel wiring ─────────────────────────────────────────────────────
 

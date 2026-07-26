@@ -4,8 +4,7 @@ settings_cards.py — SettingsPage card builder mixin and helpers.
 Extracted from settings_page.py (S14-3c) to reduce that file's size.
 
 Provides:
-  • Worker threads: _NotifTestWorker, _FetchRegistryWorker, _InstallWorker,
-                    _UninstallWorker
+  • Worker threads: _FetchRegistryWorker, _InstallWorker, _UninstallWorker
   • UI helpers:     _page_header, _card, _integr_cert_count, _integr_svc_count
   • _SettingsCardsMixin — all _build_*_card methods and their handlers,
     inherited by SettingsPage
@@ -50,115 +49,6 @@ log = logging.getLogger(__name__)
 
 
 # ── Worker threads ────────────────────────────────────────────────────────────
-
-class _NotifTestWorker(QThread):
-    done  = pyqtSignal(str)
-    error = pyqtSignal(str)
-
-    def __init__(self, channel_type: str, parent=None):
-        super().__init__(parent)
-        self._channel_type = channel_type
-
-    def run(self) -> None:
-        import socket, time as _t
-        host = socket.gethostname()
-        ts   = _t.strftime("%Y-%m-%d %H:%M:%S")
-        subj = "NetSentinel test message"
-        body = f"This is a test from NetSentinel on {host} at {ts}."
-        try:
-            qs = QSettings("NetSentinel", "NetSentinel")
-            ct = self._channel_type
-            if ct == "email":
-                self._test_email(qs, subj, body)
-            elif ct == "webhook":
-                self._test_webhook(qs, subj, body)
-            elif ct == "pushover":
-                self._test_pushover(qs, subj, body)
-            elif ct == "telegram":
-                self._test_telegram(qs, body)
-            elif ct == "ntfy":
-                self._test_ntfy(qs, body)
-            else:
-                raise ValueError(f"Unknown channel: {ct}")
-            self.done.emit("Test sent ✓")
-        except Exception as exc:
-            self.error.emit(f"Failed: {exc}")
-
-    def _test_email(self, qs, subj: str, body: str) -> None:
-        import smtplib, ssl
-        smtp_host = qs.value("notifications/smtp_host", "")
-        smtp_port = qs.value("notifications/smtp_port", 587, int)
-        username  = qs.value("notifications/smtp_user", "")
-        to_addr   = qs.value("notifications/email_address", "")
-        if not smtp_host or not to_addr:
-            raise ValueError("SMTP host or recipient not configured — open Notifications settings")
-        try:
-            import keyring
-            password = keyring.get_password("NetSentinel", "notifications/smtp_password") or ""
-        except Exception:
-            password = ""
-        from email.mime.text import MIMEText
-        msg = MIMEText(body)
-        msg["Subject"] = subj
-        msg["From"] = username or to_addr
-        msg["To"]   = to_addr
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-            s.ehlo(); s.starttls(context=ctx)
-            if username:
-                s.login(username, password)
-            s.sendmail(msg["From"], [to_addr], msg.as_string())
-
-    def _test_webhook(self, qs, subj: str, body: str) -> None:
-        import urllib.request, json
-        url = qs.value("notifications/webhook_url", "")
-        if not url:
-            raise ValueError("Webhook URL not configured — open Notifications settings")
-        payload = json.dumps({"subject": subj, "body": body, "source": "NetSentinel"}).encode()
-        req = urllib.request.Request(url, data=payload,
-                                     headers={"Content-Type": "application/json"}, method="POST")
-        urllib.request.urlopen(req, timeout=8)
-
-    def _test_pushover(self, qs, subj: str, body: str) -> None:
-        import urllib.request, urllib.parse
-        try:
-            import keyring
-            api_token = keyring.get_password("NetSentinel", "notifications/pushover_token") or ""
-        except Exception:
-            api_token = ""
-        user_key = qs.value("notifications/pushover_user_key", "")
-        if not api_token or not user_key:
-            raise ValueError("Pushover API token or user key not configured — open Notifications settings")
-        data = urllib.parse.urlencode({
-            "token": api_token, "user": user_key, "title": subj, "message": body,
-        }).encode()
-        urllib.request.urlopen("https://api.pushover.net/1/messages.json", data=data, timeout=8)
-
-    def _test_telegram(self, qs, body: str) -> None:
-        import urllib.request, urllib.parse
-        try:
-            import keyring
-            bot_token = keyring.get_password("NetSentinel", "notifications/telegram_token") or ""
-        except Exception:
-            bot_token = ""
-        chat_id = qs.value("notifications/telegram_chat_id", "")
-        if not bot_token or not chat_id:
-            raise ValueError("Telegram bot token or chat ID not configured — open Notifications settings")
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        data = urllib.parse.urlencode({"chat_id": chat_id, "text": body}).encode()
-        urllib.request.urlopen(url, data=data, timeout=8)
-
-    def _test_ntfy(self, qs, body: str) -> None:
-        import urllib.request
-        topic_url = qs.value("notifications/ntfy_topic_url", "")
-        if not topic_url:
-            raise ValueError("ntfy topic URL not configured — open Notifications settings")
-        urllib.request.urlopen(
-            urllib.request.Request(topic_url, data=body.encode(),
-                                   headers={"Title": "NetSentinel Test"}, method="POST"),
-            timeout=8,
-        )
-
 
 class _FetchRegistryWorker(QThread):
     ready = pyqtSignal(list)
@@ -420,21 +310,23 @@ class _SettingsCardsMixin:
         def _set(key: str, state: str) -> None:
             self._cfg_chips[key].setStyleSheet(self._chip_style(state))
 
-        _set("notifications", "green" if s.value("tray/alerts_enabled", True, bool) else "grey")
+        from modules.alert_suppressor import _default_rules, rule_settings_key
+        _any_rule = any(s.value(rule_settings_key(r.name), False, bool) for r in _default_rules())
+        _any_chan = any(s.value(f"notif/{k}_enabled", False, bool)
+                        for k in ("toast", "webhook", "email", "pushover", "ntfy", "telegram"))
+        if _any_rule and _any_chan:
+            _set("notifications", "green")
+        elif _any_rule or _any_chan:
+            _set("notifications", "amber")
+        else:
+            _set("notifications", "grey")
         _set("sched_scan",    "green" if s.value("sched_scan/enabled", False, bool) else "grey")
         any_monitor = (
             s.value("monitor_persist/arp_running", False, bool)
             or s.value("monitor_persist/bandwidth_running", False, bool)
         )
         _set("monitor_resume", "green" if any_monitor else "grey")
-        email = s.value("digest/email", "", str)
-        digest_on = s.value("digest/enabled", False, bool)
-        if digest_on and email:
-            _set("digest", "green")
-        elif digest_on or email:
-            _set("digest", "amber")
-        else:
-            _set("digest", "grey")
+        _set("digest", "green" if s.value("notif/weekly_digest_enabled", False, bool) else "grey")
         _set("cve_tracking", "green" if cve_count > 0 else "grey")
         _set("automation",   "green" if rule_count > 0 else "grey")
 
@@ -471,80 +363,9 @@ class _SettingsCardsMixin:
             row.addWidget(cfg_btn)
             bl.addLayout(row)
 
-        def _notif_row(label: str, status_fn, nav_target: str, channel_type: str) -> None:
-            row = QHBoxLayout()
-            row.setSpacing(8)
-            lbl = QLabel(label)
-            lbl.setFixedWidth(190)
-            _styles.themed_ss(lbl, lambda: _styles.qss_label(_styles.TEXT_PRIMARY, 11))
-            status_val = status_fn()
-            ok = status_val[0]
-            status_txt = status_val[1]
-            s_lbl = QLabel(status_txt)
-            _styles.themed_ss(s_lbl, lambda ok=ok:
-                f"font-size:11px;color:{_styles.GREEN if ok else _styles.TEXT_MUTED};background:transparent;")
-            test_btn = QPushButton("Send test")
-            test_btn.setFlat(True)
-            test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            _styles.themed_ss(test_btn, "QPushButton{{color:{TEXT_SECONDARY};font-size:11px;background:transparent;"
-                "border:1px solid {BORDER};border-radius:3px;padding:1px 8px;}}"
-                "QPushButton:hover{{color:{TEXT_PRIMARY};border-color:{ACCENT};}}"
-                "QPushButton:disabled{{color:{TEXT_MUTED};}}"
-                "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}")
-            cfg_btn = QPushButton("Configure →")
-            cfg_btn.setFlat(True)
-            cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            _styles.themed_ss(
-                cfg_btn,
-                "QPushButton{{color:{ACCENT};font-size:11px;background:transparent;border:none;padding:0;}}"
-                "QPushButton:hover{{color:{ACCENT_DARK};}}"
-                "QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-            )
-            cfg_btn.clicked.connect(lambda _=False, t=nav_target: self.navigate_to.emit(t))
-
-            def _run_test(ct=channel_type, btn=test_btn):
-                btn.setEnabled(False)
-                btn.setText("Sending…")
-                w = _NotifTestWorker(ct, parent=self)
-                self._notif_test_workers.append(w)
-                def _on_done(msg, b=btn, worker=w):
-                    b.setEnabled(True)
-                    b.setText("Send test")
-                    from ui.widgets.toast import ToastManager
-                    ToastManager.show(msg, kind="info")
-                    if worker in self._notif_test_workers:
-                        self._notif_test_workers.remove(worker)
-                def _on_err(msg, b=btn, worker=w):
-                    b.setEnabled(True)
-                    b.setText("Send test")
-                    from ui.widgets.toast import ToastManager
-                    ToastManager.show(msg, kind="warning")
-                    if worker in self._notif_test_workers:
-                        self._notif_test_workers.remove(worker)
-                w.done.connect(_on_done)
-                w.error.connect(_on_err)
-                w.start()
-
-            test_btn.clicked.connect(_run_test)
-            row.addWidget(lbl)
-            row.addWidget(s_lbl, 1)
-            row.addWidget(test_btn)
-            row.addWidget(cfg_btn)
-            bl.addLayout(row)
-
-        _notif_row("Email notifications",
-             lambda: (bool(qs.value("notifications/email_address", "")),
-                      ("✓ " + str(qs.value("notifications/email_address", ""))[:30])
-                      if qs.value("notifications/email_address", "") else "✗ Not configured"),
-             "Notifications", "email")
-        _notif_row("Webhook",
-             lambda: (bool(qs.value("notifications/webhook_url", "")),
-                      ("✓ Configured" if qs.value("notifications/webhook_url", "") else "✗ Not set")),
-             "Notifications", "webhook")
-        _notif_row("Pushover",
-             lambda: (bool(qs.value("notifications/pushover_user_key", "")),
-                      ("✓ Configured" if qs.value("notifications/pushover_user_key", "") else "✗ Not set")),
-             "Notifications", "pushover")
+        _row("Notification channels",
+             lambda: (False, "Email · Webhook · Pushover · ntfy · Telegram — test and configure here"),
+             "Notifications")
         _row("5G Modem logging",
              lambda: (qs.value("logging/modem_enabled", False, type=bool),
                       (f"● Logging · every {qs.value('logging/modem_interval_min', 5, type=int)} min"

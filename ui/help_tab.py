@@ -341,7 +341,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Fixed duplicate app windows from repeated icon clicks", "Clicking the taskbar or Start-menu icon several times in a row now brings the existing window to the front instead of sometimes opening a second copy of NetSentinel."),
+        ("Notifications now strictly opt-in", "Desktop toast and tray notifications no longer reach you unless you've actually turned them on in Settings."),
+        ("Every alert now explains how to fix it", "All alert types include clear, actionable remediation guidance instead of leaving some without any next step."),
+        ("Advanced notification routing matrix", "A new per-rule x per-channel routing card lets you send specific alert types to specific channels."),
+        ("Notification secrets survive restarts", "Email, Pushover, Telegram, and ntfy credentials are now reliably restored from the OS keychain after an app restart."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

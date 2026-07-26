@@ -951,10 +951,28 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     self._set_status(
                         f"⚠  {len(tr.gone_devices)} device(s) gone: {', '.join(gone_msgs)}"
                     )
+                    # Tray notification — only if user opted in (mirrors the
+                    # tray/notify_new_device branch above)
+                    from PyQt6.QtCore import QSettings as _QS
+                    if (
+                        self._tray_manager.is_available()
+                        and _QS("NetSentinel", "NetSentinel").value(
+                            "tray/notify_device_gone", False, type=bool
+                        )
+                    ):
+                        summary = ", ".join(gone_msgs)
+                        if len(tr.gone_devices) > 2:
+                            summary += f" +{len(tr.gone_devices)-2} more"
+                        self._tray_manager.show_notification(
+                            "Device Left the Network",
+                            summary,
+                            "WARNING",
+                        )
+                        self._tray_manager.increment_badge()
                 # Feed tracker result into alert engine + MQTT
                 if self._alert_engine is not None:
                     for a in self._alert_engine.evaluate_tracker_result(tr):
-                        self._show_alert_toast(a)
+                        self._surface_alert_in_app(a)
                         self._home_page.on_alert(a)
                         self._mqtt_page.on_alert(a.severity, a.message, a.host)
                         try:
@@ -967,7 +985,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     except Exception:
                         churn = {}
                     for a in self._alert_engine.evaluate_ip_churn_checks(churn):
-                        self._show_alert_toast(a)
+                        self._surface_alert_in_app(a)
                         self._home_page.on_alert(a)
                         try:
                             persist_alert(self._store, a)
@@ -1222,7 +1240,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         if _blessed_snap is not None:
                             _drift_diff = diff_snapshots(_blessed_snap, _new_snap)
                             for a in self._alert_engine.evaluate_config_drift_checks(_drift_diff):
-                                self._show_alert_toast(a)
+                                self._surface_alert_in_app(a)
                                 self._home_page.on_alert(a)
                                 try:
                                     persist_alert(self._store, a)

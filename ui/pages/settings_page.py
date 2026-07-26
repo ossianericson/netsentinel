@@ -33,7 +33,6 @@ from ui import styles as _s
 from ui.pages.settings_cards import (
     _card,
     _SettingsCardsMixin,
-    _NotifTestWorker,
 )
 
 class SettingsPage(_SettingsCardsMixin, QWidget):
@@ -67,7 +66,6 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         super().__init__(parent)
         self.setObjectName("contentArea")
         self._all_cards: list[tuple[QFrame, str, str, str]] = []  # (card, title, kw, category)
-        self._notif_test_workers: list[_NotifTestWorker] = []  # prevent GC
         self._active_category: str = "All"
         self._autostart_query_started = False
 

@@ -77,23 +77,17 @@ class _AlertChecksMixin:
                             duration = f"{mins}m {secs}s"
                         else:
                             duration = f"{secs}s"
-                        resolution = AlertFired(
-                            rule_name=rule.name,
-                            rule_type="SERVICE_DOWN",
-                            host=key,
-                            message=(
-                                f"{label} is back — was unreachable for {duration}."
-                            ),
-                            severity="HEALTHY",
-                            ts=now,
-                            is_resolution=True,
+                        resolution = self._fire_resolution(
+                            rule, key, now,
+                            message=f"{label} is back — was unreachable for {duration}.",
                             downtime_s=downtime,
                             cta_page="Service Heartbeat",
                             cta_filter=key,
                         )
-                        fired.append(resolution)
-                        if self._on_alert:
-                            self._on_alert(resolution)
+                        if resolution:
+                            fired.append(resolution)
+                            if self._on_alert:
+                                self._on_alert(resolution)
                     continue
 
                 # Track downtime start on the first observed failure (used for
@@ -281,20 +275,16 @@ class _AlertChecksMixin:
                             self._on_alert(alert)
                 elif host in since:
                     since.pop(host)
-                    resolution = AlertFired(
-                        rule_name=rule.name,
-                        rule_type="JITTER_HIGH",
-                        host=host,
+                    resolution = self._fire_resolution(
+                        rule, host, now,
                         message=f"{host}'s jitter is back to normal ({avg_jitter:.0f} ms).",
-                        severity="HEALTHY",
-                        ts=now,
-                        is_resolution=True,
                         cta_page="Network Logger",
                         cta_filter=host,
                     )
-                    fired.append(resolution)
-                    if self._on_alert:
-                        self._on_alert(resolution)
+                    if resolution:
+                        fired.append(resolution)
+                        if self._on_alert:
+                            self._on_alert(resolution)
 
         return fired
 
@@ -338,20 +328,16 @@ class _AlertChecksMixin:
                         self._on_alert(alert)
             elif was_degraded:
                 self._mesh_degraded_since.pop(key, None)
-                resolution = AlertFired(
-                    rule_name=rule.name,
-                    rule_type="MESH_DEGRADED",
-                    host=key,
+                resolution = self._fire_resolution(
+                    rule, key, now,
                     message="Your mesh network is back to full health.",
-                    severity="HEALTHY",
-                    ts=now,
-                    is_resolution=True,
                     cta_page="Hardware",
                     cta_filter=None,
                 )
-                fired.append(resolution)
-                if self._on_alert:
-                    self._on_alert(resolution)
+                if resolution:
+                    fired.append(resolution)
+                    if self._on_alert:
+                        self._on_alert(resolution)
 
         return fired
 
@@ -406,20 +392,16 @@ class _AlertChecksMixin:
                         self._on_alert(alert)
             elif key in self._modem_degraded_since:
                 self._modem_degraded_since.pop(key, None)
-                resolution = AlertFired(
-                    rule_name=rule.name,
-                    rule_type="MODEM_SIGNAL_DROP",
-                    host=key,
+                resolution = self._fire_resolution(
+                    rule, key, now,
                     message="Your modem's signal is back to normal.",
-                    severity="HEALTHY",
-                    ts=now,
-                    is_resolution=True,
                     cta_page="Hardware",
                     cta_filter=None,
                 )
-                fired.append(resolution)
-                if self._on_alert:
-                    self._on_alert(resolution)
+                if resolution:
+                    fired.append(resolution)
+                    if self._on_alert:
+                        self._on_alert(resolution)
 
         return fired
 
@@ -500,19 +482,15 @@ class _AlertChecksMixin:
             recovered = [mac for mac in list(since) if mac not in churn_counts]
             for mac in recovered:
                 since.pop(mac)
-                resolution = AlertFired(
-                    rule_name=rule.name,
-                    rule_type="IP_CHURN",
-                    host=mac,
+                resolution = self._fire_resolution(
+                    rule, mac, now,
                     message=f"Device {mac}'s IP address is stable again.",
-                    severity="HEALTHY",
-                    ts=now,
-                    is_resolution=True,
                     cta_page="Devices",
                     cta_filter=mac,
                 )
-                fired.append(resolution)
-                if self._on_alert:
-                    self._on_alert(resolution)
+                if resolution:
+                    fired.append(resolution)
+                    if self._on_alert:
+                        self._on_alert(resolution)
 
         return fired

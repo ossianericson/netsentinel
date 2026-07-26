@@ -104,8 +104,10 @@ def test_default_rules_count():
     # Trend Forecast); V6 Sprint 3: +3 (New Open Port, New CVE Found, New
     # Internet Exposure — previously missing default rules, fixed alongside
     # Sprint 4); V6 Sprint 4: +3 (ARP Spoof Detected, Rogue DHCP Server,
-    # Config Drift)
-    assert len(rules) == 24
+    # Config Drift); strict-opt-in-alerting Phase 7.5: +1 (Packet Loss /
+    # LOSS_THRESHOLD — the one RULE_TYPES member with no default rule at all,
+    # so it could never fire regardless of settings)
+    assert len(rules) == 25
     assert all(not r.enabled for r in rules)
 
 

@@ -17,12 +17,12 @@ from typing import Any, Mapping
 
 # QSettings keys that map to keyring entries — never exported.
 _KEYRING_KEYS: frozenset[str] = frozenset({
-    "notifications/smtp_password",
-    "notifications/pushover_token",
-    "notifications/telegram_token",
-    "rest_api/api_key",
-    "snmp/community",
-    "mqtt/password",
+    # Legacy plaintext QSettings keys migrated into the OS keychain by
+    # NotificationsPage._restore() — never export them even if a stale one
+    # survives from a pre-migration install.
+    "notif/email_pass", "notif/pushover_token", "notif/pushover_user",
+    "notif/ntfy_token", "notif/telegram_token",
+    "rest_api/api_key", "snmp/community", "mqtt/password",
 })
 
 

@@ -41,9 +41,15 @@ _log = logging.getLogger(__name__)
 
 # ── Severity ordering ─────────────────────────────────────────────────────────
 
-_SEVERITY_ORDER = {"INFO": 0, "WARNING": 1, "CRITICAL": 2}
+# HEALTHY  — a resolution ("back online"). Ranked with WARNING so a WARNING-floor
+#            channel does not silently drop it; resolutions also bypass the floor
+#            entirely in _matches_channel().
+# HIGH / MEDIUM — aliases that reach the router from ui/system_tray.py's
+#            vocabulary; mapped here so the two agree.
+_SEVERITY_ORDER = {"INFO": 0, "MEDIUM": 1, "WARNING": 1, "HEALTHY": 1,
+                   "HIGH": 2, "CRITICAL": 2}
 
-SEVERITY_LEVELS = ["INFO", "WARNING", "CRITICAL"]
+SEVERITY_LEVELS = ["INFO", "WARNING", "CRITICAL"]   # user-selectable only — unchanged
 
 
 def _severity_gte(severity: str, minimum: str) -> bool:
@@ -57,7 +63,7 @@ def _severity_gte(severity: str, minimum: str) -> bool:
 class ToastChannel:
     """Desktop system-tray notification. Callback injected by the UI layer."""
     name:             str  = "Desktop Notification"
-    enabled:          bool = True
+    enabled:          bool = False         # strict opt-in — see notif/toast_enabled
     min_severity:     str  = "WARNING"     # INFO | WARNING | CRITICAL
     rule_types:       List[str] = field(default_factory=list)  # empty = all
 
@@ -144,11 +150,15 @@ _ESCALATION_CHANNEL_TYPES: Dict[str, type] = {
 
 def _matches_channel(alert: AlertFired, min_severity: str, rule_types: List[str]) -> bool:
     """Return True if the alert should be dispatched to a channel with these filters."""
-    if not _severity_gte(alert.severity, min_severity):
-        return False
     if rule_types and alert.rule_type not in rule_types:
         return False
-    return True
+    if getattr(alert, "is_resolution", False):
+        # A resolution exists only because the user opted into the rule AND it
+        # already fired. Delivering "it's broken" but suppressing "it's fixed"
+        # leaves an open loop, so resolutions skip the severity floor (same
+        # reasoning dispatch_escalation() uses). rule_types still applies.
+        return True
+    return _severity_gte(alert.severity, min_severity)
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
@@ -170,7 +180,7 @@ class NotificationRouter:
 
     def __init__(self) -> None:
         self._channels: List[Channel] = [
-            ToastChannel(),   # desktop toast on by default
+            ToastChannel(),   # strict opt-in — disabled until the user enables it
         ]
         self._toast_cb: Optional[Callable[[AlertFired], None]] = None
         self._lock = threading.Lock()
@@ -515,3 +525,51 @@ def channels_from_dict(data: List[dict]) -> List[Channel]:
         except TypeError:
             pass  # schema mismatch — skip stale entry
     return result
+
+
+# ── Per-rule x per-channel routing matrix (QSettings 'notif/rule_routing') ────
+
+ROUTE_CHANNEL_KEYS = ("toast", "webhook", "email", "pushover", "ntfy", "telegram")
+
+
+def routing_matrix_to_json(matrix: Dict[str, List[str]]) -> str:
+    """Serialise {channel_key: [rule_type, ...]} for QSettings 'notif/rule_routing'.
+
+    A channel covering every RULE_TYPES member is stored as [] — the canonical
+    'all rules' value _matches_channel() already understands, so an install that
+    never opens this card behaves exactly as before.
+    """
+    from modules.alert_types import RULE_TYPES
+
+    out: Dict[str, List[str]] = {}
+    for ch, rule_types in matrix.items():
+        if ch not in ROUTE_CHANNEL_KEYS:
+            continue
+        rt_list = list(rule_types)
+        if rt_list and set(rt_list) >= RULE_TYPES:
+            out[ch] = []
+        else:
+            out[ch] = rt_list
+    return json.dumps(out)
+
+
+def routing_matrix_from_json(raw: Optional[str]) -> Dict[str, List[str]]:
+    """Inverse of routing_matrix_to_json(). Unknown channel keys and rule
+    types are dropped; malformed or absent input yields {} (= every channel
+    routes all rules)."""
+    from modules.alert_types import RULE_TYPES
+
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out: Dict[str, List[str]] = {}
+    for ch, rule_types in data.items():
+        if ch not in ROUTE_CHANNEL_KEYS or not isinstance(rule_types, list):
+            continue
+        out[ch] = [rt for rt in rule_types if rt in RULE_TYPES]
+    return out

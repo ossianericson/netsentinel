@@ -753,19 +753,64 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         hard_exit(0)
 
 
-    def _show_alert_toast(self, alert) -> None:
-        """Show a desktop notification for a fired alert."""
+    def _surface_alert_in_app(self, alert) -> None:
+        """In-app surfaces for a fired alert -- always on, never gated.
+
+        Status bar + tray badge only. It deliberately shows NO desktop
+        notification balloon: that is NotificationRouter's ToastChannel job and
+        is strictly opt-in (notif/toast_enabled, default False). Every
+        evaluate_*() consumer calls this directly, so these surfaces work
+        regardless of notification settings.
+        """
         severity = getattr(alert, "severity", "INFO")
         message  = getattr(alert, "message",  str(alert))
-
-        # Update status bar regardless
-        prefix = "🔴" if severity == "CRITICAL" else "🟡"
+        if severity == "CRITICAL":
+            prefix = "🔴"
+        elif severity == "HEALTHY":
+            prefix = "🟢"
+        else:
+            prefix = "🟡"
         self._set_status(f"{prefix} {message}")
+        # A resolution closes an alert; it must not add to the unacked badge.
+        if self._tray_manager.is_available() and not getattr(alert, "is_resolution", False):
+            self._tray_manager.increment_badge()
+        self._maybe_prompt_toast_optin()
 
-        # Desktop toast via tray manager
+    def _maybe_prompt_toast_optin(self) -> None:
+        """One-time in-app nudge after an alert fires while desktop balloons are
+        off. In-app toast only -- it does not itself show an OS balloon, so strict
+        opt-in is preserved."""
+        from PyQt6.QtCore import QSettings as _QS
+        qs = _QS("NetSentinel", "NetSentinel")
+        if qs.value("notif/toast_enabled", False, type=bool):
+            return
+        if qs.value("notif/toast_optin_prompted", False, type=bool):
+            return
+        qs.setValue("notif/toast_optin_prompted", True)
+        try:
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(
+                "Desktop notifications are off — alerts appear here and in Alert History.",
+                "action", action_label="Turn on",
+                action_callback=lambda: self._nav_rail_go_to(L.NOTIFICATIONS),
+            )
+        except Exception:
+            pass  # non-fatal — the nudge is cosmetic, must never break alert delivery
+
+    def _show_alert_toast(self, alert) -> None:
+        """Desktop notification balloon -- ROUTER-ONLY entry point.
+
+        Wired once, as NotificationRouter.set_toast_callback() in app.py. The
+        router has already applied snooze + ToastChannel.enabled + min_severity
+        + rule_types before calling this, so there is deliberately NO settings
+        read here and no other call site may exist (enforced by
+        tests/test_toast_gate.py::test_show_alert_toast_has_exactly_one_call_site).
+        In-app surfaces live in _surface_alert_in_app().
+        """
+        severity = getattr(alert, "severity", "INFO")
+        message  = getattr(alert, "message",  str(alert))
         if self._tray_manager.is_available():
             self._tray_manager.show_notification("NetSentinel Alert", message, severity)
-            self._tray_manager.increment_badge()
         elif self._tray_icon is not None:
             # Legacy fallback (should never be reached after tray_manager setup)
             from PyQt6.QtWidgets import QSystemTrayIcon
@@ -1644,30 +1689,25 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         last_ts = float(qs.value("notif/weekly_digest_last_ts", 0))
         if now.timestamp() - last_ts < 6 * 86400:
             return
-        qs.setValue("notif/weekly_digest_last_ts", now.timestamp())
-        # SCHED-4: use digest_builder for full HTML digest
-        try:
-            from modules.digest_builder import build_digest_html
-            body = build_digest_html(self._store) if self._store else "NetSentinel weekly digest"
-        except Exception:
-            if hasattr(self, "_notifications_page"):
-                body = self._notifications_page._generate_weekly_summary()
-            else:
-                body = "NetSentinel weekly digest"
-        if self._notif_router:
+        # The digest has its own explicit opt-in key (notif/weekly_digest_enabled)
+        # and is not a rule alert, so it is delivered directly -- same pattern as
+        # the morning briefing -- rather than through NotificationRouter.dispatch().
+        if hasattr(self, "_notifications_page"):
+            summary_text = self._notifications_page._generate_weekly_summary()
+        else:
+            summary_text = "NetSentinel weekly digest"
+        if self._tray_manager.is_available():
             try:
-                from modules.notification_router import Alert as _Alert
-                alert = _Alert(
-                    rule_name="Weekly Digest",
-                    rule_type="WEEKLY_DIGEST",
-                    severity="INFO",
-                    host="NetSentinel",
-                    message=body,
+                self._tray_manager.show_notification(
+                    "NetSentinel Weekly Digest", summary_text, "INFO",
+                    on_click=lambda: self._nav_rail_go_to(L.NOTIFICATIONS),
                 )
-                self._notif_router.dispatch(alert)
+                # Only advance last_ts on a successful send -- writing this
+                # before dispatch made a failed digest self-suppressing for
+                # 6 days (the previous bug).
+                qs.setValue("notif/weekly_digest_last_ts", now.timestamp())
             except Exception:
                 pass  # non-fatal
-
 
     @pyqtSlot(str)
     def _on_plugin_page_test(self, path: str) -> None:
@@ -1795,7 +1835,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                         for a in self._alert_engine.evaluate_modem_checks(
                             _cur_type, _cur_sinr, _prior_sinr, _prior_type,
                         ):
-                            self._show_alert_toast(a)
+                            self._surface_alert_in_app(a)
                             self._home_page.on_alert(a)
                             try:
                                 persist_alert(self._store, a)

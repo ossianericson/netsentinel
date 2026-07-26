@@ -22,6 +22,23 @@ def test_default_rules_all_disabled():
     assert all(not r.enabled for r in rules)
 
 
+def test_every_rule_type_has_a_default_rule():
+    """Phase 7.5 -- LOSS_THRESHOLD had no _default_rules() entry, so that
+    rule type could never fire regardless of settings."""
+    from modules.alert_types import RULE_TYPES
+    from modules.alert_suppressor import _default_rules
+    default_types = {r.rule_type for r in _default_rules()}
+    missing = RULE_TYPES - default_types
+    assert missing == set(), f"Rule types with no default rule: {sorted(missing)}"
+
+
+def test_loss_threshold_default_rule_exists_and_is_disabled():
+    from modules.alert_suppressor import _default_rules
+    rule = next((r for r in _default_rules() if r.rule_type == "LOSS_THRESHOLD"), None)
+    assert rule is not None
+    assert rule.enabled is False
+
+
 def test_rule_settings_key_format():
     from modules.alert_suppressor import rule_settings_key
     assert rule_settings_key("Host Down") == "alert_rules/host_down/enabled"

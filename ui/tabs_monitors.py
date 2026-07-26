@@ -169,14 +169,24 @@ class _MonitorTabsMixin:
                 _color_for_level(level)
             ))
             self._arp_table.setItem(row, col, item)
-        # Tray notification for ARP attacks
-        if self._tray_manager.is_available():
-            self._tray_manager.show_notification(
-                f"ARP Attack Detected — {event.event_type.replace('_', ' ').title()}",
-                f"{event.attacker_ip} ({event.attacker_mac}) → {event.verdict}",
-                "CRITICAL" if level == "HIGH" else "WARNING",
-            )
-            self._tray_manager.increment_badge()
+        # Route through the same evaluator the background ARP watcher uses
+        # (evaluate_arp_watch_checks() reads only report.events) so this event
+        # gains the "ARP Spoof Detected" rule's opt-in gate, cooldown,
+        # maintenance-window suppression, and Alert History persistence,
+        # instead of an ungated raw tray balloon.
+        if self._alert_engine is not None:
+            from types import SimpleNamespace
+            from modules.scan_persistence import persist_alert
+
+            for a in self._alert_engine.evaluate_arp_watch_checks(
+                SimpleNamespace(events=[event])
+            ):
+                self._surface_alert_in_app(a)
+                self._home_page.on_alert(a)
+                try:
+                    persist_alert(self._store, a)
+                except Exception:
+                    pass  # non-fatal — persistence failure must not break the ARP monitor
 
     # ── DHCP monitor tab ──────────────────────────────────────────────────────
 

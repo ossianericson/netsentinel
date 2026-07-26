@@ -357,7 +357,6 @@ BASELINE_UNUSED_GLOBALS: frozenset[tuple[str, str]] = frozenset({
     ("modules/ha_detector.py", "HA_TYPE_LABELS"),
     ("modules/internet_exposure.py", "_RFC1918"),
     ("modules/nl_query.py", "EXAMPLE_QUERIES"),
-    ("modules/notification_router.py", "SEVERITY_LEVELS"),
     ("modules/syslog_receiver.py", "_MONTHS"),
     ("modules/wifi_scanner.py", "CHANNELS_24GHZ"),
     ("modules/wifi_scanner.py", "CHANNELS_5GHZ"),

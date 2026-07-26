@@ -528,7 +528,7 @@ class _AnalysisTabsMixin:
                         # of a page-only table row.
                         if self._alert_engine is not None:
                             for a in self._alert_engine.evaluate_iot_behavior_checks([alert]):
-                                self._show_alert_toast(a)
+                                self._surface_alert_in_app(a)
                                 self._home_page.on_alert(a)
                                 if self._store is not None:
                                     try:
@@ -817,7 +817,7 @@ class _AnalysisTabsMixin:
                 for a in self._alert_engine.evaluate_grade_check(
                     result.overall_grade, result.overall_score, result.overall_verdict, _prior_grade,
                 ):
-                    self._show_alert_toast(a)
+                    self._surface_alert_in_app(a)
                     self._home_page.on_alert(a)
                     try:
                         persist_alert(self._store, a)

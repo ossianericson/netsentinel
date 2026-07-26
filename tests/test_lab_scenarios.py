@@ -114,18 +114,21 @@ def test_sprint_b2_scan_types():
 
 
 def test_rule_to_fix_known_types():
-    """_rule_to_fix returns non-empty strings for all five primary alert types."""
-    from ui.widgets.alert_drawer import _rule_to_fix
+    """remediation_for()'s legacy rule_name fallback returns non-empty strings
+    for all five primary alert types (moved from
+    ui.widgets.alert_drawer::_rule_to_fix to modules.alert_remediation in
+    Phase 7.3 of the strict-opt-in-alerting plan)."""
+    from modules.alert_remediation import remediation_for
     for rule in ("PORT_SCAN_ALERT", "ARP_SPOOF", "DHCP_ROGUE", "DEVICE_NEW",
                  "HOST_DOWN_1", "RTT_THRESHOLD_BREACH", "THREAT_INTEL_HIT"):
-        result = _rule_to_fix(rule)
-        assert isinstance(result, str), f"_rule_to_fix({rule!r}) did not return str"
-        assert len(result) > 0, f"_rule_to_fix({rule!r}) returned empty string"
+        result = remediation_for("", rule_name=rule)
+        assert isinstance(result, str), f"remediation_for('', {rule!r}) did not return str"
+        assert len(result) > 0, f"remediation_for('', {rule!r}) returned empty string"
 
 
 def test_rule_to_fix_unknown_returns_empty():
-    from ui.widgets.alert_drawer import _rule_to_fix
-    assert _rule_to_fix("COMPLETELY_UNKNOWN_RULE_XYZ") == ""
+    from modules.alert_remediation import remediation_for
+    assert remediation_for("", rule_name="COMPLETELY_UNKNOWN_RULE_XYZ") == ""
 
 
 def test_scenario_goal_field():

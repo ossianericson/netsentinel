@@ -71,7 +71,7 @@ def _make_stub(store, engine):
     stub = _Stub()
     stub._store = store
     stub._alert_engine = engine
-    stub._show_alert_toast = MagicMock()
+    stub._surface_alert_in_app = MagicMock()
     stub._home_page = MagicMock()
     stub._mqtt_page = MagicMock()
     stub._set_status = MagicMock()
@@ -106,7 +106,7 @@ def test_tracker_alert_still_shows_toast_and_home_card(monkeypatch):
 
     stub._m1_track_devices({"devices": []})
 
-    stub._show_alert_toast.assert_called_once()
+    stub._surface_alert_in_app.assert_called_once()
     stub._home_page.on_alert.assert_called_once()
     stub._mqtt_page.on_alert.assert_called_once()
 
@@ -128,4 +128,4 @@ def test_persist_failure_does_not_break_scan_handler(monkeypatch):
 
     stub._m1_track_devices({"devices": []})  # must not raise
 
-    stub._show_alert_toast.assert_called_once()
+    stub._surface_alert_in_app.assert_called_once()

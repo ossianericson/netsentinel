@@ -95,6 +95,16 @@ class TestRouterDispatch(unittest.TestCase):
         r.dispatch(_alert("INFO"))
         cb.assert_not_called()
 
+    def test_default_toast_channel_is_disabled(self):
+        """Strict opt-in by construction -- a freshly constructed router must
+        never deliver a balloon before NotificationsPage._apply_to_router()
+        has run, even for a CRITICAL alert."""
+        r = NotificationRouter()
+        cb = MagicMock()
+        r.set_toast_callback(cb)
+        r.dispatch(_alert("CRITICAL"))
+        cb.assert_not_called()
+
     def test_toast_disabled_not_called(self):
         r = NotificationRouter()
         r.set_channels([ToastChannel(enabled=False)])
@@ -347,6 +357,54 @@ class TestSnoozeJsonPersistence(unittest.TestCase):
             assert "import QSettings" not in src and "QSettings(" not in src, (
                 f"{method_name} still uses QSettings"
             )
+
+
+class TestRoutingMatrixSerialization(unittest.TestCase):
+    """Phase 6 -- per-rule x per-channel routing matrix. Additive, self-gating:
+    absent notif/rule_routing -> {} -> every rule_types=[] -> today's
+    behaviour byte-for-byte."""
+
+    def test_roundtrip_subset(self):
+        from modules.notification_router import routing_matrix_to_json, routing_matrix_from_json
+        matrix = {"email": ["NEW_CVE", "HOST_DOWN"]}
+        restored = routing_matrix_from_json(routing_matrix_to_json(matrix))
+        assert restored == {"email": ["NEW_CVE", "HOST_DOWN"]}
+
+    def test_all_rule_types_selected_collapses_to_empty_list(self):
+        from modules.notification_router import routing_matrix_to_json
+        from modules.alert_types import RULE_TYPES
+        import json as _json
+        raw = routing_matrix_to_json({"toast": sorted(RULE_TYPES)})
+        assert _json.loads(raw) == {"toast": []}
+
+    def test_unknown_rule_type_dropped_on_load(self):
+        from modules.notification_router import routing_matrix_from_json
+        import json as _json
+        raw = _json.dumps({"email": ["HOST_DOWN", "NOT_A_REAL_RULE_TYPE"]})
+        assert routing_matrix_from_json(raw) == {"email": ["HOST_DOWN"]}
+
+    def test_unknown_channel_key_dropped_on_load(self):
+        from modules.notification_router import routing_matrix_from_json
+        import json as _json
+        raw = _json.dumps({"carrier_pigeon": ["HOST_DOWN"], "email": []})
+        assert routing_matrix_from_json(raw) == {"email": []}
+
+    def test_garbage_json_returns_empty_dict(self):
+        from modules.notification_router import routing_matrix_from_json
+        assert routing_matrix_from_json("{not valid json") == {}
+
+    def test_missing_input_returns_empty_dict(self):
+        from modules.notification_router import routing_matrix_from_json
+        assert routing_matrix_from_json("") == {}
+        assert routing_matrix_from_json(None) == {}
+
+    def test_empty_list_channel_round_trips_as_empty(self):
+        """An empty selection stored for a channel round-trips as [] --
+        _matches_channel() reads that as 'no filter', matching the pre-Phase-6
+        default for every channel that never touches this card."""
+        from modules.notification_router import routing_matrix_to_json, routing_matrix_from_json
+        restored = routing_matrix_from_json(routing_matrix_to_json({"webhook": []}))
+        assert restored == {"webhook": []}
 
 
 if __name__ == "__main__":

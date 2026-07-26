@@ -77,20 +77,16 @@ class _AlertChecksMixin2:
                             self._on_alert(alert)
                 elif host in since:
                     since.pop(host)
-                    resolution = AlertFired(
-                        rule_name=rule.name,
-                        rule_type="RTT_ANOMALY",
-                        host=host,
+                    resolution = self._fire_resolution(
+                        rule, host, now,
                         message=f"{host}'s response time is back to its usual pattern.",
-                        severity="HEALTHY",
-                        ts=now,
-                        is_resolution=True,
                         cta_page="DNS & Stability",
                         cta_filter=host,
                     )
-                    fired.append(resolution)
-                    if self._on_alert:
-                        self._on_alert(resolution)
+                    if resolution:
+                        fired.append(resolution)
+                        if self._on_alert:
+                            self._on_alert(resolution)
 
         return fired
 
@@ -130,6 +126,7 @@ class _AlertChecksMixin2:
                 if alert:
                     alert.host = host
                     alert.cta_filter = host
+                    alert.remediation = getattr(signal, "remediation", "") or ""
                     fired.append(alert)
                     if self._on_alert:
                         self._on_alert(alert)

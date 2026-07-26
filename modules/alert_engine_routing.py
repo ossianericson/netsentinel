@@ -70,6 +70,14 @@ ACTION_STEPS: Dict[str, str] = {
     "ARP_SPOOF":      "→ Run as Administrator, check the Devices list immediately  → Isolate the attacking device from the network",
     "ROGUE_DHCP":     "→ Identify and disconnect the unauthorised DHCP server  → Check your router for a compromised second router or IoT device",
     "CONFIG_DRIFT":   "→ Open Config Snapshots to review the change  → Re-bless the baseline if the change was expected",
+    "JITTER_HIGH":       "→ Move the device closer to the router or use a cable  → Check for other devices saturating the link",
+    "MESH_DEGRADED":     "→ Check the offline node's power  → Move it closer to the main router and re-run the scan",
+    "MODEM_SIGNAL_DROP": "→ Reposition the modem near a window  → Check the antenna connections  → Re-run a speed test to confirm",
+    "GRADE_REGRESSION":  "→ Open Network Grade to see which check dropped  → Re-run the scan after fixing it",
+    "IP_CHURN":          "→ Reserve a fixed DHCP lease for this device in your router  → Check its Wi-Fi signal",
+    "RTT_ANOMALY":       "→ Compare against the host's own history in Network Logger  → Check for new traffic on the link",
+    "IOT_BEHAVIOR":      "→ Open IoT Behaviour to see what changed  → Block the device in your router if you do not recognise the destination",
+    "TREND_FORECAST":    "→ Open Trend Forecasts to see the projection  → Act before the threshold is crossed",
 }
 
 

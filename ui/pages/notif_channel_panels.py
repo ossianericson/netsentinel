@@ -174,6 +174,7 @@ _RECOMMENDED_RULES = {"Host Down", "New Device", "High RTT", "Cert Expiring", "H
 
 _ALERT_RULE_DEFS = [
     ("High RTT",      "RTT_THRESHOLD",  "Fires when a host's round-trip time exceeds the threshold"),
+    ("Packet Loss",   "LOSS_THRESHOLD", "Fires when packets are lost reaching a monitored host"),
     ("Host Down",     "HOST_DOWN",      "Fires when a monitored host becomes unreachable"),
     ("Host Degraded", "HOST_DEGRADED",  "Fires when a host responds slowly or intermittently"),
     ("New Device",    "NEW_DEVICE",     "Fires when a device with a new MAC address is seen on the network"),
@@ -273,6 +274,22 @@ class _NotifChannelsMixin:
             if kr_key in self._kr_change_btns:
                 self._kr_change_btns[kr_key].setVisible(False)
 
+    def _kr_value(self, kr_key: str, field: QLineEdit) -> str:
+        """Live secret for building a router channel.
+
+        _kr_restore_field() leaves the widget EMPTY and shows only a masked
+        placeholder for a secret living in the OS keychain, so .text() is "" after
+        every restart. Return the typed text when the user just entered a new
+        secret; otherwise fall back to the keychain value the placeholder stands
+        in for. Never written back to QSettings (RULE 22-A).
+        """
+        typed = field.text()
+        if typed:
+            return typed
+        if kr_key in self._kr_locked:
+            return _load_secret(kr_key)
+        return ""
+
     def _kr_save_field(self, kr_key: str, field: QLineEdit) -> None:
         if kr_key in self._kr_locked and not field.text():
             return
@@ -313,13 +330,13 @@ class _NotifChannelsMixin:
         sens_row.addWidget(self._combo_sensitivity)
         sens_row.addStretch()
         bl.addLayout(sens_row)
-        sens_hint = QLabel(
+        self._sens_hint_lbl = QLabel(
             "Scales the trigger thresholds and cooldowns of every rule above — "
-            "does not change which rules are enabled. Applies the next time NetSentinel starts."
+            "does not change which rules are enabled. Applies immediately."
         )
-        sens_hint.setWordWrap(True)
-        _s.themed_ss(sens_hint, "font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;")
-        bl.addWidget(sens_hint)
+        self._sens_hint_lbl.setWordWrap(True)
+        _s.themed_ss(self._sens_hint_lbl, "font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;")
+        bl.addWidget(self._sens_hint_lbl)
 
         self._zero_rules_banner = QFrame()
         _s.themed_ss(self._zero_rules_banner, "QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:4px; }}")
@@ -561,7 +578,8 @@ class _NotifChannelsMixin:
                 lbl.setVisible(False)
 
     def _test_webhook(self) -> None:
-        from modules.notification_router import WebhookChannel, _deliver_webhook
+        from modules.notification_router import WebhookChannel
+        from modules.notification_channels import _deliver_webhook
         from modules.alert_types import AlertFired
         import time as _t
         url = self._webhook_url.text().strip()
@@ -577,7 +595,8 @@ class _NotifChannelsMixin:
         self._run_test("webhook", _deliver_webhook, ch, alert)
 
     def _test_email(self) -> None:
-        from modules.notification_router import EmailChannel, _deliver_email
+        from modules.notification_router import EmailChannel
+        from modules.notification_channels import _deliver_email
         from modules.alert_types import AlertFired
         import time as _t
         try:
@@ -604,7 +623,8 @@ class _NotifChannelsMixin:
         self._run_test("email", _deliver_email, ch, alert)
 
     def _test_pushover(self) -> None:
-        from modules.notification_router import PushoverChannel, _deliver_pushover
+        from modules.notification_router import PushoverChannel
+        from modules.notification_channels import _deliver_pushover
         from modules.alert_types import AlertFired
         import time as _t
         ch = PushoverChannel(
@@ -621,7 +641,8 @@ class _NotifChannelsMixin:
         self._run_test("pushover", _deliver_pushover, ch, alert)
 
     def _test_ntfy(self) -> None:
-        from modules.notification_router import NtfyChannel, _deliver_ntfy
+        from modules.notification_router import NtfyChannel
+        from modules.notification_channels import _deliver_ntfy
         from modules.alert_types import AlertFired
         import time as _t
         ch = NtfyChannel(
@@ -639,7 +660,8 @@ class _NotifChannelsMixin:
         self._run_test("ntfy", _deliver_ntfy, ch, alert)
 
     def _test_telegram(self) -> None:
-        from modules.notification_router import TelegramChannel, _deliver_telegram
+        from modules.notification_router import TelegramChannel
+        from modules.notification_channels import _deliver_telegram
         from modules.alert_types import AlertFired
         import time as _t
         ch = TelegramChannel(

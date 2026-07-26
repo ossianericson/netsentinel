@@ -209,6 +209,53 @@ class TestEscalationWiring:
         assert "Host Down" in policy_names
         assert "New Device" not in policy_names  # never enabled in this test
 
+    def test_case_insensitive_rule_names_canonicalise(self):
+        """Phase 7.6 -- alert_engine.py:212 compares case-sensitively, so free
+        text like 'host down' previously silently escalated nothing."""
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+
+        page._chk_escalation.setChecked(True)
+        page._txt_escalation_rules.setText("host down, HIGH rtt")
+        page._save()
+
+        policy_names = {p.rule_name for p in eng.get_escalation_policies()}
+        assert policy_names == {"Host Down", "High RTT"}
+
+    def test_unknown_rule_name_produces_no_policy_and_shows_warning(self):
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+        page.show()  # isVisible() reflects the whole ancestor chain, and the
+                     # escalation card body starts collapsed
+        page._toggle_escalation_body()
+
+        page._chk_escalation.setChecked(True)
+        page._txt_escalation_rules.setText("Nope")
+        page._save()
+
+        assert eng.get_escalation_policies() == []
+        assert hasattr(page, "_escalation_rules_warning")
+        assert page._escalation_rules_warning.isVisible() is True
+        assert "Nope" in page._escalation_rules_warning.text()
+
+    def test_warning_clears_once_all_names_are_valid(self):
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+        page.show()
+        page._toggle_escalation_body()
+
+        page._chk_escalation.setChecked(True)
+        page._txt_escalation_rules.setText("Nope")
+        page._save()
+        assert page._escalation_rules_warning.isVisible() is True
+
+        page._txt_escalation_rules.setText("Host Down")
+        page._save()
+        assert page._escalation_rules_warning.isVisible() is False
+
 
 # ---------------------------------------------------------------------------
 # Router injection
@@ -281,6 +328,81 @@ class TestSettingsPersistence:
 
         qs.remove("alerts/sensitivity")
         qs.sync()
+
+
+class TestSensitivityAppliesImmediately:
+    """Phase 7.7 -- apply_sensitivity() mutates AlertRule objects in place and
+    is NOT idempotent (calling it twice compounds: 200 -> 140 -> 98). The
+    'requires a restart' hint existed because _apply_to_engine() used to
+    re-scale the ALREADY-SCALED live rule objects on every save. Fixed by
+    rebuilding from _default_rules() every time, matching app.py's own
+    startup bootstrap sequence."""
+
+    def _make_engine(self):
+        from modules.alert_engine import AlertEngine, _default_rules
+        return AlertEngine(store=None, rules=_default_rules())
+
+    def test_sensitivity_change_rescales_live_engine_thresholds(self):
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+
+        idx = page._combo_sensitivity.findData("aggressive")
+        page._combo_sensitivity.setCurrentIndex(idx)
+        page._save()
+
+        rule = next(r for r in eng.get_rules() if r.name == "High RTT")
+        assert rule.threshold_ms == 140.0
+
+    def test_repeated_saves_do_not_compound_the_scale(self):
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+
+        idx = page._combo_sensitivity.findData("aggressive")
+        page._combo_sensitivity.setCurrentIndex(idx)
+        page._save()
+        page._save()
+        page._save()
+
+        rule = next(r for r in eng.get_rules() if r.name == "High RTT")
+        assert rule.threshold_ms == 140.0
+
+    def test_cooldown_state_survives_a_settings_change(self):
+        """_last_fired is keyed by 'rule_name::host' strings, so replacing
+        rule objects wholesale must not let a just-fired alert re-fire
+        immediately after a sensitivity change."""
+        from modules.alert_engine import AlertRule
+
+        page = _make_page()
+        eng = self._make_engine()
+        page.set_alert_engine(eng)
+        page._rule_checkboxes["Host Down"].setChecked(True)
+        page._save()
+
+        now = 1_000_000
+        rule = next(r for r in eng.get_rules() if r.name == "Host Down")
+        fired = eng._eval_rule_for_host(
+            rule, "10.0.0.1", {"10.0.0.1": "DOWN"}, {}, now,
+        )
+        assert fired is not None  # first firing populates _last_fired
+
+        idx = page._combo_sensitivity.findData("conservative")
+        page._combo_sensitivity.setCurrentIndex(idx)
+        page._save()
+
+        rule2 = next(r for r in eng.get_rules() if r.name == "Host Down")
+        assert isinstance(rule2, AlertRule)
+        refired = eng._eval_rule_for_host(
+            rule2, "10.0.0.1", {"10.0.0.1": "DOWN"}, {}, now + 1,
+        )
+        assert refired is None  # still within cooldown -- must not double-fire
+
+    def test_sensitivity_hint_no_longer_claims_a_restart_is_needed(self):
+        page = _make_page()
+        text = page._sens_hint_lbl.text().lower()
+        assert "restart" not in text
+        assert "immediately" in text
 
 
 # ---------------------------------------------------------------------------
@@ -424,6 +546,52 @@ class TestSwitchToHistoryTabUnacked:
         page.switch_to_history_tab(unacked_only=True)
         assert page._notif_tabs.currentIndex() == 1
         assert page._chk_unacked_only.isChecked() is True
+
+
+class TestChannelTestButtons:
+    """Phase 3.1 -- defect 8, a live crash. All five 'Send Test' buttons
+    imported _deliver_* from modules.notification_router, where those names
+    do not exist (they live in modules.notification_channels). No try/except
+    guarded the import, so it escaped into the global exception hook as an
+    'unhandled error' dialog on every click."""
+
+    def _rig(self, page, monkeypatch):
+        calls = []
+        monkeypatch.setattr(page, "_run_test", lambda key, fn, ch, alert: calls.append((key, fn, ch, alert)))
+        return calls
+
+    def test_email_test_button_does_not_raise(self, monkeypatch):
+        page = _make_page()
+        calls = self._rig(page, monkeypatch)
+        page._email_host.setText("smtp.example.com")
+        page._email_to.setText("a@b.com")
+        page._test_email()
+        assert calls and calls[0][0] == "email"
+
+    def test_webhook_test_button_does_not_raise(self, monkeypatch):
+        page = _make_page()
+        calls = self._rig(page, monkeypatch)
+        page._webhook_url.setText("https://example.com/hook")
+        page._test_webhook()
+        assert calls and calls[0][0] == "webhook"
+
+    def test_pushover_test_button_does_not_raise(self, monkeypatch):
+        page = _make_page()
+        calls = self._rig(page, monkeypatch)
+        page._test_pushover()
+        assert calls and calls[0][0] == "pushover"
+
+    def test_ntfy_test_button_does_not_raise(self, monkeypatch):
+        page = _make_page()
+        calls = self._rig(page, monkeypatch)
+        page._test_ntfy()
+        assert calls and calls[0][0] == "ntfy"
+
+    def test_telegram_test_button_does_not_raise(self, monkeypatch):
+        page = _make_page()
+        calls = self._rig(page, monkeypatch)
+        page._test_telegram()
+        assert calls and calls[0][0] == "telegram"
 
 
 class TestSetGlobalHoursSync:

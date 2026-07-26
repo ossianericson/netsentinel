@@ -806,49 +806,6 @@ class _LoggerTabMixin:
         except Exception:
             return ""
 
-    def _maybe_send_weekly_digest(self) -> None:
-        """Show a tray digest notification if 7+ days since the last one."""
-        try:
-            import time as _time
-            from PyQt6.QtCore import QSettings as _QS
-            _s = _QS("NetSentinel", "NetSentinel")
-            last_ts = int(_s.value("app/last_digest_ts", 0, type=int))
-            now = int(_time.time())
-            if now - last_ts < 7 * 86400:
-                return
-            if not self._tray_manager.is_available():
-                return
-
-            parts: list[str] = []
-            if self._store is not None:
-                try:
-                    speed_rows = self._store.query_speed_test_history(hours=168, limit=1)
-                    if speed_rows:
-                        dl = speed_rows[0].download_mbps or 0.0
-                        parts.append(f"Speed: {dl:.0f} Mbps download")
-                    joined = self._store.query_device_events(hours=168, event_types=["JOINED"])
-                    if joined:
-                        n = len({e.ip for e in joined})
-                        s = "s" if n != 1 else ""
-                        parts.append(f"{n} new device{s} joined")
-                    g = self._store.query_last_grade()
-                    if g:
-                        parts.append(f"Network grade: {g['grade']}")
-                except Exception:
-                    pass  # non-fatal
-
-            if not parts:
-                parts.append("Network has been running smoothly")
-
-            self._tray_manager.show_notification(
-                "NetSentinel Weekly Digest",
-                "  ·  ".join(parts),
-                "INFO",
-            )
-            _s.setValue("app/last_digest_ts", str(now))
-        except Exception:
-            pass  # non-fatal
-
     def _load_log_file(self):
         """Let the user pick any existing log CSV and show its analysis."""
         from PyQt6.QtWidgets import QFileDialog

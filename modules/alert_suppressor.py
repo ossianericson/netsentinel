@@ -134,6 +134,14 @@ def _default_rules():
             enabled=False,
         ),
         AlertRule(
+            name="Packet Loss",
+            rule_type="LOSS_THRESHOLD",
+            host=None,
+            threshold_pct=10.0,
+            cooldown_s=300,
+            enabled=False,
+        ),
+        AlertRule(
             name="Host Down",
             rule_type="HOST_DOWN",
             host=None,

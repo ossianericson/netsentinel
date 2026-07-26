@@ -107,6 +107,8 @@ def _smoke_test() -> None:
         "modules.proactive_digest",
         "modules.digest_bullets",
         "modules.notification_router",
+        "modules.alert_audit",
+        "modules.alert_remediation",
         "modules.utils",
         "modules.maintenance_window",
         "modules.snmp_trap_receiver",
@@ -207,6 +209,65 @@ def _smoke_test() -> None:
 
     print("smoke-test OK")
     sys.exit(0)
+
+
+def _audit_alerts() -> None:
+    """
+    Alert/notification configuration self-test.
+
+    Usage:  python app.py --audit-alerts [--json]
+    Exits 0 when every finding passes, 1 otherwise. No display required.
+    This is a DIAGNOSTIC, not a CI gate — it is expected to exit 1 until
+    every phase of the strict-opt-in-alerting plan has landed.
+    """
+    from PyQt6.QtCore import QSettings
+    from modules.alert_audit import (
+        audit_alert_config, audit_static_coverage, audit_source_tree,
+        channels_from_settings, format_findings,
+    )
+    from modules.alert_suppressor import _default_rules, EscalationPolicy
+    from modules.alert_sensitivity import apply_sensitivity, DEFAULT_SENSITIVITY
+    from modules.alert_engine import rule_settings_key as _rk
+
+    qs = QSettings("NetSentinel", "NetSentinel")
+
+    def _settings_get(key: str, default=None):
+        return qs.value(key, default)
+
+    def _secret_get(key: str) -> str:
+        try:
+            import keyring
+            return keyring.get_password("NetSentinel", key) or ""
+        except Exception:
+            return ""
+
+    rules = _default_rules()
+    for r in rules:
+        r.enabled = qs.value(_rk(r.name), False, type=bool)
+    sensitivity = qs.value("alerts/sensitivity", DEFAULT_SENSITIVITY, type=str)
+    apply_sensitivity(rules, sensitivity)
+
+    channels = channels_from_settings(_settings_get, _secret_get)
+
+    rules_text = str(qs.value("notif/escalation_rules", "")).strip()
+    if rules_text:
+        policy_names = [r.strip() for r in rules_text.split(",") if r.strip()]
+    else:
+        policy_names = [r.name for r in rules if r.enabled]
+    escalation_policies = [EscalationPolicy(rule_name=name) for name in policy_names]
+
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parent
+
+    findings = (
+        audit_alert_config(_settings_get, rules, channels, escalation_policies)
+        + audit_static_coverage()
+        + audit_source_tree(repo_root)
+    )
+
+    as_json = "--json" in sys.argv
+    print(format_findings(findings, as_json=as_json))
+    sys.exit(0 if all(f.ok for f in findings) else 1)
 
 
 def _headless() -> None:
@@ -459,7 +520,8 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
                 cta_page="Service Diagnostics",
                 cta_filter=host,
             )
-            notif_router.dispatch(escalation)  # dispatch() already invokes the toast callback
+            notif_router.dispatch(escalation)
+            window._surface_alert_in_app(escalation)
             window._home_page.on_alert(escalation)
             _persist_alert(escalation)
             _cleanup()
@@ -475,7 +537,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     def _on_svc_check(results: list) -> None:
         fired = alerts.evaluate_service_checks(results)
         for a in fired:
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             _persist_alert(a)
             if a.rule_type == "SERVICE_DOWN" and not a.is_resolution and _escalation_enabled():
@@ -487,7 +549,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     def _on_cert_check(results: list) -> None:
         fired = alerts.evaluate_cert_checks(results)
         for a in fired:
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             _persist_alert(a)
         window._overview_page.on_cert_done(results)
@@ -564,7 +626,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
         fired += alerts.evaluate_rtt_anomaly_checks(rtts_by_host, _baseline_learner)
 
         for a in fired:
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             window._overview_page.on_alert(a)
             _persist_alert(a)
@@ -578,10 +640,8 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
     Sprint 3 — scheduled speed test.  ``worker`` is a ProactiveProbeWorker
     running modules.scheduled_speed_test.run_scheduled_speed_test().  Each
     completed probe is evaluated against the BASELINE_DROP rule; a fired
-    alert flows through the same window._show_alert_toast() +
-    window._home_page.on_alert() path every other evaluate_* caller uses
-    (see the pre-existing double-toast note in _wire_monitoring — left
-    alone here for the same reason: not this sprint's concern).
+    alert flows through the same window._surface_alert_in_app() +
+    window._home_page.on_alert() path every other evaluate_* caller uses.
 
     Sprint 4: also persists via store.record_alert_fired() so
     modules.digest_bullets._speed_trend_bullet() has overnight BASELINE_DROP
@@ -593,7 +653,7 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
             current_sinr=result.current_sinr, prior_sinr=result.prior_sinr,
         )
         for a in fired:
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
                 store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
@@ -625,7 +685,7 @@ def _wire_port_sweep(window, worker, alerts, store, cert_worker):
     already shown on the Security Overview Scan Status card)."""
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_port_sweep_checks(report):
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
                 store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
@@ -655,7 +715,7 @@ def _wire_cve_recheck(window, worker, alerts, store):
     services, diffed against cve_lifecycle for NEW_CVE alerts."""
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_cve_recheck_checks(report):
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
                 store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
@@ -678,7 +738,7 @@ def _wire_exposure_watch(window, worker, alerts, store):
     prior week's snapshot for NEW_EXPOSURE alerts."""
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_exposure_checks(report):
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
                 store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
@@ -704,7 +764,7 @@ def _wire_arp_watch(window, worker, alerts, store):
 
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_arp_watch_checks(report):
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
                 store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
@@ -728,7 +788,7 @@ def _wire_dhcp_watch(window, worker, alerts, store):
 
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_dhcp_watch_checks(report):
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
                 store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
@@ -751,7 +811,7 @@ def _wire_trend_forecast(window, worker, alerts, store):
     every other evaluate_* caller uses."""
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_trend_checks(report):
-            window._show_alert_toast(a)
+            window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
                 store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
@@ -996,7 +1056,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.45")
+    app.setApplicationVersion("2.1.46")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1147,7 +1207,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.45")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.46")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -2003,6 +2063,8 @@ if __name__ == "__main__":
 
     if "--smoke" in sys.argv:
         _smoke_test()
+    if "--audit-alerts" in sys.argv:
+        _audit_alerts()
     if "--headless" in sys.argv:
         _headless()
     try:

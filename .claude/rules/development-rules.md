@@ -480,6 +480,67 @@ local tag to HEAD (`git tag -d` + `git tag vX.Y.Z HEAD`) silently re-runs CI aga
 commit. Does not apply to normal version bumps (RULE-BUMP1) — those always tag the
 just-committed HEAD. Full sequence: `/bump` Mode B.
 
+### RULE-REL1 (blocking): An external reputation-scan gate must classify by confidence, not fail on any nonzero hit — and a downstream job gated on the upstream job's bare conclusion inherits whatever that gate decides
+
+**Mechanism.** `scripts/vt_scan.py` submits the release installer's download URL to VirusTotal and
+used to fail the step (`sys.exit(1)`) on `malicious > 0 or suspicious > 0` — treating one
+heuristic/ML engine's hit on a brand-new, never-seen binary identically to ten engines agreeing on
+a known malware family. VT's own model is bulk-vote across ~90+ independent engines specifically
+*because* any single engine is noisy on novel binaries; a gate that doesn't distinguish "1 hit" from
+"10 hits" isn't a security gate, it's a coin flip on that one engine's heuristics. This shipped a
+real incident on v2.1.45: 1 malicious / 92 engines (vs. 0/92 for v2.1.44 two days earlier, identical
+pool) — the first flag in ~30 releases, most likely triggered by `modules/single_instance.py`'s
+`Global\` named-mutex single-instance guard (RULE-WIN16), which is also a textbook malware
+anti-multi-instance technique despite being the correct, deliberate Win32 pattern here.
+
+The second-order failure is structural, not a bug in the gate itself: `.github/workflows/release.yml`'s
+`winget` job declares `needs: [release]`, which GitHub Actions resolves against the *upstream job's
+overall conclusion* — not any specific step. A VT step with no `continue-on-error` failing the whole
+`release` job silently skips **both** the "Prepend security section" step (the release notes lose
+their security section with no trace it ever ran) **and** the entire `winget` job (blocking Windows
+Package Manager distribution on a signal that was never confidence-checked), with no override path.
+
+**Fix — classify by threshold, not by nonzero:**
+```python
+# WRONG — any single engine's heuristic hit is treated as confirmed malware
+if malicious > 0 or suspicious > 0:
+    sys.exit(1)
+
+# CORRECT — scripts/vt_scan.py::classify(); combined-hit threshold, tunable via env
+SOFT_FLAG_MAX = int(os.environ.get("VT_SOFT_FLAG_MAX", "2"))
+def classify(stats: dict) -> str:            # "clean" | "flagged" | "blocked"
+    hits = stats.get("malicious", 0) + stats.get("suspicious", 0)
+    if hits == 0:
+        return "clean"
+    return "blocked" if hits > SOFT_FLAG_MAX else "flagged"
+```
+Only `"blocked"` exits nonzero (and correctly still fails the job, still blocks `winget` via its
+existing `needs: [release]` — real corroborated signals must keep blocking distribution). A
+`"flagged"` result exits 0 but is never silent: it prints a `::warning::` Actions annotation, writes
+a `$GITHUB_STEP_SUMMARY` block, and renders an explicit "⚠️ Flagged by N/M engines" line (with the
+actual flagging engine names, extracted from the same `/analyses/{id}` response's `results` field
+the original script already fetched but discarded) in the release notes via
+`scripts/update_release_body.py` — visible everywhere a human would look, just not blocking.
+
+`.github/workflows/release.yml`'s "Prepend security section" step also gets `if: always()` so it
+runs (and reports the real verdict) regardless of the VT step's outcome, including the rare genuine
+`"blocked"` case — a security section that vanishes on exactly the runs where it matters most is
+worse than one that always shows the truth.
+
+**Manual-override corollary — do not `gh run rerun` a job whose `needs:` chain includes the failed
+one.** Rerunning `winget` (or any job with `needs: [release]`) reruns the *entire* upstream chain —
+all build jobs + `release` — because GitHub Actions has no "rerun just this job, trust the
+upstream outputs" mode when the dependency itself failed. This re-deletes and recreates the live
+GitHub Release and re-submits the identical URL to VirusTotal (returning the same cached verdict) —
+pure wasted CI time, confirmed live (~35 minutes, no change in outcome). If a hard `"blocked"` verdict
+is later judged a false positive by a human, use the standalone `.github/workflows/winget-submit.yml`
+(`workflow_dispatch`, takes a bare `version` input, needs only the Actions-side `WINGET_PAT` — no
+local secret, no interactive device-code login) to complete WinGet distribution without touching
+builds or VT at all. Full procedure: `docs/internal/vt-false-positive-runbook.md`.
+
+Enforced by `tests/test_vt_scan.py` (`classify()` threshold boundaries, engine-name extraction) and
+`tests/test_update_release_body.py` (status-aware release-notes rendering per verdict).
+
 ---
 
 ## Winget Submission
@@ -2302,6 +2363,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN14 → `test_window_chrome.py` (regression: restore that leaves the QWidget hidden must re-show it)
 - RULE-WIN16 → `test_single_instance.py` (real CreateMutexW round-trip) + `test_single_instance_race.py` (RED/GREEN regression)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
+- RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry
