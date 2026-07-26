@@ -926,6 +926,41 @@ def main():
     sys.excepthook = _excepthook
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Single instance guard (RULE-WIN16) ──────────────────────────────────
+    # A named OS mutex is the atomic gate — CreateMutexW resolves "who got
+    # here first" with no client/server race, unlike the QLocalServer
+    # probe-then-listen dance further below (which only handles "bring the
+    # existing window to front" once this process already knows it won).
+    # A losing process never builds a real QApplication — no splash, no
+    # stylesheet, no DB init — so a duplicate launch (e.g. impatient repeat
+    # clicks during a slow MSIX/Store cold start) exits almost instantly
+    # instead of becoming a second fully-running instance.
+    _INSTANCE_KEY = "NetSentinel_SingleInstance_v1"
+    from modules.single_instance import acquire_instance_mutex
+    _is_first_instance, _instance_mutex_handle = acquire_instance_mutex(_INSTANCE_KEY)
+    if not _is_first_instance:
+        from PyQt6.QtCore import QCoreApplication
+        from PyQt6.QtNetwork import QLocalSocket
+        _signal_app = QCoreApplication(sys.argv)
+        for _attempt in range(5):
+            _probe = QLocalSocket()
+            _probe.connectToServer(_INSTANCE_KEY)
+            if _probe.waitForConnected(300):
+                _probe.write(b"SHOW")
+                _probe.flush()
+                _probe.waitForBytesWritten(300)
+                _probe.disconnectFromServer()
+                break
+            _probe.abort()
+            _signal_app.processEvents()
+            # A failed connect returns almost immediately (no pipe to find
+            # yet) rather than blocking out waitForConnected's own timeout —
+            # sleep for real so the winning instance gets actual wall-clock
+            # time to reach its own listen() call before we give up.
+            time.sleep(0.2)
+        sys.exit(0)
+    # ─────────────────────────────────────────────────────────────────────────
+
     from PyQt6.QtWidgets import QApplication, QSplashScreen
     from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
     from PyQt6.QtCore import Qt, QSettings, qInstallMessageHandler, QRect
@@ -961,7 +996,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.44")
+    app.setApplicationVersion("2.1.45")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1112,7 +1147,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.44")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.45")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1155,30 +1190,30 @@ def main():
     with _suspend_repaints():
         app.setStyleSheet(get_app_qss())
 
-    # ── Single instance guard ─────────────────────────────────────────────────
-    # If another instance is running, signal it to restore its window and exit.
-    from PyQt6.QtNetwork import QLocalServer, QLocalSocket
-    _INSTANCE_KEY = "NetSentinel_SingleInstance_v1"
-    _probe = QLocalSocket()
-    _probe.connectToServer(_INSTANCE_KEY)
-    if _probe.waitForConnected(500):
-        # Another instance is alive — tell it to come to the front and exit.
-        _probe.write(b"SHOW")
-        _probe.flush()
-        _probe.waitForBytesWritten(500)
-        _probe.disconnectFromServer()
-        _probe = None
-        sys.exit(0)
-    # No running instance found; clean up the probe and take ownership of the key.
-    _probe.abort()
-    del _probe
+    # ── Single instance guard (RULE-WIN16), continued ───────────────────────
+    # The mutex acquired earlier in main() already proves this process is
+    # the sole winner — no probe/race needed here. This QLocalServer exists
+    # only so a future duplicate launch can ask this instance to come to
+    # the front; it is no longer what decides whether a duplicate is
+    # allowed to run.
+    from PyQt6.QtNetwork import QLocalServer
+    QLocalServer.removeServer(_INSTANCE_KEY)  # no-op on Windows; harmless elsewhere
     _instance_server = QLocalServer()
-    # Remove any stale socket left by a prior crash (no-op on Windows).
-    # Only called after the probe confirmed no live server is behind the name.
-    QLocalServer.removeServer(_INSTANCE_KEY)
     if not _instance_server.listen(_INSTANCE_KEY):
-        # Fallback: if listen fails, run without instance guard rather than crashing.
+        # The mutex already guarantees we are the only instance; a failure
+        # here only means a future duplicate can't be signalled to raise
+        # this window — log it, but there is nothing unsafe about continuing.
+        import logging
+        logging.getLogger("netsentinel").warning(
+            "Single-instance QLocalServer failed to listen: %s",
+            _instance_server.errorString(),
+        )
         _instance_server = None
+    # Keep the mutex handle reachable for the process lifetime (never
+    # closed) — attaching it to `app` mirrors the existing `_win_tracer`
+    # keep-alive pattern above. Windows releases the mutex automatically on
+    # exit, including a crash, which is the desired self-healing behaviour.
+    app._instance_mutex_handle = _instance_mutex_handle
     # ─────────────────────────────────────────────────────────────────────────
 
     # App icon (bundled as icon.ico / icon.png if present)
@@ -1743,6 +1778,211 @@ def main():
         # Fire once, ~3 s after app.exec() begins — the window has already painted by
         # then, so the expensive first paint is not slowed by tracemalloc bookkeeping.
         _TmActivateTimer.singleShot(3000, _activate_tracemalloc)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── gc object census (activated by NETSENTINEL_GC_CENSUS=1 env var) ──────
+    # Set by tools/monkey_test.py --gc-census. tracemalloc (above) only sees
+    # Python-heap allocations, not the C++ objects a QWidget/QObject Python
+    # wrapper references (RULE-WIN8) — a 2026-07-24 wild-soak diagnostic found
+    # tracemalloc's Python-heap view topping out ~23MB across a full hour while
+    # RSS climbed to a 1780.7MB peak, ruling out pure-Python growth as the
+    # driver. This is the proposed follow-up: gc.get_objects() DOES see every
+    # live Python-side wrapper object, so a class whose *count* keeps climbing
+    # (independent of tracemalloc's per-allocation *byte* view) points at a
+    # widget/figure retention leak instead of a raw-bytes leak.
+    # Same deferred-activation shape as the tracemalloc block for consistency,
+    # though a point-in-time gc.get_objects() census has no per-allocation
+    # tracing cost, so it should not carry RULE-TM1's startup-slowdown risk.
+    if os.environ.get("NETSENTINEL_GC_CENSUS") == "1":
+        from PyQt6.QtCore import QTimer as _GcActivateTimer
+
+        def _activate_gc_census() -> None:
+            import gc as _gc
+            import logging as _logging
+            import threading as _threading
+            from collections import Counter as _Counter
+            from modules.utils import get_app_data_dir as _gad_gc
+
+            _gc_log = _logging.getLogger("netsentinel.gc_census")
+            _gc_log.setLevel(_logging.DEBUG)
+            _gc_log.propagate = False
+            if not _gc_log.handlers:
+                try:
+                    _gc_path = os.path.join(str(_gad_gc()), "gc_census.log")
+                    _gc_handler = _logging.FileHandler(_gc_path, mode="w", encoding="utf-8")
+                    _gc_handler.setFormatter(_logging.Formatter("%(asctime)s %(message)s"))
+                    _gc_log.addHandler(_gc_handler)
+                except Exception:
+                    pass  # file handler is optional — census loop still runs, just logs nowhere
+
+            def _gc_census_loop() -> None:
+                import time as _time
+                _time.sleep(60)   # let the app warm up before first census
+                while True:
+                    _time.sleep(60)
+                    try:
+                        # No explicit gc.collect() here (RULE-WIN4): forcing a full collection
+                        # cycle can run arbitrary __del__/weakref finalizers for Qt-wrapped
+                        # objects on THIS background thread rather than the GUI thread, which
+                        # can corrupt Qt's event-loop state on Windows. get_objects() alone is a
+                        # pure read with no finalization side effects; a roughly-constant amount
+                        # of not-yet-swept cyclic garbage doesn't bias the growth TREND we care
+                        # about across snapshots.
+                        counts = _Counter(type(o).__name__ for o in _gc.get_objects())
+                        _gc_log.info("=== gc census top-30 (by live count), total=%d ===",
+                                     sum(counts.values()))
+                        for name, n in counts.most_common(30):
+                            _gc_log.info("  %s: %d", name, n)
+                    except Exception as _e:
+                        _gc_log.warning("gc census failed: %s", _e)
+
+            _gc_thread = _threading.Thread(target=_gc_census_loop, daemon=True,
+                                           name="gc-census-sampler")
+            _gc_thread.start()
+
+        # Fire once, ~3 s after app.exec() begins, mirroring the tracemalloc timer.
+        _GcActivateTimer.singleShot(3000, _activate_gc_census)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── Virtual-memory region census (activated by NETSENTINEL_VMEM_CENSUS=1) ──
+    # Set by tools/monkey_test.py --vmem-census. Both CPython-visible angles are
+    # exhausted (2026-07-24 diagnostic): --tracemalloc showed Python-heap BYTES flat
+    # ~23MB and --gc-census showed live-object COUNT flat (+8%), while RSS climbed
+    # +200% across a full wild-chaos hour — so the driver is native memory with NO
+    # Python-side object at all. This census walks the process's OWN address space via
+    # VirtualQuery (a pure metadata read — no per-allocation tracing, so no RULE-TM1
+    # startup-slowdown risk) and buckets committed bytes by region Type
+    # (Private / Mapped / Image) × Protect, plus a committed-region COUNT per bucket
+    # (a rising count against rising bytes is a native-heap-fragmentation signal). It
+    # answers WHICH native region holds the growth — Private/committed
+    # (CRT-heap-traceable, so UMDH can then name the allocation site) vs Mapped
+    # (GDI/section/GPU surfaces, UMDH-blind) vs Image (unexpected). Windows-only:
+    # VirtualQuery is a kernel32 call, and the env var is only ever set by the
+    # Windows-only monkey harness.
+    if os.environ.get("NETSENTINEL_VMEM_CENSUS") == "1" and sys.platform == "win32":
+        from PyQt6.QtCore import QTimer as _VmActivateTimer
+
+        def _activate_vmem_census() -> None:
+            import ctypes as _ctypes
+            import logging as _logging
+            import threading as _threading
+            from modules.utils import get_app_data_dir as _gad_vm
+
+            _vm_log = _logging.getLogger("netsentinel.vmem_census")
+            _vm_log.setLevel(_logging.DEBUG)
+            _vm_log.propagate = False
+            if not _vm_log.handlers:
+                try:
+                    _vm_path = os.path.join(str(_gad_vm()), "vmem_census.log")
+                    _vm_handler = _logging.FileHandler(_vm_path, mode="w", encoding="utf-8")
+                    _vm_handler.setFormatter(_logging.Formatter("%(asctime)s %(message)s"))
+                    _vm_log.addHandler(_vm_handler)
+                except Exception:
+                    pass  # file handler is optional — census loop still runs, just logs nowhere
+
+            class _MBI(_ctypes.Structure):
+                # 64-bit MEMORY_BASIC_INFORMATION. ctypes' natural alignment inserts the
+                # 4-byte pad before RegionSize (SIZE_T, 8-aligned) and the trailing pad,
+                # giving the documented sizeof == 48. Do NOT add explicit padding fields
+                # — that would double the padding and corrupt every field read.
+                _fields_ = [
+                    ("BaseAddress",       _ctypes.c_void_p),
+                    ("AllocationBase",    _ctypes.c_void_p),
+                    ("AllocationProtect", _ctypes.c_ulong),
+                    ("RegionSize",        _ctypes.c_size_t),
+                    ("State",             _ctypes.c_ulong),
+                    ("Protect",           _ctypes.c_ulong),
+                    ("Type",              _ctypes.c_ulong),
+                ]
+
+            # Local WinDLL handle with declared types (RULE-WIN11) — never mutate the
+            # cached ctypes.windll.kernel32 function objects (process-global).
+            _k32 = _ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+            _k32.VirtualQuery.restype  = _ctypes.c_size_t
+            _k32.VirtualQuery.argtypes = [_ctypes.c_void_p, _ctypes.c_void_p, _ctypes.c_size_t]
+
+            _MEM_COMMIT    = 0x1000
+            _MEM_PRIVATE   = 0x20000
+            _MEM_MAPPED    = 0x40000
+            _MEM_IMAGE     = 0x1000000
+            _PAGE_GUARD    = 0x100
+            _PAGE_NOACCESS = 0x01
+            _EXEC_MASK     = 0xF0            # PAGE_EXECUTE* protections occupy the 0xF0 nibble
+            _MAX_ADDR      = 0x7FFFFFFFFFFF  # user-mode address ceiling on x64
+            _MBI_SIZE      = _ctypes.sizeof(_MBI)
+
+            def _walk() -> dict:
+                mbi = _MBI()
+                addr = 0
+                buckets: dict = {
+                    "private_rw":    [0, 0],
+                    "private_exec":  [0, 0],
+                    "private_other": [0, 0],
+                    "mapped":        [0, 0],
+                    "image":         [0, 0],
+                }
+                while addr < _MAX_ADDR:
+                    if not _k32.VirtualQuery(_ctypes.c_void_p(addr), _ctypes.byref(mbi), _MBI_SIZE):
+                        break  # past the top of the address space
+                    size = int(mbi.RegionSize)
+                    if size <= 0:
+                        break
+                    if mbi.State == _MEM_COMMIT:
+                        t, p = mbi.Type, mbi.Protect
+                        if t == _MEM_IMAGE:
+                            key = "image"
+                        elif t == _MEM_MAPPED:
+                            key = "mapped"
+                        elif t == _MEM_PRIVATE:
+                            if p & (_PAGE_GUARD | _PAGE_NOACCESS):
+                                key = "private_other"
+                            elif p & _EXEC_MASK:
+                                key = "private_exec"
+                            else:
+                                key = "private_rw"
+                        else:
+                            key = "private_other"
+                        buckets[key][0] += size
+                        buckets[key][1] += 1
+                    next_addr = int(mbi.BaseAddress or 0) + size
+                    if next_addr <= addr:
+                        break  # no forward progress — stop rather than spin
+                    addr = next_addr
+                return buckets
+
+            def _vm_census_loop() -> None:
+                import time as _time
+                try:
+                    import psutil as _psutil
+                    _self = _psutil.Process()
+                except Exception:
+                    _self = None  # rss column just shows 0 if psutil is unavailable
+                _mb = 1024 * 1024
+                _vm_log.info("vmem census started (MEMORY_BASIC_INFORMATION sizeof=%d, expect 48)",
+                             _MBI_SIZE)
+                _time.sleep(60)   # let the app warm up before first census
+                while True:
+                    _time.sleep(60)
+                    try:
+                        b = _walk()
+                        total = sum(v[0] for v in b.values())
+                        rss = _self.memory_info().rss if _self is not None else 0
+                        _vm_log.info(
+                            "=== vmem census: rss=%.1f MB committed_total=%.1f MB regions=%d ===",
+                            rss / _mb, total / _mb, sum(v[1] for v in b.values()),
+                        )
+                        for name in ("private_rw", "private_exec", "private_other", "mapped", "image"):
+                            byts, cnt = b[name]
+                            _vm_log.info("  %-14s %9.1f MB  (%d regions)", name, byts / _mb, cnt)
+                    except Exception as _e:
+                        _vm_log.warning("vmem census failed: %s", _e)
+
+            _vm_thread = _threading.Thread(target=_vm_census_loop, daemon=True,
+                                           name="vmem-census-sampler")
+            _vm_thread.start()
+
+        # Fire once, ~3 s after app.exec() begins, mirroring the tracemalloc/gc timers.
+        _VmActivateTimer.singleShot(3000, _activate_vmem_census)
     # ─────────────────────────────────────────────────────────────────────────
 
     ret = app.exec()

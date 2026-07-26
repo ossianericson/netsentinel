@@ -4,6 +4,17 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.45
+
+**Added**
+- `app.py`: `--gc-census` diagnostic mode (`NETSENTINEL_GC_CENSUS=1`) logs the top 30 live Python object counts by class name to `gc_census.log` every 60s, complementing `--tracemalloc` (RULE-TM1) with visibility into live QWidget/QObject wrapper counts that raw heap-byte tracing can't see
+- `app.py` / `tools/monkey_test.py`: `--vmem-census` diagnostic mode buckets committed process memory by region type (Private/Mapped/Image) x protection via `VirtualQuery` every 60s — the native-memory counterpart to `--tracemalloc`/`--gc-census`, added because both Python-visible angles stayed flat while wild-soak RSS kept climbing; also adds `docs/spikes/wild-soak-rss-leak-investigation.md`, a full narrative write-up of the multi-session investigation
+
+**Fixed**
+- `modules/single_instance.py`: the single-instance guard's `QLocalServer` probe-then-listen dance had a TOCTOU race — a process that lost the race fell back to running as a fully independent second instance instead of exiting, letting repeated Start-menu/taskbar icon clicks open 5+ windows (worst on MS Store cold starts); replaced with an atomic `CreateMutexW` gate checked before `QApplication` is even constructed, with `QLocalServer` demoted to a best-effort "bring the existing window to front" signal sent after the mutex has already decided (RULE-WIN16)
+
+---
+
 ### v2.1.44
 
 **Fixed**
