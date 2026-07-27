@@ -196,6 +196,25 @@ class _MetricsQueriesMixin:
         )
         return [dict(r) for r in rows]
 
+    def get_recent_acks(self, since_ts: int) -> List[dict]:
+        """Alerts acknowledged at or after `since_ts`, oldest ack first.
+
+        Seeds AlertEngine.load_ack_holds() so an acknowledged, still-ongoing
+        condition stops re-firing (and stays muted across restarts, since the
+        engine's hold map is in-memory).
+
+        Windows on **acked_ts**, not on the alert's fire time: a real backlog
+        is routinely days old, so a fire-time window would return nothing for
+        an acknowledgement made seconds ago. Ordered oldest-first so a caller
+        folding rows into a dict keeps the newest ack per key.
+        """
+        rows = self._execute_read(
+            "SELECT rule_name, host, acked_ts FROM alert_fired "
+            "WHERE acked_ts IS NOT NULL AND acked_ts >= ? ORDER BY acked_ts ASC",
+            (int(since_ts),),
+        )
+        return [dict(r) for r in rows]
+
     def get_last_event_time(self, rule_prefix: str) -> Optional[float]:
         """Return Unix timestamp of the most recent matching alert, or None."""
         rows = self._execute_read(

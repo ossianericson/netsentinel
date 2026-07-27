@@ -412,10 +412,32 @@ script rewrites every tracked file's version to that literal text (this happened
 `--help`). Always invoke it with a bare semver argument, and prefer `/bump` (RULE-BUMP1) so the
 skill supplies the argument correctly.
 
-### RULE-R1b (blocking): Every version bump needs a CHANGELOG.md entry and a README.md summary update
+### RULE-R1b (blocking): Every version bump needs a CHANGELOG.md entry, a README.md summary update, and a What's New rewrite
 Before running `bump_version.py`:
 1. Add a `### vX.Y.Z` entry at the **top** of `CHANGELOG.md` — full detail, one bullet per logical change, following the format already in that file. `bump_version.py` promotes this topmost header to the new version number.
 2. Update the short `### vX.Y.Z (current)` block under `## Changelog` in `README.md` to a 3–5 bullet plain-English summary of the most important changes. The full history lives in CHANGELOG.md; README.md shows only the current release highlights. `bump_version.py` also promotes this topmost header.
+3. Rewrite `_WHATS_NEW_ENTRIES` in `ui/help_tab.py` (the in-app "What's New" section) to describe this release, then set `_WHATS_NEW_VERSION` to the new version.
+
+**Why step 3 needs its own enforcement.** Steps 1 and 2 edit files `bump_version.py`
+subsequently rewrites, so a missed edit shows up as a wrong version string. Step 3 is
+hand-written *prose* the script deliberately never touches — there is no version string to
+check, so nothing structural links it to the release. It was missed on two consecutive
+releases while `/bump` already carried a step and a checklist item for it (the exact
+RULE-ENFORCE1 failure mode: a documented step is not a gate). The `_WHATS_NEW_VERSION`
+constant exists purely to make "did anyone rewrite the bullets?" machine-checkable, and
+`bump_version.py` must never auto-bump it — doing so would relabel the previous release's
+bullets as the new version, which is the defect itself (v2.1.47 shipped showing v2.1.46's
+bullets under a "What's New in v2.1.47" heading).
+
+The heading renders from `_WHATS_NEW_VERSION`, not the live app version, so a bypassed gate
+degrades to stale-but-truthful rather than actively mislabelled.
+
+Enforced by `tests/test_version_consistency.py::test_whats_new_version` (constant must equal
+`app.py`'s version) plus a `_preflight_whats_new()` abort at the top of `bump_version.py`,
+which fails before the first file is written so a stale What's New never leaves a half-bumped
+tree. **Known limit:** the gate forces the constant to move, not the prose to change — the
+two are kept adjacent at the top of `help_tab.py` so bumping one without the other requires
+ignoring the list directly beneath it.
 
 **Test-count figures are no longer hand-maintained.** `bump_version.py` recomputes the total
 test count and file count via `pytest --collect-only -q -m ""` (overriding the default marker
@@ -751,6 +773,55 @@ never removes a deliberate local deviation.
 
 Enforced by `tests/test_qss_widget_coverage.py` — `_STYLING_CRITICAL_SUBCONTROLS` extends the
 class-level net one level down; `_EXEMPT` is empty and must stay that way.
+
+### RULE-QSS5 (blocking): A `setFixedSize()` button smaller than its `sizeHint()` must declare `padding` in its own inline sheet — an inline stylesheet MERGES with the global QSS, it does not replace it
+
+**Mechanism.** Qt resolves a widget's effective stylesheet by merging the inline
+`setStyleSheet()` declarations *over* the application-level rule for that selector.
+Properties the inline sheet does not name are still taken from the global rule — an inline
+sheet is an override list, not a reset. `ui/styles.py::MAIN_STYLE` declares
+`QPushButton { padding: 5px 14px; }`, so **every** button in the app inherits 28 px of
+horizontal padding unless it says otherwise.
+
+That is harmless while a button is free to grow to its `sizeHint()`. It is fatal the moment
+the button is pinned smaller: `setFixedSize(22, 18)` against a `sizeHint()` of 40×26 leaves
+`22 - 2(border) - 28(padding) = -8 px` of label rect, so Qt elides the text to **nothing**.
+The button still paints its background and border, so it looks like a deliberate empty box
+rather than a broken control — and `text()` still returns the label, so every property-based
+test passes.
+
+This shipped: the Home "Action needed" card's per-alert acknowledge button
+(`home_data_mixin.py`) rendered as a bordered empty square. Measured on the real widget under
+the real app stylesheet — **0 ink pixels inside the border, byte-identical to `setText("")`**;
+11 ink pixels once `padding:0` was pinned. The user reported it as "the box on the right",
+having never seen a ✓. Same *visible* failure as the RULE-ENC1 class-2 dismiss buttons, but a
+completely different cause — checking the glyph's encoding here finds a perfectly valid
+U+2713 and clears the file.
+
+```python
+# WRONG — inherits `padding: 5px 14px` from MAIN_STYLE; label rect goes negative
+btn.setFixedSize(22, 18)
+btn.setStyleSheet(f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
+                  f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}")
+
+# CORRECT — the inline sheet names padding, so the global rule cannot apply
+btn.setStyleSheet(f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
+                  f" border:1px solid {BORDER}; border-radius:3px;"
+                  f" font-size:10px; padding:0; }}")
+```
+
+**Two traps when verifying a fix in this class.**
+- *A bare pytest `QApplication` has no application stylesheet*, so the bug does not reproduce
+  under test unless the test applies `MAIN_STYLE + get_app_qss()` itself (and restores it
+  afterward — a stylesheet left applied changes rendering for every later test in the run).
+  A render test written without it measures nothing and passes green forever.
+- *"Is the render multi-coloured?" and "does it differ from `setText('')`?" do not
+  discriminate.* The border and its rounded corners supply several colours either way, and a
+  second `grab()` can differ for reasons unrelated to the label. Count interior pixels that
+  differ from the modal (background) colour — that separates 0 from 11 unambiguously.
+
+Enforced by `tests/test_home_ack_button_glyph.py` (static: available label width ≥ text
+advance; render: non-zero ink under the real app stylesheet).
 
 ### RULE-PERF1 (blocking): Never set `QHeaderView.ResizeMode.ResizeToContents` as a table's default column resize mode
 **Mechanism:** the single-argument `setSectionResizeMode(ResizeToContents)` (applied to all
@@ -2430,6 +2501,7 @@ Currently tool-enforced (high reliability):
 - RULE-QSS2 → `test_qss_hex_alpha.py`
 - RULE-QSS3 → `test_qss_recipe_adoption.py`
 - RULE-QSS4 → `test_qss_widget_coverage.py` (class-level net + `_STYLING_CRITICAL_SUBCONTROLS` one level down) + `test_qss_derived_contrast.py` (fg/bg pairs derived from the real QSS, both themes) + `test_qss_tab_styling.py` (SMB-tabs pin)
+- RULE-QSS5 → `test_home_ack_button_glyph.py` (label-width arithmetic + ink-pixel render under the real app stylesheet)
 - RULE-GATE1 → `test_run_test_suite.py` (canned-output classification of all five modes) + `tools/run_test_suite.py` as COMMIT GATE Step 2
 - RULE-UX7 → `test_item_tooltip_wrap.py` (ratchet on `safe_tooltip` call-site count)
 - RULE-ENC1 → `test_source_encoding.py`
@@ -2447,6 +2519,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN16 → `test_single_instance.py` (real CreateMutexW round-trip) + `test_single_instance_race.py` (RED/GREEN regression)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 - RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
+- RULE-R1b → `test_version_consistency.py::test_whats_new_version` + `bump_version.py::_preflight_whats_new()` (aborts the bump before any file is written)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry

@@ -44,7 +44,9 @@ from __future__ import annotations
 import time
 from typing import Callable, Dict, List, Optional
 
-from modules.alert_types import AlertFired, AlertRule, RULE_TYPES  # noqa: F401 — re-exported
+from modules.alert_types import (  # noqa: F401 — re-exported
+    AlertFired, AlertRule, RULE_TYPES, DEFAULT_ACK_HOLD_SECONDS,
+)
 from modules.metric_store import MetricStore
 from modules.alert_suppressor import (
     EscalationPolicy, _default_rules, rule_settings_key,
@@ -60,6 +62,7 @@ from modules.alert_engine_routing import cta_for_rule, append_action
 __all__ = [
     "AlertRule", "AlertFired", "AlertEngine",
     "EscalationPolicy", "rule_settings_key", "RULE_TYPES",
+    "DEFAULT_ACK_HOLD_SECONDS",
 ]
 
 
@@ -100,6 +103,14 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         self._on_alert = on_alert
         # rule_name::host → last_fired_ts
         self._last_fired: Dict[str, int] = {}
+        # rule_name::host → ts the user acknowledged it. Cooldown alone only
+        # spaces out repeats (300 s for most rules), so a condition that stays
+        # true re-alerts forever and acknowledging does nothing to stop it —
+        # ack marks a past DB row, it never reached the engine. A hold mutes
+        # the key for _ack_hold_s; a resolution clears it so a genuinely new
+        # occurrence after recovery still alerts.
+        self._ack_hold: Dict[str, int] = {}
+        self._ack_hold_s: int = DEFAULT_ACK_HOLD_SECONDS
         # host → [(ts, state), ...] — rolling history for flap detection
         self._state_history: Dict[str, List] = {}
         # hosts currently classified as flapping
@@ -492,6 +503,13 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         if self._out_of_scope(scope_host if scope_host is not None else host, rule.rule_type):
             return None
         key = f"{rule.name}::{host}"
+        # Acknowledgement hold — the user has said "I know about this one".
+        if self._ack_hold_s > 0:
+            acked = self._ack_hold.get(key)
+            if acked is not None:
+                if now - acked < self._ack_hold_s:
+                    return None
+                del self._ack_hold[key]  # expired — a mute, not a permanent block
         last = self._last_fired.get(key)
         if last is not None and now - last < rule.cooldown_s:
             return None
@@ -508,6 +526,53 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
             cta_page=cta_page,
             cta_filter=cta_filter,
         )
+
+    # ── Acknowledgement holds ─────────────────────────────────────────────────
+
+    def set_ack_hold_seconds(self, seconds: int) -> None:
+        """How long an ack mutes the same (rule, host). 0 disables the hold."""
+        try:
+            self._ack_hold_s = max(0, int(seconds))
+        except (TypeError, ValueError):
+            self._ack_hold_s = DEFAULT_ACK_HOLD_SECONDS
+
+    def note_acknowledged(
+        self, rule_name: str, host: str, ts: Optional[int] = None
+    ) -> None:
+        """Record that the user acknowledged this (rule, host)."""
+        if not rule_name:
+            return
+        self._ack_hold[f"{rule_name}::{host or ''}"] = int(
+            ts if ts is not None else time.time()
+        )
+
+    def clear_ack_hold(self, rule_name: str, host: str) -> None:
+        """Drop the hold — the condition resolved, so the next one is new."""
+        self._ack_hold.pop(f"{rule_name}::{host or ''}", None)
+
+    def load_ack_holds(self, acked_rows) -> None:
+        """Seed holds from persisted `alert_fired` rows.
+
+        _ack_hold (like _last_fired) is in-memory, so every restart would
+        otherwise unmute the whole backlog and re-alert it within one cooldown.
+        Reads acked_ts straight off the existing rows — no schema change. Rows
+        that are unacked or malformed are skipped, and the newest ack wins per
+        key so an older row can't shadow a more recent acknowledgement.
+        """
+        for row in acked_rows or []:
+            if not isinstance(row, dict):
+                continue
+            rule_name = row.get("rule_name") or ""
+            acked_ts  = row.get("acked_ts")
+            if not rule_name or acked_ts in (None, ""):
+                continue
+            try:
+                ts = int(acked_ts)
+            except (TypeError, ValueError):
+                continue
+            key = f"{rule_name}::{row.get('host') or ''}"
+            if ts > self._ack_hold.get(key, 0):
+                self._ack_hold[key] = ts
 
     def _fire_resolution(
         self,
@@ -527,8 +592,12 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         Deliberately does NOT apply the per-rule cooldown _fire_if_cooled
         does — a resolution fires at most once per down-state (the caller
         pops its own `_since`-style tracking dict before calling this) and
-        must never be swallowed by the cooldown of the alert it closes.
+        must never be swallowed by the cooldown of the alert it closes. The
+        acknowledgement hold is skipped for the same reason, and is *cleared*
+        here: the condition is over, so the next occurrence is genuinely new
+        and must be allowed to alert.
         """
+        self.clear_ack_hold(rule.name, host)
         if time.time() < self._suppress_until:
             return None
         if self._maintenance_suppresses(host, rule.name, "HEALTHY", message):

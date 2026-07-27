@@ -325,8 +325,8 @@ class _DiagExtraTabsMixin:
         """Handle ack from the shared alert drawer (any page, no navigation required)."""
         from ui.widgets.toast import ToastManager
         ToastManager.show("Alert acknowledged", "success")
-        if callable(getattr(self, "_push_monitor_pills", None)):
-            self._push_monitor_pills()
+        if callable(getattr(self, "_on_alerts_acknowledged", None)):
+            self._on_alerts_acknowledged()
 
     @pyqtSlot(object)
     def _on_alert_view_requested(self, alert) -> None:

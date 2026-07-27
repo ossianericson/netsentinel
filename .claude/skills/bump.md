@@ -73,8 +73,15 @@ highlights; full history lives in CHANGELOG.md.
 
 ### Step 4 — Update "What's New" in ui/help_tab.py
 
-Find the `_section(f"What's New in v{app_ver}", [...])` call in `ui/help_tab.py` and update
-it to match the CHANGELOG entry for this version.
+Edit the `_WHATS_NEW_VERSION` / `_WHATS_NEW_ENTRIES` pair at the **top** of `ui/help_tab.py`:
+
+1. Rewrite `_WHATS_NEW_ENTRIES` to match this version's CHANGELOG entry — plain-English,
+   user-facing phrasing (RULE-A1), not the CHANGELOG's technical wording.
+2. Set `_WHATS_NEW_VERSION` to the new version.
+
+This is hand-written prose — `bump_version.py` never rewrites it (auto-bumping the constant
+would relabel the last release's bullets as this one). Skipping this step is not a silent
+miss any more: Step 5 aborts before touching a single file (RULE-R1b).
 
 ### Step 5 — Run bump_version.py
 

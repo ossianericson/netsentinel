@@ -48,12 +48,6 @@ _PRESSED_RULE_WITH_COLOR = re.compile(
     re.DOTALL,
 )
 
-# Matches a :pressed pseudo-state rule (with or without color).
-_PRESSED_RULE_ANY = re.compile(
-    r'QPushButton\s*:pressed\s*\{',
-    re.DOTALL,
-)
-
 
 def _extract_setStyleSheet_strings(source: str) -> list[tuple[int, str]]:
     """

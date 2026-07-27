@@ -287,6 +287,7 @@ class AlertDrawer(QFrame):
         self._store  = None
         self._router = None
         self._current_alert: dict | None = None
+        self._group_ids: list[int] = []
         self._evidence_worker: "_EvidenceWorker | None" = None
 
         self._anim = QPropertyAnimation(self, b"maximumWidth")
@@ -305,8 +306,17 @@ class AlertDrawer(QFrame):
 
     # ── Open / close ──────────────────────────────────────────────────────────
 
-    def open(self, alert: dict) -> None:
+    def open(self, alert: dict, group_ids=None) -> None:
+        """Show one alert.
+
+        `group_ids`, when given, are every alert id the caller has collapsed
+        into the row this alert represents (the Alert History table's "×N"
+        grouping). Acknowledging then clears the whole group -- acking only the
+        representative left the rest unacked, so they reappeared on the next
+        refresh. Callers with no grouping omit it and get single-alert ack.
+        """
         self._current_alert = alert
+        self._group_ids = [int(i) for i in (group_ids or []) if i is not None]
         self._populate(alert)
         self._start_evidence_fetch(alert)
         self._anim.stop()
@@ -315,6 +325,7 @@ class AlertDrawer(QFrame):
         self._anim.start()
 
     def close_drawer(self) -> None:
+        self._stop_evidence_worker()
         self._anim.stop()
         self._anim.setStartValue(self.maximumWidth())
         self._anim.setEndValue(0)
@@ -780,13 +791,16 @@ class AlertDrawer(QFrame):
             return
         name    = self._ack_name_edit.text().strip() or "user"
         comment = self._ack_comment_edit.text().strip()
+        ids     = self._group_ids or [int(alert_id)]
         try:
-            self._store.acknowledge_alert(int(alert_id), acked_by=name, comment=comment)
+            self._store.acknowledge_alerts(ids, acked_by=name, comment=comment)
         except Exception:
             return
         self._ack_form.setVisible(False)
         self._ack_btn.setEnabled(False)
-        self._ack_btn.setText("✓ Acknowledged")
+        self._ack_btn.setText(
+            f"✓ Acknowledged ({len(ids)})" if len(ids) > 1 else "✓ Acknowledged"
+        )
         self._ack_info_lbl.setText(
             f"✓ Acknowledged by {name} on "
             f"{time.strftime('%Y-%m-%d %H:%M', time.localtime())}"
@@ -819,10 +833,32 @@ class AlertDrawer(QFrame):
         source_key = _rule_to_log_source(alert.get("rule_name") or "")
         self.view_in_log_hub.emit(ts, source_key)
 
+    def _stop_evidence_worker(self) -> None:
+        """Stop and reap the evidence QThread.
+
+        The worker is parented to the drawer, so Qt destroys it with the
+        drawer -- and destroying a *running* QThread aborts the process
+        natively (RULE-WIN4). The previous code only quit() without wait(),
+        which leaves that window open. Also called before starting a
+        replacement so two fetches never race on the same handle.
+        """
+        w = self._evidence_worker
+        if w is None:
+            return
+        try:
+            if w.isRunning():
+                try:
+                    w.done.disconnect()
+                except (RuntimeError, TypeError):
+                    pass  # nothing connected — nothing to detach
+                w.quit()
+                w.wait(500)
+        except RuntimeError:
+            pass  # C++ object already deleted — nothing to stop
+        self._evidence_worker = None
+
     def _start_evidence_fetch(self, alert: dict) -> None:
-        if self._evidence_worker and self._evidence_worker.isRunning():
-            self._evidence_worker.done.disconnect()
-            self._evidence_worker.quit()
+        self._stop_evidence_worker()
         for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
             lbl.setText("…")
             _s.themed_ss(lbl, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")

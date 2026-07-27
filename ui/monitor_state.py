@@ -8,6 +8,7 @@ overall verdict, and the RiskBadge / VerdictPanel widget classes.
 from __future__ import annotations
 
 import re
+import time
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -449,6 +450,24 @@ class _MonitorStateMixin:
             self._notifications_page.switch_to_history_tab(unacked_only=True)
 
     # ── Section badges ────────────────────────────────────────────────────────
+
+    def _on_alerts_acknowledged(self) -> None:
+        """Single wiring point for every acknowledge path.
+
+        Tells the AlertEngine about the acknowledgement so an acked but still
+        ongoing condition stops re-firing on its cooldown, then refreshes the
+        badge/pills. Re-reads the acks from the store instead of taking ids
+        from the caller, so the bulk bar, the alert drawer, the Home card's
+        "Acknowledge all" and its per-row ✓ are all covered by one handler.
+        """
+        engine = getattr(self, "_alert_engine", None)
+        store  = getattr(self, "_store", None)
+        if engine is not None and store is not None:
+            try:
+                engine.load_ack_holds(store.get_recent_acks(int(time.time()) - 86400))
+            except Exception:
+                pass  # non-fatal — the ack still stands, it just won't mute re-fires
+        self._push_monitor_pills()
 
     def _update_monitor_badge(self, _active: bool = False) -> None:
         """Refresh all section badges and Home pills when log source state changes."""

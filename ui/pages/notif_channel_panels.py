@@ -338,6 +338,37 @@ class _NotifChannelsMixin:
         _s.themed_ss(self._sens_hint_lbl, "font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;")
         bl.addWidget(self._sens_hint_lbl)
 
+        hold_row = QHBoxLayout()
+        hold_row.setSpacing(8)
+        hold_lbl = QLabel("Acknowledging mutes an alert for:")
+        _s.themed_ss(hold_lbl, "font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        hold_row.addWidget(hold_lbl)
+        self._combo_ack_hold = QComboBox()
+        for _label, _hours in (
+            ("1 hour", 1), ("8 hours", 8), ("24 hours (default)", 24),
+            ("7 days", 168), ("Don't mute — always re-alert", 0),
+        ):
+            self._combo_ack_hold.addItem(_label, _hours)
+        self._combo_ack_hold.setFixedWidth(280)
+        _s.themed_ss(self._combo_ack_hold, "QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            "border-radius:2px;padding:0 6px;font-size:11px;}}"
+            "QComboBox::drop-down{{border:none;}}"
+            "QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            "border:1px solid {BORDER};selection-background-color:{ACCENT};}}")
+        self._combo_ack_hold.currentIndexChanged.connect(self._save)
+        hold_row.addWidget(self._combo_ack_hold)
+        hold_row.addStretch()
+        bl.addLayout(hold_row)
+        _hold_hint = QLabel(
+            "A condition that stays true (a service still down, a device still "
+            "gone) otherwise re-alerts every few minutes forever. Acknowledging "
+            "silences that device + rule for this long. A recovery always clears "
+            "the mute, so a genuinely new problem still alerts."
+        )
+        _hold_hint.setWordWrap(True)
+        _s.themed_ss(_hold_hint, "font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;")
+        bl.addWidget(_hold_hint)
+
         self._zero_rules_banner = QFrame()
         _s.themed_ss(self._zero_rules_banner, "QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:4px; }}")
         banner_lay = QHBoxLayout(self._zero_rules_banner)

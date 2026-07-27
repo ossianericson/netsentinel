@@ -204,6 +204,7 @@ class NotificationsPage(
         for name, chk in self._rule_checkboxes.items():
             qs.setValue(_rule_key(name), chk.isChecked())
         qs.setValue("alerts/sensitivity", self._combo_sensitivity.currentData())
+        qs.setValue("alerts/ack_hold_hours", int(self._combo_ack_hold.currentData()))
         self._update_rules_badge()
         self._apply_to_engine()
         self._apply_to_router()
@@ -258,6 +259,14 @@ class NotificationsPage(
             level = qs.value("alerts/sensitivity", DEFAULT_SENSITIVITY, type=str)
             idx = self._combo_sensitivity.findData(level)
             self._combo_sensitivity.setCurrentIndex(idx if idx >= 0 else 1)
+            from modules.alert_types import DEFAULT_ACK_HOLD_SECONDS
+            hold_h = qs.value(
+                "alerts/ack_hold_hours", DEFAULT_ACK_HOLD_SECONDS // 3600, type=int
+            )
+            idx = self._combo_ack_hold.findData(int(hold_h))
+            self._combo_ack_hold.setCurrentIndex(
+                idx if idx >= 0 else self._combo_ack_hold.findData(24)
+            )
         finally:
             self._restoring = False
         self._apply_to_router()
@@ -399,6 +408,9 @@ class NotificationsPage(
             chk = self._rule_checkboxes.get(rule.name)
             rule.enabled = bool(chk is not None and chk.isChecked())
         self._alert_engine.set_rules(rules)
+        self._alert_engine.set_ack_hold_seconds(
+            int(self._combo_ack_hold.currentData()) * 3600
+        )
 
         from modules.alert_suppressor import EscalationPolicy
         wait_minutes = self._spin_escalation_wait.value()

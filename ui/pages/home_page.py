@@ -62,6 +62,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     investigate_live_requested = pyqtSignal()
     #: Emitted when the user clicks an alert row; carries the raw alert object.
     alert_view_requested = pyqtSignal(object)
+
+    alerts_acknowledged = pyqtSignal()
     #: Emitted when user clicks "Add" on a hardware checklist step; carries plugin path.
     add_plugin_requested = pyqtSignal(str)
     #: Emitted when the user clicks "Email me this report →" on the weekly report card (S8-3).
@@ -580,6 +582,24 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             " background:transparent; border:none;")
         _ac_hdr_row.addWidget(_ac_hdr_lbl)
         _ac_hdr_row.addStretch()
+        # The card only ever lists the 5 newest alerts. Without this count the
+        # backlog is invisible: acking the visible 5 just promotes the next 5
+        # on the following refresh, which reads as "they came straight back".
+        self._ac_count_lbl = QLabel("")
+        _s.themed_ss(self._ac_count_lbl, "font-size:10px; color:{TEXT_MUTED};"
+            " background:transparent; border:none;")
+        self._ac_count_lbl.setVisible(False)
+        _ac_hdr_row.addWidget(self._ac_count_lbl)
+        self._ac_ack_all_btn = QPushButton("✓ Acknowledge all")
+        self._ac_ack_all_btn.setFixedHeight(20)
+        self._ac_ack_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _s.themed_ss(self._ac_ack_all_btn, "QPushButton {{ background:transparent; color:{TEXT_MUTED};"
+            " border:1px solid {BORDER}; border-radius:3px; font-size:10px; padding:0 8px; }}"
+            "QPushButton:hover {{ color:{GREEN}; border-color:{GREEN}; }}"
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
+        _ac_hdr_row.addWidget(self._ac_ack_all_btn)
+        self._ac_ack_all_btn.setVisible(False)
+        self._ac_ack_all_btn.clicked.connect(self._ack_all_alerts)
         _ac_outer.addLayout(_ac_hdr_row)
 
         # ── ALERT-3: per-alert rows with inline ack ───────────────────────────

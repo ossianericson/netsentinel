@@ -35,7 +35,7 @@ next unrelated write) before re-raising. On the sqlalchemy backend,
 Engine.begin() already rolls back on exception.
 """
 import time
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 
 class _BatchWritesMixin:
@@ -105,6 +105,54 @@ class _BatchWritesMixin:
             "(ts, mac, label, category, app, cdn, bytes_total, window_s) "
             "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
             rows,
+        )
+
+    # ── Write: alert acknowledgement, batched ─────────────────────────────────
+
+    def acknowledge_alerts(
+        self,
+        alert_ids: Sequence[int],
+        acked_by: str = "user",
+        comment: str = "",
+        ts: Optional[int] = None,
+    ) -> None:
+        """Batch version of acknowledge_alert() -- one transaction for a whole
+        selection instead of one commit per id.
+
+        Exists because the Alert History table collapses alerts by
+        (rule_name, host) into "×N" rows: acknowledging one visible row has to
+        clear every member of its group, or the group's remaining members
+        reappear on the next refresh. Same reason the Home action card's
+        "Acknowledge all" needs it -- that button can clear a backlog of
+        hundreds in one click.
+
+        An empty/None-only id list is a no-op, so callers can pass a selection
+        straight through without a guard.
+        """
+        ids = [int(a) for a in alert_ids if a is not None]
+        if not ids:
+            return
+        now = ts or int(time.time())
+        self._execute_write_many(
+            "UPDATE alert_fired SET acked_ts=?, acked_by=?, acked_comment=? WHERE id=?",
+            [(now, acked_by or "user", comment or None, aid) for aid in ids],
+        )
+
+    def unacknowledge_alerts(self, alert_ids: Sequence[int]) -> None:
+        """Undo acknowledge_alerts() -- put the alerts back in the unacked queue.
+
+        Backs the Home action card's "Acknowledge all" undo toast: that button
+        can clear a backlog of hundreds in one click, so the action has to be
+        reversible. Clears acked_by/acked_comment too, so an undone ack leaves
+        no partial ownership record behind.
+        """
+        ids = [int(a) for a in alert_ids if a is not None]
+        if not ids:
+            return
+        self._execute_write_many(
+            "UPDATE alert_fired SET acked_ts=NULL, acked_by=NULL, acked_comment=NULL "
+            "WHERE id=?",
+            [(aid,) for aid in ids],
         )
 
     # ── Write: availability cycle, batched (F5) ───────────────────────────────

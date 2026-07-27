@@ -4,6 +4,22 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.48
+
+**Fixed**
+- Acknowledging an alert did not stick, from three independent causes found against a live DB holding 87 unacked alerts: `ui/pages/notif_alert_history.py` collapses rows by `(rule_name, host)` into "xN" entries but only ever wrote the group's representative id, so acking every visible row of 43 grouped rows left 44 alerts unacked; the bulk acknowledge action was effectively unreachable (labelled "Dismiss", with the bulk bar only appearing after a row was already selected and single-click opening the 320px drawer on every Ctrl/Shift-click, fighting the multi-select it needed); and `modules/alert_engine.py` deduped on cooldown alone, so a condition that stayed true re-alerted every 5 minutes forever regardless of acknowledgement — measured at 247 "Service Down" fires with a 5.0-minute median gap for a single host
+- `modules/alert_engine.py`: acknowledging now places a per-`(rule, host)` hold — default 24 h, configurable under Notifications -> Configure — seeded from `alert_fired.acked_ts` via the new `MetricStore.get_recent_acks()` so holds survive a restart with no schema change; a resolution clears the hold, so a genuinely new occurrence still alerts
+- Home page "Action needed" card reported "5 of N" with no total and no bulk action, so acknowledging the visible rows just promoted the next five within 30s; it now reports the real backlog and offers "Acknowledge all (N)" with an undo toast backed by the new `MetricStore.unacknowledge_alerts()`
+- Alert History stretched the Rule column — a short fixed vocabulary in a very wide column that read as permanently empty — while never showing the alert message in the table at all; columns are now Time/Rule/Host/Message/Severity/Status with Message stretching
+- The Home card's per-alert acknowledge button has shipped as an unlabelled empty box: an inline stylesheet MERGES with the global QSS rather than replacing it (RULE-QSS5), so the 22x18 button inherited `MAIN_STYLE`'s `QPushButton { padding: 5px 14px; }`, leaving -8px of label rect and eliding the check mark to nothing — measured at 0 ink pixels inside the border, byte-identical to `setText("")`, vs 11 with padding pinned
+- `ui/widgets/alert_drawer.py` never stopped its parented `_EvidenceWorker` QThread; destroying a running QThread aborts the process natively (RULE-WIN4) — it killed a test run with exit 127 and no summary line
+- The in-app "What's New" section shipped stale for two consecutive releases (v2.1.47 showed v2.1.46's bullets under a "What's New in v2.1.47" heading) because it is hand-written prose `bump_version.py` deliberately never rewrites, so nothing structural linked it to a release; `ui/help_tab.py` now hoists it to a `_WHATS_NEW_VERSION`/`_WHATS_NEW_ENTRIES` pair that `bump_version.py::_preflight_whats_new()` checks before the first file is written, and the heading renders from the constant so a bypassed gate degrades to stale-but-truthful rather than mislabelled (RULE-R1b)
+
+**Changed**
+- `tests/`: removed three definition-only module-level globals flagged by CodeQL `py/unused-global-variable`, found by pointing `tools/check_import_lint.py`'s unused-global scan at `tests/` (RULE-LINT6 normally scopes it to `modules`/`ui`/`workers`, which is why they reached GitHub) — internal tooling, no user-facing change
+
+---
+
 ### v2.1.47
 
 **Fixed**

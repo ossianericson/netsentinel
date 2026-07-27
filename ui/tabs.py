@@ -117,7 +117,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._notifications_page.view_in_log_hub.connect(self._on_view_alert_in_log_hub)
         self._notifications_page.automation_rule_requested.connect(self._on_automation_rule_requested)
         self._notifications_page.select_inventory_device.connect(self._inventory_page.select_device)
-        self._notifications_page.alert_acknowledged.connect(self._push_monitor_pills)
+        self._notifications_page.alert_acknowledged.connect(self._on_alerts_acknowledged)
         self._notifications_page.set_store(self._store)
         self.global_time_range_changed.connect(self._notifications_page.set_global_hours)
 
@@ -539,6 +539,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             self._home_page.start_logger_requested.connect(self._toggle_logger)
             self._home_page.investigate_live_requested.connect(self._on_investigate_live)
             self._home_page.alert_view_requested.connect(self._on_alert_view_requested)
+            self._home_page.alerts_acknowledged.connect(self._on_alerts_acknowledged)
             self._home_page.rescan_requested.connect(self._start_full_scan)
             self._home_page.add_plugin_requested.connect(
                 lambda p: self._hardware_integration_page._import_bundled(p)

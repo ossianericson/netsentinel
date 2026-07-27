@@ -48,6 +48,37 @@ def _test_stats() -> tuple[int, int]:
     return n_tests, n_files
 
 
+def _preflight_whats_new(ver: str) -> None:
+    """Abort before ANY file is written if the in-app "What's New" is stale.
+
+    `ui/help_tab.py` carries hand-written release prose that this script
+    deliberately never rewrites — auto-bumping it would relabel the previous
+    release's bullets as the new version, which is the defect the check exists
+    to catch (v2.1.47 shipped showing v2.1.46's bullets).
+
+    tests/test_version_consistency.py::test_whats_new_version catches the same
+    thing at the end of this run, but by then ~20 files have already been
+    rewritten, leaving a half-bumped tree to unpick by hand.  Fail here instead,
+    while the tree is still clean.
+    """
+    path = ROOT / "ui" / "help_tab.py"
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r'^_WHATS_NEW_VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    if match is None:
+        print("error: could not find _WHATS_NEW_VERSION in ui/help_tab.py")
+        print("       (expected a module-level assignment — has the file been restructured?)")
+        sys.exit(1)
+    if match.group(1) != ver:
+        print(f"error: ui/help_tab.py still describes v{match.group(1)}, not v{ver}.\n")
+        print("The in-app \"What's New\" section is hand-written and is NOT bumped")
+        print("automatically. Nothing has been modified — fix this first:\n")
+        print("  1. Rewrite _WHATS_NEW_ENTRIES in ui/help_tab.py to describe this")
+        print("     release's changes (match the top CHANGELOG.md entry).")
+        print(f'  2. Set _WHATS_NEW_VERSION = "{ver}".')
+        print(f"  3. Re-run: python bump_version.py {ver}")
+        sys.exit(1)
+
+
 def _sub(path: Path, pattern: str, replacement: str, flags: int = 0, count: int = 0) -> None:
     text = path.read_text(encoding="utf-8")
     new_text, n = re.subn(pattern, replacement, text, count=count, flags=flags)
@@ -59,6 +90,9 @@ def _sub(path: Path, pattern: str, replacement: str, flags: int = 0, count: int 
 
 
 def bump(ver: str) -> None:
+    # Runs before the first _sub() so a stale "What's New" leaves a clean tree.
+    _preflight_whats_new(ver)
+
     print(f"\nBumping to {ver}\n")
 
     # app.py  ── canonical source of truth
@@ -209,6 +243,9 @@ def bump(ver: str) -> None:
         ".github/winget/NetSentinel.NetSentinel.installer.yaml",
         ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml",
         "README.md", "CHANGELOG.md", "ui/dashboard.py",
+        # Hand-edited (see _preflight_whats_new) — staged here so the What's New
+        # rewrite lands in the release commit instead of being left behind.
+        "ui/help_tab.py",
         "docs/architecture.md",
         ".apm/instructions/project-vision.instructions.md",
         ".claude/rules/project-vision.md",

@@ -163,3 +163,55 @@ def test_splash_screen_version(canonical):
     assert m.group(1) == canonical, (
         f"Splash screen version={m.group(1)!r} does not match app.py {canonical!r}"
     )
+
+
+def test_whats_new_version(canonical):
+    """The in-app "What's New" prose must be rewritten for every release.
+
+    Unlike every other check in this file, this one does not guard a version
+    string that `bump_version.py` rewrites — it guards hand-written release
+    prose that the script deliberately never touches.  `_WHATS_NEW_VERSION`
+    is the anchor that makes "did anyone update the bullets?" machine-checkable:
+    it only moves when a human edits the list sitting directly beneath it.
+
+    Auto-bumping this constant would defeat the entire check — it would
+    relabel the previous release's bullets as the new version, which is the
+    exact defect this test exists to catch (shipped in v2.1.47, which showed
+    v2.1.46's bullets under a "What's New in v2.1.47" heading).
+    """
+    text = (ROOT / "ui" / "help_tab.py").read_text(encoding="utf-8")
+    m = re.search(r'^_WHATS_NEW_VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    assert m, "Could not find _WHATS_NEW_VERSION in ui/help_tab.py"
+    assert m.group(1) == canonical, (
+        f"ui/help_tab.py _WHATS_NEW_VERSION={m.group(1)!r} does not match app.py "
+        f"{canonical!r} — the in-app \"What's New\" section still shows the previous "
+        f"release's changes.\n"
+        f"Fix: rewrite the bullet list in ui/help_tab.py to describe {canonical}'s "
+        f"changes (match the top CHANGELOG.md entry), then set "
+        f'_WHATS_NEW_VERSION = "{canonical}".\n'
+        f"Do NOT just bump the constant — the bullets are the point."
+    )
+
+
+def test_whats_new_heading_renders_from_the_constant():
+    """The heading must render from _WHATS_NEW_VERSION, never the live app version.
+
+    Rendering it from `QApplication.applicationVersion()` is what made the
+    original defect actively wrong rather than merely stale: the heading always
+    claimed the current release while the bullets beneath it described the
+    previous one.  Sourcing it from the constant means a bypassed gate degrades
+    to stale-but-truthful.
+
+    Without this check, reverting the heading to `app_ver` would reopen the hole
+    silently — test_whats_new_version above would still pass.
+    """
+    text = (ROOT / "ui" / "help_tab.py").read_text(encoding="utf-8")
+    m = re.search(r'What\'s New in v\{([^}]+)\}', text)
+    assert m, "Could not find the \"What's New in v{...}\" heading in ui/help_tab.py"
+    assert m.group(1) == "_WHATS_NEW_VERSION", (
+        f"The What's New heading renders from {{{m.group(1)}}}, not "
+        f"{{_WHATS_NEW_VERSION}}.\n"
+        f"Sourcing it from the live app version means a missed prose update shows "
+        f"the new version number above the previous release's bullets — the exact "
+        f"defect that shipped in v2.1.47."
+    )

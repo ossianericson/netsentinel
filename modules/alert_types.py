@@ -102,6 +102,12 @@ SECURITY_RELEVANT_RULE_TYPES = frozenset({
     "CERT_EXPIRED",
 })
 
+# How long acknowledging an alert mutes further firings of the same
+# (rule, host) in AlertEngine. Lives here, not in alert_engine.py, so the UI
+# can read the default without importing the engine (ARCH RULE 1); the engine
+# re-exports it for existing callers. 0 disables the hold.
+DEFAULT_ACK_HOLD_SECONDS = 86400  # 24 h
+
 
 # ── Data types ────────────────────────────────────────────────────────────────
 

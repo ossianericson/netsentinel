@@ -112,6 +112,19 @@ def _enrich_alert_sublabel(alert: dict) -> str:
     return ""
 
 
+# ── Alert history table columns ──────────────────────────────────────────────
+
+_HIST_COLUMNS = ("Time", "Rule", "Host", "Message", "Severity", "Status")
+_COL_TIME, _COL_RULE, _COL_HOST, _COL_MESSAGE, _COL_SEVERITY, _COL_STATUS = range(6)
+# Message is the stretch column, so its entry here is unused.
+_HIST_COL_WIDTHS = (100, 150, 130, 0, 80, 100)
+
+# Per-row payload: every ack-eligible alert id collapsed into that "×N" row.
+# UserRole holds the representative alert dict; this holds the whole group, so
+# acknowledging one visible row clears all of its members.
+_GROUP_IDS_ROLE = Qt.ItemDataRole.UserRole + 1
+
+
 # ── Severity / channel colour maps ───────────────────────────────────────────
 
 _SEV_LEVELS = ("INFO", "WARNING", "CRITICAL")
@@ -295,13 +308,15 @@ class _NotifAlertHistoryMixin:
         _sb_lay.addWidget(_sb_dismiss_btn)
         hist_lay.addWidget(self._storm_banner)
 
-        self._alert_history_table = QTableWidget(0, 5)
-        self._alert_history_table.setHorizontalHeaderLabels(
-            ["Time", "Rule", "Host", "Severity", "Status"]
-        )
+        self._alert_history_table = QTableWidget(0, len(_HIST_COLUMNS))
+        self._alert_history_table.setHorizontalHeaderLabels(list(_HIST_COLUMNS))
         self._alert_history_table.horizontalHeader().setStretchLastSection(False)
+        # Message stretches, not Rule. Rule holds a short fixed vocabulary
+        # ("Device Gone", "IP Churn"); stretching it produced a very wide column
+        # that read as permanently empty while the alert's actual text was not
+        # shown in the table at all.
         self._alert_history_table.horizontalHeader().setSectionResizeMode(
-            1, self._alert_history_table.horizontalHeader().ResizeMode.Stretch
+            _COL_MESSAGE, self._alert_history_table.horizontalHeader().ResizeMode.Stretch
         )
         self._alert_history_table.verticalHeader().setVisible(False)
         self._alert_history_table.setEditTriggers(
@@ -317,8 +332,9 @@ class _NotifAlertHistoryMixin:
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         _s.themed_ss(self._alert_history_table, _tbl_qss)
-        for w, col in zip((100, 80, 100, 80), range(4)):
-            self._alert_history_table.setColumnWidth(col, w)
+        for col, w in enumerate(_HIST_COL_WIDTHS):
+            if col != _COL_MESSAGE:
+                self._alert_history_table.setColumnWidth(col, w)
         self._alert_history_table.itemClicked.connect(self._on_alert_row_single_click)
         self._alert_history_table.itemDoubleClicked.connect(
             self._on_alert_history_row_clicked
@@ -352,13 +368,14 @@ class _NotifAlertHistoryMixin:
         _s.themed_ss(self._bulk_lbl, "font-size:11px; color:{TEXT_PRIMARY}; font-weight:600;")
         _bb_lay.addWidget(self._bulk_lbl)
         _bb_lay.addSpacing(6)
-        _bb_dismiss = QPushButton("Dismiss")
-        _bb_dismiss.setFixedHeight(22)
-        _s.themed_ss(_bb_dismiss, "QPushButton{{background:{ACCENT};color:{WHITE};font-size:10px;font-weight:600;"
+        self._bb_ack = QPushButton("✓ Acknowledge")
+        self._bb_ack.setFixedHeight(22)
+        self._bb_ack.setCursor(Qt.CursorShape.PointingHandCursor)
+        _s.themed_ss(self._bb_ack, "QPushButton{{background:{ACCENT};color:{WHITE};font-size:10px;font-weight:600;"
             "border:none;border-radius:3px;padding:0 10px;}}"
             "QPushButton:hover{{background:{ACCENT_DARK};}}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
-        _bb_dismiss.clicked.connect(self._bulk_dismiss)
+        self._bb_ack.clicked.connect(self._bulk_acknowledge)
         _snooze_ss = (
             "QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};font-size:10px;"
             "border:1px solid {BORDER};border-radius:3px;padding:0 10px;}}"
@@ -380,11 +397,22 @@ class _NotifAlertHistoryMixin:
             "QPushButton:hover{{color:{TEXT_PRIMARY};}}"
             "QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}")
         _bb_deselect.clicked.connect(self._alert_history_table.clearSelection)
-        for w in (_bb_dismiss, _bb_snooze1, _bb_snooze8):
+        for w in (self._bb_ack, _bb_snooze1, _bb_snooze8):
             _bb_lay.addWidget(w)
         _bb_lay.addStretch()
         _bb_lay.addWidget(_bb_deselect)
         hist_lay.addWidget(self._bulk_bar)
+
+        # "Select all" lives outside the selection-gated bulk bar so it is
+        # reachable with nothing selected yet -- the bulk bar only appears once
+        # a row is already picked, which is what made bulk ack undiscoverable.
+        self._btn_select_all = QPushButton("Select all")
+        self._btn_select_all.setFixedHeight(24)
+        _s.themed_ss(self._btn_select_all, _refresh_btn_ss)
+        self._btn_select_all.setToolTip(_s.safe_tooltip(
+            "Select every alert listed below, then use ✓ Acknowledge to clear them in one go"
+        ))
+        self._btn_select_all.clicked.connect(self._select_all_alerts)
 
         hist_btn_row = QHBoxLayout()
         btn_hist_refresh = QPushButton("Refresh")
@@ -397,6 +425,7 @@ class _NotifAlertHistoryMixin:
         btn_hist_export.clicked.connect(self._export_alert_history_csv)
         hist_btn_row.addWidget(btn_hist_refresh)
         hist_btn_row.addWidget(btn_hist_export)
+        hist_btn_row.addWidget(self._btn_select_all)
         hist_btn_row.addStretch()
         hist_lay.addLayout(hist_btn_row)
         tabs.addTab(hist_tab, "Alert History")
@@ -647,20 +676,31 @@ class _NotifAlertHistoryMixin:
         if self._hist_sev_filter != {"INFO", "WARNING", "CRITICAL"}:
             alerts = [a for a in alerts if a.get("severity", "INFO") in self._hist_sev_filter]
 
+        # Collapse by (rule_name, host) into one "×N" row -- but keep EVERY
+        # member's id, not just the representative's. Acknowledging a visible
+        # row has to clear the whole group or the other members reappear on the
+        # next refresh (this is the "acked alerts pop right back" bug: 87
+        # unacked alerts collapsed into 43 rows, so acking all 43 left 44).
+        # Only unacked members are ack-eligible -- re-acking an already-acked
+        # member would overwrite its recorded owner/comment.
         seen: dict = {}
         for alert in alerts:
             key = (alert.get("rule_name", ""), alert.get("host", ""))
             if key not in seen:
-                seen[key] = (alert, 1)
-            else:
-                seen[key] = (seen[key][0], seen[key][1] + 1)
-        grouped = list(seen.values())
+                seen[key] = [alert, 0, []]
+            entry = seen[key]
+            entry[1] += 1
+            if not alert.get("acked_ts"):
+                aid = alert.get("id")
+                if aid is not None:
+                    entry[2].append(int(aid))
+        grouped = [(a, n, ids) for a, n, ids in seen.values()]
         snoozes = self._router.get_all_snoozes() if self._router else {}
 
         from ui.widgets.skeleton import clear_skeleton_rows
         clear_skeleton_rows(self._alert_history_table)
         self._alert_history_table.setRowCount(0)
-        for alert, count in grouped:
+        for alert, count, group_ids in grouped:
             row = self._alert_history_table.rowCount()
             self._alert_history_table.insertRow(row)
             ts_str    = time.strftime("%m-%d %H:%M", time.localtime(alert.get("ts", 0)))
@@ -681,45 +721,65 @@ class _NotifAlertHistoryMixin:
             else:
                 status = "Pending"
                 st_col = _s.AMBER
-            for col, val in enumerate([ts_str, rule_disp, alert.get("host", ""), sev, status]):
+            message = alert.get("message", "")
+            for col, val in enumerate(
+                [ts_str, rule_disp, alert.get("host", ""), message, sev, status]
+            ):
                 it = QTableWidgetItem(str(val))
                 it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                if col == 3:
+                if col == _COL_SEVERITY:
                     it.setForeground(QColor(sev_col))
-                elif col == 4:
+                elif col == _COL_STATUS:
                     it.setForeground(QColor(st_col))
                 self._alert_history_table.setItem(row, col, it)
-            self._alert_history_table.item(row, 0).setData(
-                Qt.ItemDataRole.UserRole, alert
-            )
+            first_it = self._alert_history_table.item(row, 0)
+            first_it.setData(Qt.ItemDataRole.UserRole, alert)
+            # Every ack-eligible id in this collapsed group, read back by
+            # _selected_alert_ids() and the drawer -- see the grouping comment above.
+            first_it.setData(_GROUP_IDS_ROLE, list(group_ids))
+            # Message is the stretch column, so the enrichment sub-label ("Down
+            # for 3h 20m", "Expires in 6 days") goes there rather than under the
+            # rule name -- that column is now sized to its content.
             sub_label = _enrich_alert_sublabel(alert)
-            _cw = QWidget()
-            _cw.setAutoFillBackground(False)
-            _cl = QVBoxLayout(_cw)
-            _cl.setContentsMargins(4, 2, 4, 1)
-            _cl.setSpacing(0)
-            _lr = QLabel(rule_disp)
-            _s.themed_ss(_lr, "color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;")
-            _cl.addWidget(_lr)
             if sub_label:
+                _cw = QWidget()
+                _cw.setAutoFillBackground(False)
+                _cl = QVBoxLayout(_cw)
+                _cl.setContentsMargins(4, 2, 4, 1)
+                _cl.setSpacing(0)
+                _lm = QLabel(message)
+                _s.themed_ss(_lm, "color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;")
+                _cl.addWidget(_lm)
                 _ls = QLabel(sub_label)
                 _s.themed_ss(_ls, "color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
                 _cl.addWidget(_ls)
-            _cl.addStretch()
-            self._alert_history_table.setCellWidget(row, 1, _cw)
-            if sub_label:
+                _cl.addStretch()
+                self._alert_history_table.setCellWidget(row, _COL_MESSAGE, _cw)
                 self._alert_history_table.setRowHeight(row, 36)
+            elif message:
+                self._alert_history_table.item(row, _COL_MESSAGE).setToolTip(
+                    _s.safe_tooltip(message)
+                )
 
         has_rows = self._alert_history_table.rowCount() > 0
         self._hist_empty_lbl.setVisible(not has_rows)
 
     def _on_alert_row_single_click(self, item: QTableWidgetItem) -> None:
+        # Ctrl/Shift-click means "extend the selection", not "inspect this one".
+        # Opening the 320px drawer on every modified click made multi-select
+        # unusable, which is why bulk acknowledge was never found.
+        from PyQt6.QtWidgets import QApplication as _QApp
+        mods = _QApp.keyboardModifiers()
+        if mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
+            return
+        if len(self._selected_rows()) > 1:
+            return
         first = self._alert_history_table.item(item.row(), 0)
         if first is None:
             return
         alert = first.data(Qt.ItemDataRole.UserRole)
         if isinstance(alert, dict):
-            self._alert_drawer.open(alert)
+            self._alert_drawer.open(alert, group_ids=first.data(_GROUP_IDS_ROLE))
 
     def _on_drawer_acknowledged(self, alert_id: int) -> None:
         from ui.widgets.toast import ToastManager
@@ -830,16 +890,29 @@ class _NotifAlertHistoryMixin:
             ToastManager.show(f"Export failed: {exc}", "error")
 
     def _on_hist_selection_changed(self) -> None:
-        rows = {idx.row() for idx in self._alert_history_table.selectedIndexes()}
-        n = len(rows)
-        self._bulk_bar.setVisible(n > 0)
-        if n > 0:
-            self._bulk_lbl.setText(f"{n} selected")
+        n_rows = len(self._selected_rows())
+        self._bulk_bar.setVisible(n_rows > 0)
+        if n_rows == 0:
+            return
+        # Rows and alerts are not 1:1 -- a "×N" row stands for N alerts, and the
+        # ack clears all of them. Show both so the count on the button matches
+        # what the toast will report.
+        n_alerts = len(self._selected_alert_ids())
+        if n_alerts and n_alerts != n_rows:
+            self._bulk_lbl.setText(f"{n_rows} selected · {n_alerts} alerts")
+        else:
+            self._bulk_lbl.setText(f"{n_rows} selected")
+        self._bb_ack.setText(
+            f"✓ Acknowledge ({n_alerts})" if n_alerts else "✓ Acknowledge"
+        )
+        self._bb_ack.setEnabled(bool(n_alerts))
+
+    def _selected_rows(self) -> list:
+        return sorted({idx.row() for idx in self._alert_history_table.selectedIndexes()})
 
     def _selected_alerts(self) -> list:
-        rows = sorted({idx.row() for idx in self._alert_history_table.selectedIndexes()})
         alerts = []
-        for r in rows:
+        for r in self._selected_rows():
             item = self._alert_history_table.item(r, 0)
             if item:
                 data = item.data(Qt.ItemDataRole.UserRole)
@@ -847,24 +920,45 @@ class _NotifAlertHistoryMixin:
                     alerts.append(data)
         return alerts
 
-    def _bulk_dismiss(self) -> None:
-        alerts = self._selected_alerts()
-        for alert in alerts:
-            alert_id = alert.get("id") or alert.get("alert_id")
-            if alert_id and self._store:
-                try:
-                    self._store.acknowledge_alert(int(alert_id))
-                except Exception:
-                    pass  # non-fatal
+    def _selected_alert_ids(self) -> list:
+        """Every ack-eligible id across the selected rows, groups expanded.
+
+        A selected "×N" row contributes all N of its unacked members, not just
+        the representative the row was built from -- acking only the
+        representative is what made acknowledged alerts reappear.
+        """
+        ids: list = []
+        seen: set = set()
+        for r in self._selected_rows():
+            item = self._alert_history_table.item(r, 0)
+            if item is None:
+                continue
+            for aid in item.data(_GROUP_IDS_ROLE) or []:
+                if aid not in seen:
+                    seen.add(aid)
+                    ids.append(int(aid))
+        return ids
+
+    def _bulk_acknowledge(self) -> None:
+        ids = self._selected_alert_ids()
+        if ids and self._store:
+            try:
+                self._store.acknowledge_alerts(ids)
+            except Exception:
+                pass  # non-fatal — a failed ack leaves the rows Pending, not lost
         self._alert_history_table.clearSelection()
         self._refresh_alert_history()
         self.alert_acknowledged.emit()
-        if alerts:
+        if ids:
             from ui.widgets.toast import ToastManager
-            n = len(alerts)
+            n = len(ids)
             ToastManager.show(
                 f"{n} alert{'s' if n != 1 else ''} acknowledged", "success"
             )
+
+    def _select_all_alerts(self) -> None:
+        self._alert_history_table.selectAll()
+        self._alert_history_table.setFocus()
 
     def _bulk_snooze(self, seconds: int) -> None:
         until_ts = time.time() + seconds

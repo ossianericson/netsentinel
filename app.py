@@ -1056,7 +1056,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.47")
+    app.setApplicationVersion("2.1.48")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1207,7 +1207,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.47")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.48")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1331,6 +1331,22 @@ def main():
     apply_sensitivity(_rules, _sensitivity)
 
     alerts.set_rules(_rules)
+
+    # Acknowledgement holds — an acked but still-ongoing condition must not
+    # re-alert on its 5-minute cooldown. The engine's hold map is in-memory,
+    # so re-seed it from the persisted acks (windowed on acked_ts, so acks of
+    # old alerts still count) or a restart would unmute the whole backlog.
+    from modules.alert_types import DEFAULT_ACK_HOLD_SECONDS as _ACK_HOLD_DEFAULT
+    _ack_hold_h = _rule_qs.value(
+        "alerts/ack_hold_hours", _ACK_HOLD_DEFAULT // 3600, type=int
+    )
+    alerts.set_ack_hold_seconds(int(_ack_hold_h) * 3600)
+    try:
+        alerts.load_ack_holds(
+            store.get_recent_acks(int(time.time()) - max(int(_ack_hold_h), 1) * 3600)
+        )
+    except Exception:
+        pass  # non-fatal — holds simply start empty this session
 
     from modules.notification_router import NotificationRouter
     notif_router = NotificationRouter()

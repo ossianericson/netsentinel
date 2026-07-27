@@ -248,8 +248,6 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     "widgets/protocol_canvas.py": 1230,  # actual 746 + 200 margin (Phase A5)
 }
 
-UI_DEFAULT_BUDGET = 1300  # stricter than modules for new UI files
-
 
 def _line_count(path: Path) -> int:
     return sum(1 for _ in path.read_text(encoding="utf-8", errors="replace").splitlines())

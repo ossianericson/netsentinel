@@ -429,6 +429,7 @@ class _HomeDataMixin:
             if item and item.widget():
                 item.widget().deleteLater()
 
+        total = len(alerts)
         alerts = alerts[:5]
 
         for alert in alerts:
@@ -479,9 +480,16 @@ class _HomeDataMixin:
             ack_btn.setFixedSize(22, 18)
             ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             ack_btn.setToolTip(_s.safe_tooltip("Acknowledge this alert"))
+            # padding:0 is load-bearing, not cosmetic. An inline sheet merges
+            # with the global QSS rather than replacing it, so without this the
+            # app-level `QPushButton { padding: 5px 14px; }` applies 28px of
+            # horizontal padding inside a 22px-wide button, the label rect goes
+            # negative, and Qt elides the ✓ away entirely — leaving a bordered
+            # empty box whose only affordance is the glyph that isn't drawn.
             _s.themed_ss(ack_btn, lambda: (
                 f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED};"
-                f" border:1px solid {_s.BORDER}; border-radius:3px; font-size:10px; }}"
+                f" border:1px solid {_s.BORDER}; border-radius:3px;"
+                f" font-size:10px; padding:0; }}"
                 f"QPushButton:hover {{ color:{_s.GREEN}; border-color:{_s.GREEN}; }}"
                 f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
             ))
@@ -497,6 +505,60 @@ class _HomeDataMixin:
         self._ac_alert_rows_widget.setVisible(has_alerts)
         self._ac_view_all_btn.setVisible(has_alerts)
         self._action_card.setVisible(has_alerts)
+        self._ac_count_lbl.setText(
+            f"showing {len(alerts)} of {total}" if total > len(alerts) else ""
+        )
+        self._ac_count_lbl.setVisible(has_alerts and total > len(alerts))
+        self._ac_ack_all_btn.setText(
+            f"✓ Acknowledge all ({total})" if total > len(alerts) else "✓ Acknowledge all"
+        )
+        self._ac_ack_all_btn.setVisible(has_alerts)
+
+    def _ack_all_alerts(self) -> None:
+        """Clear the entire unacked backlog, not just the 5 rows on screen.
+
+        Acking the visible rows one at a time never empties the card when the
+        backlog is deeper than 5 -- the next refresh promotes the next 5, which
+        is indistinguishable from "the alerts came back". Reversible via the
+        undo toast because one click can clear hundreds.
+        """
+        if self._store is None:
+            return
+        try:
+            ids = [
+                int(a["id"]) for a in self._store.get_unacked_alerts()
+                if a.get("id") is not None
+            ]
+        except Exception:
+            return
+        if not ids:
+            return
+        try:
+            self._store.acknowledge_alerts(ids)
+        except Exception:
+            return  # non-fatal — nothing acked, card is left as-is
+        self.set_pending_alert_rows([])
+        self.alerts_acknowledged.emit()
+        from ui.widgets.toast import ToastManager
+        ToastManager.show(
+            f"{len(ids)} alert{'s' if len(ids) != 1 else ''} acknowledged",
+            "action",
+            action_label="Undo",
+            action_callback=lambda: self._undo_ack_all(ids),
+        )
+
+    def _undo_ack_all(self, alert_ids: list) -> None:
+        if self._store is None or not alert_ids:
+            return
+        try:
+            self._store.unacknowledge_alerts(alert_ids)
+        except Exception:
+            return  # non-fatal — the ack simply stands
+        try:
+            self.set_pending_alert_rows(self._store.get_unacked_alerts())
+        except Exception:
+            pass  # non-fatal — the next 30s refresh repopulates the card
+        self.alerts_acknowledged.emit()
 
     def _ack_alert_row(self, alert_id, row_widget) -> None:
         if self._store and alert_id is not None:
@@ -515,7 +577,12 @@ class _HomeDataMixin:
         if remaining == 0:
             self._ac_alert_rows_widget.setVisible(False)
             self._ac_view_all_btn.setVisible(False)
+            self._ac_count_lbl.setVisible(False)
+            self._ac_ack_all_btn.setVisible(False)
             self._action_card.setVisible(False)
+        # Repopulate from the store rather than waiting up to 30s for the next
+        # _push_monitor_pills(), so the remaining backlog count stays honest.
+        self.alerts_acknowledged.emit()
 
     def _scroll_to_setup_card(self) -> None:
         """Scroll to / expand the Getting Started card."""

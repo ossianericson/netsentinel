@@ -27,6 +27,23 @@ from PyQt6.QtWidgets import (
 
 from ui import styles as _s
 
+# ── What's New ───────────────────────────────────────────────────────────────
+# Hand-written release prose, rewritten once per release as part of /bump.
+# `bump_version.py` deliberately never rewrites these — auto-bumping the version
+# would relabel the previous release's bullets as the new one, which is exactly
+# the defect this pair exists to prevent (v2.1.47 shipped showing v2.1.46's
+# bullets under a "What's New in v2.1.47" heading).  The heading renders from
+# _WHATS_NEW_VERSION rather than the live app version so that a missed update
+# reads as stale-but-truthful instead of mislabelled.
+# Enforced by tests/test_version_consistency.py::test_whats_new_version.
+_WHATS_NEW_VERSION = "2.1.48"
+_WHATS_NEW_ENTRIES = [
+    ("Acknowledged alerts now stay acknowledged", "Acknowledging a grouped row clears every alert in that group, not just the one it stood for, and the alert stops re-notifying for 24 hours instead of firing again every 5 minutes while the condition lasts.  Change the mute length under Notifications, Configure; a recovery always clears it early."),
+    ("Acknowledge all, from anywhere", "The Home page alert card and Alert History both show the real backlog count and offer a bulk Acknowledge, with an undo if you clear more than you meant to."),
+    ("Alert History shows the message", "Columns are now Time, Rule, Host, Message, Severity and Status.  The alert's own message was previously missing from the table entirely."),
+    ("Fixed an invisible acknowledge button", "The acknowledge button on the Home page alert card rendered as an empty box instead of a check mark."),
+]
+
 
 def _page_header(title: str, subtitle: str = "") -> QFrame:
     """
@@ -339,13 +356,9 @@ def build_help_tab(window) -> QWidget:
     ]))
 
     # ── What's New ───────────────────────────────────────────────────────
+    # Content lives in the module-level _WHATS_NEW_* pair at the top of this file.
     app_ver = QApplication.applicationVersion()
-    bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Notifications now strictly opt-in", "Desktop toast and tray notifications no longer reach you unless you've actually turned them on in Settings."),
-        ("Every alert now explains how to fix it", "All alert types include clear, actionable remediation guidance instead of leaving some without any next step."),
-        ("Advanced notification routing matrix", "A new per-rule x per-channel routing card lets you send specific alert types to specific channels."),
-        ("Notification secrets survive restarts", "Email, Pushover, Telegram, and ntfy credentials are now reliably restored from the OS keychain after an app restart."),
-    ]))
+    bl.addWidget(_section(f"What's New in v{_WHATS_NEW_VERSION}", _WHATS_NEW_ENTRIES))
 
     # ── Requirements ─────────────────────────────────────────────────────
     bl.addWidget(_section("Requirements & Notes", [

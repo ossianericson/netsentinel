@@ -45,7 +45,6 @@ MIN_RATIO = 3.0
 
 _COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _RULE_RE = re.compile(r"([^{}]*)\{([^{}]*)\}")
-_TOKEN_RE = re.compile(r"\{([A-Z][A-Z0-9_]*)\}")
 
 # `color:` but not `background-color:` / `selection-color:` / `border-color:`
 _FG_RE = re.compile(r"(?<![-a-z]) color \s*:\s* ([^;]+)", re.X)
