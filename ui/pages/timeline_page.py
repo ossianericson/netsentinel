@@ -227,7 +227,7 @@ class TimelinePage(QWidget):
         self._tl_search.setFixedHeight(24)
         self._tl_search.setFixedWidth(180)
         _s.themed_ss(self._tl_search, "QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            " font-size:10px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
+            " font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
             "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._tl_search.textChanged.connect(lambda: self._tl_search_timer.start())
         chip_row.addWidget(self._tl_search)

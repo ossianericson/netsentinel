@@ -55,7 +55,7 @@ understanding.
 <details><summary>Test run</summary>
 
 ```
-python -m pytest tests/ -q
+python tools/run_test_suite.py
 ```
 <paste output>
 </details>
@@ -80,7 +80,7 @@ python tools/debug_launch.py
 | Files changed | `git diff --name-status main...HEAD` |
 | Full diff | `git diff main...HEAD` |
 | Commit messages | `git log --no-merges main..HEAD --oneline` |
-| Test results | `python -m pytest tests/ -q` |
+| Test results | `python tools/run_test_suite.py` |
 | App launch check | `python tools/debug_launch.py` — confirm `window.show() called OK` |
 
 Do not draft until all inputs are in hand. Do not invent facts not
@@ -90,7 +90,7 @@ present in the diff or commit messages.
 
 Every PR body **must** include both of the following in Validation:
 
-1. **Test run** — `python -m pytest tests/ -q` output (or "no new modules,
+1. **Test run** — `python tools/run_test_suite.py` output (or "no new modules,
    existing suite unchanged").
 2. **App launch check** — relevant lines from `netsentinel_debug.log`
    confirming `Dashboard() instantiated OK` and `window.show() called OK`.

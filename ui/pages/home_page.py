@@ -597,7 +597,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _s.themed_ss(self._ac_view_all_btn, "QPushButton {{ background:transparent; color:{AMBER}; border:none;"
             " font-size:10px; padding:0; text-align:left; }}"
             "QPushButton:hover {{ color:{RED}; }}"
-            "QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}")
+            "QPushButton:pressed {{ background:{BG_HOVER}; color:{INLINE_WARN_FG}; }}")
         self._ac_view_all_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
         self._ac_view_all_btn.setVisible(False)
         _ac_outer.addWidget(self._ac_view_all_btn)

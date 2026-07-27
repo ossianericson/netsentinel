@@ -2021,8 +2021,9 @@ class InventoryPage(QWidget):
         """Right-click context menu on a segment pill."""
         from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
-        _s.themed_ss(menu, "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
-            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}")
+        # No inline stylesheet: get_app_qss()'s QMenu rules already declare
+        # exactly these colours. A hand-copied duplicate is one more place for a
+        # token to drift out of sync (RULE-UX6).
         edit_act = menu.addAction("Edit Segment")
         action = menu.exec(self.cursor().pos())
         if action == edit_act:

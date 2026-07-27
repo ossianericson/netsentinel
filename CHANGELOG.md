@@ -4,6 +4,20 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.47
+
+**Fixed**
+- Security Audit -> Windows Shares (SMB) page: the Shares/Users tabs rendered unreadable dark-on-dark text in Midnight Pro because `ui/styles.py` had no global `QTabBar::tab` rule; also closed the same gap for `QPlainTextEdit` and `QDoubleSpinBox`, siblings of already-styled widget classes
+- Menu separators (`QMenu::separator`) rendered from the native, non-theme-aware palette instead of the active theme across 15 of the 19 files that call `addSeparator()`
+
+**Changed**
+- `tools/run_test_suite.py` (RULE-GATE1): the commit-gate test runner now fails closed on three independent conditions — a real summary line, zero failure counts, and a clean exit code — so a mid-run crash or silent early exit can no longer be misread as a passing suite (internal tooling, no user-facing change)
+
+**Added**
+- `tests/test_qss_widget_coverage.py`, `tests/test_qss_derived_contrast.py`, `tests/test_qss_tab_styling.py` — regression coverage pinning theme colour rendering across every style-painted widget subcontrol the app uses (RULE-QSS4)
+
+---
+
 ### v2.1.46
 
 **Added**

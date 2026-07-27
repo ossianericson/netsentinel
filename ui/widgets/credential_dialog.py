@@ -272,10 +272,10 @@ def show_unsigned_warning(parent: QWidget, path: str) -> bool:
     btn_row.addWidget(cancel_btn)
 
     proceed_btn = QPushButton("I understand — Add anyway")
-    _s.themed_ss(proceed_btn, "QPushButton {{ background:{AMBER}; color:{TEXT_PRIMARY}; border:none;"
+    _s.themed_ss(proceed_btn, "QPushButton {{ background:{AMBER}; color:{TEXT_ON_FILL}; border:none;"
         " border-radius:3px; padding:5px 16px; font-weight:600; }}"
-        "QPushButton:hover {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}"
-        "QPushButton:pressed {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}")
+        "QPushButton:hover {{ background:{AMBER}; color:{TEXT_ON_FILL}; }}"
+        "QPushButton:pressed {{ background:{AMBER}; color:{TEXT_ON_FILL}; }}")
     proceed_btn.clicked.connect(dlg.accept)
     btn_row.addWidget(proceed_btn)
     lay.addLayout(btn_row)

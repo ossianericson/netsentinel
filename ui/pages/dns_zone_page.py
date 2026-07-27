@@ -93,7 +93,7 @@ def _btn(text: str, primary: bool = True) -> QPushButton:
             "QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
             "QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}")
     else:
-        _s.themed_ss(b, "QPushButton {{ background:{WHITE}; color:{ACCENT}; font-size:12px;"
+        _s.themed_ss(b, "QPushButton {{ background:{BG_CARD}; color:{ACCENT}; font-size:12px;"
             " border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
             "QPushButton:hover {{ background:{BG_HOVER}; }}"
             "QPushButton:disabled {{ background:{BG_DARK}; color:{INPUT_PLACEHOLDER}; border-color:{BTN_DISABLED_BORDER}; }}"
@@ -107,7 +107,7 @@ def _field(placeholder: str, width: int = 180) -> QLineEdit:
     e.setFixedHeight(30)
     e.setFixedWidth(width)
     _s.themed_ss(e, "QLineEdit {{ border:1px solid {BORDER}; border-radius:4px; padding:0 8px;"
-        " font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
+        " font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
         "QLineEdit:focus {{ border-color:{ACCENT}; }}")
     return e
 

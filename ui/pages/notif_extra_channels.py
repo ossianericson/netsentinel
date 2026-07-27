@@ -239,6 +239,10 @@ class _NotifExtraChannelsMixin:
         _s.themed_ss(self._txt_escalation_rules, "font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;")
         _completer = QCompleter([name for name, _rt, _desc in _ALERT_RULE_DEFS], self._txt_escalation_rules)
         _completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        # Deliberately NOT styled here via _completer.popup(): that call
+        # constructs the popup eagerly and double-free-aborts the test suite.
+        # The global QListView rule in ui/styles.py themes it instead — see the
+        # comment there for the full mechanism.
         self._txt_escalation_rules.setCompleter(_completer)
         self._txt_escalation_rules.editingFinished.connect(self._save)
         rules_row.addWidget(rules_lbl)

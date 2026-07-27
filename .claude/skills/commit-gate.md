@@ -45,16 +45,35 @@ CLI is on the PATH; `python -m ruff` can pick up the wrong interpreter.
 
 ---
 
-## Step 2 — Full test suite
+## Step 2 — Full test suite (HARD GATE)
 
 ```powershell
-python -m pytest tests/ -q
+python tools/run_test_suite.py
 ```
 
-All tests must pass. Fix any failures before proceeding.
+Takes ~9 minutes. It runs `pytest tests/ -q`, streams output live, tees the full log to
+`pytest_suite_output.log`, and prints a verdict block. **Proceed only on `[PASS]`.**
+
+**Never run bare `pytest | tail` for this step (RULE-GATE1).** A pipe returns *tail's* exit
+code, so the shell reports 0 no matter what pytest did, and it discards the `Fatal Python
+error` block that explains a crash. The runner exists because two real failure modes print
+no summary line at all:
+
+| Mode | Exit code | Verdict |
+|---|---|---|
+| `os._exit(0)` mid-run (RULE-TP4-DASH) | **0** — looks like success | `FAIL_TRUNCATED_SILENT` |
+| Native abort / double free | 3 | `FAIL_TRUNCATED_CRASH` |
+| Ordinary red suite | 1 | `FAIL_TESTS` |
+
+The runner fails **closed**: unparseable output is a failure, never a pass. Each verdict names
+the mechanism and the next step — read the block, don't just re-run.
 
 **Do not** skip or filter tests to make them appear to pass. A red test anywhere is a failure —
 "pre-existing / not my diff" does not clear it.
+
+**One green run is not proof for the truncation modes.** Crash position drifts between runs
+(observed drifting across 52/55/58 tests into the same output line), so when investigating a
+`FAIL_TRUNCATED_*` verdict, confirm a fix with two consecutive clean runs.
 
 ---
 
@@ -125,6 +144,12 @@ exit 0 before continuing. Do not proceed to Step 2 while violations remain.
 Fix the failing tests. Do not continue. The full gate must be re-run from Step 1 after any
 code change — a fix that clears the tests might introduce new lint violations.
 
+A `FAIL_TRUNCATED_SILENT` verdict is **not** a flaky run — it means a test reached
+`Dashboard.closeEvent()` → `os._exit(0)` in-process and killed the session. Run
+`python -m pytest tests/test_suite_completes.py -q` to name the offending file, then move its
+Dashboard construction into a subprocess child (RULE-TP4-DASH). Re-running the suite without
+fixing it just reproduces the truncation at a different position.
+
 ### Step 3 fails (app won't start)
 This is the most important failure. PyQt6 crashes here do not appear in tests. Common causes:
 - Wrong kwarg names on Qt layout calls (RULE-UI1 — never assume PyQt5 kwargs work in PyQt6)
@@ -148,7 +173,7 @@ State the result of each step explicitly:
 Step 1 (ruff): ✓ exit 0
 Step 1 (mypy): ✓ exit 0
 Step 1 (pip-audit): ✓ exit 0
-Step 2 (pytest): ✓ N tests passed
+Step 2 (run_test_suite): ✓ [PASS] N passed
 Step 3 (debug_launch): ✓ window.show() called OK
 Step 4: waiting for user UI confirmation
 Step 5: waiting for explicit commit instruction

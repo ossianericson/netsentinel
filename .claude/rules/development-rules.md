@@ -716,6 +716,42 @@ already migrated onto them.
 Enforced by `tests/test_qss_recipe_adoption.py` (ratchet, scoped to `home_page.py`,
 `overview_tile.py`, `settings_cards.py`).
 
+### RULE-QSS4 (blocking): The global QSS must cover every style-painted SUBCONTROL the app uses, not just the widget class — an unstyled subcontrol silently falls back to Qt's non-theme-aware palette
+
+**Mechanism.** Qt resolves a QSS type selector by class *and its subclasses*, but never its
+siblings, and a rule on the class does **not** reach the class's style-painted subcontrols.
+`QMenu { background: ... }` styles the popup frame; it says nothing about `QMenu::separator`.
+When no rule matches a subcontrol, Qt does not inherit the parent rule's colours — it paints
+that subcontrol from the **native palette**, which does not track the active theme. The result
+is a widget that is 90% correctly themed with one hard-coded-looking element in it.
+
+This is the exact shape of the Windows Shares (SMB) bug (v2.1.46): `ui/styles.py` styled 20
+widget classes but had no `QTabBar` rule at all, so `QTabBar::tab` — a style-painted subcontrol
+— rendered dark-on-dark in Midnight Pro on every `QTabWidget` that lacked an inline sheet.
+
+**The trap that makes this class recur: a class-level coverage test cannot see it.** A test that
+asks "does `QMenu` have a rule?" passes today, because `get_app_qss()` does define `QMenu`. The
+gap is one level down, and a class-level net is *structurally* blind to it — not merely
+incomplete. Found live: 19 files call `addSeparator()` while only 4 styled `QMenu::separator`,
+so 15 files' menu separators were painted from the native palette in both themes.
+
+```python
+# WRONG — the class rule does not reach the subcontrol; separators use the native palette
+f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
+
+# CORRECT — every style-painted subcontrol the app actually uses gets its own rule
+f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
+f"QMenu::separator {{ height:1px; background:{BORDER}; margin:3px 6px; }}"
+```
+
+Before adding a widget to the global QSS, check which of its subcontrols the app paints
+(`::tab`, `::separator`, `::item`, `::handle`, `::chunk`, `::indicator`, `::section`) and give
+each one a rule. Inline per-site sheets still override the global rule, so a global default
+never removes a deliberate local deviation.
+
+Enforced by `tests/test_qss_widget_coverage.py` — `_STYLING_CRITICAL_SUBCONTROLS` extends the
+class-level net one level down; `_EXEMPT` is empty and must stay that way.
+
 ### RULE-PERF1 (blocking): Never set `QHeaderView.ResizeMode.ResizeToContents` as a table's default column resize mode
 **Mechanism:** the single-argument `setSectionResizeMode(ResizeToContents)` (applied to all
 columns) tells Qt to recompute every column's ideal width — a full `sizeHintForColumn()` pass,
@@ -1135,6 +1171,50 @@ is GC'd and tears down the C++ app under the Dashboard mid-construction.
 
 Enforced by `tests/test_suite_completes.py` (`test_no_collected_test_constructs_dashboard_in_process`
 + the two run-to-completion guards).
+
+### RULE-GATE1 (blocking): A green test suite must be proven by a summary line — an exit code alone cannot distinguish "all passed" from "the process died before finishing"
+
+**Mechanism.** COMMIT GATE Step 2 is the only thing standing between a broken suite and a
+commit, and its pass condition used to be "pytest exited 0". Two real, observed failure modes
+defeat that check, and they need *different* evidence to detect:
+
+| Mode | Exit code | Summary line | Caught by exit code? |
+|---|---|---|---|
+| `os._exit(0)` mid-run (RULE-TP4-DASH) | **0** | absent | **No** — reads as success |
+| Native abort / double free (`Fatal Python error: Aborted`) | 3 | absent | Yes, *if* you check it |
+| Normal failure | 1 | present | Yes |
+
+Both truncation modes are silent: pytest prints the dots it already emitted and stops. The
+`os._exit(0)` mode is the dangerous one — it is *indistinguishable from success* by exit code,
+which is exactly how it hid ~60% of the suite for months.
+
+**The reporting habit that masks the survivor.** `pytest -q | tail` returns **`tail`'s** exit
+code, not pytest's, so the shell sees 0 even for the abort mode that would otherwise be caught
+(verified: `python -c 'import sys; sys.exit(3)' | tail` → `$? == 0`). Piping the run through
+`tail`/`head` also discards the `Fatal Python error` block and its native stack — the only
+evidence of what actually died. Never pipe the gate run; tee it to a file and read the file.
+
+```powershell
+# WRONG — tail eats the exit code AND the crash dump; os._exit(0) is invisible either way
+python -m pytest tests/ -q | tail -20
+
+# CORRECT — asserts a real summary line exists, counts are clean, and preserves full output
+python tools/run_test_suite.py
+```
+
+`tools/run_test_suite.py` fails **closed**: any output it cannot parse into a summary line is
+treated as failure, never as success. Its diagnosis names which of the three conditions broke
+(missing summary / nonzero counts / bad exit code), distinguishes the `os._exit(0)` mask from a
+native abort by pairing exit code with the presence of a `Fatal Python error` block, and prints
+the log path plus the relevant excerpt so the next step is actionable without a re-run.
+
+**Corollary — this generalizes past pytest.** Any gate whose subject can die mid-run needs a
+positive completion signal (a summary line, a sentinel, a written artifact), not just an exit
+code. "The process didn't report failure" and "the process finished the work" are different
+claims, and only the second one is the gate.
+
+Enforced by `tests/test_run_test_suite.py` (canned-output classification: clean, truncated-exit-0,
+aborted, failed, unparseable) and the Step 2 command in `.claude/skills/commit-gate.md`.
 
 ### RULE-WIN5 (blocking): Never use unparented QTimer.singleShot(n, self.method) anywhere in a widget — use a parented QTimer
 `QTimer.singleShot(n, slot)` creates a standalone timer with **no Qt parent**. If the widget is
@@ -2252,7 +2332,8 @@ If CodeQL is not already running, see `.github/workflows/codeql.yml`.
 
 A `feat:` commit is not the end of a sprint. Sprint done means all five pass:
 
-1. `python -m pytest tests/ -q` — all tests pass, no new failures
+1. `python tools/run_test_suite.py` — verdict `[PASS]` (RULE-GATE1; a bare
+   `pytest | tail` cannot tell "all passed" from "died mid-run")
 2. `python tools/debug_launch.py` — `window.show() called OK` present in log
 3. `python -m pytest tests/test_nav_completeness.py tests/test_systematic_coverage.py -v` — new pages reachable
 4. The behavioral integration test for the new feature (RULE-T7) exists and passes
@@ -2348,6 +2429,8 @@ Currently tool-enforced (high reliability):
 - RULE-QSS1 → `test_qss_scoping.py`
 - RULE-QSS2 → `test_qss_hex_alpha.py`
 - RULE-QSS3 → `test_qss_recipe_adoption.py`
+- RULE-QSS4 → `test_qss_widget_coverage.py` (class-level net + `_STYLING_CRITICAL_SUBCONTROLS` one level down) + `test_qss_derived_contrast.py` (fg/bg pairs derived from the real QSS, both themes) + `test_qss_tab_styling.py` (SMB-tabs pin)
+- RULE-GATE1 → `test_run_test_suite.py` (canned-output classification of all five modes) + `tools/run_test_suite.py` as COMMIT GATE Step 2
 - RULE-UX7 → `test_item_tooltip_wrap.py` (ratchet on `safe_tooltip` call-site count)
 - RULE-ENC1 → `test_source_encoding.py`
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically

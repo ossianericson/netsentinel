@@ -93,7 +93,7 @@ State which slot is reserved for stabilization before starting feature work.
 A sprint is "done" only when all five pass. Check each explicitly:
 
 ```
-1. python -m pytest tests/ -q           → [ ] pass / [ ] fail
+1. python tools/run_test_suite.py        → [ ] [PASS] / [ ] fail   (RULE-GATE1)
 2. python tools/debug_launch.py          → [ ] window.show() called OK / [ ] fail
 3. test_nav_completeness + test_systematic_coverage → [ ] pass / [ ] fail (only if new pages added)
 4. Behavioral integration test (RULE-T7) → [ ] exists and passes / [ ] missing

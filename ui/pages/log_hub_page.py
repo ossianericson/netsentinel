@@ -568,7 +568,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
                 _s.themed_ss(btn, "QPushButton {{ background:transparent; border:none; color:{AMBER};"
                     " font-size:10px; text-align:left; padding:0 4px; }}"
                     "QPushButton:hover {{ color:{ACCENT}; text-decoration:underline; }}"
-                    "QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}")
+                    "QPushButton:pressed {{ background:{BG_HOVER}; color:{INLINE_WARN_FG}; }}")
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 _raw = e["raw"]
                 btn.clicked.connect(lambda _=False, r=_raw: self.animate_requested.emit(r))

@@ -659,7 +659,7 @@ class ConnectionsPage(QWidget):
         # Actions column
         if is_blocked:
             btn_fw = QPushButton(f"Unblock {c.exe_name}")
-            _s.themed_ss(btn_fw, "font-size:11px; font-weight:bold; color:{WHITE}; background:{AMBER};"
+            _s.themed_ss(btn_fw, "font-size:11px; font-weight:bold; color:{TEXT_ON_FILL}; background:{AMBER};"
                 " border:none; padding:0 12px; border-radius:4px;")
             btn_fw.clicked.connect(lambda: self._toggle_block(c, True))
         else:

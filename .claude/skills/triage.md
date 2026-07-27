@@ -185,7 +185,7 @@ Cycle 1 — GREEN:
 
 - [ ] <specific observable outcome 1>
 - [ ] <specific observable outcome 2>
-- [ ] Full test suite passes: `python -m pytest tests/ -q`
+- [ ] Full test suite passes: `python tools/run_test_suite.py` → `[PASS]` (RULE-GATE1)
 - [ ] App launches cleanly: `python tools/debug_launch.py` → `window.show() called OK`
 
 ## Next step

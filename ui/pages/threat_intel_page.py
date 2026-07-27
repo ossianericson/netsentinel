@@ -132,7 +132,7 @@ def _primary_btn(text: str) -> QPushButton:
 def _secondary_btn(text: str) -> QPushButton:
     b = QPushButton(text)
     b.setFixedHeight(30)
-    _s.themed_ss(b, "QPushButton {{ background:{WHITE}; color:{ACCENT}; font-size:12px;"
+    _s.themed_ss(b, "QPushButton {{ background:{BG_CARD}; color:{ACCENT}; font-size:12px;"
         " border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
         "QPushButton:hover {{ background:{BG_HOVER}; }}"
         "QPushButton:disabled {{ background:{BG_DARK}; color:{INPUT_PLACEHOLDER}; border-color:{BTN_DISABLED_BORDER}; }}"
@@ -252,7 +252,7 @@ class ThreatIntelPage(QWidget):
         self._threat_search.setFixedHeight(28)
         self._threat_search.setFixedWidth(220)
         _s.themed_ss(self._threat_search, "QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            " font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
+            " font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
             "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._threat_search.textChanged.connect(lambda: self._threat_timer.start())
 
@@ -343,7 +343,7 @@ class ThreatIntelPage(QWidget):
         self._api_key_field.setPlaceholderText("Paste your API v2 key here")
         self._api_key_field.setFixedHeight(26)
         _s.themed_ss(self._api_key_field, "QLineEdit {{ border:1px solid {BORDER}; border-radius:2px; padding:0 6px;"
-            " font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
+            " font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
             "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._api_key_field.editingFinished.connect(self._save_settings)
         key_row.addWidget(key_lbl)
@@ -377,7 +377,7 @@ class ThreatIntelPage(QWidget):
         self._lookup_field.setFixedHeight(30)
         self._lookup_field.setFixedWidth(240)
         _s.themed_ss(self._lookup_field, "QLineEdit {{ border:1px solid {BORDER}; border-radius:4px; padding:0 8px;"
-            " font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
+            " font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
             "QLineEdit:focus {{ border-color:{ACCENT}; }}")
         self._lookup_field.returnPressed.connect(self._run_lookup)
 

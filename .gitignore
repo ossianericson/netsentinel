@@ -64,6 +64,9 @@ netsentinel_debug*.log
 netsentinel_crash.log
 netsentinel_stderr.log
 
+# Full pytest log tee'd by tools/run_test_suite.py (COMMIT GATE Step 2, RULE-GATE1)
+pytest_suite_output.log
+
 # Generated output
 repomix-output.txt
 repomix.config.json

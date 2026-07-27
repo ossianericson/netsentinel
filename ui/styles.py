@@ -83,6 +83,10 @@ _ARCTIC_CLEAN = {
     "RED_BG":             "#FDF2F2",
     "AMBER_BG":           "#FFFBF0",
     "GREEN_BG":           "#F2FBF4",
+    # Dark ink for text sitting ON a saturated fill (AMBER/GREEN/RED button or
+    # badge). AMBER is light in BOTH themes, so TEXT_PRIMARY/WHITE on an amber
+    # fill is ~1.5:1 — unreadable. This token is dark in both themes by design.
+    "TEXT_ON_FILL":       "#1A1A2E",
     # Borders / dividers
     "BORDER":             "#E2E8F0",
     "BORDER_LITE":        "#EBEBEB",
@@ -210,6 +214,8 @@ _DARK_PRO = {
     "RED_BG":             "rgba(217,48,37,0.12)",
     "AMBER_BG":           "rgba(245,158,11,0.12)",
     "GREEN_BG":           "rgba(46,125,50,0.15)",
+    # Dark ink for text sitting ON a saturated fill — see the Arctic Clean note.
+    "TEXT_ON_FILL":       "#0D1117",
     # Borders / dividers
     "BORDER":             "rgba(255,255,255,0.08)",
     "BORDER_LITE":        "#484F58",
@@ -725,6 +731,38 @@ QLabel {{
 }}
 
 /* ── Sidebar nav list ── */
+/* ── Item views ──
+   Covers the standalone QListView instances Qt creates internally that no
+   other selector reaches — notably a QCompleter's completion popup.
+
+   Do NOT style a completer popup at its call site: QCompleter.popup() LAZILY
+   CONSTRUCTS the view and keeps ownership of it. Materialising it during page
+   construction hands a top-level widget to Qt that the completer will later
+   destroy, while tests/conftest.py's _flush_qt_events sweeps topLevelWidgets()
+   and deleteLater()s it too — a double free that aborts the process inside the
+   DeferredDelete drain, ~3,000 tests later (RULE-WIN4). Confirmed by bisect on
+   2026-07-26. A global rule applies whenever Qt eventually builds the popup,
+   with nothing materialised early.
+
+   Safe as a bare type selector: every QListWidget in ui/ either sets its own
+   widget stylesheet (which always beats the app stylesheet) or is #sideNav
+   below, whose ID selector outranks this. */
+QListView {{
+    background: {BG_CARD};
+    color: {TEXT_PRIMARY};
+    border: 1px solid {BORDER};
+    outline: none;
+    font-size: 11px;
+}}
+QListView::item {{
+    padding: 3px 6px;
+    color: {TEXT_PRIMARY};
+}}
+QListView::item:selected {{
+    background: {BG_HOVER};
+    color: {TEXT_PRIMARY};
+}}
+
 QListWidget#sideNav {{
     background-color: {SIDEBAR_BG};
     border: none;
@@ -1081,7 +1119,10 @@ QProgressBar::chunk {{
 }}
 
 /* ── SpinBox / ComboBox ── */
-QSpinBox, QComboBox {{
+/* QDateTimeEdit also covers its QDateEdit / QTimeEdit subclasses. The whole
+   family are siblings of QSpinBox under QAbstractSpinBox, so the QSpinBox
+   selector alone never reached them (RULE-UX6 bug class). */
+QSpinBox, QDoubleSpinBox, QDateTimeEdit, QComboBox {{
     background-color: {BG_CARD};
     border: 1px solid {INPUT_BORDER};
     border-radius: 3px;
@@ -1090,7 +1131,7 @@ QSpinBox, QComboBox {{
     min-width: 52px;
     font-size: 11px;
 }}
-QSpinBox:focus, QComboBox:focus {{
+QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus, QComboBox:focus {{
     border-color: {ACCENT};
 }}
 QComboBox::drop-down {{
@@ -1104,14 +1145,87 @@ QComboBox QAbstractItemView {{
     selection-color: {TEXT_PRIMARY};
     color: {TEXT_PRIMARY};
 }}
-/* ── Text edit (log / analysis boxes) ── */
-QTextEdit {{
+/* ── Text edit (log / analysis boxes) ──
+   QPlainTextEdit is a SIBLING of QTextEdit (both derive from
+   QAbstractScrollArea), so it must be named explicitly — a QTextEdit type
+   selector does not reach it. */
+QTextEdit, QPlainTextEdit {{
     background-color: {BG_CARD};
     border: 1px solid {BORDER};
     border-radius: 3px;
     color: {TEXT_PRIMARY};
     font-family: 'Consolas', 'Courier New', monospace;
     font-size: 11px;
+}}
+
+/* ── Tab widget ──
+   Secondary/inner tabs only; primary navigation is the activity rail (RULE 2).
+
+   Global coverage is load-bearing here: `QTabBar::tab` is a subcontrol painted
+   by the style, so the QWidget background-color base rule above never
+   reaches it. Without these rules an unstyled QTabWidget falls back to Qt's
+   NATIVE palette, which is not theme-aware — that shipped unreadable
+   dark-on-dark tabs on Security Audit → Windows Shares (SMB) and Login Test.
+   Sites carrying their own inline QSS still win; this is the correct-by-default
+   floor. Enforced by tests/test_qss_tab_styling.py. */
+QTabWidget::pane {{
+    background: {BG_CARD};
+    border: 1px solid {BORDER};
+    border-radius: 3px;
+}}
+QTabBar {{
+    background: transparent;
+}}
+QTabBar::tab {{
+    background: {BG_CARD};
+    color: {TEXT_SECONDARY};
+    border: 1px solid {BORDER};
+    border-bottom: none;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    padding: 5px 14px;
+    margin-right: 2px;
+    font-size: 11px;
+}}
+QTabBar::tab:hover {{
+    background: {BG_HOVER};
+    color: {TEXT_PRIMARY};
+}}
+QTabBar::tab:selected {{
+    background: {BG_CARD};
+    color: {TEXT_PRIMARY};
+    font-weight: 600;
+    border-bottom: 2px solid {ACCENT};
+}}
+QTabBar::tab:disabled {{
+    background: {BG_CARD};
+    color: {TEXT_MUTED};
+}}
+
+/* ── Tool button ──
+   Sibling of QPushButton under QAbstractButton, so the QPushButton selector
+   does not reach it. Every current site styles itself inline (the two on the
+   dark app bar must, since TEXT_PRIMARY is dark navy in Arctic Clean); this
+   rule is the safe floor for content-area tool buttons added later. */
+QToolButton {{
+    background: transparent;
+    color: {TEXT_PRIMARY};
+    border: none;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 11px;
+}}
+QToolButton:hover {{
+    background: {BG_HOVER};
+    color: {TEXT_PRIMARY};
+}}
+QToolButton:pressed {{
+    background: {ACCENT};
+    color: {WHITE};
+}}
+QToolButton:disabled {{
+    background: transparent;
+    color: {BTN_DISABLED_FG};
 }}
 
 /* ── Group box ── */
@@ -1477,6 +1591,10 @@ def get_app_qss() -> str:
         f" border:1px solid {_m.BORDER}; padding:4px; font-size:12px; }}"
         f"QMenu::item {{ padding:4px 16px; color:{_m.TEXT_PRIMARY}; background:{_m.BG_CARD}; }}"
         f"QMenu::item:selected {{ background:{_m.BG_HOVER}; color:{_m.TEXT_PRIMARY}; }}"
+        # RULE-QSS4: a QMenu rule does not reach QMenu::separator. Without this,
+        # every addSeparator() divider is painted from Qt's native palette in
+        # both themes. Per-site sheets still override it where they differ.
+        f"QMenu::separator {{ height:1px; background:{_m.BORDER}; margin:3px 6px; }}"
         f"QToolTip {{ background:{_m.TOOLTIP_BG}; color:{_m.TOOLTIP_FG};"
         f" border:1px solid {_m.TOOLTIP_BORDER}; border-radius:3px; padding:4px 8px;"
         f" font-size:11px; }}"
