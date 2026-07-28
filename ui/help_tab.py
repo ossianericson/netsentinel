@@ -36,12 +36,12 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.1.48"
+_WHATS_NEW_VERSION = "2.1.49"
 _WHATS_NEW_ENTRIES = [
-    ("Acknowledged alerts now stay acknowledged", "Acknowledging a grouped row clears every alert in that group, not just the one it stood for, and the alert stops re-notifying for 24 hours instead of firing again every 5 minutes while the condition lasts.  Change the mute length under Notifications, Configure; a recovery always clears it early."),
-    ("Acknowledge all, from anywhere", "The Home page alert card and Alert History both show the real backlog count and offer a bulk Acknowledge, with an undo if you clear more than you meant to."),
-    ("Alert History shows the message", "Columns are now Time, Rule, Host, Message, Severity and Status.  The alert's own message was previously missing from the table entirely."),
-    ("Fixed an invisible acknowledge button", "The acknowledge button on the Home page alert card rendered as an empty box instead of a check mark."),
+    ("Device names now show everywhere", "App Traffic, Live Bandwidth, and Timeline previously showed a bare MAC address for devices that already had a name elsewhere in the app.  All three now resolve the real name, including a name that only becomes known partway through a session."),
+    ("Fewer false IoT alerts", "A device baselined during a quiet stretch could trigger a nonsense \"rate spike\" alert from just a handful of stray packets.  A genuine sustained burst still alerts; ordinary background noise no longer does."),
+    ("Refreshed Store screenshots", "The Microsoft Store listing's screenshots were more than 20 releases out of date.  They're now current, with a new check that catches a blank or wrong-page capture before it ships."),
+    ("Documentation site fixes", "Internal engineering notes are excluded from the public docs build, five previously-orphaned pages are now reachable from the site's navigation, and several broken links are fixed."),
 ]
 
 

@@ -52,3 +52,31 @@ def test_set_label_map():
     w.set_label_map({"aa:bb:cc:dd:ee:ff": "laptop"})
     assert w._label_map == {"aa:bb:cc:dd:ee:ff": "laptop"}
     _cleanup(w)
+
+
+def test_set_label_map_reaches_the_running_monitor():
+    """Regression: AppTrafficMonitor keeps its own reference to the map it was
+    constructed with, so rebinding the worker's dict alone left a monitor that
+    started before the first scan stamping bare MACs on every snapshot."""
+    from workers.app_traffic_worker import AppTrafficWorker
+
+    class _FakeMonitor:
+        def __init__(self):
+            self.label_map = {}
+
+    w = AppTrafficWorker()
+    monitor = _FakeMonitor()
+    w._monitor = monitor            # simulate run() having built the monitor
+
+    w.set_label_map({"aa:bb:cc:dd:ee:ff": "Living Room TV"})
+
+    assert monitor.label_map == {"aa:bb:cc:dd:ee:ff": "Living Room TV"}
+    _cleanup(w)
+
+
+def test_set_label_map_is_safe_before_the_monitor_exists():
+    from workers.app_traffic_worker import AppTrafficWorker
+    w = AppTrafficWorker()
+    assert w._monitor is None
+    w.set_label_map({"aa:bb:cc:dd:ee:ff": "laptop"})   # must not raise
+    _cleanup(w)

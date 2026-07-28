@@ -30,12 +30,23 @@ class AppTrafficWorker(QThread):
         self._interval   = interval_s
         self._stop_event = threading.Event()
         self._label_map: dict = {}
+        self._monitor = None
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def set_label_map(self, label_map: dict) -> None:
-        """Update MAC → display-label mapping (thread-safe)."""
+        """Update MAC → display-label mapping (thread-safe).
+
+        The running AppTrafficMonitor holds its own reference to the map it was
+        constructed with, so rebinding `self._label_map` alone would silently
+        discard every update made after start() — leaving a session that began
+        monitoring before its first scan stamping bare MACs onto every snapshot
+        for as long as it ran. Push the new map onto the live monitor too.
+        """
         self._label_map = dict(label_map)
+        monitor = self._monitor
+        if monitor is not None:
+            monitor.label_map = self._label_map
 
     def stop(self) -> None:
         """Signal the monitor loop to exit; call wait() to join."""
@@ -61,4 +72,8 @@ class AppTrafficWorker(QThread):
             label_map=self._label_map,
             stop_event=self._stop_event,
         )
-        monitor.run()   # blocks until _stop_event is set
+        self._monitor = monitor
+        try:
+            monitor.run()   # blocks until _stop_event is set
+        finally:
+            self._monitor = None

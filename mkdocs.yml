@@ -3,7 +3,15 @@ site_description: Network Security Scanner — Rogue Device Detector, STP Monito
 site_url: https://ossianericson.github.io/netsentinel
 repo_url: https://github.com/ossianericson/netsentinel
 repo_name: ossianericson/netsentinel
-edit_uri: edit/master/docs/
+edit_uri: edit/main/docs/
+
+# Engineering-internal notes live under docs/ for editing convenience but must never
+# reach the public site. MkDocs builds every file in docs_dir regardless of `nav`,
+# so exclusion has to be explicit.
+exclude_docs: |
+  internal/
+  spikes/
+  benchmark-comparison.md
 
 theme:
   name: material
@@ -31,11 +39,18 @@ theme:
 
 nav:
   - Home: index.md
-  - Architecture: architecture.md
-  - Contributing: contributing.md
-  - Competitive Landscape: benchmark-comparison.md
-  - Networking Guide: networking-guide.md
-  - Jargon Dictionary: jargon-dictionary.md
+  - Guide:
+      - Feature Reference: feature-reference.md
+      - Networking Concepts: networking-guide.md
+      - Validated Incident Patterns: incident-patterns.md
+      - Jargon Dictionary: jargon-dictionary.md
+  - Extend:
+      - Hardware Integrations: hardware-plugins.md
+      - Writing Scan Plugins: plugin-authoring.md
+  - Develop:
+      - Architecture: architecture.md
+      - Chaos / Monkey Testing: chaos-testing.md
+      - Contributing: contributing.md
   - Privacy Policy: privacy-policy.md
 
 markdown_extensions:

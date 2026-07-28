@@ -198,6 +198,55 @@ class TestIoTMonitorInit:
         assert ev.is_set()
 
 
+# ── RATE_SPIKE detection (degenerate near-zero baseline) ─────────────────────
+
+class TestRateSpikeDetection:
+    """A device baselined during a quiet stretch can end up with an avg_pps of
+    a few hundredths. A pure ratio check (current_pps > avg_pps * FACTOR) then
+    fires on a handful of stray packets -- both values round to "0"/"0.0" at
+    the alert message's own display precision, producing a nonsensical
+    "0 pps is Nx the baseline (0.0 pps)" alarm with no real signal behind it.
+    """
+
+    def _make_baseline(self, avg_pps, mac="aa:bb:cc:00:00:30", ip="192.168.1.30"):
+        return DeviceBaseline(
+            mac=mac, ip=ip,
+            device_type="IoT Device", vendor="Acme", model="Widget",
+            avg_pps=avg_pps,
+        )
+
+    def test_near_zero_baseline_does_not_trigger_on_a_few_stray_packets(self, monkeypatch):
+        from scapy.all import IP
+
+        baseline = self._make_baseline(avg_pps=0.01)
+        alerts = []
+        monitor = IoTMonitor({baseline.mac: baseline}, on_alert=alerts.append)
+        # Seed the rate window: 1 packet already counted, one more arrives
+        # exactly at the 10s mark -> current_pps = 2/10 = 0.2, which is 20x
+        # the 0.01 baseline (past RATE_SPIKE_FACTOR) despite being noise.
+        monitor._rate[baseline.mac] = [1000.0, 1]
+        monkeypatch.setattr("modules.iot_baseline.time.monotonic", lambda: 1010.0)
+
+        monitor._handle(IP(src=baseline.ip, dst="8.8.8.8"))
+
+        assert not any(a.alert_type == "RATE_SPIKE" for a in alerts)
+
+    def test_genuine_burst_against_near_zero_baseline_still_triggers(self, monkeypatch):
+        from scapy.all import IP
+
+        baseline = self._make_baseline(avg_pps=0.01)
+        alerts = []
+        monitor = IoTMonitor({baseline.mac: baseline}, on_alert=alerts.append)
+        # 500 packets in the 10s window -> current_pps = 50, a real sustained
+        # burst that must still fire even though the baseline is near-zero.
+        monitor._rate[baseline.mac] = [1000.0, 499]
+        monkeypatch.setattr("modules.iot_baseline.time.monotonic", lambda: 1010.0)
+
+        monitor._handle(IP(src=baseline.ip, dst="8.8.8.8"))
+
+        assert any(a.alert_type == "RATE_SPIKE" for a in alerts)
+
+
 # ── inject_into_assessment ────────────────────────────────────────────────────
 
 class TestInjectIntoAssessment:

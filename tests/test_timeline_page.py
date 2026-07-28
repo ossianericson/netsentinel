@@ -68,3 +68,21 @@ def test_device_change_event_shows_hostname_after_set_label_map(page, tmp_path):
     titles = [ev.title for ev in page._events]
     assert any("Living Room TV" in t for t in titles)
     assert not any(mac in t for t in titles)
+
+
+def test_device_change_event_uses_known_device_name_without_any_label_map(page):
+    """Regression: with no scan this session nothing ever calls set_label_map,
+    and every device-change row rendered as a bare MAC even though the
+    persistent device map already held the name."""
+    from modules.device_tracker import record_event
+
+    mac = "00:22:61:d8:ee:58"
+    page._store.upsert_known_device(mac, ip="192.168.68.54",
+                                    hostname="Barnens-rum", vendor="Sonos")
+    record_event(mac, "hostname_changed", "", "barnens-rum", "scan", page._store)
+
+    page._reload()
+
+    titles = [ev.title for ev in page._events]
+    assert any("Barnens-rum" in t for t in titles)
+    assert not any(mac in t for t in titles)

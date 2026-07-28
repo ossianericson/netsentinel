@@ -12,7 +12,7 @@ This guide explains the networking concepts that NetSentinel monitors and report
 4. [Spanning Tree Protocol and rogue bridges](#4-spanning-tree-protocol-and-rogue-bridges)
 5. [ARP spoofing and man-in-the-middle attacks](#5-arp-spoofing-and-man-in-the-middle-attacks)
 6. [Broadcast storms](#6-broadcast-storms)
-7. [DNS — why speed matters and what a DNS leak is](#7-dns--why-speed-matters-and-what-a-dns-leak-is)
+7. [DNS — why speed matters and what a DNS leak is](#7-dns-why-speed-matters-and-what-a-dns-leak-is)
 8. [Open ports and port scanning](#8-open-ports-and-port-scanning)
 9. [Tools in NetSentinel](#tools-in-netsentinel)
 

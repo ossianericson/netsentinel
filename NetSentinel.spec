@@ -276,6 +276,7 @@ hiddenimports: list = [
     "ui.npcap_banner",
     "ui.scan_settings",
     "ui.skeleton",
+    "ui.device_labels",
     "ui.styles",
     "ui.system_tray",
     "ui.topology_widget",

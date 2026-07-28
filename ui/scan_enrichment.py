@@ -1031,6 +1031,10 @@ class ScanEnrichmentMixin:
             _label_map.update(get_local_mac_label_map())
             if _label_map:
                 self._feed_app_traffic_label_map(_label_map)
+                # Live Bandwidth resolves its row labels through the shared
+                # resolver at render time, so feed it here too — the worker's
+                # own map only reaches snapshots captured after this point.
+                self._device_label_resolver().set_label_map(_label_map)
                 if getattr(self, "_bw_worker", None) is not None:
                     self._bw_worker.label_map = _label_map
                 if hasattr(self, "_timeline_page"):

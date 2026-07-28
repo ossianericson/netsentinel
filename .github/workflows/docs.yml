@@ -25,5 +25,20 @@ jobs:
       - name: Install MkDocs
         run: pip install mkdocs-material
 
+      # Strict build first: fails the job on a broken internal link or a page that
+      # resolves nowhere, so a dead site can never deploy green. gh-deploy alone
+      # reports success even when every cross-reference on the site is a 404.
+      - name: Build (strict)
+        run: mkdocs build --strict --site-dir _strict_check
+
+      - name: Verify no internal docs in build output
+        run: |
+          if find _strict_check \( -path '*/internal/*' -o -path '*/spikes/*' \) | grep -q .; then
+            echo "::error::Engineering-internal docs leaked into the public site build"
+            find _strict_check \( -path '*/internal/*' -o -path '*/spikes/*' \)
+            exit 1
+          fi
+          echo "OK — no internal/ or spikes/ pages in build output"
+
       - name: Deploy to GitHub Pages
         run: mkdocs gh-deploy --force

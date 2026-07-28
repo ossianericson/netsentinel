@@ -166,4 +166,4 @@ Open a pull request with your `.py` file in the `plugins/` directory. The PR des
 - Example output from a real scan (anonymise IPs if needed)
 - Any new pip dependencies and why they are necessary
 
-See the [PR checklist](../CONTRIBUTING.md#pr-checklist) for the full merge requirements.
+See the [PR checklist](contributing.md#10-pr-checklist) for the full merge requirements.

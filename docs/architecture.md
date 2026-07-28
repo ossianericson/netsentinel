@@ -139,7 +139,7 @@ The installed binary lives in `C:\Program Files\NetSentinel\` — a read-only di
 
 ## Test architecture
 
-The test suite has 6,357 tests across 490 files. Key categories:
+The test suite has 6,392 tests across 492 files. Key categories:
 
 | Category | Files | What it catches |
 |---|---|---|
@@ -187,4 +187,4 @@ Main window: permanent 48 px activity rail + 280 px animated flyout + `QStackedW
 - Ctrl+K opens the command palette (fuzzy-match any page); Ctrl+F focuses sidebar search; Esc closes the flyout
 - Right-click any flyout item to pin it; pinned items appear in a "Pinned" rail section at index 0
 
-Full coding conventions and all development rules: [`.claude/rules/`](../.claude/rules/) (APM source: `.apm/instructions/`)
+Full coding conventions and all development rules: [`.claude/rules/`](https://github.com/ossianericson/netsentinel/tree/main/.claude/rules) (APM source: `.apm/instructions/`)

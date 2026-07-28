@@ -47,6 +47,7 @@ from modules.colours import APP_CATEGORY_COLORS
 from modules.app_traffic_classifier import CATEGORY_ORDER as _CAT_ORDER
 from modules.metric_store import MetricStore
 from ui import styles as _s
+from ui.device_labels import DeviceLabelResolver, normalise_mac
 from ui.styles import (
     CHART_AXIS,
 )
@@ -54,6 +55,7 @@ from ui.widgets.empty_state_card import EmptyStateCard
 
 _INTERVAL_S = 10.0   # capture window length in seconds
 _MAX_HOSTS  = 12     # max hosts shown simultaneously in chart
+_ALL_HOSTS  = "All Hosts"   # combo entry meaning "aggregate every host"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -118,10 +120,17 @@ class AppTrafficPage(QWidget):
         self._worker = None
         self._running = False
         self._label_map: Dict[str, str] = {}
+        #: Resolves MAC → display name at render time, so names appear even when
+        #: no scan has run this session and a late label map relabels rows that
+        #: are already on screen.
+        self._resolver = DeviceLabelResolver(store=store)
 
-        # {label/mac -> AppHostSnapshot} — last received data per host
+        # {mac -> AppHostSnapshot} — last received data per host. Keyed by MAC,
+        # never by display label: a label can change mid-session (a scan lands,
+        # the user renames a device) and a label-keyed dict answers that by
+        # growing a second, permanently stale entry for the same device.
         self._snapshots: Dict[str, object] = {}
-        self._selected_host = "All Hosts"
+        self._selected_host = _ALL_HOSTS   # "" / _ALL_HOSTS = aggregate; else a MAC
         self._hist_categories: List[str] = []   # category order matching the last drawn 24h chart
         self._selected_hist_category: Optional[str] = None
 
@@ -156,7 +165,7 @@ class AppTrafficPage(QWidget):
         _s.themed_ss(self._host_combo, "QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             " border:1px solid {BORDER}; border-radius:3px;"
             " padding:3px 8px; font-size:11px; min-height:26px; }}")
-        self._host_combo.addItem("All Hosts")
+        self._host_combo.addItem(_ALL_HOSTS, "")
         self._host_combo.currentTextChanged.connect(self._on_host_changed)
 
         self._status_lbl = QLabel("")
@@ -342,8 +351,22 @@ class AppTrafficPage(QWidget):
     def set_label_map(self, label_map: dict) -> None:
         """Pass MAC→display-name mapping from latest scan result."""
         self._label_map = dict(label_map)
+        self._resolver.set_label_map(self._label_map)
         if self._worker:
             self._worker.set_label_map(self._label_map)
+        # Rows already on screen were labelled with the previous map — re-render
+        # so the new names land immediately instead of at the next capture.
+        if self._snapshots:
+            self._refresh_host_combo()
+            self._redraw_chart()
+
+    # ── Label resolution ──────────────────────────────────────────────────────
+
+    def _host_label(self, host) -> str:
+        """Display name for a captured host snapshot."""
+        return self._resolver.label_for_entry(
+            getattr(host, "mac", ""), getattr(host, "label", "") or ""
+        )
 
     # ── Slot: new snapshot ────────────────────────────────────────────────────
 
@@ -351,10 +374,11 @@ class AppTrafficPage(QWidget):
     def _on_snapshot(self, snap) -> None:
         self._content_stack.setCurrentIndex(1)
 
-        # Update per-host data keyed by display label
+        # Update per-host data keyed by MAC (stable across label changes)
         for host in snap.hosts:
-            key = host.label or host.mac
-            self._snapshots[key] = host
+            key = normalise_mac(host.mac) or (host.label or "")
+            if key:
+                self._snapshots[key] = host
 
         self._refresh_host_combo()
         self._redraw_chart()
@@ -378,7 +402,7 @@ class AppTrafficPage(QWidget):
             for flow in host.flows:
                 payload.append({
                     "mac": flow.mac,
-                    "label": host.label or host.mac,
+                    "label": self._host_label(host),
                     "category": flow.category,
                     "app": flow.app,
                     "cdn": flow.cdn,
@@ -397,7 +421,7 @@ class AppTrafficPage(QWidget):
             return
         top = max(self._snapshots.values(), key=lambda h: h.total_bytes)
         self.top_host_changed.emit({
-            "label": top.label or top.mac,
+            "label": self._host_label(top),
             "bytes_total": top.total_bytes,
             "share_pct": (top.total_bytes / total * 100) if total else 0.0,
             "window_s": top.window_s,
@@ -418,19 +442,25 @@ class AppTrafficPage(QWidget):
     # ── Host combo ────────────────────────────────────────────────────────────
 
     def _refresh_host_combo(self) -> None:
-        current = self._host_combo.currentText()
+        # Selection is tracked by MAC (item data), not by the visible text, so a
+        # device keeps its selection when its label changes.
+        current = self._selected_host
         self._host_combo.blockSignals(True)
         self._host_combo.clear()
-        self._host_combo.addItem("All Hosts")
-        for label in sorted(self._snapshots.keys()):
-            self._host_combo.addItem(label)
-        idx = self._host_combo.findText(current)
+        self._host_combo.addItem(_ALL_HOSTS, "")
+        entries = sorted(
+            ((self._host_label(h), mac) for mac, h in self._snapshots.items()),
+            key=lambda e: e[0].lower(),
+        )
+        for label, mac in entries:
+            self._host_combo.addItem(label, mac)
+        idx = self._host_combo.findData(current) if current and current != _ALL_HOSTS else 0
         self._host_combo.setCurrentIndex(max(idx, 0))
         self._host_combo.blockSignals(False)
 
     @pyqtSlot(str)
     def _on_host_changed(self, text: str) -> None:
-        self._selected_host = text
+        self._selected_host = self._host_combo.currentData() or _ALL_HOSTS
         self._redraw_chart()
         self._refresh_detail_table()
 
@@ -471,7 +501,7 @@ class AppTrafficPage(QWidget):
             self._draw_empty_chart()
             return
 
-        if self._selected_host == "All Hosts":
+        if self._selected_host in ("", _ALL_HOSTS):
             hosts_to_show = sorted(
                 self._snapshots.values(), key=lambda h: h.total_bytes, reverse=True
             )[:_MAX_HOSTS]
@@ -483,7 +513,7 @@ class AppTrafficPage(QWidget):
             self._draw_empty_chart()
             return
 
-        labels = [h.label or h.mac for h in hosts_to_show]
+        labels = [self._host_label(h) for h in hosts_to_show]
         y_pos = list(range(len(hosts_to_show)))
 
         # Compute per-category byte arrays aligned with hosts_to_show
@@ -615,7 +645,7 @@ class AppTrafficPage(QWidget):
         if not self._snapshots:
             return
 
-        if self._selected_host == "All Hosts":
+        if self._selected_host in ("", _ALL_HOSTS):
             # Aggregate across all hosts
             agg: Dict[tuple, int] = {}
             total = 0

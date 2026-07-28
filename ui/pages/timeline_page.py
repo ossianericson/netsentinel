@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.empty_state_card import EmptyStateCard
+from ui.device_labels import DeviceLabelResolver
 from ui import styles as _s
 from ui.styles import (
     alpha,
@@ -138,6 +139,9 @@ class TimelinePage(QWidget):
         }
         self._events: list[_Ev] = []
         self._label_map: dict[str, str] = {}
+        #: Falls back to known_device / OUI when no scan has fed a label map,
+        #: so device-change rows name the device instead of showing a bare MAC.
+        self._resolver = DeviceLabelResolver(store=store)
         self._tl_search_timer = QTimer(self)
         self._tl_search_timer.setSingleShot(True)
         self._tl_search_timer.setInterval(200)
@@ -283,6 +287,7 @@ class TimelinePage(QWidget):
     def set_label_map(self, label_map: dict) -> None:
         """Pass MAC→display-name mapping from latest scan result."""
         self._label_map = dict(label_map)
+        self._resolver.set_label_map(self._label_map)
         self._reload()
 
     # ── Data loading ──────────────────────────────────────────────────────────
@@ -393,7 +398,7 @@ class TimelinePage(QWidget):
                     _new   = ev.get("new_value", "")
                     _src   = ev.get("source", "")
                     _detail = (f"{_old} → {_new}" if _old and _new else (_new or _src))
-                    _name  = self._label_map.get(_mac.lower(), _mac[:17]) if _mac != "?" else _mac
+                    _name  = self._resolver.label_for(_mac)[:40] if _mac != "?" else _mac
                     events.append(_Ev(
                         ts     = _ts,
                         source = _SOURCE_CHANGES,

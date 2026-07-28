@@ -278,6 +278,18 @@ class _MonitorTabsMixin:
         lay.addWidget(self._bw_stack, 1)
         return w
 
+    def _device_label_resolver(self):
+        """Shared MAC → display-name resolver for the live monitor views.
+
+        Built lazily so the mixin does not depend on Dashboard.__init__ ordering.
+        """
+        resolver = getattr(self, "_dev_label_resolver", None)
+        if resolver is None:
+            from ui.device_labels import DeviceLabelResolver
+            resolver = DeviceLabelResolver(store=getattr(self, "_store", None))
+            self._dev_label_resolver = resolver
+        return resolver
+
     @pyqtSlot()
     def _start_bandwidth_monitor(self):
         from workers.scan_worker import BandwidthWorker
@@ -294,6 +306,7 @@ class _MonitorTabsMixin:
                     label_map[mac.lower()] = host or vendor or mac
         from modules.utils_net import get_local_mac_label_map
         label_map.update(get_local_mac_label_map())
+        self._device_label_resolver().set_label_map(label_map)
         self._bw_worker = BandwidthWorker(interval_s=5.0, label_map=label_map)
         self._bw_worker.snapshot.connect(self._on_bw_snapshot)
         self._bw_worker.status.connect(self._bw_status.setText)
@@ -312,13 +325,14 @@ class _MonitorTabsMixin:
     def _on_bw_snapshot(self, snap):
         self._bw_stack.setCurrentIndex(1)   # switch from empty state to table
         self._bw_table.setRowCount(0)
+        resolver = self._device_label_resolver()
         for entry in snap.entries:
             row = self._bw_table.rowCount()
             self._bw_table.insertRow(row)
             total_kbps = entry.total_bps / 1000
             level = "HIGH" if total_kbps > 5000 else ("MEDIUM" if total_kbps > 500 else "CLEAN")
             for col, val in enumerate([
-                entry.label or entry.mac,
+                resolver.label_for_entry(entry.mac, entry.label or ""),
                 f"{entry.tx_bps/1000:.1f}",
                 f"{entry.rx_bps/1000:.1f}",
                 f"{total_kbps:.1f}",

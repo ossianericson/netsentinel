@@ -20,7 +20,8 @@ How it works
                      (169.254.169.254, 100.100.100.200, fd00:ec2::254, etc.)
    • SYN_SCAN      — device sends SYN packets to 5+ distinct ports within
                      60 s (port-scan-like behaviour)
-   • RATE_SPIKE    — current pps > baseline_pps * RATE_SPIKE_FACTOR
+   • RATE_SPIKE    — current pps >= RATE_SPIKE_MIN_PPS AND
+                     current pps > baseline_pps * RATE_SPIKE_FACTOR
 
 3. RISK SCORER INTEGRATION — IoTAlert.severity maps to a score delta that
    callers can inject into a RiskAssessment via inject_into_assessment().
@@ -70,6 +71,11 @@ _ALWAYS_ALERT_PORTS: Set[int] = {
 
 # Ratio by which pps must exceed baseline to trigger RATE_SPIKE
 RATE_SPIKE_FACTOR = 5.0
+# Minimum absolute current_pps required before RATE_SPIKE can fire at all --
+# guards against a near-zero baseline (a device baselined during a quiet
+# stretch) turning a handful of stray packets into a mathematically-huge but
+# meaningless ratio (e.g. "0.2 pps is 20x the 0.01 pps baseline").
+RATE_SPIKE_MIN_PPS = 1.0
 # Number of distinct new ports within window to trigger SYN_SCAN
 SYN_SCAN_THRESHOLD = 5
 SYN_SCAN_WINDOW_S  = 60
@@ -324,7 +330,11 @@ class IoTMonitor:
             if elapsed >= 10.0:
                 current_pps = count / elapsed
                 self._rate[mac] = [now, 0]
-                if baseline.avg_pps > 0 and current_pps > baseline.avg_pps * RATE_SPIKE_FACTOR:
+                if (
+                    baseline.avg_pps > 0
+                    and current_pps >= RATE_SPIKE_MIN_PPS
+                    and current_pps > baseline.avg_pps * RATE_SPIKE_FACTOR
+                ):
                     self._emit(IoTAlert(
                         mac=mac, ip=src_ip, device_label=label,
                         alert_type="RATE_SPIKE",

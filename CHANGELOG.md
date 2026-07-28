@@ -4,6 +4,21 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.49
+
+**Fixed**
+- App Traffic, Live Bandwidth, and Timeline rows showed a bare MAC address instead of a device's known name, even when `known_device` already had one. Added `ui/device_labels.py::DeviceLabelResolver` (fed label map -> `known_device` custom name/hostname/vendor -> offline OUI lookup -> MAC) and switched all three views to resolve names at render time instead of baking a label in at capture time, so a label map arriving later now corrects rows already on screen. Also fixed `AppTrafficPage` keying its snapshot history by display label (a renamed device grew a duplicate, MAC-keyed entry) and `AppTrafficWorker.set_label_map()` rebinding its own dict instead of updating the running `AppTrafficMonitor`, which silently discarded every label update issued after `start()`
+
+- `modules/iot_baseline.py`: a device baselined during a quiet stretch could end up with an `avg_pps` of a few hundredths, so the pure ratio check behind `RATE_SPIKE` fired on a handful of stray packets — both values round to "0"/"0.0" at the alert's own display precision, producing a nonsensical alarm with no real signal behind it. Added `RATE_SPIKE_MIN_PPS` as an absolute floor `current_pps` must clear before the ratio check applies, so a genuine sustained burst against a near-zero baseline still fires but stray packets against it no longer do
+
+**Changed**
+- Made the documentation site publishable: excluded `docs/internal/` and `docs/spikes/` from the MkDocs build (previously compiled into `gh-pages` even though absent from `nav`), added 5 previously-orphaned pages to the nav (feature-reference, incident-patterns, hardware-plugins, plugin-authoring, chaos-testing), fixed 6 dead links including a `master`-branch `edit_uri` on a repo whose default branch is `main`, and added a `mkdocs build --strict` CI guard that fails the job if any internal/spikes page reaches the build output
+- `.github/winget/NetSentinel.NetSentinel.locale.en-US.yaml`: rewrote the winget listing to lead with LAN scanning, diagnosis, and security audit instead of specific hardware models; consolidated vendor hardware into one bullet and added the ISP Accountability Report and Stability Logger, which were missing entirely
+- Regenerated the Microsoft Store screenshot set (previous set was 23 releases stale); `tools/store_screenshots.py` now verifies each capture via breadcrumb match, content-uniformity check, and scan-idle wait, catching a silent-navigation defect where a no-op saved the previous page under the new page's filename
+- Rewrote the Microsoft Partner Center listing copy (`assets/store/partner-center-listing.md`) to lead with device discovery, fault diagnosis, and security audit instead of specific vendor hardware, and states the Administrator/Npcap requirements up front; added `assets/store/check_listing_lengths.py` to validate every field against Partner Center's length limits before submission
+
+---
+
 ### v2.1.48
 
 **Fixed**
