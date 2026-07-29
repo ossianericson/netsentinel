@@ -47,14 +47,27 @@ def _mask_to_prefix(mask: str) -> int | None:
 
 
 def _widest_subnet(local_ips: list) -> tuple:
-    """Return (ip, prefix_len) for the entry with the smallest (widest) prefix."""
+    """Return (ip, prefix_len) for the entry with the smallest (widest) prefix.
+
+    Link-local (169.254.x.x / APIPA) entries are skipped entirely: Windows assigns
+    them to adapters that never obtained a DHCP lease — a disconnected WiFi radio,
+    Bluetooth PAN, or an idle virtual adapter — so they describe no real routed
+    subnet. They are typically /16, which would otherwise beat the real LAN's
+    narrower prefix and make scope_cidr describe a network with no devices on it.
+    """
     best_ip, best_prefix = "", 24
     for entry in local_ips:
+        ip = entry.get("ip", "")
+        try:
+            if ipaddress.ip_address(ip).is_link_local:
+                continue  # APIPA fallback address — adapter has no real lease
+        except ValueError:
+            continue  # unparseable address — cannot confirm it is a real subnet
         prefix = _mask_to_prefix(entry.get("mask", ""))
         if prefix is None:
             continue
         if best_ip == "" or prefix < best_prefix:
-            best_ip, best_prefix = entry.get("ip", ""), prefix
+            best_ip, best_prefix = ip, prefix
     return best_ip, best_prefix
 
 

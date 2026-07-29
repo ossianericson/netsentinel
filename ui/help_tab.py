@@ -36,12 +36,10 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.1.49"
+_WHATS_NEW_VERSION = "2.1.50"
 _WHATS_NEW_ENTRIES = [
-    ("Device names now show everywhere", "App Traffic, Live Bandwidth, and Timeline previously showed a bare MAC address for devices that already had a name elsewhere in the app.  All three now resolve the real name, including a name that only becomes known partway through a session."),
-    ("Fewer false IoT alerts", "A device baselined during a quiet stretch could trigger a nonsense \"rate spike\" alert from just a handful of stray packets.  A genuine sustained burst still alerts; ordinary background noise no longer does."),
-    ("Refreshed Store screenshots", "The Microsoft Store listing's screenshots were more than 20 releases out of date.  They're now current, with a new check that catches a blank or wrong-page capture before it ships."),
-    ("Documentation site fixes", "Internal engineering notes are excluded from the public docs build, five previously-orphaned pages are now reachable from the site's navigation, and several broken links are fixed."),
+    ("Fixed device discovery returning nothing", "On some machines a disconnected Wi-Fi, Bluetooth, or virtual adapter's address could hijack which network got scanned, so a scan of a real, populated network came back completely empty with a blank Vendor column.  Fixed."),
+    ("Refreshed Store screenshots", "Updated the Devices and App Traffic screenshots in the Microsoft Store listing."),
 ]
 
 

@@ -246,10 +246,15 @@ class _MonitorStateMixin:
             row.addWidget(t)
         return bar
 
-    def _update_kpi_tiles(self, data: dict) -> None:
-        """Refresh KPI tile values from a completed scan result dict."""
+    def _update_kpi_tiles(self, data: dict, extra_count: int = 0) -> None:
+        """Refresh KPI tile values from a completed scan result dict.
+
+        extra_count covers mesh/plugin-only devices that are visible in the Devices
+        table but deliberately absent from data["devices"] (which stays ARP-truth) —
+        without it the TOTAL NODES tile reads 0 beside a table full of rows.
+        """
         devices    = data.get("devices", [])
-        total      = len(devices)
+        total      = len(devices) + extra_count
         high_risk  = sum(
             1 for d in devices
             if (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "")) in ("HIGH", "CRITICAL")

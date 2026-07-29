@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
 
+from modules.mac_registry import lookup as _mac_registry_lookup
 from modules.scan_persistence import (
     persist_alert, record_mesh_snapshot, record_plugin_snapshot, record_rtt,
 )
@@ -26,6 +27,28 @@ if TYPE_CHECKING:
     pass
 
 
+def _oui_identity(mac: str) -> tuple:
+    """Return (vendor, device_type) for a synthesized row's MAC.
+
+    Devices answered for by proxy ARP are deliberately skipped by
+    rogue_device.scan() (the router replies with its own MAC, so the real
+    hardware address is unknowable from ARP), which means they never reach that
+    module's OUI classification pass. The mesh/plugin router API is the only
+    source of their real MAC, so the lookup scan() would have done has to happen
+    here instead — otherwise every such row shows a blank Vendor.
+
+    Uses the same offline registry rogue_device.py uses: a pure in-memory dict
+    lookup with no file or network I/O, so it is safe to call on the GUI thread.
+    modules.utils.lookup_vendor is NOT — it can fall through to a rate-limited
+    online API (RULE 4).
+    """
+    try:
+        reg = _mac_registry_lookup(mac) or {}
+    except Exception:
+        reg = {}  # non-fatal — an unresolvable MAC just keeps the generic fallback
+    return reg.get("vendor", "") or "", reg.get("device_type", "") or "Wireless Client"
+
+
 class ScanEnrichmentMixin:
     """Mixin providing mesh and hardware plugin enrichment handlers for Dashboard.
 
@@ -35,6 +58,29 @@ class ScanEnrichmentMixin:
 
     def _save_mesh_enrichment_cache(self) -> None:
         """No-op base — overridden by ScanResultMixin with the full file-write implementation."""
+
+    def _m1_refresh_scan_summary(self) -> None:
+        """Rebuild the Devices header text from _m1_result plus any synthesized rows.
+
+        Mesh/plugin-only rows are appended to the table asynchronously, long after
+        _on_m1_result() computed the header from the raw ARP dict, so total_count
+        alone under-reports what the user can actually see (the reported "0 devices
+        scanned" above 15 visible rows). Those rows are counted here rather than
+        appended to _m1_result["devices"], which stays ARP-truth for its many
+        consumers — availability ping targets, port-scan/OS-detection target lists
+        and the report exporters all read that list, and a synthesized row's IP can
+        be the literal "—" placeholder.
+        """
+        if not getattr(self, "_m1_result", None):
+            return
+        synth = len(getattr(self, "_m1_synth_macs", None) or ())
+        total = self._m1_result.get("total_count", 0) + synth
+        self._m1_scan_summary = (
+            f"✓  {total} devices scanned — "
+            f"{self._m1_result.get('high_risk_count', 0)} HIGH RISK"
+        )
+        if getattr(self, "_m1_status", None) is not None:
+            self._m1_status.setText(self._m1_scan_summary)
 
     def _on_mesh_result(self, data: dict) -> None:
         """Receive mesh scan result and enrich the Devices table."""
@@ -1086,6 +1132,13 @@ class ScanEnrichmentMixin:
             _ii = self._m1_table.item(_r, 0)
             if _ii and _ii.text() and _ii.text() != "—":
                 _existing_ips.add(_ii.text().strip())
+        # Synthesized MACs for THIS scan — drives the header/KPI count without
+        # polluting _m1_result["devices"]. Reset by _m1_populate_device_table()
+        # when a new scan clears the table; persists across the repeated
+        # _apply_mesh_enrichment() calls a plugin's poll cycle triggers, so a row
+        # already in the table is counted once, not once per call.
+        if getattr(self, "_m1_synth_macs", None) is None:
+            self._m1_synth_macs = set()
         _synth_added = False
         for _mc in self._mesh_enrichment.values():
             if _norm_mac(_mc.mac) in _existing_macs:
@@ -1093,13 +1146,15 @@ class ScanEnrichmentMixin:
             # Also skip if the device's IP is already in the table (ARP found it without MAC)
             if _mc.ip and _mc.ip in _existing_ips:
                 continue
+            _mesh_vendor, _mesh_dtype = _oui_identity(_mc.mac)
             _add_row(
                 self._m1_table,
-                [_mc.ip or "—", _mc.name or "—", _mc.mac, "", "CLEAN",
-                 "Wireless Client", _mc.unit_name, _mc.band,
+                [_mc.ip or "—", _mc.name or "—", _mc.mac, _mesh_vendor, "CLEAN",
+                 _mesh_dtype, _mc.unit_name, _mc.band,
                  "Mesh-only — not visible to ARP scan"],
                 "CLEAN",
             )
+            self._m1_synth_macs.add(_norm_mac(_mc.mac))
             _synth_item = self._m1_table.item(self._m1_table.rowCount() - 1, 0)
             if _synth_item:
                 _synth_item.setData(Qt.ItemDataRole.UserRole + 10, "__mesh_synth__")
@@ -1122,10 +1177,11 @@ class ScanEnrichmentMixin:
             # Skip if the device's IP is already in the table (ARP found it without MAC)
             if _pip != "—" and _pip in _existing_ips:
                 continue
+            _plugin_vendor, _plugin_dtype = _oui_identity(_pmac)
             _add_row(
                 self._m1_table,
-                [_pip, _phn, _pmac, "", "CLEAN",
-                 "Wireless Client", _pc.get("unit", ""), _pc.get("band", ""),
+                [_pip, _phn, _pmac, _plugin_vendor, "CLEAN",
+                 _plugin_dtype, _pc.get("unit", ""), _pc.get("band", ""),
                  "Plugin-only — not visible to ARP scan"],
                 "CLEAN",
             )
@@ -1133,10 +1189,19 @@ class ScanEnrichmentMixin:
             if _psi:
                 _psi.setData(Qt.ItemDataRole.UserRole + 10, "__plugin_synth__")
             _existing_macs.add(_pmac)
+            self._m1_synth_macs.add(_pmac)
             _plugin_synth_added = True
         if _plugin_synth_added:
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
+
+        # Re-derive the header text and TOTAL NODES tile now that the table holds
+        # rows the raw ARP result never contained (see _m1_refresh_scan_summary).
+        if self._m1_synth_macs:
+            self._m1_refresh_scan_summary()
+            _upd_kpi = getattr(self, "_update_kpi_tiles", None)
+            if _upd_kpi is not None and self._m1_result:
+                _upd_kpi(self._m1_result, extra_count=len(self._m1_synth_macs))
 
         # Regroup M1 table into collapsible satellite sections (only when toggle is ON)
         if (any_matched or _synth_added or plugin_any_matched or _plugin_synth_added) \
@@ -1626,11 +1691,7 @@ class ScanEnrichmentMixin:
             else:
                 for row in range(self._m1_table.rowCount()):
                     self._m1_table.setRowHidden(row, False)
-            if self._m1_result:
-                self._m1_status.setText(
-                    f"✓  {self._m1_result.get('total_count', 0)} devices scanned — "
-                    f"{self._m1_result.get('high_risk_count', 0)} HIGH RISK"
-                )
+            self._m1_refresh_scan_summary()
             return
         if not self._m1_result:
             return

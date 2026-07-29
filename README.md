@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-6392%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-6399%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**6,392+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**6,399+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -155,7 +155,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**6,392 automated tests** across 492 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**6,399 automated tests** across 492 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -201,53 +201,10 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.49 (current)
+### v2.1.50 (current)
 
-- Fixed device names not showing on App Traffic, Live Bandwidth, and Timeline — devices with a known name previously showed as a bare MAC address on all three
-- Fixed IoT Behaviour Baseline raising a "rate spike" alert on ordinary background traffic for devices baselined during a quiet stretch
-- Regenerated the Microsoft Store screenshot set, which had gone 23 releases stale, and added automatic verification so a blank or wrong-page capture can no longer slip through silently
-- Made the documentation site publishable — internal engineering notes are excluded from the public build, five previously-orphaned pages are now reachable from the site navigation, and several broken links are fixed
-
-### v2.1.48
-
-- Fixed acknowledged alerts not staying acknowledged — acknowledging a grouped row now clears every alert in that group, and an acknowledged alert stops re-notifying for 24 hours (configurable under Notifications → Configure) instead of firing again every 5 minutes
-- Added a working "Acknowledge all" to the Home page alert card and a real bulk Acknowledge to Alert History, both showing the true backlog count rather than just the visible rows
-- Fixed the Home alert card's acknowledge button rendering as an empty box instead of a check mark
-- Alert History now shows the alert message — the column was missing entirely, while the short Rule column was stretched across the width
-- Fixed the in-app "What's New" list showing the previous release's changes
-
-### v2.1.47
-
-- Fixed unreadable dark-on-dark tabs on the Windows Shares (SMB) security scan page in the dark theme
-- Fixed menu separator lines not matching the active theme in several menus
-- Hardened the internal test-suite runner so a crashed or silently truncated run can no longer be mistaken for a passing one
-
-### v2.1.46
-
-- Fixed desktop toast and tray notifications reaching users who never opted into alerts
-- Every alert type now includes clear, actionable "how to fix" guidance
-- Added an advanced per-rule x per-channel notification routing matrix
-- Notification channel secrets (email, Pushover, Telegram, ntfy) now survive an app restart
-- Hardened the release pipeline's security scan so a single false positive can no longer block a release or silently hide its result
-
-### v2.1.45
-
-- Fixed a bug that could let repeated clicks on the taskbar or Start-menu icon open several copies of NetSentinel instead of bringing the existing window to the front
-- Added internal diagnostic tooling to help track down a long-running background memory-growth investigation (no user-facing change)
-
-### v2.1.44
-
-- Fixed a memory leak in the Network Map's Traffic Overlay that kept a background packet sniffer and its Chromium renderer process growing after leaving the page
-- Fixed a smaller, related memory leak on the Live Bandwidth page from repeated visits
-- Chaos-testing tooling now catches memory leaks in background browser/renderer processes, not just the main app process
-
-### v2.1.43
-
-- Fixed the app window sometimes coming back blank/unpainted after being restored from a minimized state
-- Fixed a small memory leak on the Inventory Change History page from repeated visits
-- Improved navigation rail responsiveness by skipping unnecessary icon redraws on section toggle
-
-### v2.1.42
+- Fixed device discovery sometimes returning zero devices and a blank Vendor column — a disconnected Wi-Fi/Bluetooth/virtual adapter's link-local address could hijack the scan scope, so a scan of a real, populated network came back empty
+- Regenerated the Microsoft Store Devices and App Traffic screenshots
 
 ---
 

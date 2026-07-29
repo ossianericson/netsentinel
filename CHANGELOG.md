@@ -4,6 +4,16 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.50
+
+**Fixed**
+- Device discovery could return zero devices with a blank Vendor column on some machines. `modules/network_environment.py::_widest_subnet()` picked scan scope by widest netmask without excluding link-local (`169.254.0.0/16`) adapters, so a disconnected Wi-Fi radio, Bluetooth PAN, or idle virtual NIC's APIPA `/16` beat the real LAN's narrower subnet, and `effective_scan_scope_cidr()` bounded the scan to a network with nothing on it — `partition_by_scope()` then classified every real ARP entry as out-of-scope (measured live: 0 in-scope devices before the fix, 15 after). A machine with only link-local addresses now fails open (unbounded scan) instead of silently scoping to nothing. The blank Vendor column was a downstream symptom, not a `lookup_vendor`/`mac_lookup`/`device_classifier` fault — `ui/scan_enrichment.py` now also fills Vendor/Device Type on mesh- and plugin-synthesized rows via the offline `mac_registry` lookup, and the header device count includes those synthesized rows
+
+**Changed**
+- Regenerated the `03_devices.png` / `04_app_traffic.png` Microsoft Store screenshots
+
+---
+
 ### v2.1.49
 
 **Fixed**

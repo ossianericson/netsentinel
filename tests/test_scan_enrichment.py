@@ -504,6 +504,202 @@ class TestMeshMacNormalization:
 
 
 # ---------------------------------------------------------------------------
+# Synthesized mesh/plugin-only rows — OUI vendor lookup + display-only count
+# ---------------------------------------------------------------------------
+
+class TestSynthesizedRowEnrichment:
+    """A device behind proxy-ARP is deliberately skipped by rogue_device.scan()
+    (its real MAC is unknowable from ARP — the router answers on its behalf), so
+    the mesh/hardware plugin is the ONLY source of that MAC. The synthesized row
+    built for it used to hardcode Vendor="" and "Wireless Client", discarding a
+    perfectly good MAC that the offline OUI registry can resolve — which is why
+    the Devices page showed an empty Vendor column on every plugin-supplied row.
+
+    The row count shown in the header / TOTAL NODES tile is computed from the raw
+    ARP result before these rows exist, so it must be adjusted by the synthesized
+    count — deliberately WITHOUT writing them into _m1_result["devices"], which is
+    ARP-truth consumed by ~40 downstream call sites (ping targets, port-scan target
+    lists, exports).
+    """
+
+    # Real registry OUIs — see modules/mac_registry.py
+    PI_MAC = "b8:27:eb:11:22:33"      # -> Raspberry Pi / Single Board Computer
+    XBOX_MAC = "d8:3a:dd:00:00:01"    # -> Microsoft / Games Console
+    UNKNOWN_MAC = "ac:63:be:00:00:01"  # -> not in the registry
+
+    def _stub_with_kpi(self, table, m1_result, plugin_enrichments=None):
+        stub = _make_stub(
+            table,
+            m1_result=m1_result,
+            net_info={"gateway": "192.168.1.1", "gateway_mac": "aa:bb:cc:dd:ee:01"},
+            plugin_enrichments=plugin_enrichments,
+        )
+        stub._kpi_calls = []
+        stub._status_text = []
+
+        class _Status:
+            def __init__(self, sink):
+                self._sink = sink
+
+            def setText(self, txt):
+                self._sink.append(txt)
+
+        stub._m1_status = _Status(stub._status_text)
+
+        def _fake_kpi(data, extra_count=0):
+            stub._kpi_calls.append((len(data.get("devices", [])), extra_count))
+
+        stub._update_kpi_tiles = _fake_kpi
+        return stub
+
+    def _row_for_mac(self, table, mac):
+        from modules.deco_client import _norm_mac
+        for r in range(table.rowCount()):
+            item = table.item(r, 2)
+            if item and _norm_mac(item.text()) == _norm_mac(mac):
+                return r
+        return None
+
+    def test_plugin_only_row_gets_vendor_and_device_type_from_oui(self):
+        """The reported bug: every plugin-supplied row showed a blank Vendor cell."""
+        from modules.deco_client import _norm_mac
+
+        table = _make_table([])
+        plugin_enrichments = {
+            "router": {
+                _norm_mac(self.PI_MAC): {
+                    "mac": self.PI_MAC, "hostname": "pi-hole",
+                    "ip": "192.168.1.77", "band": "Wired", "unit": "Main",
+                },
+            },
+        }
+        stub = self._stub_with_kpi(table, {"devices": [], "total_count": 0},
+                                   plugin_enrichments)
+        stub._apply_mesh_enrichment()
+
+        row = self._row_for_mac(table, self.PI_MAC)
+        assert row is not None, "plugin-only client was not synthesized into the table"
+
+        vendor = table.item(row, 3)
+        assert vendor is not None and vendor.text() == "Raspberry Pi", (
+            "Vendor cell must be filled from the offline OUI registry, got "
+            f"{vendor.text() if vendor else None!r}"
+        )
+        dtype = table.item(row, 5)
+        assert dtype is not None and dtype.text() == "Single Board Computer", (
+            "Device Type must come from the OUI registry, not the hardcoded "
+            f"'Wireless Client' fallback; got {dtype.text() if dtype else None!r}"
+        )
+
+    def test_unknown_oui_keeps_wireless_client_fallback(self):
+        """An OUI the registry doesn't know must degrade to today's behaviour."""
+        from modules.deco_client import _norm_mac
+
+        table = _make_table([])
+        plugin_enrichments = {
+            "router": {
+                _norm_mac(self.UNKNOWN_MAC): {
+                    "mac": self.UNKNOWN_MAC, "hostname": "mystery-box",
+                    "ip": "192.168.1.88", "band": "5 GHz", "unit": "Satellite",
+                },
+            },
+        }
+        stub = self._stub_with_kpi(table, {"devices": [], "total_count": 0},
+                                   plugin_enrichments)
+        stub._apply_mesh_enrichment()
+
+        row = self._row_for_mac(table, self.UNKNOWN_MAC)
+        assert row is not None
+        vendor = table.item(row, 3)
+        assert (vendor.text() if vendor else "") == ""
+        dtype = table.item(row, 5)
+        assert dtype is not None and dtype.text() == "Wireless Client"
+
+    def test_mesh_only_row_gets_vendor_from_oui(self):
+        """Same fix must apply to the native mesh synthesis block, not just plugins."""
+        from modules.deco_client import MeshClient, _norm_mac
+
+        table = _make_table([])
+        stub = self._stub_with_kpi(table, {"devices": [], "total_count": 0})
+        stub._mesh_enrichment = {
+            _norm_mac(self.XBOX_MAC): MeshClient(
+                name="Xbox", mac=self.XBOX_MAC, ip="192.168.1.60",
+                unit_mac="aa:bb:cc:dd:ee:01", unit_name="Living Room", band="5G",
+            ),
+        }
+        stub._apply_mesh_enrichment()
+
+        row = self._row_for_mac(table, self.XBOX_MAC)
+        assert row is not None, "mesh-only client was not synthesized into the table"
+        vendor = table.item(row, 3)
+        assert vendor is not None and vendor.text() == "Microsoft"
+        dtype = table.item(row, 5)
+        assert dtype is not None and dtype.text() == "Games Console"
+
+    def test_synthesized_rows_counted_without_polluting_m1_result(self):
+        """TOTAL NODES / header must include synthesized rows, but _m1_result must
+        stay ARP-truth — a synthesized IP can be the literal '—' placeholder, which
+        would be fed to the availability worker as a ping target if appended."""
+        from modules.deco_client import _norm_mac
+
+        table = _make_table([])
+        m1_result = {"devices": [], "total_count": 0, "high_risk_count": 0}
+        plugin_enrichments = {
+            "router": {
+                _norm_mac(self.PI_MAC): {
+                    "mac": self.PI_MAC, "hostname": "pi-hole",
+                    "ip": "192.168.1.77", "band": "Wired", "unit": "Main",
+                },
+                _norm_mac(self.XBOX_MAC): {
+                    "mac": self.XBOX_MAC, "hostname": "Xbox",
+                    "ip": "192.168.1.60", "band": "5 GHz", "unit": "Main",
+                },
+            },
+        }
+        stub = self._stub_with_kpi(table, m1_result, plugin_enrichments)
+        stub._apply_mesh_enrichment()
+
+        assert table.rowCount() == 2
+        assert m1_result["devices"] == [], (
+            "_m1_result['devices'] must stay ARP-truth — synthesized rows must not "
+            "leak into the list consumed by ping targets / exports / port scans"
+        )
+        assert m1_result["total_count"] == 0, "_m1_result must not be mutated"
+        assert stub._kpi_calls, "_update_kpi_tiles was never called after synthesis"
+        assert stub._kpi_calls[-1][1] == 2, (
+            f"KPI tile must be told about 2 synthesized rows, got {stub._kpi_calls[-1]}"
+        )
+        assert any("2 devices" in t for t in stub._status_text), (
+            f"header must report the 2 visible devices, got {stub._status_text!r}"
+        )
+
+    def test_repeat_enrichment_does_not_double_count(self):
+        """_apply_mesh_enrichment runs on every plugin poll — the count must be
+        idempotent, not grow by one row-set per call."""
+        from modules.deco_client import _norm_mac
+
+        table = _make_table([])
+        plugin_enrichments = {
+            "router": {
+                _norm_mac(self.PI_MAC): {
+                    "mac": self.PI_MAC, "hostname": "pi-hole",
+                    "ip": "192.168.1.77", "band": "Wired", "unit": "Main",
+                },
+            },
+        }
+        stub = self._stub_with_kpi(table, {"devices": [], "total_count": 0},
+                                   plugin_enrichments)
+        stub._apply_mesh_enrichment()
+        stub._apply_mesh_enrichment()
+        stub._apply_mesh_enrichment()
+
+        assert table.rowCount() == 1, "row was synthesized more than once"
+        assert stub._kpi_calls[-1][1] == 1, (
+            f"synthesized count must stay 1 across repeat calls, got {stub._kpi_calls}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Bug #3 — blank cells after second scan when sort indicator is active
 # ---------------------------------------------------------------------------
 

@@ -204,6 +204,46 @@ class TestScopeCidr:
         assert env.scope_cidr == ""
 
 
+class TestLinkLocalAdaptersAreIgnored:
+    """A 169.254.x.x (APIPA) address only ever appears on an adapter that never got a
+    DHCP lease — it is not a real routed subnet and must never win the "widest subnet"
+    comparison. Regression: a machine with disconnected WiFi/Bluetooth/virtual adapters
+    reporting 169.254.x.x/16 had scope_cidr set to 169.254.0.0/16, which made
+    partition_by_scope() classify every real LAN device as out-of-scope, so
+    rogue_device.scan() returned 0 devices and the Devices page showed an empty Vendor
+    column with a "0 devices scanned" header."""
+
+    def test_real_lan_wins_over_wider_link_local_adapters(self):
+        net_info = _net_info(
+            local_ips=[
+                {"ip": "192.168.68.50", "mask": "255.255.252.0", "adapter": "Ethernet"},
+                {"ip": "169.254.51.29", "mask": "255.255.0.0", "adapter": "Local Area Connection* 9"},
+                {"ip": "169.254.223.160", "mask": "255.255.0.0", "adapter": "WiFi"},
+                {"ip": "169.254.42.108", "mask": "255.255.0.0", "adapter": "Bluetooth Network Connection"},
+            ],
+            gateway="192.168.68.1",
+        )
+        adapters = [_adapter("Ethernet", connected=True, ipv4="192.168.68.50")]
+
+        env = detect_environment(net_info=net_info, adapters=adapters)
+
+        assert env.scope_cidr == "192.168.68.0/22"
+
+    def test_only_link_local_adapters_fails_open_with_no_scope(self):
+        """No real subnet is determinable — scope_cidr must be blank so callers fail
+        OPEN (unbounded scan) rather than bounding the scan to a bogus 169.254.0.0/16."""
+        net_info = _net_info(
+            local_ips=[
+                {"ip": "169.254.51.29", "mask": "255.255.0.0", "adapter": "WiFi"},
+                {"ip": "169.254.42.108", "mask": "255.255.0.0", "adapter": "Bluetooth Network Connection"},
+            ],
+        )
+
+        env = detect_environment(net_info=net_info, adapters=[])
+
+        assert env.scope_cidr == ""
+
+
 class TestPartitionByScope:
     """L5: rogue_device.scan() must never silently over-scan into a subnet it
     wasn't asked to touch, and never silently drop what it excludes — pairs are

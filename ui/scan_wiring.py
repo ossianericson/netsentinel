@@ -807,11 +807,11 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if _sc >= 0:
             self._m1_table.sortByColumn(_sc, Qt.SortOrder(_so))
 
-        self._m1_scan_summary = (
-            f"✓  {data.get('total_count', 0)} devices scanned — "
-            f"{data.get('high_risk_count', 0)} HIGH RISK"
-        )
-        self._m1_status.setText(self._m1_scan_summary)
+        # A fresh scan owns the table, so any mesh/plugin-only rows synthesized on
+        # top of the previous result are gone — clear their count before the header
+        # is rebuilt, or it would carry over into this scan's total.
+        self._m1_synth_macs = set()
+        self._m1_refresh_scan_summary()
         # Mirror into Network Info tab
         self._net_devices_table.setRowCount(0)
         for d in data.get("devices", []):
