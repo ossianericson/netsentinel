@@ -22,6 +22,7 @@ from ui.widgets.home_widgets import (
 from ui.widgets.home_session_widgets import _GradeBreakdownDialog
 
 from ui.dialog_utils import run_dialog
+from ui.device_labels import resolve_alert_message
 
 try:
     from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
@@ -436,7 +437,12 @@ class _HomeDataMixin:
             alert_id   = alert.get("id")
             severity   = alert.get("severity", "WARNING")
             rule       = alert.get("rule_name", "Alert")
-            msg        = alert.get("message", "")
+            # S4: resolve the raw IP/MAC baked into message at fire time to
+            # a device name at render time, so a name learned later corrects
+            # an alert already on screen (ui/device_labels.py docstring).
+            msg        = resolve_alert_message(
+                self._resolver, alert.get("host", ""), alert.get("message", ""),
+            )
             ts         = float(alert.get("ts") or 0)
             elapsed    = max(0, int(_time.time()) - int(ts))
             if elapsed < 60:
@@ -446,7 +452,11 @@ class _HomeDataMixin:
             else:
                 time_str = f"{elapsed // 3600}h ago"
 
-            label_text = f"{rule} · {msg[:50]}" if msg else rule
+            # S5: do not truncate -- append_action() puts the -> action steps
+            # at the END of the message (live lengths run 116-181 chars), so
+            # a fixed short slice cut them before they ever reached the
+            # screen. Word-wrap instead; the card has vertical room for it.
+            label_text = f"{rule} · {msg}" if msg else rule
 
             row_w = QWidget()
             row_w.setStyleSheet("background:transparent;")
@@ -462,6 +472,7 @@ class _HomeDataMixin:
             ))
 
             msg_lbl = QLabel(label_text)
+            msg_lbl.setWordWrap(True)
             _s.themed_ss(msg_lbl, lambda: (
                 f"QLabel {{ font-size:11px; color:{_s.TEXT_PRIMARY};"
                 f" background:transparent; border:none; }}"
@@ -1390,10 +1401,15 @@ class _HomeDataMixin:
         except Exception:
             registry = {}
 
+        # S6: kept in sync with security_overview_page._AUDIT_SCAN_LABELS —
+        # see tests/test_claims_audit_ratchet.py::test_rollup_lists_match_audit_labels.
         _SEC_LABELS = [
             "Port Scan (TCP)", "Port Scan (UDP)", "CVE Lookup", "OS Detection",
             "Login Test", "Threat Intel", "TLS & Exposure",
             "Exposed to Internet", "Full Device Discovery",
+            "Device Risk Score", "CVE Tracker", "Windows Shares (SMB)",
+            "Recon Plugins", "Private Endpoint Check", "Cloud Metadata Probe",
+            "DHCP Rogue Monitor",
         ]
         _sec_ts    = 0.0
         _sec_state = "never"

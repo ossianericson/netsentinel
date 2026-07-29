@@ -107,6 +107,9 @@ def _confidence_color(conf: int) -> str:
 
 
 # C-3: Scan types shown in the Scan Status overview card
+# S6: reconciled against every registered audit_item=True page that actually
+# reports scan state (modules.scan_guidance_audit.AUDIT_CARD_PARITY) -- the
+# 7 pages below were wired and state-reporting but had no card row.
 _AUDIT_SCAN_LABELS: tuple[str, ...] = (
     L.PORT_SCAN_TCP,
     L.PORT_SCAN_UDP,
@@ -117,6 +120,13 @@ _AUDIT_SCAN_LABELS: tuple[str, ...] = (
     L.OS_DETECTION,
     L.EXPOSED_TO_INTERNET,
     L.FULL_DEVICE_DISCOVERY,
+    L.DEVICE_RISK_SCORE,
+    L.CVE_TRACKER,
+    L.WINDOWS_SHARES_SMB,
+    L.RECON_PLUGINS,
+    L.PRIVATE_ENDPOINT_CHECK,
+    L.CLOUD_METADATA_PROBE,
+    L.DHCP_ROGUE_MONITOR,
 )
 
 # Values are theme-token NAMES resolved live via _state_color (below) so the
@@ -521,8 +531,15 @@ class SecurityOverviewPage(QWidget):
         dims: list[int] = []
         if self._port_scan_done and not port_scan_not_testable:
             dims.append(len(self._port_findings))
-        if self._store is not None:
+        # S7: store presence is data persistence, not proof the scan that
+        # produces it ever ran -- cve_lifecycle/cert_check can hold rows (or
+        # sit empty) regardless of whether CVE Lookup / TLS & Exposure have
+        # ever completed on this profile. Gate on the same scan registry the
+        # Scan Status card itself reads, exactly like the port/cred
+        # dimensions already do with their own *_scan_done flags.
+        if self._store is not None and registry.get(L.CVE_LOOKUP, {}).get("state") not in (None, "never"):
             dims.append(len(set(e.get("host", "") for e in self._cve_entries if e.get("host"))))
+        if self._store is not None and registry.get(L.TLS_EXPOSURE, {}).get("state") not in (None, "never"):
             dims.append(len(self._tls_issues))
         if self._cred_scan_done:
             dims.append(len(self._cred_flags))

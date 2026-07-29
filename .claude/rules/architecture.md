@@ -237,7 +237,7 @@ Port scans default to 2 h; CVE/TLS to 24 h; unknown labels use `_DEFAULT_FRESH_S
 
 **QSettings persistence** — key `scan_registry/state` (JSON). Restored on startup via `_restore_scan_registry()`; any entry stored as `"running"` is reset to `"never"` on restore (mid-scan interrupted by exit).
 
-**`_AUDIT_SCAN_LABELS`** (in `security_overview_page.py`) — 9-item tuple of all nav page labels shown in the Scan Status card rows: `"Port Scan (TCP)"`, `"Port Scan (UDP)"`, `"CVE Lookup"`, `"Threat Intel"`, `"TLS & Exposure"`, `"Login Test"`, `"OS Detection"`, `"Exposed to Internet"`, `"Full Device Discovery"`. These must exactly match the strings passed to `_nav_set_scan_state()` in `ScanResultMixin`.
+**`_AUDIT_SCAN_LABELS`** (in `security_overview_page.py`) — 16-item tuple of all nav page labels shown in the Scan Status card rows: `"Port Scan (TCP)"`, `"Port Scan (UDP)"`, `"CVE Lookup"`, `"Threat Intel"`, `"TLS & Exposure"`, `"Login Test"`, `"OS Detection"`, `"Exposed to Internet"`, `"Full Device Discovery"`, `"Device Risk Score"`, `"CVE Tracker"`, `"Windows Shares (SMB)"`, `"Recon Plugins"`, `"Private Endpoint Check"`, `"Cloud Metadata Probe"`, `"DHCP Rogue Monitor"`. These must exactly match the strings passed to `_nav_set_scan_state()` in `ScanResultMixin`; `modules/scan_guidance_audit.py`'s `AUDIT_CARD_PARITY` check (`python app.py --audit`) enforces the set stays reconciled against every registered audit page that actually reports scan state.
 
 **Security Scan panel** — `_SecurityScanPanel._TOOLS` (in `ui/widgets/overview_tile.py`) is a
 6-item checkbox list on the Overview page ("Threat Intel", "TLS & Exposure", "Device Risk
@@ -246,10 +246,17 @@ before clicking "Run". Selected labels emit via `run_clicked` → `overview_page
 `security_scan_requested` signal (wired in `ui/tabs.py`) → `dashboard.py._run_security_scans()`.
 
 **Security Audit Coordinator** — `dashboard.py._advance_security_audit()` pops labels one at a
-time from `_pending_security_tools` and dispatches by comparing against `NavLabel` enum members
-(`L.PORT_SCAN_TCP`, `L.EXPOSED_TO_INTERNET`) — only those two currently have working dispatch
-code; any other label falls through the "unrecognised label — skip silently" branch.
-`_security_audit_total` tracks progress for the Security Overview progress bar.
+time from `_pending_security_tools` and dispatches by comparing against `NavLabel` enum members.
+Six labels have working dispatch code — `L.PORT_SCAN_TCP`, `L.EXPOSED_TO_INTERNET`,
+`L.THREAT_INTEL`, `L.DEVICE_RISK_SCORE`, `L.CVE_LOOKUP`, `L.TLS_EXPOSURE` — matching
+`_SecurityScanPanel._TOOLS`'s 6-item list above 1:1; any other label falls through the
+"unrecognised label — skip silently" branch. Each branch either advances the queue itself or
+hands off to a downstream result handler that does (e.g. `scan_wiring.py::_on_syn_result()` for
+`PORT_SCAN_TCP`, `dashboard.py::_on_threat_intel_scan_complete/_error/_not_testable()` for
+`THREAT_INTEL`) — `modules/scan_guidance_audit.py`'s `AUDIT_QUEUE_TERMINATES` check enforces every
+branch reaches an advance call. There is no numeric progress bar for this coordinator — the
+status bar shows "Security audit complete — see Security Overview for findings." once the queue
+empties.
 
 ### Scan workers
 All network operations run in `workers/` (QThread subclasses). Emit `result_ready` and `error` signals. **Never** do blocking I/O on the main thread.

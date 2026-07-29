@@ -239,6 +239,14 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             lambda ip: (self._ensure_page("_connections_page").focus_on_ip(ip),
                         self._nav_rail_go_to(L.ACTIVE_CONNECTIONS))
         )
+        # RULE-SS1 / S1: the page already emits scan_complete/scan_error/
+        # scan_not_testable at the right points — nothing consumed them, so
+        # Threat Intel's Scan Status row always read "Never run" and the
+        # Security Audit queue silently stalled on it (see
+        # dashboard.py::_advance_security_audit / _on_threat_intel_scan_complete).
+        self._threat_intel_page.scan_complete.connect(self._on_threat_intel_scan_complete)
+        self._threat_intel_page.scan_error.connect(self._on_threat_intel_scan_error)
+        self._threat_intel_page.scan_not_testable.connect(self._on_threat_intel_scan_not_testable)
 
         from ui.pages.security_overview_page import SecurityOverviewPage
         self._security_overview_page = SecurityOverviewPage(store=self._store, parent=None)
@@ -247,6 +255,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
 
         from ui.pages.cve_page import CvePage
         self._cve_page = CvePage(self._store, parent=None)
+        # S6: CVE Tracker never reported scan state, so its Scan Status row
+        # read "Never run" forever even with tracked CVEs on screen.
+        self._cve_page.data_refreshed.connect(
+            lambda n: self._nav_set_scan_state(L.CVE_TRACKER, "fresh", verdict=f"{n} CVE(s) tracked")
+        )
         self._cve_page.navigate_to_inventory.connect(
             lambda ip: (self._nav_rail_go_to(L.INVENTORY_CHANGES), self._inventory_page.select_device(ip))
         )

@@ -36,10 +36,11 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.1.50"
+_WHATS_NEW_VERSION = "2.1.51"
 _WHATS_NEW_ENTRIES = [
-    ("Fixed device discovery returning nothing", "On some machines a disconnected Wi-Fi, Bluetooth, or virtual adapter's address could hijack which network got scanned, so a scan of a real, populated network came back completely empty with a blank Vendor column.  Fixed."),
-    ("Refreshed Store screenshots", "Updated the Devices and App Traffic screenshots in the Microsoft Store listing."),
+    ("Devices table blank on startup — fixed", "The Vendor and Risk columns could show blank right after launch, before you ran a scan. The startup cache-restore path now populates the table correctly."),
+    ("Window restore from tray — fixed", "Restoring a maximized window from the tray icon could come back small and stuck in the top-left corner instead of staying maximized. Fixed."),
+    ("Alert notifications — 7 fixes", "Several notification links pointed at the wrong page, the Home page's action guidance was getting cut off mid-sentence, and the security grade could be inaccurate in some cases. All fixed."),
 ]
 
 

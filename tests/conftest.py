@@ -117,6 +117,40 @@ def _preserve_real_theme():
 
 
 @pytest.fixture(scope="session", autouse=True)
+def _preserve_real_window_settings():
+    """Restore the developer's real NetSentinel.ini after the suite finishes.
+
+    Unlike the registry-backed theme setting above, ui.app_settings.settings_path()
+    resolves to a real FILE at the repo root (not frozen -> exe_dir = repo root),
+    so it CAN be sandboxed by snapshotting its bytes -- no registry redirect
+    limitation applies here.
+
+    Why this matters: tests/_lazy_pages_child.py, tests/_startup_minimised_child.py
+    and tests/_theme_switch_deferred_child.py each run subprocess children that
+    construct a real, never-shown, offscreen Dashboard and call dash.close(),
+    whose closeEvent() unconditionally calls save_settings() -- on the real
+    on-disk NetSentinel.ini if not redirected. That silently overwrote the
+    developer's actual saved window geometry with the degenerate rect a
+    never-shown widget reports (small, often off-screen-ish coordinates) on
+    every test-suite run -- confirmed live via an MD5 hash of the file before
+    and after. Those three files now redirect ui.app_settings.settings_path to
+    an isolated temp file themselves; this fixture is the session-level
+    backstop for any test (present or future) that does not.
+    """
+    from ui.app_settings import settings_path
+
+    path = settings_path()
+    original = path.read_bytes() if path.exists() else None
+    try:
+        yield
+    finally:
+        if original is None:
+            path.unlink(missing_ok=True)   # file did not exist before the run
+        else:
+            path.write_bytes(original)
+
+
+@pytest.fixture(scope="session", autouse=True)
 def qt_app():
     """Session-scoped QApplication — created once, lives until all tests finish."""
     try:

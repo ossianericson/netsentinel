@@ -122,3 +122,28 @@ def get_services(
             seen_names.add(name)
 
     return results
+
+
+# ── Expected local ports per device type (S2: NEW_OPEN_PORT suppression) ──────
+# Keyed by device_type (case-insensitive) -> port numbers that are normal,
+# expected local-network behaviour for that class of device -- not a
+# security-relevant "newly opened port" event. Distinct from
+# get_services()/service_map.json (cloud services, no port data): this is
+# local LAN discovery/casting/streaming-protocol ports, seen live on the
+# exact device classes generating NEW_OPEN_PORT noise (Google streaming
+# sticks, Chromecasts, a Samsung Smart TV).
+_EXPECTED_PORTS_BY_DEVICE_TYPE: dict[str, frozenset[int]] = {
+    "streaming stick": frozenset({8008, 8009, 8443, 1900, 49152}),  # Cast protocol + UPnP SSDP
+    "smart tv":         frozenset({80, 8080, 8001, 8002, 9080, 1900, 8443}),
+    "smart speaker":    frozenset({8008, 8009, 1900}),
+    "games console":    frozenset({80, 443, 3074}),
+}
+
+
+def is_expected_port(device_type: str, port: int) -> bool:
+    """True when *port* is normal, expected behaviour for this device_type
+    (e.g. UPnP SSDP on a streaming stick, 8443 on a Chromecast, or 80/8080
+    on a Smart TV's own web UI). Used to suppress NEW_OPEN_PORT noise for
+    device classes that legitimately advertise these ports as part of
+    normal operation."""
+    return port in _EXPECTED_PORTS_BY_DEVICE_TYPE.get((device_type or "").strip().lower(), frozenset())

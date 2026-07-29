@@ -88,6 +88,50 @@ def test_no_backlog_label_when_everything_fits(store):
     assert page._ac_ack_all_btn.text() == "✓ Acknowledge all"
 
 
+# ── Device name resolution (S4) ────────────────────────────────────────────────
+
+def _row_label_texts(page) -> list:
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QLabel
+    texts = []
+    for i in range(page._ac_alert_rows_lay.count()):
+        row_w = page._ac_alert_rows_lay.itemAt(i).widget()
+        for lbl in row_w.findChildren(QLabel):
+            if lbl.cursor().shape() == Qt.CursorShape.PointingHandCursor:
+                texts.append(lbl.text())
+    return texts
+
+
+def test_row_shows_the_device_name_not_the_bare_ip(store):
+    store.upsert_known_device("f8:7d:76:d1:2c:84", ip="192.168.68.51", hostname="Lovisas-ny-iphone")
+    store.record_alert_fired(
+        "New Open Port", "192.168.68.51", "WARNING",
+        "Port 8443/HTTPS Alternate opened on 192.168.68.51 since the last sweep.",
+    )
+    page = _make_page(store)
+
+    page.set_pending_alert_rows(store.get_unacked_alerts())
+
+    texts = _row_label_texts(page)
+    assert len(texts) == 1
+    assert "Lovisas-ny-iphone" in texts[0]
+    assert "192.168.68.51" not in texts[0]
+
+
+def test_row_falls_back_to_the_ip_when_no_device_name_is_known(store):
+    store.record_alert_fired(
+        "New Open Port", "192.168.68.99", "WARNING",
+        "Port 22 opened on 192.168.68.99 since the last sweep.",
+    )
+    page = _make_page(store)
+
+    page.set_pending_alert_rows(store.get_unacked_alerts())
+
+    texts = _row_label_texts(page)
+    assert len(texts) == 1
+    assert "192.168.68.99" in texts[0]
+
+
 # ── Acknowledge all ───────────────────────────────────────────────────────────
 
 def test_ack_all_clears_the_whole_backlog_not_just_the_visible_rows(store):

@@ -13,7 +13,9 @@ def test_import():
 def test_cta_for_rule_known_and_unknown():
     from modules.alert_engine_routing import cta_for_rule
     page, host = cta_for_rule("HOST_DOWN", "192.168.1.1")
-    assert page == "Inventory"
+    # S3 fix: HOST_DOWN used to point at the dead label "Inventory" — the
+    # real nav page is "Inventory Changes".
+    assert page == "Inventory Changes"
     assert host == "192.168.1.1"
 
     page, host = cta_for_rule("NOT_A_REAL_RULE", "192.168.1.1")

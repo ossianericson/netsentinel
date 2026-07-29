@@ -212,6 +212,7 @@ class CvePage(QWidget):
     navigate_to               = pyqtSignal(str)   # general cross-page navigation
     scan_requested            = pyqtSignal()      # emitted by empty-state CTA; wire to _start_full_scan
     lookup_threat_intel_for   = pyqtSignal(str)   # IP → navigate to Threat Intel + pre-filter
+    data_refreshed            = pyqtSignal(int)   # S6: emitted after _refresh() with tracked-CVE count
 
     def __init__(self, store: MetricStore, parent=None):
         super().__init__(parent)
@@ -421,6 +422,7 @@ class CvePage(QWidget):
         self._content_stack.setCurrentIndex(0 if not all_rows else 1)
         self._apply_filter(self._search_box.text())
         self._update_kpis()
+        self.data_refreshed.emit(len(all_rows))
 
     def _update_kpis(self) -> None:
         if self._store is None:

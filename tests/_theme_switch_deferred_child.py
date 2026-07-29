@@ -23,6 +23,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
 
+# Redirect settings_path() to an isolated temp file BEFORE any Dashboard is
+# constructed -- see tests/_lazy_pages_child.py's identical block for why:
+# dash.close() below runs the real closeEvent()/save_settings(), which would
+# otherwise overwrite the developer's real on-disk NetSentinel.ini with a
+# never-shown Dashboard's degenerate geometry on every test-suite run.
+import tempfile as _tempfile
+from ui import app_settings as _app_settings
+_TEST_SETTINGS_PATH = Path(_tempfile.mkdtemp()) / "NetSentinel_test.ini"
+_app_settings.settings_path = lambda: _TEST_SETTINGS_PATH
+
 _APP: QApplication | None = None
 
 

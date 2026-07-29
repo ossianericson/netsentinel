@@ -4,6 +4,19 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.51
+
+**Added**
+- `modules/scan_guidance_audit.py` — a 7-invariant audit harness (dead CTA labels, CTA table parity, scan-state wiring, Scan Status card parity, security-audit queue termination, alert-guidance render truncation, grade-dimension gating) wired into `app.py --audit`, guarding against the alert/scan-wiring bug class that produced 5 consecutive one-off fix releases (v2.1.46–v2.1.50)
+
+**Fixed**
+- Devices table showed a blank Vendor/Risk column on every startup, before any scan ran — `_restore_cached_scan()` populated `_m1_table` from cached data without disabling live sorting first, so Qt's default column-0 sort indicator resorted rows mid-populate and scattered Vendor/Risk onto the wrong rows. The startup cache-restore path now guards against this the same way the live-scan path already did
+- A window minimized while maximized and restored from the tray came back small and docked top-left instead of maximized — `AppHeaderMixin.show_main_window()` called `showNormal()` unconditionally on any minimized window, dropping the maximized state. Now checks `WindowMaximized` first
+- The test suite was silently overwriting the developer's real saved window geometry on every run — three subprocess-isolated Dashboard tests (`_lazy_pages_child.py`, `_startup_minimised_child.py`, `_theme_switch_deferred_child.py`) called `dash.close()`, whose `closeEvent()` writes to the real repo-root `NetSentinel.ini`. All three now redirect `settings_path` to an isolated temp file, plus a session-scoped `conftest.py` backstop that snapshots/restores the real ini around the whole suite
+- Resolved all 7 findings from the scan-guidance audit (Phase 2+3): Threat Intel now advances the Security Audit queue and reports scan state; 6 dead/wrong CTA targets fixed across `notif_alert_history.py` and a previously-undocumented duplicate table in `alert_drawer.py`; Home "Action needed" card no longer truncates guidance text at 50 chars; device-name resolution extended to IP-based lookup on all three alert render surfaces; port-sweep now distinguishes "unreachable" from "genuinely nothing open" and matches devices by MAC to survive DHCP lease reuse; CVE Tracker and DHCP Rogue Monitor now report scan state (Scan Status card reconciled 9→16 rows); security grade no longer counts CVE/TLS from store presence alone, gated on the scan registry instead
+
+---
+
 ### v2.1.50
 
 **Fixed**

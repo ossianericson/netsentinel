@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.device_detail_pane import _wire_close_icon
+from ui.device_labels import resolve_alert_message
 
 from ui import styles as _s
 
@@ -60,8 +61,18 @@ _RULE_NAME_CTA: dict[str, str] = {
 }
 
 
-def _cta_page_for_rule(rule_name: str) -> str | None:
-    """Return the nav label of the best page for this alert, or None."""
+def _cta_page_for_rule(rule_name: str, rule_type: str = "") -> str | None:
+    """Return the nav label of the best page for this alert, or None.
+
+    S3 fix: prefer the alert's own persisted rule_type against RULE_CTA (the
+    canonical, single-source-of-truth table) when present -- this table's
+    rule-name-substring matching is a legacy fallback for alerts fired before
+    rule_type was queried, or for a user-renamed rule with no reliable type."""
+    if rule_type:
+        from modules.alert_engine_routing import RULE_CTA
+        page = RULE_CTA.get(rule_type)
+        if page:
+            return str(page)
     lower = rule_name.lower()
     for pattern, page in _RULE_NAME_CTA.items():
         if pattern in lower:
@@ -721,9 +732,15 @@ class _NotifAlertHistoryMixin:
             else:
                 status = "Pending"
                 st_col = _s.AMBER
-            message = alert.get("message", "")
+            # S4: resolve the raw host at render time -- a name learned
+            # after this alert fired still corrects both columns (see
+            # ui/device_labels.py's docstring for why render-time, not
+            # fire-time).
+            host_raw  = alert.get("host", "")
+            host_disp = self._resolver.label_for_host(host_raw) if host_raw else ""
+            message   = resolve_alert_message(self._resolver, host_raw, alert.get("message", ""))
             for col, val in enumerate(
-                [ts_str, rule_disp, alert.get("host", ""), message, sev, status]
+                [ts_str, rule_disp, host_disp, message, sev, status]
             ):
                 it = QTableWidgetItem(str(val))
                 it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -795,8 +812,9 @@ class _NotifAlertHistoryMixin:
         if not isinstance(alert, dict):
             return
         rule = alert.get("rule_name", "")
+        rule_type = alert.get("rule_type", "")
         host = alert.get("host") or alert.get("ip") or ""
-        target = _cta_page_for_rule(rule)
+        target = _cta_page_for_rule(rule, rule_type)
         if target:
             self.navigate_to.emit(target)
             if host and target in ("Inventory Changes", "Devices"):

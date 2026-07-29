@@ -88,6 +88,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     def __init__(self, store=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._store = store
+        from ui.device_labels import DeviceLabelResolver
+        self._resolver = DeviceLabelResolver(store=store)
         self._alert_count = 0
         self._device_count: int = 0
         self._signals_connected: bool = False

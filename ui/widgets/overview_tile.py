@@ -1816,10 +1816,15 @@ class _ScanStatusTile(_BaseTile):
         except Exception:
             registry = {}
 
+        # S6: kept in sync with security_overview_page._AUDIT_SCAN_LABELS —
+        # see tests/test_claims_audit_ratchet.py::test_rollup_lists_match_audit_labels.
         _SEC = [
             "Port Scan (TCP)", "Port Scan (UDP)", "CVE Lookup", "OS Detection",
             "Login Test", "Threat Intel", "TLS & Exposure",
             "Exposed to Internet", "Full Device Discovery",
+            "Device Risk Score", "CVE Tracker", "Windows Shares (SMB)",
+            "Recon Plugins", "Private Endpoint Check", "Cloud Metadata Probe",
+            "DHCP Rogue Monitor",
         ]
         _sec_ts, _sec_state = 0.0, "never"
         for lbl in _SEC:

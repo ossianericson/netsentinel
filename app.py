@@ -211,19 +211,13 @@ def _smoke_test() -> None:
     sys.exit(0)
 
 
-def _audit_alerts() -> None:
-    """
-    Alert/notification configuration self-test.
-
-    Usage:  python app.py --audit-alerts [--json]
-    Exits 0 when every finding passes, 1 otherwise. No display required.
-    This is a DIAGNOSTIC, not a CI gate — it is expected to exit 1 until
-    every phase of the strict-opt-in-alerting plan has landed.
-    """
+def _gather_alert_audit_findings() -> list:
+    """Build the alert/notification-config findings list shared by
+    --audit-alerts and --audit."""
     from PyQt6.QtCore import QSettings
     from modules.alert_audit import (
         audit_alert_config, audit_static_coverage, audit_source_tree,
-        channels_from_settings, format_findings,
+        channels_from_settings,
     )
     from modules.alert_suppressor import _default_rules, EscalationPolicy
     from modules.alert_sensitivity import apply_sensitivity, DEFAULT_SENSITIVITY
@@ -259,12 +253,46 @@ def _audit_alerts() -> None:
     from pathlib import Path
     repo_root = Path(__file__).resolve().parent
 
-    findings = (
+    return (
         audit_alert_config(_settings_get, rules, channels, escalation_policies)
         + audit_static_coverage()
         + audit_source_tree(repo_root)
     )
 
+
+def _audit_alerts() -> None:
+    """
+    Alert/notification configuration self-test.
+
+    Usage:  python app.py --audit-alerts [--json]
+    Exits 0 when every finding passes, 1 otherwise. No display required.
+    This is a DIAGNOSTIC, not a CI gate — it is expected to exit 1 until
+    every phase of the strict-opt-in-alerting plan has landed.
+    """
+    from modules.alert_audit import format_findings
+
+    findings = _gather_alert_audit_findings()
+    as_json = "--json" in sys.argv
+    print(format_findings(findings, as_json=as_json))
+    sys.exit(0 if all(f.ok for f in findings) else 1)
+
+
+def _audit() -> None:
+    """
+    Combined alert-config + scan-guidance self-test.
+
+    Usage:  python app.py --audit [--json]
+    Runs everything --audit-alerts does, plus modules.scan_guidance_audit's
+    CTA-routing / scan-state-wiring / guidance-render / grade-gating
+    invariants. Exits 0 when every finding passes, 1 otherwise. This is a
+    DIAGNOSTIC, not a CI gate.
+    """
+    from pathlib import Path
+    from modules.alert_audit import format_findings
+    from modules.scan_guidance_audit import run_all as _run_scan_guidance_audit
+
+    repo_root = Path(__file__).resolve().parent
+    findings = _gather_alert_audit_findings() + _run_scan_guidance_audit(repo_root)
     as_json = "--json" in sys.argv
     print(format_findings(findings, as_json=as_json))
     sys.exit(0 if all(f.ok for f in findings) else 1)
@@ -1056,7 +1084,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.50")
+    app.setApplicationVersion("2.1.51")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1207,7 +1235,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.50")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.51")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -2081,6 +2109,8 @@ if __name__ == "__main__":
         _smoke_test()
     if "--audit-alerts" in sys.argv:
         _audit_alerts()
+    if "--audit" in sys.argv:
+        _audit()
     if "--headless" in sys.argv:
         _headless()
     try:

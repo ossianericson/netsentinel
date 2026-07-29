@@ -21,6 +21,7 @@ import time
 from typing import Dict, List, Optional
 
 from modules.alert_types import AlertFired
+from modules.device_classifier import is_randomized_mac
 
 # GRADE_REGRESSION — worse rank = lower number
 _GRADE_RANK = {"F": 0, "D": 1, "C": 2, "B": 3, "A": 4}
@@ -462,6 +463,12 @@ class _AlertChecksMixin:
 
             for mac, count in churn_counts.items():
                 if rule.host and rule.host != mac:
+                    continue
+                if is_randomized_mac(mac):
+                    # S4: a locally-administered/privacy-randomised MAC
+                    # churning IPs is normal phone/OS behaviour (the OS
+                    # itself rotates the address), not a missing DHCP
+                    # reservation -- skip rather than alert on noise.
                     continue
                 alert = self._fire_if_cooled(
                     rule, mac, now,

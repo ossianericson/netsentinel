@@ -177,6 +177,7 @@ hiddenimports: list = [
     "modules.notification_channels",
     "modules.notification_router",
     "modules.alert_audit",
+    "modules.scan_guidance_audit",
     "modules.alert_remediation",
     "modules.nspkg",
     "modules.os_fingerprint",

@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from modules.metric_store import MetricStore
 
@@ -33,6 +33,11 @@ class DeviceEntry:
     open_ports: List[int]        = field(default_factory=list)
     vendor:     str              = ""
     device_type: str             = ""
+    # S2: True when this sweep could not confirm the device was actually up
+    # (no ping reply and zero open ports) -- an absent measurement, not a
+    # confirmed "nothing open." Consumers must not treat this entry's
+    # open_ports as ground truth for diffing.
+    not_testable: bool           = False
 
     def to_dict(self) -> dict:
         return {
@@ -42,6 +47,7 @@ class DeviceEntry:
             "open_ports":  sorted(self.open_ports),
             "vendor":      self.vendor,
             "device_type": self.device_type,
+            "not_testable": self.not_testable,
         }
 
     @classmethod
@@ -53,6 +59,7 @@ class DeviceEntry:
             open_ports=d.get("open_ports", []),
             vendor=d.get("vendor", ""),
             device_type=d.get("device_type", ""),
+            not_testable=bool(d.get("not_testable", False)),
         )
 
 
@@ -165,6 +172,7 @@ def build_snapshot_from_scan(
             open_ports=sorted(int(p) for p in ports if str(p).isdigit() or isinstance(p, int)),
             vendor=d.get("vendor", ""),
             device_type=d.get("device_type", ""),
+            not_testable=bool(d.get("not_testable", False)),
         ))
 
     return ConfigSnapshot(
@@ -225,8 +233,14 @@ def diff_snapshots(old: ConfigSnapshot, new: ConfigSnapshot) -> SnapshotDiff:
     """
     Compute a SnapshotDiff between two ConfigSnapshot objects.
 
-    Compares devices by IP address, then compares ports and SNMP values.
-    Field changes (hostname, MAC, vendor) are also tracked.
+    Devices are added/removed by IP presence (an address appearing or
+    disappearing is real signal even under DHCP churn), but port/field
+    changes are matched by MAC first, falling back to IP only when a MAC is
+    unavailable on either side (S2). An IP is a DHCP lease, not a device
+    identity -- matching by IP alone attributes a reused lease's port/field
+    changes to whichever *different* physical device now holds that
+    address (live example: a lease reuse read as "new ports on
+    192.168.68.55" for a device that never actually changed).
     """
     diff = SnapshotDiff(old_id=old.id, new_id=new.id)
 
@@ -239,9 +253,29 @@ def diff_snapshots(old: ConfigSnapshot, new: ConfigSnapshot) -> SnapshotDiff:
     diff.added_devices   = sorted(new_ips - old_ips)
     diff.removed_devices = sorted(old_ips - new_ips)
 
+    old_by_mac: Dict[str, DeviceEntry] = {d.mac: d for d in old.devices if d.mac}
+    new_by_mac: Dict[str, DeviceEntry] = {d.mac: d for d in new.devices if d.mac}
+
+    pairs: List[Tuple[DeviceEntry, DeviceEntry]] = []
+    matched_new_ips: set = set()
+    for mac in set(old_by_mac) & set(new_by_mac):
+        od, nd = old_by_mac[mac], new_by_mac[mac]
+        pairs.append((od, nd))
+        matched_new_ips.add(nd.ip)
     for ip in old_ips & new_ips:
-        od = old_by_ip[ip]
-        nd = new_by_ip[ip]
+        if ip in matched_new_ips:
+            continue  # already matched by MAC above
+        od, nd = old_by_ip[ip], new_by_ip[ip]
+        if od.mac and nd.mac and od.mac != nd.mac:
+            continue  # different MACs sharing this IP -- a reused lease, not the same device
+        pairs.append((od, nd))
+
+    for od, nd in pairs:
+        if od.not_testable or nd.not_testable:
+            # S2: an absent measurement on either side is not evidence of a
+            # port or field change -- skip rather than diff against it.
+            continue
+        ip = nd.ip
 
         # Port diff
         old_ports = set(od.open_ports)

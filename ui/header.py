@@ -451,7 +451,16 @@ class AppHeaderMixin:
                 from ui.app_settings import fix_maximized_restore_rect
                 fix_maximized_restore_rect(self, *rect)
         elif self.isMinimized():
-            self.showNormal()
+            # Minimizing a maximized window keeps BOTH the WindowMinimized and
+            # WindowMaximized bits set (confirmed live) -- showNormal() would
+            # unconditionally drop the maximized state and restore to the last
+            # normal geometry instead, silently un-maximizing the window every
+            # time it is minimized (auto-hidden to tray) and restored.
+            from PyQt6.QtCore import Qt
+            if self.windowState() & Qt.WindowState.WindowMaximized:
+                self.showMaximized()
+            else:
+                self.showNormal()
         else:
             self.show()
 

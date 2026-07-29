@@ -29,6 +29,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 UI_DIR = ROOT / "ui"
+# S3 root cause: this net used to walk UI_DIR only, so a dead nav label
+# referenced from modules/ (every alert deep-link lives in
+# modules/alert_engine_routing.py) or workers/ was invisible to it. Widened
+# so the whole app, not just ui/, is covered.
+LITERAL_SCAN_DIRS = (UI_DIR, ROOT / "modules", ROOT / "workers")
 sys.path.insert(0, str(ROOT))
 
 from ui.nav.labels import NavLabel, NavSection, KNOWN_LABELS  # noqa: E402 — needs ROOT on path
@@ -52,28 +57,29 @@ def _iter_nav_literal_calls():
     ``router_kind`` is the function/attribute name: a member of ``_GOTO_FUNCS``,
     or ``"navigate_to"`` / ``"navigate_requested"`` for the signal emits.
     """
-    for path in sorted(UI_DIR.rglob("*.py")):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8").lstrip("﻿"))
-        except SyntaxError:
-            continue  # tolerate a file mid-edit; other gates cover syntax
-        rel = str(path.relative_to(ROOT))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not node.args:
-                continue
-            a0 = node.args[0]
-            if not (isinstance(a0, ast.Constant) and isinstance(a0.value, str)):
-                continue
-            fn = node.func
-            if isinstance(fn, ast.Attribute) and fn.attr in _GOTO_FUNCS:
-                yield rel, node.lineno, fn.attr, a0.value
-            elif (
-                isinstance(fn, ast.Attribute)
-                and fn.attr == "emit"
-                and isinstance(fn.value, ast.Attribute)
-                and fn.value.attr in ("navigate_to", "navigate_requested")
-            ):
-                yield rel, node.lineno, fn.value.attr, a0.value
+    for scan_dir in LITERAL_SCAN_DIRS:
+        for path in sorted(scan_dir.rglob("*.py")):
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8").lstrip("﻿"))
+            except SyntaxError:
+                continue  # tolerate a file mid-edit; other gates cover syntax
+            rel = str(path.relative_to(ROOT))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not node.args:
+                    continue
+                a0 = node.args[0]
+                if not (isinstance(a0, ast.Constant) and isinstance(a0.value, str)):
+                    continue
+                fn = node.func
+                if isinstance(fn, ast.Attribute) and fn.attr in _GOTO_FUNCS:
+                    yield rel, node.lineno, fn.attr, a0.value
+                elif (
+                    isinstance(fn, ast.Attribute)
+                    and fn.attr == "emit"
+                    and isinstance(fn.value, ast.Attribute)
+                    and fn.value.attr in ("navigate_to", "navigate_requested")
+                ):
+                    yield rel, node.lineno, fn.value.attr, a0.value
 
 
 def _build_pro_nav_body() -> str:

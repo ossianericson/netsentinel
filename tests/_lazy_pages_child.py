@@ -31,6 +31,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication, QWidget
 
+# Redirect settings_path() to an isolated temp file BEFORE any Dashboard is
+# constructed. Every dash.close() below runs the real closeEvent(), which
+# unconditionally calls save_settings() -- on the real repo-root NetSentinel.ini
+# if this were not redirected, silently overwriting the developer's actual
+# window geometry with whatever a never-shown, offscreen-constructed Dashboard
+# reports (its degenerate normalGeometry(), often small and off-screen-ish).
+# Confirmed live: running just this file flips a real maximized/1500x900
+# saved state to normal_x=-320/normal_y=-50/900x800 -- the exact "window keeps
+# coming back small, not by me" symptom, reproducing on every test-suite run.
+import tempfile as _tempfile
+from ui import app_settings as _app_settings
+_TEST_SETTINGS_PATH = Path(_tempfile.mkdtemp()) / "NetSentinel_test.ini"
+_app_settings.settings_path = lambda: _TEST_SETTINGS_PATH
+
 from ui.nav.lazy_page import _LazyPageHost
 
 

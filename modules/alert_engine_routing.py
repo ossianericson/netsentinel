@@ -10,35 +10,46 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from modules.speed_drop_detector import RESTART_CHECKLIST
+from ui.nav.labels import NavLabel
 
 # ── CTA routing — maps rule_type → nav_label ──────────────────────────────────
+#
+# Values are NavLabel members, not bare strings (S3 fix): a typo'd or renamed
+# label used to silently no-op the "Fix this" button with no error (RULE-NAV3)
+# -- HOST_DOWN/HOST_DEGRADED/DEVICE_GONE pointed at the dead label "Inventory"
+# (real: "Inventory Changes"), CERT_EXPIRY/CERT_EXPIRED at "TLS & Cert Monitor"
+# (real: "TLS & Exposure"), and NEW_CVE at "CVE Lookup" -- but NEW_CVE fires
+# from evaluate_cve_recheck_checks() for a CVE gained by an already-*tracked*
+# (host, service) pair, so "CVE Tracker" (the lifecycle page) is where that
+# finding actually lives, not the on-demand Lookup scan. NavLabel members ARE
+# str instances, so every existing str-typed consumer keeps working unchanged.
 
 RULE_CTA: Dict[str, str] = {
-    "RTT_THRESHOLD":  "DNS & Stability",
-    "LOSS_THRESHOLD": "DNS & Stability",
-    "HOST_DOWN":      "Inventory",
-    "HOST_DEGRADED":  "Inventory",
-    "NEW_DEVICE":     "Devices",
-    "DEVICE_GONE":    "Inventory",
-    "CERT_EXPIRY":    "TLS & Cert Monitor",
-    "CERT_EXPIRED":   "TLS & Cert Monitor",
-    "FLAP":           "Trend Forecasts",
-    "SERVICE_DOWN":   "Service Heartbeat",
-    "BASELINE_DROP":  "Speed Test",
-    "JITTER_HIGH":        "Network Logger",
-    "MESH_DEGRADED":      "Hardware",
-    "MODEM_SIGNAL_DROP":  "Hardware",
-    "GRADE_REGRESSION":   "Network Grade",
-    "IP_CHURN":           "Devices",
-    "RTT_ANOMALY":        "DNS & Stability",
-    "IOT_BEHAVIOR":       "IoT Behaviour",
-    "TREND_FORECAST":     "Trend Forecasts",
-    "NEW_OPEN_PORT":      "Devices",
-    "NEW_CVE":            "CVE Lookup",
-    "NEW_EXPOSURE":       "Exposed to Internet",
-    "ARP_SPOOF":          "ARP Spoof Watch",
-    "ROGUE_DHCP":         "DHCP Rogue Monitor",
-    "CONFIG_DRIFT":       "Config Snapshots",
+    "RTT_THRESHOLD":  NavLabel.DNS_STABILITY,
+    "LOSS_THRESHOLD": NavLabel.DNS_STABILITY,
+    "HOST_DOWN":      NavLabel.INVENTORY_CHANGES,
+    "HOST_DEGRADED":  NavLabel.INVENTORY_CHANGES,
+    "NEW_DEVICE":     NavLabel.DEVICES,
+    "DEVICE_GONE":    NavLabel.INVENTORY_CHANGES,
+    "CERT_EXPIRY":    NavLabel.TLS_EXPOSURE,
+    "CERT_EXPIRED":   NavLabel.TLS_EXPOSURE,
+    "FLAP":           NavLabel.TREND_FORECASTS,
+    "SERVICE_DOWN":   NavLabel.SERVICE_HEARTBEAT,
+    "BASELINE_DROP":  NavLabel.SPEED_TEST,
+    "JITTER_HIGH":        NavLabel.NETWORK_LOGGER,
+    "MESH_DEGRADED":      NavLabel.HARDWARE,
+    "MODEM_SIGNAL_DROP":  NavLabel.HARDWARE,
+    "GRADE_REGRESSION":   NavLabel.NETWORK_GRADE,
+    "IP_CHURN":           NavLabel.DEVICES,
+    "RTT_ANOMALY":        NavLabel.DNS_STABILITY,
+    "IOT_BEHAVIOR":       NavLabel.IOT_BEHAVIOUR,
+    "TREND_FORECAST":     NavLabel.TREND_FORECASTS,
+    "NEW_OPEN_PORT":      NavLabel.DEVICES,
+    "NEW_CVE":            NavLabel.CVE_TRACKER,
+    "NEW_EXPOSURE":       NavLabel.EXPOSED_TO_INTERNET,
+    "ARP_SPOOF":          NavLabel.ARP_SPOOF_WATCH,
+    "ROGUE_DHCP":         NavLabel.DHCP_ROGUE_MONITOR,
+    "CONFIG_DRIFT":       NavLabel.CONFIG_SNAPSHOTS,
 }
 
 

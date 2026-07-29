@@ -32,8 +32,11 @@ Resolution order
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Dict, Optional
+
+_MAC_RE = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
 
 #: Store/registry values that carry no more information than the MAC itself.
 #: `known_device.vendor` is literally the string "Unknown" for an unresolvable
@@ -69,7 +72,8 @@ class DeviceLabelResolver:
         self._store = store
         self._ttl_s = ttl_s
         self._label_map: Dict[str, str] = {}
-        self._known: Dict[str, str] = {}      # mac -> name derived from known_device
+        self._known: Dict[str, str] = {}         # mac -> name derived from known_device
+        self._known_by_ip: Dict[str, str] = {}   # ip -> name derived from known_device
         self._known_read_at = 0.0
         self._known_loaded = False
         self._resolved: Dict[str, str] = {}   # mac -> final answer (memoised)
@@ -91,6 +95,7 @@ class DeviceLabelResolver:
         """Drop every cached answer; the next lookup re-resolves from scratch."""
         self._resolved.clear()
         self._known.clear()
+        self._known_by_ip.clear()
         self._known_loaded = False
         self._known_read_at = 0.0
 
@@ -120,6 +125,26 @@ class DeviceLabelResolver:
         if resolved and resolved != key:
             return resolved
         return snapshot_label or resolved or normalise_mac(mac)
+
+    def label_for_host(self, host: Optional[str]) -> str:
+        """Best display name for *host*, which may be a MAC or an IP address.
+
+        Alert surfaces persist `host` as whichever the firing rule used --
+        most rule types key by IP, IP_CHURN keys by MAC. A MAC-looking host
+        goes through the normal MAC resolution path; an IP is looked up
+        directly against known_device.ip. Falls back to *host* unchanged
+        (never the MAC/IP-shaped placeholder a fed-map lookup could produce,
+        since there is no fed map for a bare IP)."""
+        if not host:
+            return ""
+        host = str(host).strip()
+        if _MAC_RE.match(host.lower().replace("-", ":")):
+            return self.label_for(host)
+        self._ensure_known()
+        name = self._known_by_ip.get(host)
+        if not _is_placeholder(name):
+            return str(name)
+        return host
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
@@ -154,16 +179,24 @@ class DeviceLabelResolver:
         except Exception:
             return  # non-fatal — DB locked/unavailable; fall through to OUI/MAC
         names: Dict[str, str] = {}
+        names_by_ip: Dict[str, str] = {}
         for mac, kd in devices.items():
             key = normalise_mac(mac)
             if not key:
                 continue
+            resolved_name = None
             for attr in ("custom_name", "hostname", "vendor"):
                 value = getattr(kd, attr, None) if not isinstance(kd, dict) else kd.get(attr)
                 if not _is_placeholder(value):
-                    names[key] = str(value).strip()
+                    resolved_name = str(value).strip()
                     break
+            if resolved_name:
+                names[key] = resolved_name
+                ip = getattr(kd, "ip", None) if not isinstance(kd, dict) else kd.get("ip")
+                if ip:
+                    names_by_ip[str(ip).strip()] = resolved_name
         self._known = names
+        self._known_by_ip = names_by_ip
 
     @staticmethod
     def _lookup_oui(key: str) -> Optional[str]:
@@ -178,3 +211,21 @@ class DeviceLabelResolver:
             return lookup_vendor(key, allow_online=False)
         except Exception:
             return None  # non-fatal — registry missing or malformed MAC
+
+
+def resolve_alert_message(resolver: "DeviceLabelResolver", host: Optional[str], message: str) -> str:
+    """Replace a bare host token embedded in an alert message with its
+    resolved device name (S4).
+
+    Every alert bakes the raw host straight into `message` at fire time
+    ("Port 8443 opened on 192.168.68.51..."), and a device name learned
+    later never corrected it. Resolving here at render time, rather than at
+    fire time, means a name learned after the alert fired still fixes it —
+    the same lesson this module's own docstring records for App Traffic /
+    Live Bandwidth / Timeline."""
+    if not host or not message or host not in message:
+        return message
+    name = resolver.label_for_host(host)
+    if name and name != host:
+        return message.replace(host, name)
+    return message

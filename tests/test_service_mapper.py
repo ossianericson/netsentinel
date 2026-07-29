@@ -197,3 +197,40 @@ def test_mobile_phone_non_apple_no_icloud():
     result = get_services(device_type="Mobile Phone", vendor="Samsung Electronics")
     names = [s.name for s in result]
     assert "iCloud" not in names
+
+
+# ── is_expected_port (S2 #3) ────────────────────────────────────────────────
+
+def test_upnp_ssdp_expected_on_streaming_stick():
+    from modules.service_mapper import is_expected_port
+    assert is_expected_port("Streaming Stick", 49152) is True
+
+
+def test_cast_port_expected_on_streaming_stick():
+    from modules.service_mapper import is_expected_port
+    assert is_expected_port("Streaming Stick", 8443) is True
+
+
+def test_http_admin_ui_expected_on_smart_tv():
+    from modules.service_mapper import is_expected_port
+    assert is_expected_port("Smart TV", 8080) is True
+
+
+def test_unrelated_port_not_expected_on_streaming_stick():
+    from modules.service_mapper import is_expected_port
+    assert is_expected_port("Streaming Stick", 22) is False
+
+
+def test_unknown_device_type_expects_nothing():
+    from modules.service_mapper import is_expected_port
+    assert is_expected_port("Unknown Device", 49152) is False
+
+
+def test_device_type_match_is_case_insensitive():
+    from modules.service_mapper import is_expected_port
+    assert is_expected_port("streaming stick", 49152) is True
+
+
+def test_empty_device_type_expects_nothing():
+    from modules.service_mapper import is_expected_port
+    assert is_expected_port("", 49152) is False

@@ -57,6 +57,7 @@ class _Stub:
         self._m1_table = SimpleNamespace(
             setRowCount=lambda *_a: None,
             setColumnHidden=lambda *_a: None,
+            setSortingEnabled=lambda *_a: None,
         )
         self._m1_status = _WidgetStub(
             setText=lambda *_a: None, setStyleSheet=lambda *_a: None,
@@ -189,3 +190,94 @@ def test_inventory_gets_map_cache_data_on_startup(tmp_path, monkeypatch):
     assert d.get("display_state") in ("cached", "pinned", "stale"), (
         "display_state must be injected so Inventory freshness dots work"
     )
+
+
+class _StubRealTable:
+    """Like _Stub, but _m1_table is a REAL QTableWidget built the same way
+    ui/tabs_scan.py builds the real one (via _table() + setSortingEnabled(True)
+    + setSortIndicatorShown(True), with columns 6/7 hidden) -- not a no-op
+    mock. That exact construction sequence is what gives the header view an
+    active default sort indicator (column 0) with no explicit sortByColumn()
+    call anywhere, which is what let this bug through every other test in
+    this file: a bare QTableWidget() with setSortingEnabled(True) alone does
+    NOT reproduce it -- confirmed live, this construction does.
+    """
+
+    _restore_cached_scan = ScanResultMixin._restore_cached_scan
+
+    def __init__(self, store):
+        from ui.tabs_helpers import _table
+
+        self._store = store
+        self._m1_table = _table([
+            "IP Address", "Hostname", "MAC Address", "Vendor", "Risk",
+            "Device Type", "Node", "Band", "Verdict",
+        ])
+        self._m1_table.setColumnHidden(6, True)
+        self._m1_table.setColumnHidden(7, True)
+        self._m1_table.setSortingEnabled(True)
+        self._m1_table.horizontalHeader().setSortIndicatorShown(True)
+        self._m1_status = _WidgetStub(setText=lambda *_a: None, setStyleSheet=lambda *_a: None)
+        self._network_map_page = _NetworkMapStub()
+
+    def _cached_scan_age_str(self, _store) -> str:
+        return "2 hours ago"
+
+
+def test_vendor_column_survives_live_resort_during_cache_restore(tmp_path, monkeypatch):
+    """Regression: Vendor (and every other non-IP column) must not go blank
+    when _m1_table has its real sortingEnabled=True + default column-0 sort
+    active during _restore_cached_scan()'s row-insertion loop.
+
+    Mechanism: _add_row() inserts a row then sets its cells one column at a
+    time. With live sorting active, QTableWidget re-sorts the view as soon as
+    column 0 (IP) is written -- before the later columns (Vendor, Risk, ...)
+    are set -- so those writes land on whatever row is now at the original
+    index, not the row they were meant for. ui/scan_wiring.py's
+    _m1_populate_device_table() already guards this exact mechanism with
+    setSortingEnabled(False)/(True) around its own insertion loop (see the
+    comment at its top); _restore_cached_scan() must do the same.
+
+    IPs are chosen so lexicographic (string) sort order differs from
+    insertion order, guaranteeing at least one live re-sort mid-loop.
+    """
+    from modules.network_map_cache import save_render_cache
+    monkeypatch.setattr("modules.utils.get_app_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("modules.network_map_cache.get_app_data_dir", lambda: tmp_path)
+
+    ips_in_insertion_order = ["192.168.1.9", "192.168.1.2", "192.168.1.5"]
+    devices = [
+        {"ip": ip, "mac": f"aa:bb:cc:dd:ee:{i:02d}", "hostname": f"host-{i}",
+         "vendor": f"Vendor-{i}", "device_type": "Workstation", "risk_level": "CLEAN"}
+        for i, ip in enumerate(ips_in_insertion_order)
+    ]
+    save_render_cache(
+        devices=devices,
+        gateway_ip="192.168.1.1", gateway_mac="aa:bb:cc:dd:ee:01",
+        modem_data=None, edges=None,
+    )
+
+    known = {d["mac"]: SimpleNamespace(
+        ip=d["ip"], custom_name="", hostname=d["hostname"], mac=d["mac"],
+        vendor=d["vendor"], last_seen=10_000_000_000, is_pinned=True,
+        device_type=d["device_type"], inferred_role="client", scan_count=1,
+        ip_stability=1.0,
+    ) for d in devices}
+    stub = _StubRealTable(_fake_store(known))
+
+    stub._restore_cached_scan()
+
+    table = stub._m1_table
+    assert table.rowCount() == len(devices), "all cached devices must produce a row"
+    by_ip = {}
+    for row in range(table.rowCount()):
+        ip_item = table.item(row, 0)
+        vendor_item = table.item(row, 3)
+        by_ip[ip_item.text() if ip_item else None] = (
+            vendor_item.text() if vendor_item else None
+        )
+    for d in devices:
+        assert by_ip.get(d["ip"]) == d["vendor"], (
+            f"expected vendor {d['vendor']!r} for {d['ip']}, got {by_ip.get(d['ip'])!r} "
+            f"-- full table: {by_ip}"
+        )

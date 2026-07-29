@@ -1564,6 +1564,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # MAC, vendor, device_type, risk_level, mesh_unit/band) over the DB
         # reconstruction which may have NULL fields for unresolved devices.
         _m1_src = _map_cache["devices"] if _map_cache else devices
+        # Sorting must be off while inserting: _m1_table is built with
+        # setSortingEnabled(True) and Qt defaults its sort indicator to column 0
+        # with no explicit sortByColumn() call anywhere before this runs, so each
+        # _add_row() would live-resort the view after its IP (col 0) write lands
+        # -- before the row's later columns are set -- scattering Vendor/Risk/etc
+        # onto whatever row the resort left at that index (same mechanism
+        # _m1_populate_device_table() already guards below).
+        self._m1_table.setSortingEnabled(False)
         self._m1_table.setRowCount(0)
         _has_mesh = False
         for d in _m1_src:
@@ -1580,6 +1588,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 _has_mesh = True
             _add_row(self._m1_table,
                      [_ip, _hn or "—", _mc, _vn, _rl, _dt, _mu, _mb, ""], _rl)
+        self._m1_table.setSortingEnabled(True)
         if _has_mesh:
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)

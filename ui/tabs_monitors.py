@@ -24,6 +24,7 @@ from ui.npcap_banner import NpcapMissingBanner
 from ui import styles as _s
 from ui.tabs_helpers import _empty_state_widget, _table
 from ui.monitor_state import _color_for_level
+from ui.nav.labels import NavLabel as L
 
 
 class _MonitorTabsMixin:
@@ -220,13 +221,24 @@ class _MonitorTabsMixin:
         self._dhcp_worker.offer_found.connect(self._on_dhcp_offer)
         self._dhcp_worker.result.connect(lambda r: self._dhcp_status.setText(r.plain_verdict), Qt.ConnectionType.QueuedConnection)
         self._dhcp_worker.result.connect(self._on_dhcp_scan_result, Qt.ConnectionType.QueuedConnection)
+        # S6: this monitor never reported scan state, so its Scan Status row
+        # (and DHCP_ROGUE_MONITOR ∈ SECURITY_RELEVANT_RULE_TYPES's own audit
+        # page) read "Never run" forever even after a real cycle completed.
+        self._dhcp_worker.result.connect(
+            lambda r: self._nav_set_scan_state(L.DHCP_ROGUE_MONITOR, "fresh", verdict=r.plain_verdict),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._dhcp_worker.status.connect(self._dhcp_status.setText)
         self._dhcp_worker.error.connect(lambda e: self._dhcp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._dhcp_worker.error.connect(
+            lambda e: self._nav_set_scan_state(L.DHCP_ROGUE_MONITOR, "error", error=e),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._dhcp_worker.finished.connect(self._push_monitor_pills)
         self._dhcp_worker.start()
         self._dhcp_status.setText("DHCP discover sent — listening for offers…")
         self._push_monitor_pills()
-        self._set_flyout_dot("DHCP Rogue Monitor", _s.GREEN)
+        self._nav_set_scan_state(L.DHCP_ROGUE_MONITOR, "running")
 
     @pyqtSlot(object)
     def _on_dhcp_offer(self, offer):

@@ -59,6 +59,8 @@ class NotificationsPage(
         self.setObjectName("contentArea")
         self._router = router
         self._store  = None
+        from ui.device_labels import DeviceLabelResolver
+        self._resolver = DeviceLabelResolver(store=None)
         self._alert_engine = None
         self._rule_checkboxes: dict = {}
         self._test_labels:     dict = {}
@@ -286,6 +288,7 @@ class NotificationsPage(
 
     def set_store(self, store) -> None:
         self._store = store
+        self._resolver.set_store(store)
         if hasattr(self, "_alert_drawer"):
             self._alert_drawer.set_store(store)
 

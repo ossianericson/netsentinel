@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.device_detail_pane import _wire_close_icon
+from ui.device_labels import resolve_alert_message
 
 from ui import styles as _s
 from ui.styles import (
@@ -94,7 +95,16 @@ def _get_sublabel(alert: dict) -> str:
     return ""
 
 
-def _rule_to_page(rule: str) -> str:
+def _rule_to_page(rule: str, rule_type: str = "") -> str:
+    """S3 fix: prefer the alert's own persisted rule_type against
+    modules.alert_engine_routing.RULE_CTA (the canonical table) when present.
+    _RULE_PAGE's rule-name-substring matching is a legacy fallback for
+    alerts fired before rule_type was queried, or a user-renamed rule."""
+    if rule_type:
+        from modules.alert_engine_routing import RULE_CTA
+        page = RULE_CTA.get(rule_type)
+        if page:
+            return str(page)
     rule_upper = rule.upper()
     for key, page in _RULE_PAGE.items():
         if key in rule_upper:
@@ -285,6 +295,8 @@ class AlertDrawer(QFrame):
         _s.themed_ss(self, "AlertDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}")
 
         self._store  = None
+        from ui.device_labels import DeviceLabelResolver
+        self._resolver = DeviceLabelResolver(store=None)
         self._router = None
         self._current_alert: dict | None = None
         self._group_ids: list[int] = []
@@ -300,6 +312,7 @@ class AlertDrawer(QFrame):
 
     def set_store(self, store) -> None:
         self._store = store
+        self._resolver.set_store(store)
 
     def set_router(self, router) -> None:
         self._router = router
@@ -645,7 +658,9 @@ class AlertDrawer(QFrame):
         rule_type = alert.get("rule_type", "")
         host = alert.get("host", "—")
         ts   = alert.get("ts", 0)
-        msg  = alert.get("message", "")
+        # S4: resolve the raw IP/MAC baked into the message at fire time to
+        # a device name at render time (see ui/device_labels.py docstring).
+        msg  = resolve_alert_message(self._resolver, alert.get("host", ""), alert.get("message", ""))
 
         sev_colour_name = _SEV_COLOR.get(sev, "ACCENT")
         self._sev_badge.setText(sev)
@@ -715,7 +730,7 @@ class AlertDrawer(QFrame):
             self._fix_lbl.setVisible(False)
             self._no_fix_lbl.setVisible(True)
 
-        page = _rule_to_page(rule)
+        page = _rule_to_page(rule, rule_type)
         has_page = bool(page)
         if has_page:
             self._go_btn.setProperty("_target_page", page)

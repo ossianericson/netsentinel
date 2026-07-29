@@ -164,7 +164,7 @@ class _MetricsQueriesMixin:
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
             "SELECT id, ts, rule_name, host, severity, message, "
-            "acked_ts, acked_by, acked_comment, escalated "
+            "acked_ts, acked_by, acked_comment, escalated, rule_type "
             "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         )
@@ -182,7 +182,7 @@ class _MetricsQueriesMixin:
         if unacked_only:
             rows = self._execute_read(
                 "SELECT id, ts, rule_name, host, severity, message, "
-                "acked_ts, acked_by, acked_comment, escalated "
+                "acked_ts, acked_by, acked_comment, escalated, rule_type "
                 "FROM alert_fired WHERE acked_ts IS NULL ORDER BY ts ASC LIMIT ?",
                 (limit,),
             )
@@ -190,7 +190,7 @@ class _MetricsQueriesMixin:
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
             "SELECT id, ts, rule_name, host, severity, message, "
-            "acked_ts, acked_by, acked_comment, escalated "
+            "acked_ts, acked_by, acked_comment, escalated, rule_type "
             "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         )

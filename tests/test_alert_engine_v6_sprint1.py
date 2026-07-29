@@ -175,10 +175,10 @@ def test_ip_churn_fires_per_device():
     engine = AlertEngine(rules=[
         AlertRule(name="churn", rule_type="IP_CHURN", cooldown_s=0)
     ])
-    fired = engine.evaluate_ip_churn_checks({"aa:bb:cc:00:00:01": 4})
+    fired = engine.evaluate_ip_churn_checks({"f8:7d:76:00:00:01": 4})
     assert len(fired) == 1
     assert fired[0].rule_type == "IP_CHURN"
-    assert fired[0].host == "aa:bb:cc:00:00:01"
+    assert fired[0].host == "f8:7d:76:00:00:01"
     assert fired[0].cta_page == "Devices"
 
 
@@ -189,11 +189,24 @@ def test_ip_churn_no_fire_when_empty():
     assert engine.evaluate_ip_churn_checks({}) == []
 
 
+def test_ip_churn_skips_locally_administered_mac():
+    """S4: a privacy-randomised MAC (U/L bit set, e.g. iOS/Android private
+    Wi-Fi addressing) churning IPs is normal OS behaviour, not a missing
+    DHCP reservation -- must not fire. 0x6a & 0x02 == 0x02, the exact MAC
+    shape confirmed live in the plan's audit (docs/internal/
+    scan-guidance-audit-2026-07-29.md)."""
+    engine = AlertEngine(rules=[
+        AlertRule(name="churn", rule_type="IP_CHURN", cooldown_s=0)
+    ])
+    fired = engine.evaluate_ip_churn_checks({"6a:34:64:72:f8:f0": 3})
+    assert fired == []
+
+
 def test_ip_churn_resolution_when_stabilized():
     engine = AlertEngine(rules=[
         AlertRule(name="churn", rule_type="IP_CHURN", cooldown_s=0)
     ])
-    engine.evaluate_ip_churn_checks({"aa:bb:cc:00:00:01": 4})
+    engine.evaluate_ip_churn_checks({"f8:7d:76:00:00:01": 4})
     fired = engine.evaluate_ip_churn_checks({})
     assert len(fired) == 1
     assert fired[0].is_resolution is True

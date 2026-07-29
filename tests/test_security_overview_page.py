@@ -569,7 +569,11 @@ def test_grade_verdict_gets_coverage_caveat_when_check_not_testable(page):
         "Port Scan (TCP)": {"state": "not_testable", "ts": 0, "verdict": None, "error": "blocked"},
     }
     page._update_security_grade()
-    assert "1 of 9 checks could not run in this environment" in page._grade_verdict_lbl.text()
+    # S6: _AUDIT_SCAN_LABELS grew from 9 to 16 entries when the 7 pages that
+    # were wired-but-cardless (CVE Tracker, DHCP Rogue Monitor, Device Risk
+    # Score, Windows Shares (SMB), Recon Plugins, Private Endpoint Check,
+    # Cloud Metadata Probe) were reconciled onto the Scan Status card.
+    assert "1 of 16 checks could not run in this environment" in page._grade_verdict_lbl.text()
 
 
 def test_grade_verdict_has_no_caveat_when_nothing_not_testable(page):
@@ -580,6 +584,66 @@ def test_grade_verdict_has_no_caveat_when_nothing_not_testable(page):
     }
     page._update_security_grade()
     assert "could not run" not in page._grade_verdict_lbl.text()
+
+
+# ── S7: grade dimensions must not count on store-presence alone ────────────────
+
+def test_cve_dimension_not_counted_when_cve_lookup_never_ran(page_with_store):
+    """The exact live-DB shape confirmed in Phase 2: a profile that has only
+    ever run Port Scan (TCP) must not have cve_lifecycle rows silently
+    counted as a checked-clean dimension -- CVE Lookup's own Scan Status row
+    reads 'Never run' on the same page."""
+    page, store = page_with_store
+    store.list_cve_lifecycles.return_value = [
+        {"cve_id": "CVE-2024-0001", "host": "192.168.1.1",
+         "severity": "Critical", "cvss_score": 9.8, "state": "Open"},
+    ]
+    page._load_metricstore_data()
+    page._port_scan_done = True
+    page._port_findings = []
+    page._scan_registry_data = {
+        "Port Scan (TCP)": {"state": "fresh", "ts": 0, "verdict": "clean", "error": None},
+    }
+    page._update_security_grade()
+    # Only the port dimension (0 findings) counts -> score 100 -> grade A,
+    # not the C the 1 (wrongly-counted) CVE finding would otherwise produce.
+    assert page._grade_ring._grade == "A"
+
+
+def test_cve_dimension_counted_once_cve_lookup_has_run(page_with_store):
+    page, store = page_with_store
+    store.list_cve_lifecycles.return_value = [
+        {"cve_id": "CVE-2024-0001", "host": "192.168.1.1",
+         "severity": "Critical", "cvss_score": 9.8, "state": "Open"},
+        {"cve_id": "CVE-2024-0002", "host": "192.168.1.2",
+         "severity": "High", "cvss_score": 7.5, "state": "Open"},
+    ]
+    page._load_metricstore_data()
+    page._scan_registry_data = {
+        "CVE Lookup": {"state": "fresh", "ts": 0, "verdict": "2 CVEs found", "error": None},
+    }
+    page._update_security_grade()
+    # 2 distinct hosts * 10 = 20 deducted -> score 80 -> grade B
+    assert page._grade_ring._grade == "B"
+
+
+def test_tls_dimension_not_counted_when_tls_exposure_never_ran(page_with_store):
+    page, store = page_with_store
+    cert = MagicMock()
+    cert.is_expired     = True
+    cert.is_self_signed = False
+    cert.days_remaining = None
+    cert.host           = "example.com"
+    cert.port           = 443
+    store.query_cert_status.return_value = [cert]
+    page._load_metricstore_data()
+    page._port_scan_done = True
+    page._port_findings = []
+    page._scan_registry_data = {
+        "Port Scan (TCP)": {"state": "fresh", "ts": 0, "verdict": "clean", "error": None},
+    }
+    page._update_security_grade()
+    assert page._grade_ring._grade == "A"
 
 
 # ── per-tool finding counts ─────────────────────────────────────────────────────

@@ -161,6 +161,48 @@ def test_restore_geometry_does_not_push_the_window_down_by_a_title_bar(qt_app, t
         qt_app.processEvents()
 
 
+def test_show_main_window_restores_to_maximized_not_normal_when_minimized_while_maximized(host):
+    """Regression: minimizing a maximized window (auto-hidden to tray when
+    tray/minimize_window_to_tray is enabled -- confirmed a real user's setting)
+    and later restoring via show_main_window() (the tray icon's "Show
+    NetSentinel" action) must bring the window back maximized, not silently
+    downgrade it to its pre-maximize size/position.
+
+    Mechanism, confirmed live against a real Dashboard: minimizing a maximized
+    window keeps BOTH the WindowMinimized and WindowMaximized bits set --
+    isMinimized() and isMaximized() are both True at once. show_main_window()'s
+    `elif self.isMinimized(): self.showNormal()` branch does not check whether
+    the window was ALSO maximized, so it unconditionally drops the maximized
+    state and restores to the last normal geometry instead. Live repro: a real
+    Dashboard, maximized then minimized then restored via show_main_window(),
+    came back at (1000, 246, 1440, 900) instead of the full maximized rect --
+    and that smaller rect is exactly what save_settings() persists on the next
+    real quit, reproducing "the window keeps coming back small, not by me."
+    """
+    host.showMaximized()
+    assert bool(host.windowState() & Qt.WindowState.WindowMaximized)
+
+    host.showMinimized()
+    assert host.isMinimized()
+    assert bool(host.windowState() & Qt.WindowState.WindowMaximized), (
+        "test setup invariant: minimizing a maximized window must keep the "
+        "maximized bit set (confirmed live under both the real platform and "
+        "offscreen QPA) -- if this fails, re-check that assumption before "
+        "touching the fix"
+    )
+
+    host.calls.clear()
+    host.show_main_window()
+
+    assert "showNormal" not in host.calls, (
+        "show_main_window() called showNormal() on a window that was ALSO "
+        "maximized before being minimized -- this silently un-maximizes it "
+        "every time the user minimizes (auto-hides to tray) and restores"
+    )
+    assert host.calls == ["showMaximized"]
+    assert bool(host.windowState() & Qt.WindowState.WindowMaximized)
+
+
 def test_changeevent_swaps_glyph_and_tooltip_on_maximize(host):
     """changeEvent must key off WindowMaximized, with standard Windows wording."""
     host.setWindowState(Qt.WindowState.WindowMaximized)

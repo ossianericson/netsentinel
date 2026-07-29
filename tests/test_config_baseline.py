@@ -194,6 +194,32 @@ class TestDiffSnapshots(unittest.TestCase):
         assert "added" in summary
         assert "port" in summary
 
+    # ── S2 #2: a reused DHCP lease must not misattribute port changes ────────
+
+    def test_reused_lease_is_not_read_as_a_port_change_on_the_old_device(self):
+        """The exact live-DB shape: 192.168.68.55 changes hands from one
+        physical device (MAC A, closed) to a different one (MAC B, port
+        8443 open) between sweeps. Diffing by IP alone reads this as
+        '192.168.68.55 gained port 8443' -- it is a different device."""
+        old = self._snap([{"ip": "192.168.68.55", "mac": "aa:11:11:11:11:11", "open_ports": []}])
+        new = self._snap([{"ip": "192.168.68.55", "mac": "bb:22:22:22:22:22", "open_ports": [8443]}])
+        diff = diff_snapshots(old, new)
+        assert "192.168.68.55" not in diff.changed_ports
+
+    def test_same_device_diffs_correctly_even_after_its_ip_changes(self):
+        """The MAC-first match must still catch a genuine port change for a
+        device that also happens to have moved to a new IP via DHCP."""
+        old = self._snap([{"ip": "192.168.68.55", "mac": "aa:11:11:11:11:11", "open_ports": []}])
+        new = self._snap([{"ip": "192.168.68.60", "mac": "aa:11:11:11:11:11", "open_ports": [8443]}])
+        diff = diff_snapshots(old, new)
+        assert diff.changed_ports.get("192.168.68.60", {}).get("added") == [8443]
+
+    def test_not_testable_entry_is_excluded_from_the_diff(self):
+        old = self._snap([{"ip": "10.0.0.1", "mac": "aa", "open_ports": [22, 80]}])
+        new = self._snap([{"ip": "10.0.0.1", "mac": "aa", "open_ports": [], "not_testable": True}])
+        diff = diff_snapshots(old, new)
+        assert "10.0.0.1" not in diff.changed_ports
+
 
 class TestSnapshotJsonRoundtrip(unittest.TestCase):
     def test_to_json_from_row(self):

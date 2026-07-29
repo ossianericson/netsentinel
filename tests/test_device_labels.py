@@ -29,10 +29,11 @@ from ui.device_labels import DeviceLabelResolver
 class _KD:
     """Stand-in for modules.metric_store.KnownDevice (only the fields used)."""
 
-    def __init__(self, custom_name=None, hostname=None, vendor=None):
+    def __init__(self, custom_name=None, hostname=None, vendor=None, ip=None):
         self.custom_name = custom_name
         self.hostname = hostname
         self.vendor = vendor
+        self.ip = ip
 
 
 class _Store:
@@ -201,3 +202,72 @@ def test_oui_failure_is_non_fatal(monkeypatch):
     monkeypatch.setattr("modules.utils.lookup_vendor", _boom)
     r = DeviceLabelResolver(store=_Store({}))
     assert r.label_for("60:83:e7:88:a0:b1") == "60:83:e7:88:a0:b1"
+
+
+# ── label_for_host (S4 — alert surfaces are host=IP for most rule types) ──────
+
+class TestLabelForHost:
+    def test_resolves_an_ip_keyed_host_from_known_device(self):
+        store = _Store({"f8:7d:76:d1:2c:84": _KD(hostname="Lovisas-ny-iphone", ip="192.168.68.51")})
+        r = DeviceLabelResolver(store=store)
+        assert r.label_for_host("192.168.68.51") == "Lovisas-ny-iphone"
+
+    def test_falls_back_to_the_bare_ip_when_unknown(self):
+        r = DeviceLabelResolver(store=_Store({}))
+        assert r.label_for_host("192.168.68.99") == "192.168.68.99"
+
+    def test_a_mac_shaped_host_goes_through_the_mac_path(self):
+        store = _Store({"6a:34:64:72:f8:f0": _KD(hostname="known-by-mac")})
+        r = DeviceLabelResolver(store=store)
+        assert r.label_for_host("6a:34:64:72:f8:f0") == "known-by-mac"
+
+    def test_empty_host_returns_empty_string(self):
+        r = DeviceLabelResolver(store=_Store({}))
+        assert r.label_for_host("") == ""
+
+    def test_placeholder_ip_name_falls_back_to_the_ip(self):
+        store = _Store({"f8:7d:76:d1:2c:84": _KD(vendor="Unknown", ip="192.168.68.51")})
+        r = DeviceLabelResolver(store=store)
+        assert r.label_for_host("192.168.68.51") == "192.168.68.51"
+
+
+# ── resolve_alert_message (S4) ─────────────────────────────────────────────────
+
+class TestResolveAlertMessage:
+    def test_replaces_the_host_token_with_the_resolved_name(self):
+        from ui.device_labels import resolve_alert_message
+
+        store = _Store({"f8:7d:76:d1:2c:84": _KD(hostname="Lovisas-ny-iphone", ip="192.168.68.51")})
+        r = DeviceLabelResolver(store=store)
+        msg = "Port 8443/HTTPS Alternate opened on 192.168.68.51 since the last sweep."
+        resolved = resolve_alert_message(r, "192.168.68.51", msg)
+        assert resolved == "Port 8443/HTTPS Alternate opened on Lovisas-ny-iphone since the last sweep."
+
+    def test_leaves_the_message_unchanged_when_nothing_better_is_known(self):
+        from ui.device_labels import resolve_alert_message
+
+        r = DeviceLabelResolver(store=_Store({}))
+        msg = "Port 22 opened on 192.168.68.99 since the last sweep."
+        assert resolve_alert_message(r, "192.168.68.99", msg) == msg
+
+    def test_a_later_learned_name_corrects_an_already_built_message(self):
+        """The core render-time promise: resolving is not cached against the
+        message string itself, so a name learned after the message was
+        first rendered still corrects the next render."""
+        from ui.device_labels import resolve_alert_message
+
+        store = _Store({})
+        r = DeviceLabelResolver(store=store)
+        msg = "Host 192.168.68.51 has gone offline."
+        assert resolve_alert_message(r, "192.168.68.51", msg) == msg
+
+        store._devices["f8:7d:76:d1:2c:84"] = _KD(hostname="Lovisas-ny-iphone", ip="192.168.68.51")
+        r.invalidate()
+        assert resolve_alert_message(r, "192.168.68.51", msg) == "Host Lovisas-ny-iphone has gone offline."
+
+    def test_empty_host_or_message_is_a_noop(self):
+        from ui.device_labels import resolve_alert_message
+
+        r = DeviceLabelResolver(store=_Store({}))
+        assert resolve_alert_message(r, "", "some message") == "some message"
+        assert resolve_alert_message(r, "192.168.68.51", "") == ""

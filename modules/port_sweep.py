@@ -25,6 +25,8 @@ from modules.config_baseline import (
     store_snapshot,
 )
 from modules.metric_store import MetricStore
+from modules.service_mapper import is_expected_port
+from modules.utils_net import icmp_ping
 
 SWEEP_LABEL = "posture_port_sweep"
 
@@ -49,13 +51,22 @@ def run_nightly_port_sweep(store: MetricStore) -> PortSweepReport:
         if not ip:
             continue
         result = port_scanner.scan(ip)
+        open_ports = [r.port for r in result.open_ports]
+        # S2 #1: zero open ports is only meaningful if the device actually
+        # answered. A device asleep or Wi-Fi power-saving during this sweep
+        # also scans to zero open ports -- indistinguishable from "genuinely
+        # nothing open" without an independent liveness check, which is
+        # exactly the gap that made the *next* successful sweep report every
+        # port as newly opened.
+        not_testable = not open_ports and icmp_ping(ip) < 0
         entries.append(DeviceEntry(
             ip=ip,
             mac=d.get("mac", ""),
             hostname=d.get("hostname", ""),
-            open_ports=[r.port for r in result.open_ports],
+            open_ports=open_ports,
             vendor=d.get("vendor", ""),
             device_type=d.get("device_type", ""),
+            not_testable=not_testable,
         ))
 
     prior = latest_snapshot_with_label(store, SWEEP_LABEL)
@@ -67,10 +78,16 @@ def run_nightly_port_sweep(store: MetricStore) -> PortSweepReport:
         return PortSweepReport(new_ports=[], all_devices=entries, snapshot=stored)
 
     diff = diff_snapshots(prior, stored)
+    device_type_by_ip = {e.ip: e.device_type for e in entries}
     new_ports = [
         (ip, port)
         for ip, delta in diff.changed_ports.items()
         for port in delta.get("added", [])
+        # S2 #3: a port that's normal, expected behaviour for this device's
+        # type (UPnP SSDP on a streaming stick, 8443 on a Chromecast, an
+        # HTTP admin UI on a Smart TV) is how the device works, not a
+        # security-relevant change worth alerting on.
+        if not is_expected_port(device_type_by_ip.get(ip, ""), port)
     ]
     return PortSweepReport(new_ports=new_ports, all_devices=entries, snapshot=stored)
 

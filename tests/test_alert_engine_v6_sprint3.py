@@ -70,7 +70,10 @@ def test_new_cve_fires_with_severity_from_finding():
     assert fired[0].host == "192.168.1.10"
     assert fired[0].severity == "CRITICAL"
     assert "CVE-2024-9999" in fired[0].message
-    assert fired[0].cta_page == "CVE Lookup"
+    # S3 fix: NEW_CVE used to point at "CVE Lookup" (the on-demand scan
+    # page); the alert is about an already-tracked pair gaining a CVE, so
+    # "CVE Tracker" (the lifecycle page) is the real destination.
+    assert fired[0].cta_page == "CVE Tracker"
 
 
 def test_new_cve_empty_report_does_not_fire():

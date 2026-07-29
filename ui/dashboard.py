@@ -1379,6 +1379,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         elif label == L.EXPOSED_TO_INTERNET:
             self._start_exposure_check()
         elif label == L.THREAT_INTEL:
+            self._nav_set_scan_state(L.THREAT_INTEL, "running")
+            self._awaiting_threat_intel = True
             self._threat_intel_page._run_refresh()
         elif label == L.DEVICE_RISK_SCORE:
             # Synchronous — scores off the already-populated device scan result,
@@ -1427,6 +1429,32 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._nav_set_scan_state(L.TLS_EXPOSURE, "fresh", ts=_time.time(), verdict=verdict)
         if getattr(self, "_awaiting_tls_check", False):
             self._awaiting_tls_check = False
+            self._advance_security_audit()
+
+    def _on_threat_intel_scan_complete(self) -> None:
+        """Update the Threat Intel scan-registry row (S1: this label previously
+        had zero producers anywhere, so the Scan Status card always showed
+        "Never run" regardless of how many feed refreshes ran). Also advances
+        the security-audit queue if a dispatch is pending -- mirrors
+        _on_tls_check_done()'s _awaiting_* pattern above."""
+        import time as _time
+        n = len(getattr(self._threat_intel_page, "_threat_entries", []) or [])
+        self._nav_set_scan_state(L.THREAT_INTEL, "fresh", ts=_time.time(), verdict=f"{n} indicator(s)")
+        if getattr(self, "_awaiting_threat_intel", False):
+            self._awaiting_threat_intel = False
+            self._advance_security_audit()
+
+    def _on_threat_intel_scan_error(self, msg: str) -> None:
+        self._nav_set_scan_state(L.THREAT_INTEL, "error", error=msg)
+        if getattr(self, "_awaiting_threat_intel", False):
+            self._awaiting_threat_intel = False
+            self._advance_security_audit()
+
+    def _on_threat_intel_scan_not_testable(self, reason: str) -> None:
+        import time as _time
+        self._nav_set_scan_state(L.THREAT_INTEL, "not_testable", ts=_time.time(), error=reason)
+        if getattr(self, "_awaiting_threat_intel", False):
+            self._awaiting_threat_intel = False
             self._advance_security_audit()
 
     def _maybe_confirm_scan_environment(self) -> bool:

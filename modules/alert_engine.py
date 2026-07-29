@@ -56,7 +56,7 @@ from modules.alert_engine_checks import _AlertChecksMixin
 from modules.alert_engine_checks2 import _AlertChecksMixin2
 from modules.alert_engine_checks3 import _AlertChecksMixin3
 from modules.alert_engine_checks4 import _AlertChecksMixin4
-from modules.alert_engine_routing import cta_for_rule, append_action
+from modules.alert_engine_routing import cta_for_rule, append_action, RULE_CTA
 
 # Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
 __all__ = [
@@ -325,7 +325,7 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
                 rule, host, now,
                 message=f"{host} is back online — was unreachable for {duration}.",
                 downtime_s=downtime,
-                cta_page="Inventory",
+                cta_page=RULE_CTA["HOST_DOWN"],
                 cta_filter=host,
             )
             if resolution:
