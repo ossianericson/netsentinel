@@ -288,7 +288,7 @@ class _GradeTile(QFrame):
         self._details_btn.setVisible(bool(dimensions))
 
     def _on_details_clicked(self) -> None:
-        from ui.pages.home_page import _GradeBreakdownDialog
+        from ui.widgets.home_session_widgets import _GradeBreakdownDialog
         grade = self._grade_circle.text()
         dlg = _GradeBreakdownDialog(grade, self._dimensions, parent=self)
         run_dialog(dlg)

@@ -1837,6 +1837,65 @@ test_app_exits_promptly_when_instance_mutex_already_held` (RED before the fix �
 
 ---
 
+### RULE-WIN17 (blocking): A reusable animated widget must own its own hideEvent/showEvent pair — embedding it in a second page does not double up review of the first page's lifecycle handling
+
+**Mechanism.** `ui/widgets/protocol_canvas.py`'s `ProtocolCanvas` starts a `QTimer` at 30fps
+the first time `play()` or `enter_live()` is called, and — unlike every other page-level
+worker/timer covered by RULE-WIN15 — had no `hideEvent()` at all. It is embedded in two
+places: directly on the Protocol Visualizer page (`ui/pages/protocol_viz_page.py`) and, one
+level deeper, inside `LabCanvasCard` (`ui/widgets/lab_canvas_card.py`), which Lab Mode
+(`ui/pages/lab_mode_page.py`) embeds in turn — and also explicitly `setVisible(False)`'s that
+card mid-session, between lab steps that don't have a scene. Neither page had a `hideEvent()`
+of its own either, so a `QStackedWidget` page switch away from either page left the canvas
+ticking at 30fps forever, running its full bezier/gradient/antialiasing paint path on a widget
+nobody could see. A live check (real `QStackedWidget.setCurrentWidget()` switch, not a
+synthetic `.hide()` call, in `tests/test_protocol_canvas.py::
+test_hide_show_propagates_through_nested_stacked_widget`) confirmed Qt *does* propagate a real
+`hideEvent()`/`showEvent()` down through nested child widgets when an ancestor is hidden — so
+the fix belongs on the shared widget class itself, not duplicated onto every page that happens
+to embed it.
+
+This is the mechanism the wild-soak RSS bisect (`docs/spikes/wild-soak-rss-leak-investigation.md`)
+localized to v2.1.32-v2.1.36 (`ProtocolCanvas` landed in v2.1.34; its second embedding via
+`LabCanvasCard` landed in v2.1.36, the first run confirmed leaking) after five earlier rounds
+of tracemalloc/UMDH/VMMap diagnostics found nothing — because the leak is native paint/timer
+overhead, invisible to Python-level allocation tracing, exactly like the already-fixed Network
+Map and Live Bandwidth cases in RULE-WIN15.
+
+```python
+# WRONG — no hideEvent anywhere in the class; _timer ticks forever once started
+class ProtocolCanvas(QWidget):
+    def __init__(self, parent=None):
+        ...
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+    # (no hideEvent -- timer survives every navigation away)
+
+# CORRECT — the widget stops/resumes its own timer; no page-level code needed.
+# Resume is gated on the widget's OWN existing intent flags (_playing /
+# _live_mode), not a separate "was it ticking" snapshot -- pause()/exit_live()
+# already use those flags to mean "stopped on purpose", so a show() right
+# after a deliberate pause can't accidentally resurrect playback, and a
+# set_scene() call made while still hidden self-corrects on the next show().
+def hideEvent(self, event) -> None:
+    self._timer.stop()
+    super().hideEvent(event)
+
+def showEvent(self, event) -> None:
+    super().showEvent(event)
+    if (self._playing or self._live_mode) and not self._timer.isActive():
+        self._timer.start()
+```
+
+Fixing the shared widget once covers both embedding sites — and any future one — without
+requiring every page author to remember RULE-WIN15's page-level pattern for a widget they
+didn't write.
+
+Enforced by `tests/test_protocol_canvas.py` (timer stop/resume on hide/show, both step and
+live mode, plus the nested-`QStackedWidget` propagation case).
+
+---
+
 ## QSettings State Hygiene
 
 ### RULE-QS1 (blocking): Never gate data access on QSettings-persisted mode — use always-populated sources
@@ -2517,6 +2576,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN13 → `test_settings_startup_card.py` (regression: toggle after prior worker's `deleteLater()` must not raise)
 - RULE-WIN14 → `test_window_chrome.py` (regression: restore that leaves the QWidget hidden must re-show it)
 - RULE-WIN16 → `test_single_instance.py` (real CreateMutexW round-trip) + `test_single_instance_race.py` (RED/GREEN regression)
+- RULE-WIN17 → `test_protocol_canvas.py` (hide/show timer lifecycle, step + live mode, nested QStackedWidget propagation)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 - RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
 - RULE-R1b → `test_version_consistency.py::test_whats_new_version` + `bump_version.py::_preflight_whats_new()` (aborts the bump before any file is written)

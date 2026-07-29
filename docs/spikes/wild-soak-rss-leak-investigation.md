@@ -1,11 +1,12 @@
 # Wild-Soak RSS Growth Investigation — Full History
 
-**Status as of 2026-07-24: UNRESOLVED.** No root cause found, no fix applied for the
-primary driver. Five real, separate bugs were found and fixed along the way — none of
-them explain the bulk of the growth. This document exists because the hunt has spanned
-multiple sessions and a significant amount of investigation time, and needs a single
-place a human can read start-to-finish without piecing it back together from chat
-history or scattered memory notes.
+**Status as of 2026-07-29: a fix has been applied for the bisect's top suspect
+(`ProtocolCanvas` missing `hideEvent()`), but this is not yet confirmed as *the* primary
+driver — see Session 6.** Sessions 1–5 (through 2026-07-24) found and fixed five real,
+separate bugs, none of which explained the bulk of the growth. This document exists
+because the hunt has spanned multiple sessions and a significant amount of investigation
+time, and needs a single place a human can read start-to-finish without piecing it back
+together from chat history or scattered memory notes.
 
 ---
 
@@ -232,6 +233,51 @@ confirm the actual mechanism before writing a fix.
 
 ---
 
+### Session 6 — 2026-07-29: a cheaper technique finds a fix candidate
+
+Sessions 1-5 all took the same approach: instrument a live process and watch it run.
+This session used a fundamentally different, much cheaper technique instead — the chaos
+harness runs **fixed seeds at fixed durations**, so peak RSS from the same phase (same
+seed, same duration) is directly comparable across the project's archived
+`AI_REPORT.md` run outputs (`C:\Users\ossia\Documents\NetSentinel\test_output\`) without
+running anything new. Nobody had compared those phase tables across historical runs
+before.
+
+That comparison bisected the regression to **v2.1.32-v2.1.36**: the `Monkey wild (UIA)
+(soak) [lap 1]` phase (seed 99, 4h30m, near-identical iteration counts) went from
+**580.1MB peak at v2.1.31** to **1,431.7MB peak at v2.1.39** — same phase, same seed,
+same duration, 2.5× the RSS, every confound the earlier rounds worried about controlled
+for. A 16-minute non-soak `Monkey wild (UIA)` phase shows the same climb (500.5MB →
+839.5MB from v2.1.31 to v2.1.39), so validating a fix does not require a multi-hour soak.
+Full numbers: memory `project-wild-soak-rss-bisect-window-20260729`.
+
+That window pointed at `ui/widgets/protocol_canvas.py`'s `ProtocolCanvas` — it landed in
+v2.1.34, and its second embedding (`ui/widgets/lab_canvas_card.py`, used by Lab Mode)
+landed in v2.1.36, the first run confirmed leaking. Reading the actual code (not just
+matching the shape from memory) confirmed the suspicion directly: `ProtocolCanvas`
+starts a 30fps `QTimer` in `play()`/`enter_live()` and had **no `hideEvent()` at all** —
+the exact RULE-WIN15 shape as the already-fixed Network Map and Live Bandwidth leaks
+above, and exactly why it would be invisible to every technique tried in Sessions 1-5:
+it's native paint/timer overhead, not a Python allocation or a growing data structure.
+
+Fixed by adding a `hideEvent()`/`showEvent()` pair directly on `ProtocolCanvas` (not on
+either embedding page) — a live check confirmed Qt propagates a real `hideEvent()` down
+through nested child widgets when a `QStackedWidget` switches pages, so one fix on the
+shared widget covers both embedding sites. See `RULE-WIN17` in
+`development-rules.instructions.md` for the full mechanism writeup and the wrong/correct
+code. Regression coverage: `tests/test_protocol_canvas.py` (5 new tests, confirmed RED
+against the pre-fix code before the fix was applied).
+
+**Honest caveat, consistent with every fix in this document's table:** this matches the
+bisect window's shape and timing precisely and is a real, confirmed defect — but it has
+not yet been live-validated as accounting for the actual measured RSS climb. The next
+step is re-running the same 16-minute wild chaos phase (seed 99) and comparing peak RSS
+against the numbers above. If it doesn't fully close the gap, the bisect memory's
+lower-confidence candidates (v2.1.35's native-chrome subclass reinstall on `QWebEngineView`
+handle recreation, v2.1.34's `experimental/lazy_pages` extension) are the next leads.
+
+---
+
 ## What's fixed (real bugs, all shipped)
 
 | Bug | Where | Fix | Commit | Magnitude found |
@@ -241,10 +287,14 @@ confirm the actual mechanism before writing a fix.
 | Network Map's packet sniffer never stopped on navigate-away | `ui/pages/network_map_page.py` | added `hideEvent()` | `e44c1a6` (v2.1.44) | +107.72MB/2,400 pushes, but in a **child process** |
 | Live Bandwidth's 1Hz poller + chart redraw never stopped | `ui/pages/live_bandwidth_page.py` | added `hideEvent()`/`showEvent()` pair | `05859ef` (v2.1.44) | +3.99MB/simulated hour |
 | Monkey-test harness only measured the main process, blind to any child-process leak | `tools/monkey_test.py` | sum RSS across main + all children | (same session as Network Map fix) | — |
+| ProtocolCanvas's 30fps QTimer never stopped on navigate-away (2 embedding sites) | `ui/widgets/protocol_canvas.py` | added `hideEvent()`/`showEvent()` pair | *(Session 6, uncommitted)* | matches the v2.1.32-v2.1.36 bisect window exactly; not yet live-validated |
 
-Every one of these is a genuine, confirmed, fixed defect. **None of them, individually
-or combined, comes close to explaining the ~450MB/20min growth rate that's been the
-target since session 3.** They were each 2–3 orders of magnitude too small.
+Every one of these is a genuine, confirmed, fixed defect. The first five were each 2-3
+orders of magnitude too small to explain the ~450MB/20min growth rate that's been the
+target since session 3 — the ProtocolCanvas fix is different in kind: it's the first one
+found via a bisect that directly targeted the regression window rather than guessing at
+a page, so it has a real chance of being the actual primary driver, but that has not
+been confirmed by a live re-run yet (see Session 6's caveat above).
 
 ## What's confirmed about the actual driver
 
@@ -264,10 +314,18 @@ target since session 3.** They were each 2–3 orders of magnitude too small.
 
 ## What's still open
 
-1. **No specific line of code has been identified as the main driver.** Every technique
-   tried so far (tracemalloc, gc census, region-type census, UMDH stack diffing, VMMap
-   snapshot diffing) narrows the *category* of memory involved but stops short of a
-   single allocation site responsible for the bulk of the growth.
+0. **Whether the Session 6 `ProtocolCanvas` fix actually closes the gap is not yet
+   confirmed.** It is the first candidate found via a technique (cross-version bisect on
+   fixed seed/duration phases) that directly targets the regression window instead of
+   guessing at a page, and the code-level mechanism matches exactly — but "matches the
+   shape" is not the same claim as "measured to explain the growth," and every entry in
+   the table above that made it to a live measurement turned out to be too small. Confirm
+   with a live re-run before treating this as closed.
+1. **No specific line of code had been identified as the main driver as of Session 5.**
+   Every technique tried through that session (tracemalloc, gc census, region-type
+   census, UMDH stack diffing, VMMap snapshot diffing) narrows the *category* of memory
+   involved but stops short of a single allocation site responsible for the bulk of the
+   growth.
 2. **The reserved-arena-pattern lead from Round 5** (same-size 32MB/18.5MB/14.75MB
    blocks, unattributed) is the most specific unconfirmed thread — SQLite/MetricStore
    is a guess, not a finding.
@@ -282,10 +340,12 @@ target since session 3.** They were each 2–3 orders of magnitude too small.
 
 ## Honest bottom line
 
-Five sessions, five real bugs found and fixed, and the actual driver of the RSS growth
-observed under wild-chaos stress testing is still not identified. What exists is a
-increasingly precise description of *what it isn't* and *what general category it's in*
-— not a fix, and not yet a specific enough lead to write one. Continuing would mean
-either a much more invasive live-debugging session (see item 3 above) or accepting the
-current state as a known, unresolved, non-crashing characteristic and moving on unless
-it starts causing real problems.
+Sessions 1-5 found and fixed five real bugs without identifying the actual driver of the
+RSS growth observed under wild-chaos stress testing — an increasingly precise description
+of *what it isn't* and *what general category it's in*, not a fix. Session 6 changed
+technique (a cross-version bisect on archived run data instead of live instrumentation)
+and landed on a sixth real, confirmed bug — `ProtocolCanvas`'s missing `hideEvent()` —
+whose timing and shape match the regression window precisely. Whether that closes the
+gap is the open question a live re-run needs to answer; if it doesn't, the next move is
+either the more invasive live-debugging session described above or accepting the
+remainder as a known, unresolved, non-crashing characteristic.

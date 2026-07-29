@@ -1,14 +1,14 @@
 # NetSentinel
 
-**Network Security Scanner — Rogue Device Detector, STP Monitor & ISP Accountability Tool**
+**Find every device on your network, catch the faults that cause dropouts, and prove an outage to your ISP — all in one local app.**
 
-Find every device on your LAN. Detect rogue bridges, broadcast storms, ARP spoofing, and IoT anomalies. Prove ISP outages with timestamped evidence. All analysis runs 100% locally — nothing leaves your machine.
+Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning and CVE lookup, and continuous stability logging. Free, open-source, and 100% local — no account, no cloud, no telemetry. Nothing leaves your machine.
 
 ---
 
 ## Install
 
-**Windows**
+**Windows** — [get it from the Microsoft Store](https://apps.microsoft.com/detail/9NZ124C7HJWS), or:
 
 ```powershell
 winget install NetSentinel.NetSentinel
@@ -29,20 +29,20 @@ chmod +x NetSentinel && sudo ./NetSentinel
 
 ---
 
-## What it diagnoses
+## What it answers
 
-| Symptom | How NetSentinel finds it |
+| Your question | Where NetSentinel answers it |
 |---|---|
-| Random 30-second internet drops | STP tab — identifies rogue root bridge from BPDU capture |
-| Unknown device on WiFi | Devices page — ARP scan with MAC/OUI vendor ID and risk level |
-| "Is it my ISP or my router?" | Root Cause Correlator — 5-hop ping chain, plain-English verdict |
-| Slow browsing despite fast internet | What's Wrong? — sequences DNS, storm, STP, and ISP checks |
-| ARP spoofing / MITM attack | ARP Spoof Watch — detects IP–MAC mapping conflicts |
-| Bandwidth hog on the network | App Traffic — per-device protocol breakdown with CDN tagging |
-| Proving an outage to ISP support | Stability Log + Network Grade → ISP Report (HTML export) |
-| Open ports on a device | Port Scanner (Security Audit) — SYN stealth scan |
-| Expired or expiring TLS certs | TLS Certificate Monitor — hourly checks, 30-day pre-expiry alerts |
-| Service is unreachable | Service Diagnostics — DNS/TCP/HTTPS/traceroute per service, failure-layer classification |
+| "What is that unknown device on my Wi-Fi?" | **Devices** — ARP scan with MAC/OUI vendor ID, model and risk level |
+| "Why does my internet drop every 30 seconds?" | **Rogue Bridge (STP)** — identifies the rogue root bridge from BPDU capture |
+| "Is it my ISP or my router?" | **Root Cause Correlator** — hop-by-hop ping chain, plain-English verdict |
+| "Something is slow and I don't know what" | **What's Wrong?** — sequences DNS, storm, STP, and ISP checks |
+| "Is someone spoofing my gateway?" | **ARP Spoof Watch** — detects IP–MAC mapping conflicts |
+| "Which app is eating my bandwidth?" | **App Traffic** — per-device protocol breakdown with CDN tagging |
+| "How do I prove this outage to support?" | Stability Log + Network Grade → **ISP Report** (HTML export) |
+| "Is anything of mine exposed?" | **Port Scanner** (Security Audit) — SYN stealth scan, plus CVE and TLS checks |
+| "Are any of my certificates about to expire?" | **TLS Certificate Monitor** — hourly checks, 30-day pre-expiry alerts |
+| "Why won't this one service load?" | **Service Diagnostics** — DNS/TCP/HTTPS/traceroute per service, failure-layer classification |
 
 ---
 

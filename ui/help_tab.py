@@ -36,11 +36,10 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.1.51"
+_WHATS_NEW_VERSION = "2.1.52"
 _WHATS_NEW_ENTRIES = [
-    ("Devices table blank on startup — fixed", "The Vendor and Risk columns could show blank right after launch, before you ran a scan. The startup cache-restore path now populates the table correctly."),
-    ("Window restore from tray — fixed", "Restoring a maximized window from the tray icon could come back small and stuck in the top-left corner instead of staying maximized. Fixed."),
-    ("Alert notifications — 7 fixes", "Several notification links pointed at the wrong page, the Home page's action guidance was getting cut off mid-sentence, and the security grade could be inaccurate in some cases. All fixed."),
+    ("Protocol Visualizer / Lab Mode memory leak — fixed", "The animated diagram kept redrawing in the background after you left the page, using memory for the rest of your session. Fixed."),
+    ("README, docs site, and Store listing — rewritten", "All three now lead with the same plain-English pitch and a new \"What it answers\" table, and the documentation site is now published and browsable online."),
 ]
 
 

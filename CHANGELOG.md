@@ -4,6 +4,17 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.52
+
+**Changed**
+- README, docs site, and Microsoft Store listing now lead with the same plain-English positioning (device discovery, fault diagnosis, security audit) instead of three different pitches; added a "What it answers" table above Install, regrouped Features under the same Discover/Monitor/Diagnose/Report/Audit/Automate headings as the At-a-glance table, and filled out the Audit group to match the four capabilities the At-a-glance table already promised (OS detection, credential testing, TLS monitor, CVE lookup)
+- Updated the README quality claim to the longest chaos run to date (15h, 31,372 interactions) and dropped the peak-RSS sentence, which cited a flat run while three later runs peaked 1,432-2,880 MB and made an open issue read as resolved; `docs/_config.yml` now publishes `docs/` via GitHub Pages, excluding `internal/` and `spikes/`
+
+**Fixed**
+- `ui/widgets/protocol_canvas.py`: `ProtocolCanvas` had no `hideEvent()`, so its 30fps `QTimer` kept ticking and repainting after navigating away from Protocol Visualizer or Lab Mode — the same RULE-WIN15 leak shape as the already-fixed Network Map and Live Bandwidth workers, and the top suspect from the wild-soak RSS bisect that localized the multi-release RSS regression to v2.1.32-v2.1.36
+
+---
+
 ### v2.1.51
 
 **Added**

@@ -4,15 +4,15 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-6464%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-6469-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
 # NetSentinel
 
-**Find every device on your network. Detect rogue bridges, broadcast storms, and ARP spoofing. Prove ISP outages with timestamped evidence.**
+**Find every device on your network, catch the faults that cause dropouts, and prove an outage to your ISP — all in one local app.**
 
-Free, open-source, and 100% local. No account, no telemetry, no cloud.
+Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning and CVE lookup, and continuous stability logging. Free, open-source, and 100% local — no account, no telemetry, no cloud.
 
 <p align="center">
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
@@ -20,7 +20,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**6,464+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**6,469 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -35,6 +35,22 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
 | **Audit** | Port scan, CVE lookup, TLS monitor, credential testing, OS detection *(admin + Npcap)* |
 | **Automate** | Read-only REST API, MQTT / Home Assistant, shell hooks, scheduled scans |
 | **Learn** | Interactive protocol visualizer + guided Lab Mode, mapped to CompTIA Network+ / CCNA |
+
+---
+
+## What it answers
+
+| Your question | Where NetSentinel answers it |
+|---|---|
+| "What is that unknown device on my Wi-Fi?" | **Devices** — full inventory with IP, MAC, hostname, vendor, model and risk level for everything on the LAN |
+| "Why does my internet drop every 30–45 seconds?" | **Rogue Bridge (STP)** — captures BPDUs and names the device that stole the root bridge role, a classic cause of repeating short outages |
+| "Is it my ISP or my router?" | **Root Cause Correlator** — a hop-by-hop ping chain isolates where the loss actually starts, then states a plain-English verdict |
+| "How do I prove this outage to support?" | **ISP Accountability Report** — traceroute table, packet-loss percentages, DNS latency and a timestamped outage log as one exportable HTML file |
+| "Something is slow and I don't know what" | **What's Wrong?** — one click sequences DNS, storm, STP and ISP checks, then ranks the findings by likely cause |
+| "Is anything of mine exposed?" | **Security Overview** — port scan, OS fingerprint, CVE lookup, TLS expiry and credential testing, with a letter grade summarising your posture |
+| "Which app is eating my bandwidth?" | **App Traffic** and **Active Connections** — per-application breakdown plus a process-to-socket map with one-click firewall block |
+| "Is someone spoofing my gateway?" | **ARP Spoof Watch** — real-time detection of the IP–MAC conflicts that indicate an active man-in-the-middle |
+| "Why won't this one service load?" | **Service Diagnostics** — DNS/TCP/HTTPS/traceroute probes against any host, classifying which layer failed (including "filtered" — blocked despite a healthy ping) |
 
 ---
 
@@ -73,54 +89,57 @@ Layer 2 features (STP detection, ARP monitor, broadcast storm analysis) require 
 
 ---
 
-## What it diagnoses
-
-| Symptom | How NetSentinel finds it |
-|---|---|
-| Internet drops every 30–45 seconds | STP tab — captures BPDUs, identifies rogue root bridge and port blocking |
-| Unknown device appeared on WiFi | Devices page — ARP scan with vendor/model identification and risk scoring |
-| Slow internet despite fast plan | What's Wrong? — sequences DNS, storm, STP, and ISP checks; plain-English verdict |
-| "Is it my ISP or my router?" | Root Cause Correlator — 5-hop ping chain test; isolates ISP vs LAN failures |
-| Need to prove an outage to support | ISP Accountability Report — MTR table + packet loss % + DNS latency as exportable HTML |
-| Open ports I didn't expect | Port Scanner (Security Audit) — SYN stealth scan with service banner grabbing |
-| Service is unreachable | Service Diagnostics — DNS/TCP/HTTPS/traceroute probes on catalog services or any custom hostname; failure-layer classification including "filtered" (blocked despite healthy ping) |
-| ARP spoofing / MITM attack | ARP Spoof Watch — real-time IP–MAC conflict detection on the segment |
-
----
-
 ## Features
 
-### No admin required
+Entries marked **†** need Administrator plus [Npcap](https://npcap.com) on Windows or `libpcap` on macOS/Linux. Everything else runs unprivileged.
+
+### Discover
 
 - **Device discovery** — every device's IP, MAC, hostname, vendor, model, and risk level; vendor lookup via a curated local table, scapy's bundled ~50,000-entry OUI database, and a live API fallback
-- **Network grade A–F** — benchmark across uptime, latency, jitter, DNS speed, download speed, STP health, storm level, and device safety; compared to a "perfect home network" baseline
-- **ISP Accountability Report** — traceroute hop table, DNS latency, and timestamped outage log as a standalone HTML file for support escalation
+- **Network topology map** — interactive Cytoscape.js diagram; upgrades to a mesh tree when Deco credentials are configured
+- **Wi-Fi scan** — hidden SSIDs, rogue APs, WPS-enabled networks, co-channel interference, signal levels
+- **DHCP lease inventory** — lists active leases from the OS lease table (for rogue-server detection, see DHCP Rogue Monitor under Audit)
+- **Full device discovery †** — parallel ARP + ICMP + TCP SYN + mDNS sweep
+
+### Monitor
+
 - **Background stability logger** — continuous ping/RTT/jitter/DNS logging; timestamped CSV evidence; unattended for hours or days
 - **Availability history** — persistent UP/DEGRADED/DOWN charts per device with 1 h / 12 h / 24 h / 7 d zoom
+- **Live bandwidth chart** — 60-second rolling upload/download per interface
+- **Active connections** — process-to-socket map with one-click firewall block/unblock per process
+- **IoT behaviour baseline** — learns normal traffic per IoT device; alerts on port scans, new destinations, and traffic rate spikes
+- **TLS certificate monitor** — hourly expiry checks per host; 30-day pre-expiry alerts
+- **Per-device bandwidth †** — exact rx/tx bps per device via live packet capture
+- **802.11 monitor mode †** — passive frame capture: probe requests, association frames, deauth frames
+
+### Diagnose
+
+- **Service diagnostics** — DNS/TCP/HTTPS/ICMP/traceroute probes for streaming/gaming services or any custom hostname; failure-layer classification (device → local_network → dns → isp → routing → remote_outage → filtered)
 - **DNS benchmarking** — compares your system resolver against Cloudflare, Google, and Quad9 simultaneously; includes DNS leak test
 - **Speed test** — 3-tier engine: Ookla CLI → speedtest-cli → pure-Python fallback; always works, no forced dependencies
-- **TLS certificate monitor** — hourly expiry checks per host; 30-day pre-expiry alerts
-- **Active connections** — process-to-socket map with one-click firewall block/unblock per process
-- **Live bandwidth chart** — 60-second rolling upload/download per interface
+- **STP root bridge detection †** — captures BPDUs; identifies which device claims the root bridge election on your segment
+- **Broadcast storm detection †** — measures flood levels; pinpoints the source device
+- **ARP spoofing detection †** — watches for IP–MAC conflicts that indicate an active MITM attack
+
+### Report
+
+- **Network grade A–F** — benchmark across uptime, latency, jitter, DNS speed, download speed, STP health, storm level, and device safety; compared to a "perfect home network" baseline
+- **ISP Accountability Report** — traceroute hop table, DNS latency, and timestamped outage log as a standalone HTML file for support escalation
+
+### Audit
+
 - **CVE lookup** — cross-references discovered OS and service versions against the NVD database on demand
-- **Wi-Fi scan** — hidden SSIDs, rogue APs, WPS-enabled networks, co-channel interference, signal levels
-- **IoT behaviour baseline** — learns normal traffic per IoT device; alerts on port scans, new destinations, and traffic rate spikes
-- **Service diagnostics** — DNS/TCP/HTTPS/ICMP/traceroute probes for streaming/gaming services or any custom hostname; failure-layer classification (device → local_network → dns → isp → routing → remote_outage → filtered)
-- **DHCP lease inventory** — lists active leases from the OS lease table (for rogue-server detection, see DHCP Rogue Monitor under Security Audit)
-- **Network topology map** — interactive Cytoscape.js diagram; upgrades to a mesh tree when Deco credentials are configured
+- **Threat intelligence and risk scoring** — reputation lookups for the addresses your devices talk to, plus a per-device risk score
+- **Rogue DHCP detection and SMB share enumeration** — flags unauthorised DHCP servers on the wire and exposed Windows shares
+- **SYN stealth port scanner †** — half-open TCP scan; faster and quieter than a connect scan
+- **OS fingerprinting †** — infers operating system and version from probe responses; reuses prior port-scan results rather than re-scanning
+- **Credential testing †** — checks SSH, SMB, FTP and Telnet for default and weak logins on devices you own
+
+### Automate
+
 - **REST API** — read-only local HTTP API at `http://127.0.0.1:8765`; query devices, alerts, and uptime from Home Assistant or scripts
 - **MQTT / Home Assistant** — Discovery payloads, configurable broker, OS-keychain credentials
 - **Automation hooks** — shell command triggers on device-down, high RTT, and new-device events
-
-### Requires admin + Npcap / libpcap
-
-- **STP root bridge detection** — captures BPDUs; identifies which device claims the root bridge election on your segment
-- **Broadcast storm detection** — measures flood levels; pinpoints the source device
-- **ARP spoofing detection** — watches for IP–MAC conflicts that indicate an active MITM attack
-- **Per-device bandwidth** — exact rx/tx bps per device via live packet capture
-- **SYN stealth port scanner** — half-open TCP scan; faster and quieter than a connect scan
-- **Full device discovery** — parallel ARP + ICMP + TCP SYN + mDNS sweep
-- **802.11 monitor mode** — passive frame capture: probe requests, association frames, deauth frames
 
 ### Hardware integrations
 
@@ -155,15 +174,13 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**6,464 automated tests** across 494 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**6,469 automated tests** across 494 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
 ```
 
-**9-hour chaos run** (June 2026): 10,001 automated UIA interactions across mild, moderate, and wild randomisation levels (seeds 1, 42, 99). Zero crashes and zero unhandled exceptions. All 62 pages confirmed functional in identical systematic pre/post runs.
-
-**~7-hour chaos soak** (July 2026): 9,729 interactions across mild/moderate/wild laps. Zero crashes, zero unhandled exceptions, and zero growth in the crash log. Peak RSS stayed flat across all three laps (674 → 775 → 750 MB) with no leak trend.
+**15-hour chaos soak** (July 2026): 31,372 automated UIA interactions across mild, moderate, and wild randomisation levels — a full coverage cycle plus two complete soak laps, bracketed by identical systematic sweeps confirming all 62 pages functional before and after. Zero crashes and zero unhandled exceptions. The single health-monitor restart during the run self-healed in 13 seconds.
 
 **Every commit gated by:** `ruff` (unused imports/variables) · `mypy` (module type errors) · `pip-audit` (dependency CVEs) · `debug_launch.py` smoke test (catches PyQt6 runtime errors that only appear when the app actually starts) · CodeQL static analysis on every push.
 
@@ -201,13 +218,12 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.51 (current)
+### v2.1.52 (current)
 
-- Fixed the Devices table showing blank Vendor/Risk columns on startup, before any scan had run
-- Fixed a maximized window coming back small and stuck in the top-left corner after being restored from the tray icon
-- Fixed the test suite silently overwriting your real saved window layout every run
-- Resolved 7 alert/scan-guidance issues: dead notification links, truncated action guidance, and an inaccurate security grade among them
-- Added an internal audit harness that guards against this class of bug recurring
+- Fixed a memory leak in Protocol Visualizer / Lab Mode — the animated canvas kept ticking at 30fps after you navigated away
+- Rewrote the README, docs site, and Store listing to lead with the same plain-English pitch, with a new "What it answers" table
+- Filled out the README Audit section to list all four capabilities (OS detection, credential testing, TLS monitor, CVE lookup) already promised at the top of the page
+- Published the documentation site via GitHub Pages
 
 ---
 

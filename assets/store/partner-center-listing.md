@@ -173,13 +173,20 @@ Offline geolocation mapping with no API key required
 
 ```
 who is on my wifi
+internet keeps dropping
 ip scanner
-network analyzer
 nmap gui
-bandwidth monitor
+wifi analyzer
 packet sniffer
 network mapper
 ```
+
+Dropped from the previous set: `network analyzer` (near-duplicate of `network mapper`,
+and "analyser" already appears in the description) and `bandwidth monitor` (both words
+are already prominent in the copy, so the slot bought nothing). Added
+`internet keeps dropping` — the symptom a non-technical visitor actually types, and none
+of those three words appear in the title or short description — and `wifi analyzer`, the
+category name people search when they don't know the tool exists.
 
 ---
 
@@ -211,10 +218,11 @@ network mapper
 | Copyright and trademark info | `© 2026 Ossian Ericson. MIT licence.` |
 | Developed by | `Ossian Ericson` |
 | Privacy policy URL | `https://github.com/ossianericson/netsentinel/blob/main/PRIVACY.md` |
-| Website | `https://github.com/ossianericson/netsentinel` |
+| Website | `https://ossianericson.github.io/netsentinel` |
 | Support contact info | `https://github.com/ossianericson/netsentinel/issues` |
 | Additional system requirements | `Active scanning requires running as Administrator. Layer 2 features (spanning-tree detection, broadcast storm analysis, ARP spoof watch, 802.11 monitor mode) additionally require Npcap from npcap.com, which is not bundled.` |
 
-Once the docs site is live, change **Website** to
-`https://ossianericson.github.io/netsentinel` — a documentation site converts
-better than a source repository for non-developer visitors.
+**Website** now points at the documentation site (GitHub Pages, enabled 2026-07-29 from
+`main` → `/docs`) rather than the source repository — a docs site converts better for
+non-developer visitors. `docs/_config.yml` keeps `internal/` and `spikes/` off the
+published site.

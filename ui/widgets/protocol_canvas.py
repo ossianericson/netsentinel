@@ -253,6 +253,29 @@ class ProtocolCanvas(QWidget):
     def is_live(self) -> bool:
         return self._live_mode
 
+    # ── Visibility lifecycle ───────────────────────────────────────────────────
+
+    def hideEvent(self, event) -> None:
+        """RULE-WIN17: this canvas is a reusable widget embedded in two places
+        (Protocol Visualizer directly, Lab Mode via LabCanvasCard) and has no
+        page of its own to rely on for a hideEvent -- a QStackedWidget page
+        switch propagates a real hideEvent down to a nested child like this
+        one, but nothing stops the timer that started it. Left unguarded,
+        _timer ticks at 30fps forever once play()/enter_live() starts it,
+        repainting a widget nobody can see for the rest of the app session."""
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def showEvent(self, event) -> None:
+        """Resume ticking only if step-mode or live-mode is still the active
+        intent (self._playing / self._live_mode) -- these flags, not a
+        separate "was it ticking" snapshot, are what pause()/exit_live()
+        already use to mean "stopped on purpose", so a show() right after a
+        deliberate pause can't accidentally resurrect playback."""
+        super().showEvent(event)
+        if (self._playing or self._live_mode) and not self._timer.isActive():
+            self._timer.start()
+
     # ── Timer tick ─────────────────────────────────────────────────────────────
 
     def _tick(self) -> None:

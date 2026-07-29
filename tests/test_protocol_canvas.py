@@ -230,6 +230,103 @@ def test_step_mode_still_works_after_live_round_trip(canvas):
     assert not pixmap.isNull()
 
 
+def test_hide_stops_timer_while_playing_step_mode(canvas):
+    """RULE-WIN17: hiding the canvas (a QStackedWidget page switch, or the
+    parent LabCanvasCard being setVisible(False)'d) must stop the 30fps timer
+    rather than letting it repaint an invisible widget forever."""
+    canvas.show()   # a never-shown widget's hide() is a no-op -- no transition, no event
+    scene = _synthetic_scene()
+    canvas.set_scene(scene)
+    canvas.play()
+    assert canvas._timer.isActive()
+
+    canvas.hide()
+    assert not canvas._timer.isActive()
+    assert canvas.is_playing()   # intent preserved -- only the tick is paused
+
+    canvas.show()
+    assert canvas._timer.isActive()
+
+
+def test_hide_noop_when_not_playing(canvas):
+    canvas.show()
+    scene = _synthetic_scene()
+    canvas.set_scene(scene)   # never played -- timer was never started
+    canvas.hide()
+    assert not canvas._timer.isActive()
+    canvas.show()
+    assert not canvas._timer.isActive()   # must not spuriously start
+
+
+def test_hide_stops_timer_in_live_mode(canvas):
+    canvas.show()   # a never-shown widget's hide() is a no-op -- no transition, no event
+    canvas.enter_live(_live_nodes())
+    assert canvas._timer.isActive()
+
+    canvas.hide()
+    assert not canvas._timer.isActive()
+    assert canvas.is_live()
+
+    canvas.show()
+    assert canvas._timer.isActive()
+
+
+def test_hide_after_pause_stays_stopped_on_show(canvas):
+    """A user's explicit pause() must not be resurrected by a later show()."""
+    canvas.show()
+    scene = _synthetic_scene()
+    canvas.set_scene(scene)
+    canvas.play()
+    canvas.pause()
+    assert not canvas._timer.isActive()
+
+    canvas.hide()
+    canvas.show()
+    assert not canvas._timer.isActive()
+
+
+def test_hide_show_propagates_through_nested_stacked_widget(qt_app):
+    """Mirrors the real embedding shape (LabCanvasCard nests ProtocolCanvas one
+    level inside a page a QStackedWidget switches away from) rather than
+    calling .hide()/.show() on the canvas directly -- see
+    tests/test_network_map_page.py::test_hide_stops_bandwidth_worker for the
+    same convention applied to the other RULE-WIN15 leak."""
+    from PyQt6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
+
+    from ui.widgets.protocol_canvas import ProtocolCanvas
+
+    stack = QStackedWidget()
+    page = QWidget()
+    QVBoxLayout(page)
+    canvas = ProtocolCanvas()
+    page.layout().addWidget(canvas)
+    other = QWidget()
+    stack.addWidget(page)
+    stack.addWidget(other)
+    stack.show()
+
+    try:
+        scene = _synthetic_scene()
+        canvas.set_scene(scene)
+        canvas.play()
+        assert canvas._timer.isActive()
+
+        stack.setCurrentWidget(other)
+        assert not canvas._timer.isActive()
+
+        stack.setCurrentWidget(page)
+        assert canvas._timer.isActive()
+    finally:
+        try:
+            stack.deleteLater()
+        except RuntimeError:
+            pass  # already deleted
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
+
+
 def test_set_speed_rejects_non_positive():
     from ui.widgets.protocol_canvas import ProtocolCanvas
     c = ProtocolCanvas()

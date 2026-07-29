@@ -42,3 +42,27 @@ def test_refresh_does_not_crash(page):
     if refresh:
         refresh()
     assert page is not None
+
+
+def test_grade_tile_details_click_resolves_dialog_class(monkeypatch):
+    """Regression: _on_details_clicked() imported _GradeBreakdownDialog from
+    ui.pages.home_page, which never imports that name (it lives in
+    ui.widgets.home_session_widgets) — raised ImportError live during a chaos
+    run when the (?) details button was clicked."""
+    from ui.pages.monitor_overview_page import _GradeTile
+
+    captured = {}
+    monkeypatch.setattr(
+        "ui.pages.monitor_overview_page.run_dialog",
+        lambda dlg: captured.setdefault("dlg", dlg),
+    )
+    tile = _GradeTile()
+    tile.update("B", "Good", "#4CAF50")
+    tile._on_details_clicked()
+    assert "dlg" in captured
+
+    tile.deleteLater()
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
