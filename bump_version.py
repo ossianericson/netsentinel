@@ -189,11 +189,16 @@ def bump(ver: str) -> None:
         n_tests_str = f"{n_tests:,}"
         n_files_str = f"{n_files:,}"
 
+        # The trailing "+" (URL-encoded %2B in the badge) is optional: the README
+        # dropped it in the v2.1.52 rewrite, and because _sub() only WARNs on a
+        # no-match these two silently stopped self-correcting while the third
+        # figure below kept updating — leaving the badge and hero line stale at
+        # 6,469 against a real 6,482. Keep both spellings matchable.
         _sub(ROOT / "README.md",
-             rf'(badge/tests-){_NUM}(%2B)',
+             rf'(badge/tests-){_NUM}((?:%2B)?)',
              rf'\g<1>{n_tests}\g<2>')
         _sub(ROOT / "README.md",
-             rf'(\*\*){_NUM}(\+ tests)',
+             rf'(\*\*){_NUM}(\+? tests)',
              rf'\g<1>{n_tests_str}\g<2>')
         _sub(ROOT / "README.md",
              rf'(\*\*){_NUM}( automated tests\*\* across ){_NUM}( test files)',

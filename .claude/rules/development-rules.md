@@ -1773,6 +1773,10 @@ def hideEvent(self, event) -> None:
 
 Enforced by `tests/test_network_map_page.py::test_hide_stops_bandwidth_worker`.
 
+**`hideEvent()` alone does not cover a page that is never shown** — a widget constructed but
+never made visible receives no `hideEvent`, so a timer started in `__init__` runs forever. See
+RULE-WIN18, which is the same rule at the other end of the widget's lifecycle.
+
 ---
 
 ### RULE-WIN16 (blocking): A single-instance guard must use an atomic OS primitive as the gate — a client-probe-then-become-server dance has a TOCTOU race
@@ -1893,6 +1897,77 @@ didn't write.
 
 Enforced by `tests/test_protocol_canvas.py` (timer stop/resume on hide/show, both step and
 live mode, plus the nested-`QStackedWidget` propagation case).
+
+---
+
+### RULE-WIN18 (blocking): Never start a repeating `QTimer` from a page's `__init__` — every lazy page is constructed at startup whether or not the user ever opens it, and a never-shown widget receives no `hideEvent`
+
+**Mechanism.** `ui/nav/lazy_page.py`'s background chunk-builder (`_lazy_build_tick`, 2 pages per
+150 ms) materialises **every** registered page a few seconds after startup, regardless of
+navigation. A `QTimer` started in a page constructor therefore begins ticking for the entire app
+session on a page nobody has looked at — and, critically, **`hideEvent()` cannot save you**: Qt
+delivers a `hideEvent` only to a widget that was previously *shown*, so a page that is
+constructed and never made visible never gets one. RULE-WIN15 closes the "user navigated away"
+case; this rule closes the "user never went there at all" case, which under lazy construction is
+the *common* case.
+
+The cost is native and therefore invisible to the usual diagnostics. Both offenders found live
+rebuilt a `QTableWidget` every tick, and `QTableWidgetItem` is a C++ object — so `tracemalloc`
+saw only the small Python wrapper (~512 KB/interval) while the actual mass was unattributable
+C++ allocation. Measured on a real Dashboard idling on Home with a real `MetricStore`:
+main-process RSS **+556 MB/hr before, −19.6 MB/hr (dead flat) after**. This is the true root
+cause of the long-running wild-soak RSS growth that five prior rounds of
+tracemalloc/UMDH/VMMap diagnostics failed to find — full narrative in
+`docs/spikes/idle-rss-leak-lazy-page-timers.md`.
+
+```python
+# WRONG — ticks forever on a page the user may never open
+self._timer = QTimer(self)
+self._timer.setInterval(60_000)
+self._timer.timeout.connect(self._reload)
+self._timer.start()                      # <-- in __init__
+
+# WRONG, and harder to spot — the start is INDIRECT, through a Qt signal.
+# setChecked(True) fires `toggled` -> _on_auto_toggled -> _auto_timer.start().
+self._chk_auto.toggled.connect(self._on_auto_toggled)
+self._chk_auto.setChecked(True)
+
+# CORRECT — construct the timer, but let visibility drive it
+self._timer = QTimer(self)
+self._timer.setInterval(60_000)
+self._timer.timeout.connect(self._reload)
+
+def showEvent(self, event) -> None:
+    super().showEvent(event)
+    if not self._timer.isActive():
+        self._timer.start()
+
+def hideEvent(self, event) -> None:
+    self._timer.stop()
+    super().hideEvent(event)
+
+# CORRECT — keep a checkbox's visible default without starting the timer
+self._chk_auto.blockSignals(True)
+self._chk_auto.setChecked(True)
+self._chk_auto.blockSignals(False)
+```
+
+Resume gated on the widget's own intent flag (`isChecked()`), never a separate "was it ticking"
+snapshot — same reasoning as RULE-WIN17.
+
+**Corollary — a soak harness that samples on an event cannot attribute cost to that event.**
+`tools/page_isolation_soak.py` samples RSS after each navigation, so wall-clock growth from
+these always-on timers was misread as a per-page navigation cost, producing a coherent and
+entirely wrong "Network Map is the driver at ~2×" conclusion that survived four attempted fixes.
+Any per-event attribution needs a **do-nothing control phase of equal duration**; without one,
+"this event costs memory" and "memory grows with time and this event is how often I look" are
+indistinguishable. Also **split main-process from child-process RSS** before concluding anything:
+`QtWebEngineProcess` oscillates ~97→123 MB in a bounded sawtooth (Chromium GC), which adds ±25 MB
+of noise to the combined RULE-DBG4 number and masked a flat main process with small periodic steps.
+
+Enforced by `tests/test_page_timer_lifecycle.py` (constructed-but-never-shown page must have zero
+active timers; timer must start on a real `QStackedWidget` show and stop on hide). Runtime rather
+than AST, deliberately — no realistic static check follows the signal-driven start above.
 
 ---
 
@@ -2577,6 +2652,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN14 → `test_window_chrome.py` (regression: restore that leaves the QWidget hidden must re-show it)
 - RULE-WIN16 → `test_single_instance.py` (real CreateMutexW round-trip) + `test_single_instance_race.py` (RED/GREEN regression)
 - RULE-WIN17 → `test_protocol_canvas.py` (hide/show timer lifecycle, step + live mode, nested QStackedWidget propagation)
+- RULE-WIN18 → `test_page_timer_lifecycle.py` (never-shown page has zero active timers; start-on-show/stop-on-hide via real QStackedWidget transitions)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 - RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
 - RULE-R1b → `test_version_consistency.py::test_whats_new_version` + `bump_version.py::_preflight_whats_new()` (aborts the bump before any file is written)

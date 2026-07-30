@@ -200,8 +200,26 @@ class SecurityOverviewPage(QWidget):
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(5_000)
         self._refresh_timer.timeout.connect(self._load_data)
-        self._refresh_timer.start()
+        # RULE-WIN18: deliberately NOT started here. This page is built eagerly
+        # during Dashboard.__init__ for every user, opened or not, so a timer
+        # started at construction runs 3 MetricStore queries + 3 full table
+        # rebuilds every 5s for the entire app session on a page nobody sees.
+        # showEvent() starts it; hideEvent() stops it.
+        # The one-shot load below stays: it seeds the initial hidden/shown state
+        # of the finding tables, and runs once rather than forever.
         self._load_data()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Nothing refreshed while hidden, so load once up front rather than
+        # showing data up to one timer interval stale.
+        self._load_data()
+        if not self._refresh_timer.isActive():
+            self._refresh_timer.start()
+
+    def hideEvent(self, event) -> None:
+        self._refresh_timer.stop()
+        super().hideEvent(event)
 
     # ── UI construction ────────────────────────────────────────────────────────
 

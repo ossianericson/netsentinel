@@ -56,6 +56,16 @@ def page(qt_app):
     p._web_view = MagicMock()
     p._layout_combo.setCurrentText("Hierarchy")
     yield p
+    # RULE-WIN4: _bw_worker no longer stops on hideEvent() (see
+    # network_map_page.py's hideEvent()-removal note) so it can legitimately
+    # still be a real, running QThread here if a test drove a real
+    # showEvent()/setCurrentWidget() cycle. Stop it before deleteLater() —
+    # destroying a parented widget while its QThread child is still running
+    # corrupts the heap instead of raising a catchable Python error.
+    try:
+        p._stop_bw_worker()
+    except RuntimeError:
+        pass  # already destroyed — safe to skip
     try:
         p.deleteLater()
     except RuntimeError:
@@ -472,3 +482,172 @@ def test_hide_stops_bandwidth_worker(qt_app):
     stack.deleteLater()
     for _ in range(3):
         qt_app.processEvents()
+
+
+# ── Worker construct/discard leak (RULE-WIN8) ─────────────────────────────────
+#
+# _stop_bw_worker() (called from _on_traffic_toggled(False), no longer from
+# hideEvent() -- see that method's removal note) only ever dropped the Python
+# reference (self._bw_worker = None); it never deleteLater()'d the discarded
+# QThread. Since the worker is constructed with parent=self, the C++ object
+# survives as a permanent child of the page every time Traffic Overlay is
+# toggled off and back on (RULE-WIN8).
+
+def test_bandwidth_worker_deleted_after_stop_not_leaked(page, monkeypatch):
+    """Every BandwidthOverlayWorker discarded by _stop_bw_worker() must be
+    deleteLater()'d — otherwise each show/hide cycle leaks one permanently."""
+    from PyQt6.QtCore import QObject
+
+    constructed: list = []
+
+    class _FakeSignal:
+        def __init__(self):
+            self._slots: list = []
+
+        def connect(self, slot):
+            self._slots.append(slot)
+
+        def emit(self, *args):
+            for s in list(self._slots):
+                s(*args)
+
+    class _FakeWorker(QObject):
+        def __init__(self, interval_s=5.0, parent=None):
+            super().__init__(parent)
+            self.snapshot_ready = _FakeSignal()
+            self.error = _FakeSignal()
+            self.finished = _FakeSignal()
+            self._running = False
+            self._finished_emitted = False
+            self.delete_later_called = False
+            constructed.append(self)
+
+        def start(self):
+            self._running = True
+
+        def isRunning(self):
+            return self._running
+
+        def stop(self):
+            self._running = False
+
+        def wait(self, ms=0):
+            # Real QThread.wait() blocks until the thread's run() has
+            # returned, and Qt has already emitted finished() by then.
+            if not self._finished_emitted:
+                self._finished_emitted = True
+                self.finished.emit()
+            return True
+
+        def deleteLater(self):
+            self.delete_later_called = True
+
+    monkeypatch.setattr("ui.pages.network_map_page.BandwidthOverlayWorker", _FakeWorker)
+
+    for _ in range(5):
+        page._start_bw_worker()
+        page._stop_bw_worker()
+
+    assert len(constructed) == 5
+    assert all(w.delete_later_called for w in constructed), (
+        "every discarded BandwidthOverlayWorker must be deleteLater()'d — "
+        "otherwise it leaks as a permanent QThread child of the page "
+        "(RULE-WIN8)"
+    )
+
+
+# ── Page-isolation soak follow-up: redundant full-topology re-push ────────────
+#
+# BandwidthOverlayWorker fires every 5s regardless of whether the traffic
+# picture actually changed; _on_bw_snapshot() unconditionally called
+# _refresh_web_view(), which re-serializes the ENTIRE topology (nodes, edges,
+# segments, LLDP) and re-pushes it into the WebEngine view via
+# runJavaScript(window.updateTopology(...)) even when nothing changed (e.g.
+# an idle network snapshotting the same empty/unchanged bandwidth map every
+# tick). RULE-WIN15's own repro already measured this exact call shape as a
+# real, unbounded ~46KB/push growth in the renderer process.
+
+def test_bandwidth_snapshot_skips_refresh_when_unchanged(page, monkeypatch):
+    page.render(devices=_devices(), gateway_ip="192.168.68.1")
+    page._traffic_overlay = True
+
+    refresh_calls: list = []
+    monkeypatch.setattr(page, "_refresh_web_view", lambda **kw: refresh_calls.append(kw))
+
+    snap = SimpleNamespace(
+        entries=[SimpleNamespace(mac="aa:bb:cc:dd:ee:01", total_bps=500.0)]
+    )
+    page._on_bw_snapshot(snap)
+    assert len(refresh_calls) == 1
+
+    # Identical snapshot next tick — must not trigger a second full re-push.
+    page._on_bw_snapshot(snap)
+    assert len(refresh_calls) == 1, (
+        "an unchanged bandwidth snapshot must not re-trigger a full "
+        "topology re-serialize + runJavaScript push"
+    )
+
+    # A genuinely different snapshot must still refresh.
+    snap2 = SimpleNamespace(
+        entries=[SimpleNamespace(mac="aa:bb:cc:dd:ee:01", total_bps=999.0)]
+    )
+    page._on_bw_snapshot(snap2)
+    assert len(refresh_calls) == 2
+
+
+# ── Page-isolation soak follow-up: redundant fit_view() on every revisit ──────
+#
+# showEvent() unconditionally scheduled a QTimer -> fit_view() ->
+# runJavaScript(window.fitView...) call every single time the page became
+# visible, regardless of whether any new scan data had arrived since the
+# last visit. On a rapid navigate-away-and-back harness (~200 visits over 20
+# minutes) that is ~200 redundant JS pushes into the WebEngine renderer, each
+# with a real unbounded per-call cost per RULE-WIN15's own spike. Network Map
+# is the only one of the 5 page-isolation-tested pages with a QWebEngineView
+# at all, and disabling admin (so BandwidthOverlayWorker fails once and never
+# restarts) ruled that mechanism out as the driver of the still-measured
+# ~210-223 MB/hr excess -- this repeated fit_view() call is the only thing
+# left that fires on literally every visit.
+
+def test_show_event_skips_redundant_fit_when_no_new_data(page, monkeypatch):
+    from PyQt6.QtWidgets import QStackedWidget, QWidget
+
+    page.render(devices=_devices(), gateway_ip="192.168.68.1")
+    assert page._topology_loaded is True
+
+    fit_calls: list = []
+    monkeypatch.setattr(page, "fit_view", lambda: fit_calls.append(page._scan_id))
+
+    other = QWidget()
+    stack = QStackedWidget()
+    stack.addWidget(other)
+    stack.addWidget(page)
+    stack.show()  # a never-shown QStackedWidget does not reliably deliver
+                  # showEvent()/hideEvent() to its children (see
+                  # test_protocol_canvas.py::test_hide_show_propagates_through_nested_stacked_widget)
+
+    for _ in range(5):
+        stack.setCurrentWidget(page)   # fires showEvent()
+        QTest.qWait(250)               # let the 200ms QTimer fire
+        stack.setCurrentWidget(other)  # fires hideEvent()
+
+    assert len(fit_calls) == 1, (
+        "fit_view() must only re-fire when new scan data has arrived since "
+        "the last fit — not on every single revisit with unchanged data"
+    )
+
+    # New data (a different scan_id -- compute_scan_id() keys off /24 subnets,
+    # so the new device must be in a different subnet to actually change it)
+    # arriving must still trigger a re-fit.
+    page.render(
+        devices=_devices() + [{"ip": "10.0.0.5", "mac": "aa:bb:cc:dd:ee:99"}],
+        gateway_ip="192.168.68.1",
+    )
+    assert page._scan_id != fit_calls[0], "test setup: scan_id must actually change"
+    stack.setCurrentWidget(other)
+    stack.setCurrentWidget(page)
+    QTest.qWait(250)
+    assert len(fit_calls) == 2
+
+    other.deleteLater()
+    stack.deleteLater()

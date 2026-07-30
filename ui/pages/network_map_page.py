@@ -180,6 +180,16 @@ class NetworkMapPage(QWidget):
         # CIDRs the user has double-clicked open — their real devices are shown
         # individually instead of collapsed into one segment node (Part 1/D).
         self._expanded_segments: set = set()
+        # scan_id last passed to fit_view() from showEvent(). Diagnostic for
+        # the page-isolation RSS soak: showEvent() previously called fit_view()
+        # (one runJavaScript() push) unconditionally on every single visit,
+        # even when no new data had arrived since the last visit — on a
+        # rapid navigate-away-and-back harness (~200 visits/20min) that is
+        # ~200 redundant JS pushes into the WebEngine renderer. Skipping the
+        # re-fit when self._scan_id is unchanged since the last fit preserves
+        # the real UX intent (reset a stale zoom/scroll after new data
+        # arrives) while eliminating the no-op case.
+        self._fitted_scan_id: Optional[str] = None
 
         self._build_ui()
 
@@ -1062,11 +1072,22 @@ class NetworkMapPage(QWidget):
     def _start_bw_worker(self) -> None:
         """(Re)start the background bandwidth sniffer if it isn't already
         running. Shared by _on_traffic_toggled(True) and showEvent() (which
-        resumes it after a prior hideEvent() stopped it — RULE-WIN15)."""
+        resumes it after a prior hideEvent() stopped it — RULE-WIN15).
+
+        showEvent()/hideEvent() construct a fresh worker on every single
+        visit rather than reusing one instance, and _stop_bw_worker() only
+        ever drops the Python reference — never deleteLater()s it. Since the
+        worker is parented to self, the discarded QThread survives as a
+        permanent child of the page (RULE-WIN8) on every navigation away.
+        Wiring finished -> deleteLater here means each worker frees itself
+        the moment its run() loop actually returns, regardless of exactly
+        when _stop_bw_worker()'s wait() call returns.
+        """
         if self._bw_worker is None or not self._bw_worker.isRunning():
             self._bw_worker = BandwidthOverlayWorker(interval_s=5.0, parent=self)
             self._bw_worker.snapshot_ready.connect(self._on_bw_snapshot)
             self._bw_worker.error.connect(self._on_bw_error)
+            self._bw_worker.finished.connect(self._bw_worker.deleteLater)
             self._bw_worker.start()
 
     def _stop_bw_worker(self) -> None:
@@ -1094,15 +1115,29 @@ class NetworkMapPage(QWidget):
 
     @pyqtSlot(object)
     def _on_bw_snapshot(self, snapshot: object) -> None:
-        """Receive a BandwidthSnapshot; update the traffic overlay."""
+        """Receive a BandwidthSnapshot; update the traffic overlay.
+
+        BandwidthOverlayWorker emits a snapshot every 5s regardless of
+        whether any device's traffic actually changed (e.g. an idle
+        network). Re-serializing and re-pushing the ENTIRE topology via
+        runJavaScript(window.updateTopology(...)) on every one of those
+        ticks is a real, unbounded per-push cost in the WebEngine renderer
+        (RULE-WIN15's own repro measured this exact call shape). Skipping
+        the refresh when the bandwidth map is byte-identical to the last
+        push eliminates the redundant case without touching the legitimate
+        one — a real change still refreshes immediately.
+        """
         try:
-            self._bw_by_mac = {
+            new_bw_by_mac = {
                 e.mac: e.total_bps
                 for e in snapshot.entries  # type: ignore[union-attr]
                 if e.total_bps > 0
             }
         except Exception:
             return
+        if new_bw_by_mac == self._bw_by_mac:
+            return
+        self._bw_by_mac = new_bw_by_mac
         if self._traffic_overlay and self._last_render_kwargs:
             self._refresh_web_view(
                 diff=self._last_render_kwargs.get("diff") if self._diff_mode else None
@@ -1123,12 +1158,17 @@ class NetworkMapPage(QWidget):
         self._lldp_hint_label.setVisible(True)
 
     def showEvent(self, event) -> None:  # noqa: N802
-        """Fit the active view each time the page becomes visible, and apply
-        the traffic-overlay default on first show.
+        """Fit the active view when the page becomes visible after new data
+        has arrived, and apply the traffic-overlay default on first show.
 
         Cytoscape viewport may be at a stale zoom/scroll position after the
-        user navigates away and back; a short-delay fit snaps it to the current
-        node extents without requiring a manual "Fit" press.
+        user navigates away and back with new data waiting; a short-delay fit
+        snaps it to the current node extents without requiring a manual "Fit"
+        press. Gated on self._scan_id having changed since the last fit (see
+        _fitted_scan_id) so a rapid revisit with no new scan data does not
+        re-push a runJavaScript() call for no visible effect — each push has
+        a real, unbounded per-call cost in the WebEngine renderer process
+        (RULE-WIN15's spike).
 
         Traffic overlay is defaulted to on here (not in __init__) so that
         headless tests which never call show() never spawn a Scapy sniffer
@@ -1156,7 +1196,12 @@ class NetworkMapPage(QWidget):
             # Resume the sniffer after a prior hideEvent() stopped it — the
             # checkbox is already checked so setChecked() above wouldn't fire.
             self._start_bw_worker()
-        if self._outer_stack.currentIndex() == 1 and self._topology_loaded:
+        if (
+            self._outer_stack.currentIndex() == 1
+            and self._topology_loaded
+            and self._scan_id != self._fitted_scan_id
+        ):
+            self._fitted_scan_id = self._scan_id
             _t = QTimer(self)
             _t.setSingleShot(True)
             _t.timeout.connect(self.fit_view)

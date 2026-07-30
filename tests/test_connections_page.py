@@ -243,22 +243,59 @@ def test_block_confirmation_dialog_shows_ok_button(monkeypatch):
                 app.processEvents()
 
 
-def test_auto_refresh_checkbox_defaults_checked_and_starts_timer(monkeypatch):
+def test_auto_refresh_checkbox_defaults_checked_and_starts_timer_on_show():
     """Regression (F-84 claims-audit): ui/help.py's Active Connections entry says
     'The list refreshes every few seconds automatically', but QCheckBox("Auto (5s)")
     was constructed with no setChecked(True) -- it defaulted unchecked, so nothing
     auto-refreshed unless the user found and ticked the box themselves. Checking
-    the box must actually start _auto_timer, not just look checked."""
-    monkeypatch.setattr(ConnectionsPage, "_refresh", lambda self: None)
-    monkeypatch.setattr(ConnectionsPage, "_load_blocked_rules", lambda self: None)
+    the box must actually start _auto_timer, not just look checked.
 
-    page = ConnectionsPage()
+    Amended 2026-07-30 (RULE-WIN18): the timer must NOT start at construction --
+    this page is lazily built at startup whether or not the user ever opens it,
+    and a 5 s psutil enumeration + full table rebuild running forever on an
+    unopened page was the confirmed root cause of ~556 MB/hr idle RSS growth
+    (docs/spikes/idle-rss-leak-lazy-page-timers.md). F-84's real intent -- "the
+    box is ticked AND it genuinely drives the timer" -- is preserved by asserting
+    the timer runs once the page is actually visible.
+
+    Uses a subclass rather than monkeypatch.setattr(ConnectionsPage, "_refresh",
+    ...): _refresh is decorated @pyqtSlot(), and replacing it on the CLASS breaks
+    PyQt's slot resolution permanently -- after monkeypatch restores it, every
+    later ConnectionsPage() in the same pytest process dies with
+    "TypeError: connect() failed between timeout() and _refresh()". That made this
+    file a latent landmine for any future test that constructs the page.
+    """
+    from PyQt6.QtWidgets import QApplication
+
+    class _QuietPage(ConnectionsPage):
+        """No psutil worker / no firewall query -- overrides on the SUBCLASS, so
+        ConnectionsPage itself is never mutated."""
+
+        def _refresh(self):
+            pass  # test double — the real one spawns a ConnectionSnapshotWorker
+
+        def _load_blocked_rules(self):
+            pass  # test double — the real one shells out to the firewall
+
+    page = _QuietPage()
     try:
-        assert page._chk_auto.isChecked() is True
-        assert page._auto_timer.isActive() is True
+        assert page._chk_auto.isChecked() is True, "box must be ticked by default"
+        assert page._auto_timer.isActive() is False, (
+            "timer must not run before the page has ever been shown (RULE-WIN18)"
+        )
+
+        page.show()
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
+        assert page._auto_timer.isActive() is True, (
+            "a ticked box must genuinely drive _auto_timer once visible (F-84)"
+        )
     finally:
+        page._auto_timer.stop()
+        page.close()
         page.deleteLater()
-        from PyQt6.QtWidgets import QApplication
         app = QApplication.instance()
         if app:
             for _ in range(3):

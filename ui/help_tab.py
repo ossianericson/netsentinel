@@ -36,10 +36,12 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.1.52"
+_WHATS_NEW_VERSION = "2.2.0"
 _WHATS_NEW_ENTRIES = [
-    ("Protocol Visualizer / Lab Mode memory leak — fixed", "The animated diagram kept redrawing in the background after you left the page, using memory for the rest of your session. Fixed."),
-    ("README, docs site, and Store listing — rewritten", "All three now lead with the same plain-English pitch and a new \"What it answers\" table, and the documentation site is now published and browsable online."),
+    ("Memory growth over long sessions — fixed", "If you left NetSentinel running for hours, its memory use climbed steadily. The cause: pages you had never opened were still running background refresh timers from the moment the app started, rebuilding tables and re-reading the database for views nobody was looking at. On an idle app, memory went from growing 556 MB every hour to completely flat."),
+    ("Less background work on pages you never open", "Security Overview and DHCP Leases were refreshing themselves — and DHCP Leases was running a scan — before you ever visited them, costing about 6 seconds of CPU and 2,160 database reads an hour for nothing. Both now stay idle until you open them."),
+    ("Network Map leaks — fixed", "Three separate issues: a background bandwidth worker recreated on every visit and never released, a full map redraw pushed every 5 seconds even when nothing had changed, and a redundant re-fit each time you opened the page."),
+    ("Full Documentation card added", "Help & Shortcuts now links straight to the online documentation, so you can reach it from inside the app instead of hunting for it on GitHub."),
 ]
 
 
@@ -616,6 +618,45 @@ def build_help_tab(window) -> QWidget:
     abl.addWidget(btn_go_settings)
     acl.addWidget(abody)
     bl.addWidget(appear_callout)
+
+    # ── Full documentation ───────────────────────────────────────────────
+    _DOCS_URL = "https://ossianericson.github.io/netsentinel/"
+    docs_card = QFrame()
+    docs_card.setObjectName("card")
+    _s.themed_ss(docs_card, "QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+        "border-radius:{CARD_RADIUS};}}")
+    dcl = QVBoxLayout(docs_card)
+    dcl.setContentsMargins(0, 0, 0, 0)
+    dcl.setSpacing(0)
+    dtb = QFrame()
+    dtb.setFixedHeight(32)
+    _s.themed_ss(dtb, "background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+    dtbl = QHBoxLayout(dtb)
+    dtbl.setContentsMargins(12, 0, 12, 0)
+    dtl = QLabel("Full Documentation")
+    _s.themed_ss(dtl, "color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+    dtbl.addWidget(dtl)
+    dtbl.addStretch()
+    dcl.addWidget(dtb)
+    dbody = QHBoxLayout()
+    dbody.setContentsMargins(16, 10, 16, 12)
+    dbody.setSpacing(12)
+    dinfo = QLabel(
+        "The full documentation site covers every feature in depth, with a networking "
+        "guide, jargon dictionary, and troubleshooting patterns — browsable online."
+    )
+    dinfo.setWordWrap(True)
+    _s.themed_ss(dinfo, "font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
+    dbody.addWidget(dinfo, 1)
+    btn_open_docs = QPushButton("Open Documentation Site")
+    btn_open_docs.setObjectName("btnNetRefresh")
+    btn_open_docs.setFixedWidth(180)
+    btn_open_docs.clicked.connect(
+        lambda: QDesktopServices.openUrl(QUrl(_DOCS_URL))
+    )
+    dbody.addWidget(btn_open_docs)
+    dcl.addLayout(dbody)
+    bl.addWidget(docs_card)
 
     # ── Check for updates ─────────────────────────────────────────────────
     from modules.utils import is_store_app, store_update_url  # noqa: PLC0415

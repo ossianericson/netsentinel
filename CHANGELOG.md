@@ -4,6 +4,22 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.0
+
+**Fixed**
+- Root cause of the multi-release memory growth that had survived five rounds of tracemalloc/UMDH/VMMap diagnostics: `ui/nav/lazy_page.py`'s background chunk-builder constructs *every* lazy page a few seconds after startup whether or not the user opens it, so any `QTimer` started in `__init__` ticks for the whole session on a page nobody has looked at. Two offenders, both rebuilding a `QTableWidget` every tick — `ui/pages/connections_page.py` (5 s, full `psutil` socket enumeration) and `ui/pages/timeline_page.py` (60 s, store re-query). `QTableWidgetItem` is a C++ object, so the growth was native and invisible to Python-level profilers, which is why every earlier diagnostic round came back empty. Both timers now start in `showEvent()` and stop in `hideEvent()`; measured on a real Dashboard idling on Home against a real `MetricStore`, main-process RSS went from **+556 MB/hr to −19.6 MB/hr (flat)**
+- `ui/pages/security_overview_page.py` ran a 5 s refresh timer from construction — and unlike every other lazy page it is built *eagerly* in `_init_pages()`, so this ran on every launch for every user regardless of whether the page was ever opened. Not an RSS leak (measured flat: +5 MB/hr, +7 MB/hr with 25 seeded unacked alerts, because `setRowCount(0)` lets Qt reclaim the per-row widgets) but a permanent CPU/IO cost of ~6 s of CPU and ~2,160 SQLite reads per hour: 0.33 s CPU per 3 min idle against a 0.03 s do-nothing control, 0.05 s after the fix
+- `ui/pages/dhcp_lease_page.py` fired a lease scan at construction and kept a 300 s timer running on a never-opened page, spawning subprocesses and a `QThread` for a view the user had not asked for. Now 0 scans and no timers until first show, with the initial scan moved to a first-show-only call so opening the page still lands on populated leases rather than an empty state
+- `ui/pages/network_map_page.py`: three independent defects — `_start_bw_worker()` built a fresh `BandwidthOverlayWorker` on every `showEvent()` but `_stop_bw_worker()` only dropped the Python reference, never `deleteLater()`'d it, so each discarded `QThread` survived as a permanent C++ child of the page (RULE-WIN8); `_on_bw_snapshot()` re-serialized the entire topology into a `runJavaScript()` call every 5 s whether or not traffic had changed; and `showEvent()` scheduled a `fit_view()` JS push on every single visit even with no new scan data
+- `tests/test_connections_page.py` monkeypatched the `@pyqtSlot`-decorated `_refresh` on the *class*; once monkeypatch restored it, PyQt could no longer resolve the slot, so every later `ConnectionsPage()` in the same pytest process died with a `connect() failed` error. Test factories now override on a subclass instead
+
+**Added**
+- RULE-WIN18 and `tests/test_page_timer_lifecycle.py` — a runtime (not AST) guard that every page with a background timer starts it in `showEvent()` and stops it in `hideEvent()`. Runtime by necessity: `connections_page` started its timer *indirectly*, via `setChecked(True)` firing `toggled` into the start handler, which no realistic static check would follow. `hideEvent()` alone (RULE-WIN15) is not sufficient — a widget constructed but never shown never receives one
+- `tools/page_isolation_soak.py` — page-pair memory isolation harness built during this investigation, plus `docs/spikes/idle-rss-leak-lazy-page-timers.md` documenting the three measurements that overturned the previous root-cause theory and auditing the remaining construction-time timers
+- Full Documentation card on the Help & Shortcuts page, linking to the published docs site so a non-technical user can reach it from inside the app instead of only from README/GitHub
+
+---
+
 ### v2.1.52
 
 **Changed**

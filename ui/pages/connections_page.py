@@ -191,7 +191,16 @@ class ConnectionsPage(QWidget):
         self._chk_auto = QCheckBox("Auto (5s)")
         _s.themed_ss(self._chk_auto, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
         self._chk_auto.toggled.connect(self._on_auto_toggled)
+        # Checked by default (the intended UI state), but blockSignals keeps
+        # _on_auto_toggled from STARTING the 5 s timer here (RULE-WIN15). This
+        # page is lazily constructed by the background page-builder shortly
+        # after startup whether or not the user ever opens it, so starting the
+        # timer at construction ran a full psutil socket enumeration + table
+        # rebuild every 5 s for the whole app session on a page nobody had
+        # looked at. showEvent() starts it; hideEvent() stops it.
+        self._chk_auto.blockSignals(True)
         self._chk_auto.setChecked(True)
+        self._chk_auto.blockSignals(False)
 
         self._btn_group = QPushButton("⊞ Group by Process")
         self._btn_group.setCheckable(True)
@@ -681,6 +690,22 @@ class ConnectionsPage(QWidget):
     def showEvent(self, event) -> None:
         restore_column_widths(self._tbl, "connections")
         super().showEvent(event)
+        # Resume auto-refresh only if the user still wants it (RULE-WIN17's
+        # pattern: gate on the widget's own intent flag, not a saved snapshot).
+        if self._chk_auto.isChecked() and not self._auto_timer.isActive():
+            self._auto_timer.start()
+
+    def hideEvent(self, event) -> None:
+        """Stop the 5 s auto-refresh while the page isn't visible (RULE-WIN15).
+
+        Each _refresh() enumerates every process/socket via psutil and rebuilds
+        the whole table — ~10 QTableWidgetItems per connection row, which are
+        C++ objects and therefore invisible to tracemalloc. Left running on a
+        hidden page it is pure native churn nobody can see. The user's own
+        "Auto (5s)" checkbox state is untouched, so showEvent() resumes it.
+        """
+        self._auto_timer.stop()
+        super().hideEvent(event)
 
     def set_popover(self, popover) -> None:
         self._popover = popover

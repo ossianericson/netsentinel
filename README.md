@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-6469-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-6482-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning 
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**6,469 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**6,482 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -174,7 +174,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**6,469 automated tests** across 494 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**6,482 automated tests** across 495 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -218,12 +218,12 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.52 (current)
+### v2.2.0 (current)
 
-- Fixed a memory leak in Protocol Visualizer / Lab Mode — the animated canvas kept ticking at 30fps after you navigated away
-- Rewrote the README, docs site, and Store listing to lead with the same plain-English pitch, with a new "What it answers" table
-- Filled out the README Audit section to list all four capabilities (OS detection, credential testing, TLS monitor, CVE lookup) already promised at the top of the page
-- Published the documentation site via GitHub Pages
+- **Fixed the long-running memory growth.** Pages that had never been opened were quietly running background refresh timers from the moment the app started — rebuilding tables, querying the database, and enumerating network sockets for views nobody was looking at. On an idle app, memory went from growing 556 MB per hour to completely flat
+- Security Overview and DHCP Leases were doing the same thing, wasting roughly 6 seconds of CPU and 2,160 database reads every hour on a page you may never open. Both now do nothing until you actually visit them
+- Fixed three separate leaks in Network Map: a background worker that was recreated on every visit and never freed, a full topology redraw pushed every 5 seconds even when nothing had changed, and a redundant re-fit on every visit
+- Added a Full Documentation card to Help & Shortcuts, linking straight to the online docs
 
 ---
 

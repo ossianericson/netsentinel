@@ -154,7 +154,7 @@ def create_app(store: MetricStore) -> "Flask":
         return jsonify({
             "status":     "ok",
             "uptime_s":   round(time.time() - _start_ts, 1),
-            "version":    "2.1.52",
+            "version":    "2.2.0",
         })
 
     @app.route("/devices")

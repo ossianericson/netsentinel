@@ -72,17 +72,32 @@ class DhcpLeasePage(QWidget):
         super().__init__(parent)
         self._worker: Optional[DhcpLeaseWorker] = None
         self._leases: List[DhcpLease] = []
+        self._auto_scanned = False
         self._setup_ui()
-        # Auto-refresh every 5 minutes
+        # Auto-refresh every 5 minutes — RULE-WIN18: NOT started here, and no
+        # initial scan here either. This is a lazy page, so it is constructed a
+        # few seconds after startup whether or not the user ever opens it, and
+        # a lease scan shells out to `arp -a` + `ipconfig /all` (Windows) or
+        # reads lease files + nmcli (POSIX). Both the timer and the first scan
+        # are driven by showEvent() instead.
         self._timer = QTimer(self)
+        self._timer.setInterval(300_000)
         self._timer.timeout.connect(self._run_scan)
-        self._timer.start(300_000)
-        # Initial load
-        self._run_scan()
 
     def showEvent(self, event) -> None:
         restore_column_widths(self._table, "dhcp")
         super().showEvent(event)
+        if not self._timer.isActive():
+            self._timer.start()
+        # First visit only — replaces the scan __init__ used to fire, so opening
+        # the page still lands on populated leases rather than the empty state.
+        if not self._auto_scanned:
+            self._auto_scanned = True
+            self._run_scan()
+
+    def hideEvent(self, event) -> None:
+        self._timer.stop()
+        super().hideEvent(event)
 
     # ── UI construction ───────────────────────────────────────────────────────
 

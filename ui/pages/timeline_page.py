@@ -148,11 +148,15 @@ class TimelinePage(QWidget):
         self._tl_search_timer.timeout.connect(self._render)
         self._setup_ui()
 
-        # Auto-refresh every 60 s
+        # Auto-refresh every 60 s — deliberately NOT started here (RULE-WIN15).
+        # This page is lazily constructed by the background page-builder shortly
+        # after startup whether or not the user ever opens it, so starting the
+        # timer at construction ran a full _reload() + table rebuild every 60 s
+        # for the entire app session on a page nobody had looked at. showEvent()
+        # starts it; hideEvent() stops it.
         self._timer = QTimer(self)
         self._timer.setInterval(60_000)
         self._timer.timeout.connect(self._reload)
-        self._timer.start()
 
     # ── UI ────────────────────────────────────────────────────────────────────
 
@@ -594,3 +598,16 @@ class TimelinePage(QWidget):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._reload()
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def hideEvent(self, event) -> None:
+        """Stop the 60 s auto-refresh while the page isn't visible (RULE-WIN15).
+
+        Each _reload() re-queries the store and rebuilds the whole table —
+        hundreds of QTableWidgetItems, which are C++ objects and therefore
+        invisible to tracemalloc. Left running on a hidden page it is pure
+        native churn nobody can see.
+        """
+        self._timer.stop()
+        super().hideEvent(event)
