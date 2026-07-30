@@ -662,12 +662,18 @@ class _NavBuilderMixin:
         sec = next((s for s in self._nav_sections if s["name"] == section_name), None)
         if sec is None:
             return
+        # The "admin" pill is a WARNING, not a label — it means "you cannot run
+        # this as you are". Suppress it when the process is already elevated so the
+        # common admin case carries no noise. Re-evaluated on every flyout open,
+        # which is correct: elevation never changes mid-session.
+        _needs_admin_pill = not getattr(self, "_admin", False)
         entries = [
             (
                 e.label,
                 e.label in self._nav_pinned_labels,
                 e.admin_required or e.audit_item or e.npcap_required,
-                "admin" if e.admin_required else ("Npcap" if e.npcap_required else ""),
+                ("admin" if _needs_admin_pill else "") if e.admin_required
+                else ("Npcap" if e.npcap_required else ""),
             )
             for e in sec["entries"]
         ]

@@ -4,6 +4,17 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.1
+
+**Changed**
+- The red `admin` pill on the six Security Audit flyout items is now suppressed when NetSentinel is already running elevated. The pill is a warning ("you cannot run this as you are"), not a label, so it said nothing to a user who had already elevated — `ui/nav/builder.py::_nav_rail_toggle()` re-evaluates it on every flyout open
+- `ui/monitor_state.py::_refresh_section_badges()` now puts an amber left-dot on the Security Audit rail button and appends " — not running as Administrator" to its tooltip when unelevated, so the state is visible before the flyout is opened. `set_left_dot()` is a separate paint slot from the badge, so the existing numeric alert pill is untouched
+
+**Fixed**
+- `tools/monkey_test.py`: a long unattended chaos run could click the Settings "Start minimised to the system tray" checkbox, which `app.py` honours by launching tray-only with no window at all. The value is registry-persisted, so every later relaunch in that run — and every future run on the machine — started hidden and `_connect()` timed out with nothing to drive, surfacing as an unexplained "lost focus". The checkbox is now in `_BLACKLIST` on app-lifecycle grounds (RULE-CHAOS2), and a new `_reset_hazardous_settings()` clears an already-set value before each `_launch_exe()` / `_launch_source()`
+
+---
+
 ### v2.2.0
 
 **Fixed**

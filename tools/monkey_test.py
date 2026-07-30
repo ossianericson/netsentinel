@@ -201,6 +201,15 @@ _BLACKLIST: List[str] = [
     # --- App lifecycle ---
     "quit",
     "exit application",
+    "start minimised",  # Settings "Start minimised to the system tray" checkbox.
+                        # Writes QSettings startup/start_minimised, which app.py
+                        # honours on EVERY later launch by never showing a window
+                        # at all -- so one chaos click leaves nothing for UIA to
+                        # find (or for _assert_focus()/_focus_heartbeat() to
+                        # reclaim) for the rest of the run and every future run on
+                        # the machine.  Same app-lifecycle harm as minimize above,
+                        # only persistent.  _reset_hazardous_settings() clears an
+                        # already-set value; this stops it being set again.
     # --- File open/save dialogs (Windows native) — must never be opened ---
     # A Windows file picker steals focus from the app and stalls the harness.
     "browse",           # any "Browse…" button for file/folder selection
@@ -1265,10 +1274,44 @@ class MonkeyTester:
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass  # already gone, or no permission to force-kill — nothing more we can do
 
+    def _reset_hazardous_settings(self) -> None:
+        """Clear a persisted flag that would hide the app window from this launch.
+
+        "Start minimised to the system tray" is blacklisted (see _BLACKLIST) so
+        chaos clicking won't set it going forward, but a machine where it is
+        ALREADY set — by a prior run, by the developer's own settings, or before
+        that blacklist entry existed — would otherwise start every launch in this
+        run tray-only, with no window for _connect() to find and nothing for
+        _assert_focus()/_focus_heartbeat() to reclaim. Reset it on every launch so
+        a run is self-healing regardless of how the flag got set.
+
+        QSettings("NetSentinel", "NetSentinel") uses the Windows registry native
+        format, storing booleans as literal "true"/"false" REG_SZ strings.
+        """
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER, r"Software\NetSentinel\NetSentinel\startup",
+                0, winreg.KEY_SET_VALUE,
+            )
+            try:
+                winreg.SetValueEx(key, "start_minimised", 0, winreg.REG_SZ, "false")
+            finally:
+                winreg.CloseKey(key)
+            self.log.info("[setup] startup/start_minimised reset to false "
+                          "(app must show a window for UIA to drive)")
+        except FileNotFoundError:
+            pass  # key doesn't exist yet — the flag was never set, nothing to reset
+        except OSError as exc:
+            # Non-fatal: the launch proceeds either way. If the flag really was
+            # set, _connect() will time out and say so.
+            self.log.warning("[setup] could not reset startup/start_minimised: %s", exc)
+
     # ── Launch & connect ──────────────────────────────────────────────────
 
     def _launch_exe(self) -> bool:
         self._kill_stale_netsentinel()
+        self._reset_hazardous_settings()
         path = self.cfg.exe_path
         self.log.info("Launching exe: %s", path)
         try:
@@ -1282,6 +1325,7 @@ class MonkeyTester:
 
     def _launch_source(self) -> bool:
         self._kill_stale_netsentinel()
+        self._reset_hazardous_settings()
         repo = Path(__file__).parent.parent
         entry = repo / "app.py"
         self.log.info("Launching source: python %s", entry)

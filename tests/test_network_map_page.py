@@ -25,6 +25,7 @@ away-then-back sequence instead of a single resync call.
 """
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -97,6 +98,27 @@ def _wait_for_cycle(timeout_ms: int = 600) -> None:
     """Pump the Qt event loop long enough for _cycle_geometric_layout's
     deferred QTimer (250ms) to fire."""
     QTest.qWait(timeout_ms)
+
+
+def _wait_for(predicate, timeout_ms: int = 3000) -> bool:
+    """Pump the Qt event loop until ``predicate()`` is true, or the deadline
+    passes. Returns whether it became true.
+
+    Prefer this over a fixed QTest.qWait() for anything gated on a deferred
+    QTimer: showEvent()'s fit is scheduled 200ms out, so a flat qWait(250)
+    leaves a 50ms margin that a contended CI runner can miss — which is
+    exactly how test_show_event_skips_redundant_fit_when_no_new_data failed
+    on macOS in the v2.1.x/v2.2.1 release run while passing on the identical
+    code in the v2.2.0 run 2.5h earlier. Polling to a generous deadline
+    removes the timing dependency without weakening the assertion: a fit that
+    genuinely never fires still fails the test, it just takes longer to say so.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while time.monotonic() < deadline:
+        QTest.qWait(20)
+        if predicate():
+            return True
+    return False
 
 
 def test_mesh_arriving_after_devices_cycles_layout_away_and_back(page, monkeypatch):
@@ -626,9 +648,17 @@ def test_show_event_skips_redundant_fit_when_no_new_data(page, monkeypatch):
                   # showEvent()/hideEvent() to its children (see
                   # test_protocol_canvas.py::test_hide_show_propagates_through_nested_stacked_widget)
 
-    for _ in range(5):
+    for i in range(5):
         stack.setCurrentWidget(page)   # fires showEvent()
-        QTest.qWait(250)               # let the 200ms QTimer fire
+        if i == 0:
+            # Wait for the first fit to actually land rather than sleeping a
+            # fixed 250ms, so the count below means "the 4 revisits added
+            # nothing" instead of "one fit landed somewhere in 1250ms".
+            assert _wait_for(lambda: len(fit_calls) == 1), (
+                "the first show with fresh scan data must schedule a fit"
+            )
+        else:
+            QTest.qWait(250)           # let the 200ms QTimer fire
         stack.setCurrentWidget(other)  # fires hideEvent()
 
     assert len(fit_calls) == 1, (
@@ -646,8 +676,10 @@ def test_show_event_skips_redundant_fit_when_no_new_data(page, monkeypatch):
     assert page._scan_id != fit_calls[0], "test setup: scan_id must actually change"
     stack.setCurrentWidget(other)
     stack.setCurrentWidget(page)
-    QTest.qWait(250)
-    assert len(fit_calls) == 2
+    assert _wait_for(lambda: len(fit_calls) == 2), (
+        "a revisit after new scan data arrived must re-fit — "
+        f"fit_view() fired {len(fit_calls)} time(s), expected 2"
+    )
 
     other.deleteLater()
     stack.deleteLater()

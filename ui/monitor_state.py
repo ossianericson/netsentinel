@@ -516,15 +516,24 @@ class _MonitorStateMixin:
                 )
             except Exception:
                 alert_count = 0
+            # Elevation state on the rail itself, so "several of these tools can't
+            # run" is visible before the flyout is even opened. The left dot is a
+            # separate paint slot from the badge above, so it never collides with
+            # the numeric alert pill. Cleared when elevated (see _nav_rail_toggle:
+            # the per-item "admin" pills disappear then too).
+            _elevated = getattr(self, "_admin", False)
+            sec_btn.set_left_dot("" if _elevated else _s.AMBER)
+            _admin_note = "" if _elevated else " — not running as Administrator"
             if alert_count > 0:
                 sec_btn.set_badge(alert_count)   # numeric red pill
-                sec_btn.setToolTip(_s.safe_tooltip(f"Security Audit — {alert_count} unacknowledged alert(s)"))
+                sec_btn.setToolTip(_s.safe_tooltip(
+                    f"Security Audit — {alert_count} unacknowledged alert(s){_admin_note}"))
             elif dhcp:
                 sec_btn.set_badge(_s.GREEN)
-                sec_btn.setToolTip(_s.safe_tooltip("Security Audit"))
+                sec_btn.setToolTip(_s.safe_tooltip(f"Security Audit{_admin_note}"))
             else:
                 sec_btn.set_badge(0)
-                sec_btn.setToolTip(_s.safe_tooltip("Security Audit"))
+                sec_btn.setToolTip(_s.safe_tooltip(f"Security Audit{_admin_note}"))
 
         # POLISH-2: CVE Tracker — count of Open-state CVEs
         cve_btn = self._nav_rail_buttons.get("CVE Tracker")

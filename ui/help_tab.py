@@ -36,12 +36,10 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.2.0"
+_WHATS_NEW_VERSION = "2.2.1"
 _WHATS_NEW_ENTRIES = [
-    ("Memory growth over long sessions — fixed", "If you left NetSentinel running for hours, its memory use climbed steadily. The cause: pages you had never opened were still running background refresh timers from the moment the app started, rebuilding tables and re-reading the database for views nobody was looking at. On an idle app, memory went from growing 556 MB every hour to completely flat."),
-    ("Less background work on pages you never open", "Security Overview and DHCP Leases were refreshing themselves — and DHCP Leases was running a scan — before you ever visited them, costing about 6 seconds of CPU and 2,160 database reads an hour for nothing. Both now stay idle until you open them."),
-    ("Network Map leaks — fixed", "Three separate issues: a background bandwidth worker recreated on every visit and never released, a full map redraw pushed every 5 seconds even when nothing had changed, and a redundant re-fit each time you opened the page."),
-    ("Full Documentation card added", "Help & Shortcuts now links straight to the online documentation, so you can reach it from inside the app instead of hunting for it on GitHub."),
+    ("The admin badge now tells you something", "Security Audit pages carried a red 'admin' badge at all times, including when you were already running NetSentinel as Administrator — where it warned about a restriction that no longer applied. The badge is now shown only when you are not elevated."),
+    ("See it before you open the menu", "The Security Audit icon in the left rail now shows an amber dot, and its tooltip says 'not running as Administrator', so you can tell those scans need elevation without opening the section first. Your unread-alert count on that icon is unchanged."),
 ]
 
 

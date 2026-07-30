@@ -100,6 +100,49 @@ def test_close_and_minimize_stay_blacklisted(monkey):
         "minimize must stay blacklisted -- it hides the window from UIA"
 
 
+def test_start_minimised_checkbox_stays_blacklisted(monkey):
+    """The Settings "Start minimised to the system tray" checkbox is an
+    app-lifecycle exclusion — the same class as minimize, only PERSISTENT.
+
+    It writes QSettings startup/start_minimised, and app.py honours that flag on
+    EVERY subsequent launch by never showing a window at all (tray-only). One
+    chaos click therefore makes every later relaunch in the run — and every future
+    run on the machine, since the value lives in the registry — start with no
+    window for UIA to find, so _connect() times out and _assert_focus()/
+    _focus_heartbeat() have nothing to reclaim. Reads as "the run lost focus".
+    """
+    label = ("Start minimised to the system tray  "
+             "(applies to every launch, not just automatic startup)")
+    assert monkey._is_blacklisted(label, "QApplication.Dashboard.QCheckBox"), (
+        "the 'Start minimised to the system tray' checkbox is clickable by chaos "
+        "runs again. It hides the app from UIA on every FUTURE launch too "
+        "(QSettings startup/start_minimised), which is a persistent version of the "
+        "minimize exclusion — RULE-CHAOS2 app-lifecycle, not a crash workaround."
+    )
+
+
+def test_both_launch_paths_reset_hazardous_settings(monkey):
+    """A machine where start_minimised is already set must self-heal.
+
+    Blacklisting only stops the flag being set from here on. Both launch paths
+    must also clear it, or a run on an already-tripped machine (set by a prior
+    run, by a real user, or before the blacklist entry existed) starts tray-only
+    forever with no window to drive.
+    """
+    import inspect
+
+    assert hasattr(monkey.MonkeyTester, "_reset_hazardous_settings"), (
+        "no _reset_hazardous_settings(): an already-set startup/start_minimised "
+        "registry value would make every launch in the run tray-only"
+    )
+    for meth in ("_launch_exe", "_launch_source"):
+        src = inspect.getsource(getattr(monkey.MonkeyTester, meth))
+        assert "_reset_hazardous_settings" in src, (
+            f"MonkeyTester.{meth}() does not call _reset_hazardous_settings(), so a "
+            f"machine with startup/start_minimised already set launches tray-only"
+        )
+
+
 def test_chrome_actions_are_registered_in_every_chaos_pool(monkey):
     """Window-chrome actions must run at every chaos level, not just 'wild'.
 
