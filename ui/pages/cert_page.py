@@ -56,9 +56,14 @@ class CertPage(QWidget):
         if self._configured:
             self._content_stack.setCurrentIndex(1)
         self._refresh()
-        timer = QTimer(self)
-        timer.timeout.connect(self._refresh)
-        timer.start(300_000)   # auto-refresh every 5 minutes
+        # Auto-refresh every 5 min — deliberately NOT started here (RULE-WIN18).
+        # The lazy page-builder constructs this page shortly after startup
+        # whether or not the user ever opens it, so a timer started at
+        # construction rebuilds the whole table for the entire session on a page
+        # nobody has looked at. showEvent() starts it; hideEvent() stops it.
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(300_000)
+        self._refresh_timer.timeout.connect(self._refresh)
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
@@ -547,3 +552,15 @@ class CertPage(QWidget):
     def _clear_cert_snooze(self, host: str, port: str) -> None:
         QSettings("NetSentinel", "NetSentinel").remove(f"cert/snooze/{host}:{port}")
         self._refresh()
+
+    # ── Timer lifecycle ───────────────────────────────────────────────────────
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._refresh_timer.isActive():
+            self._refresh_timer.start()
+
+    def hideEvent(self, event) -> None:
+        """Stop the auto-refresh while the page isn't visible (RULE-WIN15)."""
+        self._refresh_timer.stop()
+        super().hideEvent(event)

@@ -93,9 +93,14 @@ class ServicePage(QWidget):
             self._content_stack.setCurrentIndex(1)
         insert_skeleton_rows(self._table, count=4)
         self._refresh()
-        timer = QTimer(self)
-        timer.timeout.connect(self._refresh)
-        timer.start(60_000)
+        # Auto-refresh every 60 s — deliberately NOT started here (RULE-WIN18).
+        # The lazy page-builder constructs this page shortly after startup
+        # whether or not the user ever opens it, so a timer started at
+        # construction rebuilds the whole table for the entire session on a page
+        # nobody has looked at. showEvent() starts it; hideEvent() stops it.
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(60_000)
+        self._refresh_timer.timeout.connect(self._refresh)
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
@@ -767,3 +772,15 @@ class ServicePage(QWidget):
                 self._table.setCurrentCell(row, 1)
                 self._table.scrollToItem(host_it)
                 break
+
+    # ── Timer lifecycle ───────────────────────────────────────────────────────
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._refresh_timer.isActive():
+            self._refresh_timer.start()
+
+    def hideEvent(self, event) -> None:
+        """Stop the auto-refresh while the page isn't visible (RULE-WIN15)."""
+        self._refresh_timer.stop()
+        super().hideEvent(event)

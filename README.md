@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-6492-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-6534-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning 
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**6,492 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**6,534 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -174,7 +174,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**6,492 automated tests** across 496 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**6,534 automated tests** across 497 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -218,11 +218,12 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.2.1 (current)
+### v2.2.2 (current)
 
-- The red **admin** badge on Security Audit pages now only appears when you are *not* running as Administrator. If you have already elevated, the badge is hidden — it was a warning about something that no longer applied
-- The Security Audit icon in the left rail now carries an amber dot and a tooltip when NetSentinel is not elevated, so you can see those scans need Administrator without opening the menu first
-- Fixed a chaos-test harness bug where a random click on "Start minimised to the system tray" left every later test run with no window to drive
+- Lower idle memory use. Four more pages — Certificates, Uptime & SLA, Service Heartbeat and Maintenance Windows — kept rebuilding their tables in the background even if you never opened them, as did the loading-placeholder animation behind them. They now only do work while on screen
+- Fixed a crash on the Notifications page when snoozing an alert on a non-English Windows locale
+- The Network Timeline no longer rebuilds every row from scratch each time it refreshes, so it stays responsive with a full event feed
+- Modem monitoring no longer re-authenticates and re-reads the entire Windows certificate store every 30 seconds — a noticeable idle-CPU saving for anyone using the 5G modem plugin
 
 ---
 

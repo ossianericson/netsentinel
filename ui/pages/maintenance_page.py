@@ -296,11 +296,15 @@ class MaintenancePage(QWidget):
         self._manager: Optional[MaintenanceWindowManager] = None
         self._content_stack = None  # set during __init__ below
 
-        # Auto-refresh timer (updates Active/Scheduled/Expired status every minute)
+        # Auto-refresh timer (updates Active/Scheduled/Expired status every
+        # minute) — deliberately NOT started here (RULE-WIN18). The lazy
+        # page-builder constructs this page shortly after startup whether or not
+        # the user ever opens it, so a timer started at construction rebuilds
+        # the whole table for the entire session on a page nobody has looked at.
+        # showEvent() starts it; hideEvent() stops it.
         self._timer = QTimer(self)
         self._timer.setInterval(60_000)
         self._timer.timeout.connect(self._refresh_table)
-        self._timer.start()
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -627,3 +631,15 @@ class MaintenancePage(QWidget):
             self._manager.clear_suppression_log()
         self._log_table.setRowCount(0)
         self._update_kpis()
+
+    # ── Timer lifecycle ───────────────────────────────────────────────────────
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def hideEvent(self, event) -> None:
+        """Stop the auto-refresh while the page isn't visible (RULE-WIN15)."""
+        self._timer.stop()
+        super().hideEvent(event)

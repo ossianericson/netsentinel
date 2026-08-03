@@ -107,12 +107,27 @@ def get_info() -> dict:
     }
 
 
+#: Authenticated client reused across polls — see get_status().
+_CLIENT = None
+
+
 def get_status() -> dict:
+    global _CLIENT
     from modules.zte_client import ZteMC889Client, ZteAuthError, ZteApiError
     try:
         host, pw = _load_credentials()
-        client = ZteMC889Client(host)
-        client.login(pw)
+        # PluginPollingWorker polls a "modem" plugin every 30 s. Building a new
+        # client per poll meant a new requests.Session per poll, and creating a
+        # Session's HTTPS adapter builds an SSLContext whose load_default_certs()
+        # enumerates the ENTIRE Windows certificate store — measured at 24% of
+        # all Python samples on an idle Dashboard, plus two extra HTTPS
+        # round-trips every 30 s. get_signal_data() already re-authenticates
+        # itself when the session goes stale, so one cached client is enough.
+        client = _CLIENT
+        if client is None or getattr(client, "host", None) != host:
+            client = ZteMC889Client(host)
+            client.login(pw)
+            _CLIENT = client
         data = client.get_signal_data()
         return {
             "wan_ip":            data.wan_ip,
@@ -146,6 +161,10 @@ def get_status() -> dict:
             },
         }
     except (ZteAuthError, ZteApiError) as exc:
+        # Drop the cached client: a revoked cookie or a rebooted modem makes it
+        # permanently unusable, so the next poll must build and authenticate a
+        # fresh one rather than re-failing against a dead session forever.
+        _CLIENT = None
         return {
             "wan_ip": None, "uptime_sec": None,
             "download_mbps": None, "upload_mbps": None,

@@ -44,6 +44,7 @@ import dataclasses
 import json
 import logging
 import random
+import shutil
 import string
 import subprocess
 import sys
@@ -83,11 +84,8 @@ _VERSION = "1.6.8"
 # Title STARTS with "NetSentinel" — never matches VS Code's
 # "monkey_test.py — NetSentinel — Visual Studio Code" title.
 _WINDOW_RE = r"^NetSentinel"
-_CONNECT_TIMEOUT = 60       # seconds to wait for the window after launch
 _CONNECT_POLL = 2.0         # seconds between connection attempts
 _HEALTH_INTERVAL = 2.0      # seconds between background health checks
-_UNRESPONSIVE_SECS = 45     # seconds without a completed iteration before hang alarm
-                            # (raised from 20 — "Update Feeds" on Threat Intel takes ~26 s)
 
 
 def _crash_log_path() -> Optional[Path]:
@@ -102,6 +100,22 @@ def _crash_log_path() -> Optional[Path]:
         return Path(get_app_data_dir()) / "netsentinel_crash.log"
     except Exception:
         return None  # non-fatal — crash-log watching is best-effort
+
+
+def _tracemalloc_log_path() -> Optional[Path]:
+    """Path of the tracemalloc snapshot log app.py writes to under --tracemalloc.
+
+    Same resolution mechanism as _crash_log_path() (get_app_data_dir(), RULE 23).
+    app.py truncates this file fresh on every launch (RULE-TM1), so a mid-phase
+    MonkeyTest._restart_app() destroys everything logged before the restart
+    unless it is salvaged first — see MonkeyTest._salvage_tracemalloc_log().
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from modules.utils import get_app_data_dir
+        return Path(get_app_data_dir()) / "tracemalloc_snapshots.log"
+    except Exception:
+        return None  # non-fatal — salvage is best-effort
 
 # ── Windows power management ───────────────────────────────────────────────────
 _ES_CONTINUOUS       = 0x80000000
@@ -356,8 +370,12 @@ class Config:
     tracemalloc: bool = False        # enable in-process tracemalloc snapshots in app
     gc_census: bool = False          # enable in-process gc.get_objects() class-count census in app
     vmem_census: bool = False        # enable in-process VirtualQuery region-type census in app
+    procdump: bool = False           # attach Sysinternals ProcDump to the launched process (RULE-DBG2)
     max_restarts: int = 3            # auto-restart app when window vanishes unexpectedly
     warmup_secs: float = 5.0        # seconds to wait after overlay dismissal before first click
+    connect_timeout_secs: float = 60.0  # seconds to wait for the window after launch
+    unresponsive_secs: float = 45.0     # seconds without a completed iteration before hang alarm
+                                         # (raised from 20 -- "Update Feeds" on Threat Intel takes ~26 s)
 
     def resolved_log_file(self) -> str:
         if self.log_file:
@@ -1069,6 +1087,8 @@ class MonkeyTester:
         self._proc: Optional[psutil.Process] = None
         self._app: Optional[Application] = None
         self._win = None
+        self._procdump_proc: Optional[subprocess.Popen] = None
+        self._procdump_warned = False
         self._last_iter_time = time.time()
         self._stop = threading.Event()
         # White-frame/hang investigation (2026-07-19): exit code of the last
@@ -1233,6 +1253,77 @@ class MonkeyTester:
                 return True
         return False
 
+    def _procdump_path(self) -> Optional[str]:
+        """Locate procdump64.exe, or None if Sysinternals ProcDump isn't installed.
+
+        winget installs it to a per-user path with a version-hash suffix that
+        isn't on PATH by default, so check shutil.which() first (covers a
+        manual install) then fall back to globbing the known winget layout.
+        """
+        found = shutil.which("procdump64") or shutil.which("procdump")
+        if found:
+            return found
+        winget_pkgs = Path.home() / "AppData/Local/Microsoft/WinGet/Packages"
+        try:
+            for candidate in winget_pkgs.glob("Microsoft.Sysinternals.Suite_*/procdump64.exe"):
+                return str(candidate)
+        except OSError:
+            pass  # winget packages dir doesn't exist on this machine
+        return None
+
+    def _attach_procdump(self, pid: int) -> None:
+        """Attach Sysinternals ProcDump to `pid` in hang-detection mode (RULE-DBG2).
+
+        Captures a full dump the moment Windows marks the window hung (via
+        IsHungAppWindow), instead of relying on log correlation after the
+        fact. Exception-monitoring mode (-e 1) was tried first but proved to
+        be pure noise for this app: every launch throws a routine, immediately
+        -handled pybind11::attribute_error during native-extension startup,
+        which -e 1 can't distinguish from a real fault — confirmed via cdb.exe
+        on 6/6 dumps across two runs, none related to the actual hangs being
+        investigated. -h targets the real open bug (hang / high-RSS stalls)
+        directly. No-ops silently if --procdump wasn't passed or ProcDump
+        isn't installed — this is optional diagnostic tooling and must never
+        abort the chaos run.
+        """
+        if not self.cfg.procdump:
+            return
+        # A previous leg's ProcDump instance dies on its own once its target
+        # process exits, but detach defensively so restarts never accumulate
+        # orphaned ProcDump processes.
+        self._detach_procdump()
+
+        path = self._procdump_path()
+        if not path:
+            if not self._procdump_warned:
+                self._procdump_warned = True
+                self.log.warning(
+                    "[procdump] --procdump requested but ProcDump was not found "
+                    "(winget install Microsoft.Sysinternals.Suite) — continuing without it"
+                )
+            return
+
+        dump_dir = Path(self.cfg.output_dir) / "dumps"
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self._procdump_proc = subprocess.Popen(
+                [path, "-accepteula", "-ma", "-h", "-n", "5", str(pid), str(dump_dir)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            self.log.info("[procdump] attached to PID %d, dumps -> %s", pid, dump_dir)
+        except OSError as exc:
+            self.log.warning("[procdump] failed to attach: %s", exc)
+
+    def _detach_procdump(self) -> None:
+        """Terminate any attached ProcDump instance so it doesn't outlive the run."""
+        if self._procdump_proc is not None and self._procdump_proc.poll() is None:
+            try:
+                self._procdump_proc.terminate()
+            except OSError:
+                pass  # already gone
+        self._procdump_proc = None
+
     def _kill_stale_netsentinel(self) -> None:
         """Terminate any pre-existing NetSentinel processes before launching a new one.
 
@@ -1318,6 +1409,7 @@ class MonkeyTester:
             raw = subprocess.Popen([path])
             self._proc = psutil.Process(raw.pid)
             self.log.info("PID: %d", raw.pid)
+            self._attach_procdump(raw.pid)
             return True
         except (OSError, FileNotFoundError) as exc:
             self.log.error("Launch failed: %s", exc)
@@ -1346,6 +1438,7 @@ class MonkeyTester:
             raw = subprocess.Popen([sys.executable, str(entry)], cwd=str(repo), env=env)
             self._proc = psutil.Process(raw.pid)
             self.log.info("PID: %d", raw.pid)
+            self._attach_procdump(raw.pid)
             return True
         except Exception as exc:
             self.log.error("Source launch failed: %s", exc)
@@ -1361,8 +1454,8 @@ class MonkeyTester:
         accidentally connect to VS Code whose title may contain "NetSentinel".
         Falls back to title-regex + process-exclusion filtering for --connect mode.
         """
-        self.log.info("Waiting for window (up to %ds)...", _CONNECT_TIMEOUT)
-        deadline = time.time() + _CONNECT_TIMEOUT
+        self.log.info("Waiting for window (up to %ds)...", self.cfg.connect_timeout_secs)
+        deadline = time.time() + self.cfg.connect_timeout_secs
         target_pid: Optional[int] = self._proc.pid if self._proc else None
 
         while time.time() < deadline:
@@ -1696,7 +1789,7 @@ class MonkeyTester:
 
             # Hang detection — main loop must complete an iteration every N seconds
             idle = time.time() - self._last_iter_time
-            if idle > _UNRESPONSIVE_SECS:
+            if idle > self.cfg.unresponsive_secs:
                 self.log.error("[health] No iteration for %.0fs — app may be hung", idle)
                 self._stop.set()
                 return
@@ -1836,6 +1929,35 @@ class MonkeyTester:
 
     # ── App restart ───────────────────────────────────────────────────────
 
+    def _salvage_tracemalloc_log(self) -> None:
+        """Copy the in-flight tracemalloc_snapshots.log into this phase's output
+        dir before _restart_app() kills the process that's writing it.
+
+        app.py truncates the log fresh on every launch (RULE-TM1), and the very
+        next thing _restart_app() does after this call is kill the current
+        process and relaunch a new one. Without this, every allocation snapshot
+        since phase start — including the run-up to whatever triggered the
+        restart (a hang, a crash, a dead process) — is silently discarded the
+        moment the new process starts, and run_all_monkey_tests.ps1's
+        end-of-phase copy only ever sees what accumulated since the LAST
+        restart. Numbered by self.stats.restarts (already incremented by the
+        caller) so multiple restarts in one phase each keep their own file.
+        """
+        if not self.cfg.tracemalloc:
+            return
+        src = _tracemalloc_log_path()
+        if src is None or not src.exists():
+            return
+        try:
+            import shutil
+            out_dir = Path(self.cfg.output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            dest = out_dir / f"tracemalloc_pre_restart_{self.stats.restarts}.log"
+            shutil.copy2(src, dest)
+            self.log.info("[restart] Salvaged tracemalloc log before restart -> %s", dest)
+        except OSError as exc:
+            self.log.warning("[restart] Could not salvage tracemalloc log before restart: %s", exc)
+
     def _restart_app(self) -> bool:
         """Kill the current app and relaunch it after an unexpected exit.
 
@@ -1851,6 +1973,8 @@ class MonkeyTester:
         self._stop.set()
         time.sleep(0.3)   # allow focus heartbeat (uses _stop.wait) to notice and exit
 
+        # Salvage BEFORE the kill below truncates the log via the new launch.
+        self._salvage_tracemalloc_log()
         self._kill_stale_netsentinel()
         self._proc = None
         self._win = None
@@ -2256,6 +2380,7 @@ class MonkeyTester:
                 break
 
         self._stop.set()
+        self._detach_procdump()
         if self.cfg.prevent_sleep:
             _prevent_sleep_end(self.log)
 
@@ -2394,6 +2519,106 @@ class MonkeyTester:
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
+# --- IFEO GlobalFlag (+ust) preflight -----------------------------------------
+# `gflags /i <image> +ust` sets FLG_USER_STACK_TRACE_DB in the image's IFEO key,
+# making the OS capture a stack trace on EVERY heap allocation in every matching
+# process. It is a debugging aid (tools/umdh_leak_probe.py needs it) but it is
+# also process-wide, persistent across reboots, and completely invisible at
+# runtime -- nothing in the app or this harness looks different, the numbers are
+# just wrong. Measured cost when it was left armed by accident on 2026-08-03:
+# app startup 5.8s -> 99s, the pytest suite 9min -> 68min, two "failures" that
+# were pure instrumentation artifact, and an entire day of RSS/perf conclusions
+# collected under it that had to be thrown out.
+#
+# A multi-hour overnight chaos run is the single most expensive thing to lose
+# this way, so the harness refuses to start rather than produce numbers nobody
+# can trust afterwards.
+_FLG_USER_STACK_TRACE_DB = 0x1000
+_IFEO_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options"
+_GFLAGS_EXE = r"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\gflags.exe"
+_TRACE_SENSITIVE_IMAGES = ("python.exe", "NetSentinel.exe")
+
+
+def _coerce_global_flag(raw: object) -> int:
+    """Parse a GlobalFlag registry value, which may be REG_DWORD or REG_SZ.
+
+    gflags writes the string form ("0x00001000"); a hand-set value is often
+    decimal. Anything unparseable reads as 0 -- see _ifeo_global_flag for why
+    this whole path fails open.
+    """
+    if isinstance(raw, int):
+        return raw
+    if raw is None:
+        return 0
+    text = str(raw).strip()
+    if not text:
+        return 0
+    try:
+        return int(text, 16) if text.lower().startswith("0x") else int(text, 10)
+    except ValueError:
+        return 0
+
+
+def _ifeo_global_flag(image_name: str) -> int:
+    """Read the IFEO GlobalFlag for `image_name`; 0 when unset or unreadable.
+
+    Fails open deliberately. This backs a preflight ABORT, so a registry read
+    that fails for an ordinary reason (non-Windows, no permission, no key at
+    all -- the normal case) must never block a legitimate chaos run.
+    """
+    if sys.platform != "win32":
+        return 0
+    try:
+        import winreg
+    except ImportError:
+        return 0
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{_IFEO_KEY}\\{image_name}") as key:
+            raw, _ = winreg.QueryValueEx(key, "GlobalFlag")
+    except OSError:
+        return 0  # no IFEO key / no GlobalFlag value / access denied — all mean "not traced"
+    return _coerce_global_flag(raw)
+
+
+def _ust_traced_images(images=_TRACE_SENSITIVE_IMAGES) -> List[tuple]:
+    """Return [(image, flag), ...] for images with +ust stack tracing armed."""
+    return [(img, flag) for img in images
+            if (flag := _ifeo_global_flag(img)) & _FLG_USER_STACK_TRACE_DB]
+
+
+def _preflight_gflags(allow_gflags: bool) -> Optional[str]:
+    """Return an abort message when +ust tracing is armed, else None.
+
+    Only FLG_USER_STACK_TRACE_DB is a hard stop -- other GlobalFlag bits (heap
+    checks etc.) don't carry the per-allocation cost that invalidates timing and
+    RSS numbers, so they're left alone rather than blocking a run over them.
+    """
+    if allow_gflags:
+        return None
+    traced = _ust_traced_images()
+    if not traced:
+        return None
+    lines = [
+        "ABORTING -- gflags +ust stack-trace tracing is armed. Every number this",
+        "run produces (RSS, peak RSS, timings, hang detection) would be an artifact",
+        "of the instrumentation, not the app.",
+        "",
+        "Traced image(s):",
+    ]
+    lines += [f"    {img}  GlobalFlag=0x{flag:08X}" for img, flag in traced]
+    lines += [
+        "",
+        "Clear it from an ELEVATED PowerShell (note the '&' -- the path has spaces):",
+    ]
+    lines += [f'    & "{_GFLAGS_EXE}" /i {img} -ust' for img, _ in traced]
+    lines += [
+        "",
+        "Then re-run. Pass --allow-gflags to run under tracing on purpose",
+        "(e.g. a deliberate UMDH soak) and accept that the numbers are not comparable.",
+    ]
+    return "\n".join(lines)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Monkey / chaos tester for NetSentinel",
@@ -2437,10 +2662,33 @@ def _build_parser() -> argparse.ArgumentParser:
                         "by Private/Mapped/Image region type to vmem_census.log every 60 s — the native "
                         "counterpart to --tracemalloc/--gc-census, showing WHICH native region grows "
                         "when the Python-heap byte and object-count views both stay flat)")
+    p.add_argument("--procdump", action="store_true",
+                   help="Attach Sysinternals ProcDump (winget install Microsoft.Sysinternals.Suite) "
+                        "to the launched process in hang-detection mode (-h -n 5 -ma), so a real "
+                        "IsHungAppWindow stall captures a full dump automatically instead of relying "
+                        "on log correlation after the fact (RULE-DBG2). Re-attached on every restart. "
+                        "No-ops with a one-time warning if ProcDump isn't installed.")
     p.add_argument("--max-restarts", type=int, default=3, metavar="N",
                    help="Max auto-restarts when the app window vanishes unexpectedly (default 3; 0 = disabled)")
     p.add_argument("--warmup-secs", type=float, default=5.0, metavar="SECS",
                    help="Seconds to wait after overlay dismissal before the first click (default 5)")
+    p.add_argument("--connect-timeout", type=float, default=60.0, metavar="SECS",
+                   help="Seconds to wait for the app window to appear after launch (default 60). "
+                        "Raise this for launches with heavy startup instrumentation active (e.g. "
+                        "gflags +ust / UMDH tracing), which can push real startup time well past "
+                        "the default before the window ever appears.")
+    p.add_argument("--unresponsive-secs", type=float, default=45.0, metavar="SECS",
+                   help="Seconds without a completed iteration before the health monitor declares "
+                        "the app hung and restarts it (default 45). Raise this alongside "
+                        "--connect-timeout under gflags +ust / UMDH tracing -- its per-allocation "
+                        "overhead can slow ordinary actions enough to false-trip this mid-run, "
+                        "which forces a restart and invalidates a snap1/snap2 UMDH pairing (they "
+                        "must come from the same process lifetime).")
+    p.add_argument("--allow-gflags", action="store_true",
+                   help="Run even when gflags +ust stack-trace tracing is armed on python.exe / "
+                        "NetSentinel.exe. Off by default: +ust puts a stack trace on every heap "
+                        "allocation, so RSS and timing numbers collected under it are artifacts "
+                        "(measured: startup 5.8s -> 99s). Use only for a deliberate UMDH soak.")
     return p
 
 
@@ -2453,6 +2701,13 @@ def main() -> None:
 
     if args.exe_path and not Path(args.exe_path).exists():
         print(f"ERROR: exe not found: {args.exe_path}", file=sys.stderr)
+        sys.exit(2)
+
+    # Checked before anything is launched or any output dir is created -- an
+    # overnight run must fail in seconds, not produce hours of unusable numbers.
+    gflags_abort = _preflight_gflags(args.allow_gflags)
+    if gflags_abort:
+        print(gflags_abort, file=sys.stderr)
         sys.exit(2)
 
     if args.tracemalloc and not args.source:
@@ -2484,8 +2739,11 @@ def main() -> None:
         tracemalloc=args.tracemalloc and args.source,
         gc_census=args.gc_census and args.source,
         vmem_census=args.vmem_census and args.source,
+        procdump=args.procdump,
         max_restarts=args.max_restarts,
         warmup_secs=args.warmup_secs,
+        connect_timeout_secs=args.connect_timeout,
+        unresponsive_secs=args.unresponsive_secs,
     )
 
     sys.exit(MonkeyTester(cfg).run())

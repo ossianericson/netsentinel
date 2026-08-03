@@ -25,6 +25,9 @@ live widget "do you have any active timers?" catches every route.
 """
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PyQt6", reason="PyQt6 not installed")
@@ -117,12 +120,48 @@ def _make_dhcp_lease_page():
     return _StubbedDhcpLeasePage()
 
 
-# (id, factory) — extend this list when a new page gains a background timer.
+def _stubbed(cls, **stubs):
+    """Subclass `cls` overriding data-load methods with no-ops.
+
+    Overriding on a subclass rather than monkeypatching the class keeps
+    @pyqtSlot resolution intact for every later instance in the same process
+    (see _make_security_overview_page for the full reasoning).
+    """
+    return type(f"_Stubbed{cls.__name__}", (cls,), dict(stubs))
+
+
+def _make_cert_page():
+    from ui.pages.cert_page import CertPage
+    return _stubbed(CertPage, _refresh=lambda self: None)(store=None)
+
+
+def _make_uptime_page():
+    from ui.pages.uptime_page import UptimePage
+    return _stubbed(UptimePage, _refresh=lambda self: None)(store=None)
+
+
+def _make_service_page():
+    from ui.pages.service_page import ServicePage
+    return _stubbed(ServicePage, _refresh=lambda self: None)(store=None)
+
+
+def _make_maintenance_page():
+    from ui.pages.maintenance_page import MaintenancePage
+    return _stubbed(MaintenancePage, _refresh_table=lambda self: None)()
+
+
+# (module stem under ui/pages/, factory). Do NOT hand-curate this list and hope:
+# test_every_page_with_a_repeating_timer_is_covered() below fails when a page
+# module wires a repeating QTimer without appearing here.
 _PAGE_FACTORIES = [
-    ("connections", _make_connections_page),
-    ("timeline", _make_timeline_page),
-    ("security_overview", _make_security_overview_page),
-    ("dhcp_lease", _make_dhcp_lease_page),
+    ("connections_page", _make_connections_page),
+    ("timeline_page", _make_timeline_page),
+    ("security_overview_page", _make_security_overview_page),
+    ("dhcp_lease_page", _make_dhcp_lease_page),
+    ("cert_page", _make_cert_page),
+    ("uptime_page", _make_uptime_page),
+    ("service_page", _make_service_page),
+    ("maintenance_page", _make_maintenance_page),
 ]
 
 
@@ -188,6 +227,92 @@ def test_timer_starts_on_show_and_stops_on_hide(qt_app, name, factory):
     other.deleteLater()
     stack.deleteLater()
     _flush()
+
+
+def _repeating_timer_owners(src: str) -> set[str]:
+    """Expressions in `src` that own a QTimer wired to fire more than once.
+
+    A timer counts as repeating when something connects to its `timeout` and
+    nothing calls `setSingleShot(True)` on the same expression. Single-shot
+    timers (status-message resets, search debounces) are not what RULE-WIN18
+    is about — they cannot run for the life of the session.
+    """
+    tree = ast.parse(src)
+    connected: set[str] = set()
+    single_shot: set[str] = set()
+
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        func = node.func
+        if (func.attr == "connect"
+                and isinstance(func.value, ast.Attribute)
+                and func.value.attr == "timeout"):
+            connected.add(ast.unparse(func.value.value))
+        if func.attr == "setSingleShot" and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and arg.value is True:
+                single_shot.add(ast.unparse(func.value))
+
+    return connected - single_shot
+
+
+_PAGES_DIR = Path(__file__).resolve().parents[1] / "ui" / "pages"
+
+# Pages that wire a repeating timer but have no lifecycle factory yet. This is a
+# RATCHET: it may only shrink. Add a factory to _PAGE_FACTORIES and delete the
+# entry here — never add a new one. Nothing in this set has been *cleared*; it
+# is known-unverified debt, not a clean bill of health.
+_UNCOVERED_BASELINE = {
+    "hardware_integration_page",
+    "history_page",
+    "home_automation_page",
+    "inventory_page",
+    "live_bandwidth_page",
+    "monitor_overview_page",
+    "overview_page",
+    "speed_test_page",
+    "trigger_builder_page",
+}
+
+
+def test_every_page_with_a_repeating_timer_is_covered():
+    """A new page with a background timer must not slip past RULE-WIN18.
+
+    _PAGE_FACTORIES used to be purely hand-maintained, so the rule was only
+    enforced on pages someone remembered to add — and four pages
+    (cert/uptime/service/maintenance) sat in the tree starting repeating
+    timers straight from __init__ with nothing to catch them. This closes the
+    loop: the file list is the source of truth, not anyone's memory.
+    """
+    flagged = set()
+    for path in sorted(_PAGES_DIR.glob("*.py")):
+        try:
+            src = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if _repeating_timer_owners(src):
+            flagged.add(path.stem)
+
+    covered = {module for module, _ in _PAGE_FACTORIES}
+    uncovered = flagged - covered
+
+    unexpected = uncovered - _UNCOVERED_BASELINE
+    assert not unexpected, (
+        f"{sorted(unexpected)} wire a repeating QTimer but have no entry in "
+        f"_PAGE_FACTORIES, so RULE-WIN18 is not enforced on them. A lazy page "
+        f"is constructed at startup even if never opened, so a timer started "
+        f"in __init__ runs for the whole session on a page nobody sees. Add a "
+        f"factory (stub out data loads, see _stubbed) — do not add the page to "
+        f"_UNCOVERED_BASELINE."
+    )
+
+    fixed = _UNCOVERED_BASELINE - uncovered
+    assert not fixed, (
+        f"{sorted(fixed)} are now covered (or no longer have a repeating "
+        f"timer) — remove them from _UNCOVERED_BASELINE. The ratchet only "
+        f"moves one way."
+    )
 
 
 def test_connections_auto_checkbox_stays_checked_by_default(qt_app):

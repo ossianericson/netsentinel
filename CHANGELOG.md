@@ -4,6 +4,31 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.2
+
+**Fixed**
+- Four more pages started a repeating `QTimer` straight from their constructor — `cert_page` and `uptime_page` (300 s), `service_page` and `maintenance_page` (60 s). The lazy page-builder constructs every page shortly after startup whether or not the user ever opens it, so each rebuilt its whole table for the entire session on a page nobody had looked at. This is the same RULE-WIN18 defect fixed in v2.2.0, in four pages the hand-maintained factory list never covered; `test_page_timer_lifecycle.py` now has a static AST pass that flags any `ui/pages/*.py` connecting to a non-single-shot `QTimer.timeout` without a factory, so coverage can no longer rot silently
+- `ui/widgets/skeleton.py` carried the same defect one level down, reached through a helper rather than a page. `insert_skeleton_rows()` started a 650 ms pulse timer stopped only by `clear_skeleton_rows()`, and `ServicePage.__init__` inserts skeleton rows then calls `_refresh()`, which returns early when the page isn't visible — so on a never-opened page the rows were never cleared and the pulse ran all session, allocating a `QBrush` + `QColor` per skeleton cell per tick. Fixed in the widget via a visibility-gated pulse controller, covering all four call sites at once
+- `modules/zte_plugin.py::get_status()` built a fresh `ZteMC889Client` and called `login()` on every poll, and `PluginPollingWorker` polls a modem-type plugin every 30 s. Each `login()` creates a new `requests.Session`, whose HTTPS adapter builds an `SSLContext` and calls `load_default_certs()` — so an idle app paid a full Windows certificate-store enumeration plus two extra HTTPS round-trips every 30 s. `get_signal_data()` already re-authenticates itself when a session goes stale, so one cached client is what the class was designed for; the cache is dropped on `ZteAuthError`/`ZteApiError` so a revoked cookie or rebooted modem can still recover
+- `time.strftime("Snoozed →%H:%M", ...)` on the Notifications page passed a non-ASCII format string through the C-runtime locale codec on Windows, which raises `UnicodeEncodeError` on a non-UTF8 locale. This was the confirmed trigger for two native `Qt6Core.dll` crashes in the 2026-07-31 chaos run, reachable from both `_bulk_snooze()` and the per-row snooze path
+- `ui/pages/timeline_page.py::_render()` tore down and reconstructed every event row on each 60 s refresh — one `QFrame` plus up to four `QLabel`s per event across a 200-event feed. The teardown was correct, so this was never a leak; it was pure churn, and `QFrame`/`QLabel` are C++ objects so tracemalloc could never see it. Rows and date headers now come from pools and are re-filled in place, giving zero widget construction per tick at steady state
+- `tools/monkey_test.py`'s own health-monitor restart silently destroyed all tracemalloc history since phase start — `app.py` truncates the snapshot log on every launch (RULE-TM1), and the harness's single end-of-phase copy never saw the earlier process. One 8 h soak lost ~1.5–3.5 h of data this way. The live log is now salvaged to `tracemalloc_pre_restart_<N>.log` before the kill and merged back in chronological order
+
+**Added**
+- `tools/vmmap_leak_probe.py` — three-phase RSS breakdown by native region type (startup ramp / steady heap climb / late image jump) without needing gflags or a multi-hour soak
+- `tools/umdh_leak_probe.py` — targeted UMDH snapshot pair bracketing the steady-growth window, automating the wait/snapshot timing that caused two documented false starts. Ships with `--manage-ust`, which arms `+ust` and always reverts it in a `finally` — including Ctrl+C, a failed snapshot, and a diff timeout
+- `docs/spikes/idle-rss-bench.py` — idle-Dashboard RSS trend over a real `MetricStore`, reporting main and child process RSS separately rather than summed (the WebEngine sawtooth is ±25 MB of noise); plus `docs/spikes/startup-arm.ps1` for per-arm time-to-window
+- `--procdump` / `-Procdump` — attaches Sysinternals ProcDump to the launched app so a real fault or stall captures a full dump automatically instead of relying on after-the-fact log correlation (RULE-DBG2)
+- `-MildOnly` / `-ModerateOnly` / `-WildOnly` — run a single continuous soak phase at exactly one chaos level, skipping the coverage cycle and both systematic sweeps, which measured 25–28 min each in practice against a 5-min budget estimate and dominated any short targeted re-run
+- RULE-CHAOS3, documenting that the chaos harness always writes to `%USERPROFILE%\Documents\NetSentinel\test_output\run_<timestamp>\` rather than the repo's own `test_output\`, and which log to read first
+
+**Changed**
+- The chaos harness now refuses to start while gflags `+ust` stack-trace tracing is armed on `python.exe` or `NetSentinel.exe`, naming the exact elevated command to clear it. `+ust` puts a stack trace on every heap allocation process-wide, persists across reboots, and is invisible at runtime — nothing looks wrong, the numbers are just false. Left armed by accident it took app startup from 5.8 s to 99 s and the test suite from 9 min to 68 min, produced two test "failures" that were pure artifact, and invalidated a day of memory measurements. `--allow-gflags` / `-AllowGflags` is the deliberate bypass
+- `--tracemalloc` is now opt-in (`-Tracemalloc`) rather than on for every soak phase. An A/B run established that tracemalloc itself caused the mid-soak hangs — 0 hangs and 0 restarts without it, against 1–2 on every prior run, with `cdb` showing the main thread stuck inside tracemalloc's own traceback capture. Its per-allocation cost also distorts the RSS numbers a soak exists to measure, and it never found this leak: the growth is native, which is why five rounds of tracemalloc came back empty
+- `--procdump` now uses hang-detection mode (`-h`) instead of exception mode (`-e 1`). Every launch throws a routine, immediately-handled `pybind11::attribute_error` during native-extension startup that `-e 1` cannot distinguish from a real fault — confirmed via `cdb` on 6 of 6 dumps captured across two chaos runs, none of them related to the bug under investigation
+
+---
+
 ### v2.2.1
 
 **Changed**

@@ -21,8 +21,9 @@
 
     Soak tail (runs once budget/indefinite-run permitting, after the coverage
     cycle): mild -> moderate -> wild ONLY (no mouse/scan - those are one-time
-    coverage extras), each a single LONG uninterrupted process with
-    --tracemalloc on, split ~12%/33%/55% of the remaining budget (matching the
+    coverage extras), each a single LONG uninterrupted process
+    (add -Tracemalloc for allocation profiling; off by default), split
+    ~12%/33%/55% of the remaining budget (matching the
     old 9h/24h .bat time split) - or fixed 1h/2.5h/4.5h laps, repeating until
     Ctrl+C, when the budget is blank. Restarting the app every few minutes (the
     coverage cycle's model) caps how much a slow leak can ever compound before
@@ -50,8 +51,8 @@
 
 .PARAMETER Soak
     Skip the ~1h coverage cycle and go STRAIGHT into the long-haul soak tail
-    (opening sweep -> continuous mild/moderate/wild with --tracemalloc ->
-    closing sweep). Use this when you specifically want the memory-leak hunt
+    (opening sweep -> continuous mild/moderate/wild -> closing sweep).
+    Use this when you specifically want the memory-leak hunt
     and don't want to wait an hour for the coverage cycle to finish first. The
     whole budget is spent on the soak (minus the two bracketing sweeps).
 
@@ -76,6 +77,56 @@
     with --source - there is no way to inject it into a packaged exe you
     don't control the launch of). Requires the Store build to already be
     installed; resolved once via Get-StartApps at startup.
+
+.PARAMETER MildOnly
+.PARAMETER ModerateOnly
+.PARAMETER Tracemalloc
+    Turn ON Python allocation profiling (--tracemalloc) for soak phases.
+    OFF by default, and deliberately so: a 2026-08-02 A/B established that
+    tracemalloc itself CAUSED the mid-soak hangs (0 hangs / 0 restarts
+    without it, against 1-2 on every prior run; cdb showed the main thread
+    stuck inside tracemalloc's own traceback capture). Its per-allocation
+    cost also distorts the RSS numbers a soak exists to measure, and it has
+    never once found this leak - the growth is native, which is exactly why
+    five rounds of tracemalloc saw nothing.
+
+    Use it only when you specifically want Python-side allocation sites and
+    accept that the run's timing, hang behaviour and RSS are instrumented.
+    Ignored with -Store (source-only instrumentation).
+
+.PARAMETER WildOnly
+    Run ONLY that one chaos level as a single continuous soak phase - no
+    coverage cycle, no other chaos levels, and no opening/closing
+    systematic sweep. Mutually
+    exclusive with each other (and implies -Soak's "skip the coverage
+    cycle" behavior).
+
+    Use this to shorten a targeted re-run: the two systematic sweeps alone
+    have taken 25-28 minutes each in practice (nowhere near the nominal
+    5-minute estimate used for budget math), which dominates the runtime of
+    a short verification run that only cares about one chaos level.
+
+    With -Duration given, the ENTIRE budget goes to that one phase (no
+    proportional mild/moderate/wild split, no time reserved for a sweep).
+    With no -Duration, it repeats that phase's normal fixed lap length
+    (mild=1h, moderate=2.5h, wild=4.5h) in a loop until Ctrl+C, exactly like
+    a normal indefinite soak would for that phase.
+
+.PARAMETER Procdump
+    Attach Sysinternals ProcDump (winget install Microsoft.Sysinternals.Suite)
+    to the app process during every soak phase (mild/moderate/wild), in
+    hang-detection mode (-h -n 5 -ma). Re-attached automatically on every
+    internal restart. Captures a full native dump the moment Windows marks
+    the window hung (IsHungAppWindow) instead of relying on log correlation
+    after the fact - dumps land in <phase-outdir>\dumps\. Exception mode
+    (-e 1) was tried first and dropped: every launch throws a routine,
+    immediately-handled pybind11::attribute_error during native-extension
+    startup that -e 1 can't tell apart from a real fault (cdb-confirmed on
+    6/6 dumps across two runs, 2026-08-01) - it never once captured anything
+    related to an actual hang. -h targets the real open bug directly. Only
+    wired into soak phases, not the coverage sweep, since every hang/RSS-
+    plateau occurrence to date has happened during a multi-hour soak. No-ops
+    with a one-time warning if ProcDump isn't installed.
 
 .EXAMPLE
     .\tools\run_all_monkey_tests.ps1
@@ -107,6 +158,17 @@
 .EXAMPLE
     .\tools\run_all_monkey_tests.ps1 8h -Soak -Store
     Long-haul soak against the Store package (no tracemalloc).
+
+.EXAMPLE
+    .\tools\run_all_monkey_tests.ps1 4.5h -WildOnly
+    Nothing but a single continuous 4.5h wild-chaos soak, no instrumentation -
+    no coverage cycle, no mild/moderate, no sweeps. (Duration only accepts one
+    number+unit - "4.5h", "270m", or "16200s", not combined forms like "4h30m".)
+
+.EXAMPLE
+    .\tools\run_all_monkey_tests.ps1 -MildOnly
+    Repeats 1h mild-only soak laps until Ctrl+C (no -Duration = indefinite,
+    using that phase's normal fixed lap length).
 #>
 [CmdletBinding()]
 param(
@@ -115,12 +177,63 @@ param(
 
     [switch]$Soak,
     [switch]$PlanOnly,
-    [switch]$Store
+    [switch]$Store,
+
+    [switch]$MildOnly,
+    [switch]$ModerateOnly,
+    [switch]$WildOnly,
+
+    [switch]$Procdump,
+
+    [switch]$AllowGflags,
+
+    [switch]$Tracemalloc
 )
 
 # Repo root is the parent of tools\ (this script's dir).
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+
+# ── gflags +ust preflight ────────────────────────────────────────────────────
+# monkey_test.py enforces this too (that's the real gate, and it covers ad-hoc
+# invocations). This copy exists so a 10-hour overnight run dies in ~2 seconds
+# instead of after the opening systematic sweep has already burned five minutes
+# and rearranged the console/sleep settings. See _preflight_gflags in
+# tools/monkey_test.py for what +ust actually costs.
+function Test-UstTracing {
+    $ifeo = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options"
+    $traced = @()
+    foreach ($image in @("python.exe", "NetSentinel.exe")) {
+        $key = Join-Path $ifeo $image
+        if (-not (Test-Path $key)) { continue }
+        try { $raw = (Get-ItemProperty -Path $key -Name GlobalFlag -ErrorAction Stop).GlobalFlag }
+        catch { continue }   # no GlobalFlag value on this image — not traced
+        $flag = 0
+        $text = "$raw".Trim()
+        if ($text -match '^0[xX]') { $flag = [Convert]::ToInt64($text.Substring(2), 16) }
+        elseif ($text -match '^\d+$') { $flag = [int64]$text }
+        if ($flag -band 0x1000) { $traced += [pscustomobject]@{ Image = $image; Flag = $flag } }
+    }
+    return $traced
+}
+
+$ustTraced = Test-UstTracing
+if ($ustTraced.Count -gt 0 -and -not $AllowGflags) {
+    Write-Host ""
+    Write-Host "ABORTING - gflags +ust stack-trace tracing is armed." -ForegroundColor Red
+    Write-Host "Every number this run produces (RSS, peak RSS, timings, hang detection)"
+    Write-Host "would be an artifact of the instrumentation, not the app."
+    Write-Host ""
+    Write-Host "Traced image(s):"
+    foreach ($t in $ustTraced) { Write-Host ("    {0}  GlobalFlag=0x{1:X8}" -f $t.Image, $t.Flag) }
+    Write-Host ""
+    Write-Host "Clear it from an ELEVATED PowerShell:"
+    $gflagsExe = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\gflags.exe"
+    foreach ($t in $ustTraced) { Write-Host ("    & `"{0}`" /i {1} -ust" -f $gflagsExe, $t.Image) }
+    Write-Host ""
+    Write-Host "Then re-run. Pass -AllowGflags to run under tracing on purpose."
+    exit 2
+}
 
 # ── Tunables ─────────────────────────────────────────────────────────────────
 # One "unit" of weight; wild/mouse get multiples of it. Nominal (uncapped by a
@@ -236,6 +349,33 @@ function Get-SoakDurations {
     return [ordered]@{ mild = $mild; moderate = $moderate; wild = $wild }
 }
 
+function Get-OnlyPhaseDuration {
+    # Single-phase equivalent of Get-SoakDurations for -MildOnly/-ModerateOnly/
+    # -WildOnly. No proportional mild/moderate/wild split and no sweep-time
+    # reservation - those modes skip both sweeps entirely (see Invoke-Phase
+    # call sites gated on $OnlyPhase), so the WHOLE remaining budget (or the
+    # phase's own fixed indefinite lap length, same numbers Get-SoakDurations
+    # uses) goes to the one selected phase alone. Returns an $soakDurations-
+    # shaped hashtable with the other two keys at 0 so the existing soak-lap
+    # loop's `if ($secs -le 0) { continue }` skips them with no other changes.
+    param([string]$Phase, [Nullable[double]]$RemainingSecs)
+
+    $indefiniteSecs = @{
+        mild     = $SoakIndefiniteMildSecs
+        moderate = $SoakIndefiniteModerateSecs
+        wild     = $SoakIndefiniteWildSecs
+    }
+    $durations = [ordered]@{ mild = 0; moderate = 0; wild = 0 }
+
+    if ($null -eq $RemainingSecs) {
+        $durations[$Phase] = $indefiniteSecs[$Phase]
+        return $durations
+    }
+    if ($RemainingSecs -lt $MinUnitSecs) { return $null }
+    $durations[$Phase] = [int]$RemainingSecs
+    return $durations
+}
+
 function Get-OutSub {
     param([string]$Kind, [int]$CycleNum, [string]$Key)
     $c = "{0:D2}" -f $CycleNum
@@ -287,16 +427,40 @@ function Get-PhaseFindings {
 }
 
 function Get-TracemallocSnapshots {
-    # Extracts the first and last "tracemalloc top-20" blocks from a captured
-    # tracemalloc.log (soak phases only - see Invoke-Phase -Tracemalloc). Only
-    # the first/last snapshot are kept (not all of them - a multi-hour soak
-    # phase can take 200+ snapshots) so an AI reviewing AI_REPORT.md can compare
-    # start-of-phase vs end-of-phase allocation sizes directly.
-    param([string]$LogPath)
+    # Extracts the first and last "tracemalloc top-20" blocks across a soak
+    # phase's ENTIRE tracemalloc history, not just the currently-running
+    # process's log. monkey_test.py's internal health-monitor restart
+    # (_restart_app()) kills a hung/crashed app.py and relaunches it; app.py
+    # truncates tracemalloc_snapshots.log fresh on every launch (RULE-TM1), so
+    # without this, a phase with 1+ restarts only ever showed the LAST
+    # (post-restart) process's snapshots - discarding the whole pre-restart
+    # allocation history, including the run-up to whatever triggered the
+    # restart. monkey_test.py salvages each pre-restart log into the phase's
+    # OutDir as tracemalloc_pre_restart_<N>.log (numbered in restart order,
+    # see MonkeyTest._salvage_tracemalloc_log()) before killing the old
+    # process; this function stitches those together with the final
+    # tracemalloc.log, in chronological order, before taking first/last so an
+    # AI reviewing AI_REPORT.md can compare true start-of-phase vs
+    # end-of-phase allocation sizes even across a restart.
+    param([string]$OutDir)
     $result = [pscustomobject]@{ First = $null; Last = $null; Count = 0 }
-    if (-not (Test-Path $LogPath)) { return $result }
-    $lines = @(Get-Content $LogPath -ErrorAction SilentlyContinue)
-    if ($lines.Count -eq 0) { return $result }
+    if (-not (Test-Path $OutDir)) { return $result }
+
+    $preRestartFiles = @(Get-ChildItem -Path $OutDir -Filter "tracemalloc_pre_restart_*.log" -File -ErrorAction SilentlyContinue |
+        Sort-Object { [int]([regex]::Match($_.Name, '\d+').Value) })
+    $orderedPaths = @($preRestartFiles | ForEach-Object { $_.FullName })
+    $finalPath = Join-Path $OutDir "tracemalloc.log"
+    if (Test-Path $finalPath) { $orderedPaths += $finalPath }
+    if ($orderedPaths.Count -eq 0) { return $result }
+
+    $allLines = New-Object System.Collections.Generic.List[string]
+    foreach ($p in $orderedPaths) {
+        foreach ($ln in @(Get-Content $p -ErrorAction SilentlyContinue)) { $allLines.Add($ln) }
+    }
+    if ($allLines.Count -eq 0) { return $result }
+    # Plain array (not List[T]) so the range-slice indexing below (`$lines[$a..$b]`)
+    # behaves exactly like it did against @(Get-Content ...) previously.
+    $lines = $allLines.ToArray()
 
     $starts = @()
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -634,6 +798,9 @@ function Invoke-Phase {
     Write-Host ("  -> {0}  (planned {1})..." -f $Label, (Format-Secs $PlannedSecs)) -ForegroundColor Yellow
 
     $fullArgs = $ScriptArgs + @("--output-dir", $OutDir)
+    # The top-level preflight already let this run through, so pass the same
+    # consent down - otherwise monkey_test.py's own gate would abort every phase.
+    if ($script:AllowGflags -and $Script -like "*monkey_test.py") { $fullArgs += "--allow-gflags" }
     $t0 = Get-Date
     # Publish the in-flight phase to script scope BEFORE launching python, so a
     # Ctrl+C (which aborts this function mid-call and jumps straight to the
@@ -667,13 +834,14 @@ function Invoke-Phase {
     # Soak phases run with --tracemalloc; app.py writes snapshots to a single
     # fixed path in get_app_data_dir() (truncated fresh on every app launch),
     # so copy it into this phase's own OutDir before the next phase overwrites it.
-    $tracemallocLog = $null
+    # This is the FINAL process's log only - any earlier, internally-restarted
+    # process's snapshots were already salvaged into tracemalloc_pre_restart_*.log
+    # by MonkeyTest._salvage_tracemalloc_log(); Get-TracemallocSnapshots merges both.
     if ($Tracemalloc) {
         $tmSrc = Join-Path $env:LOCALAPPDATA "NetSentinel\tracemalloc_snapshots.log"
         if (Test-Path $tmSrc) {
             $tmDest = Join-Path $OutDir "tracemalloc.log"
             Copy-Item -Path $tmSrc -Destination $tmDest -Force -ErrorAction SilentlyContinue
-            if (Test-Path $tmDest) { $tracemallocLog = $tmDest }
         }
     }
 
@@ -689,9 +857,14 @@ function Invoke-Phase {
     $needsDetail = ($rc -ne 0) -or ($crashes -gt 0) -or ($exc -gt 0)
     $findings = $null
     if ($needsDetail) { $findings = Get-PhaseFindings -OutDir $OutDir }
-    if ($tracemallocLog) {
+    if ($Tracemalloc) {
+        # Gated on $Tracemalloc (the phase asked for it), not on $tracemallocLog
+        # (whether the FINAL copy succeeded) - a phase that restarted and never
+        # got a clean final copy can still have salvaged tracemalloc_pre_restart_*.log
+        # files worth reporting. Get-TracemallocSnapshots itself no-ops cleanly
+        # (Count = 0) when nothing is found in OutDir.
         if (-not $findings) { $findings = [pscustomobject]@{ CrashFiles = @(); Tracebacks = @(); Screenshots = @() } }
-        $findings | Add-Member -NotePropertyName TracemallocSnapshots -NotePropertyValue (Get-TracemallocSnapshots -LogPath $tracemallocLog) -Force
+        $findings | Add-Member -NotePropertyName TracemallocSnapshots -NotePropertyValue (Get-TracemallocSnapshots -OutDir $OutDir) -Force
     }
 
     # Phase completed normally - clear the in-flight marker so the finally block
@@ -729,6 +902,22 @@ try {
 $budgetLabel = "until Ctrl+C"
 if ($budgetSecs) { $budgetLabel = Format-Secs $budgetSecs }
 
+# ── Single-phase-only mode (-MildOnly / -ModerateOnly / -WildOnly) ──────────
+# Mutually exclusive; whichever is set skips the coverage cycle (same as
+# -Soak) AND both systematic sweeps, running nothing but that one chaos
+# level as a single continuous soak phase.
+$OnlyPhase = $null
+$OnlyPhaseSwitchName = $null   # properly-cased for user-facing messages (e.g. "-WildOnly")
+$_onlyPhaseSwitchCount = 0
+if ($MildOnly)     { $OnlyPhase = "mild";     $OnlyPhaseSwitchName = "-MildOnly";     $_onlyPhaseSwitchCount++ }
+if ($ModerateOnly) { $OnlyPhase = "moderate"; $OnlyPhaseSwitchName = "-ModerateOnly"; $_onlyPhaseSwitchCount++ }
+if ($WildOnly)     { $OnlyPhase = "wild";     $OnlyPhaseSwitchName = "-WildOnly";     $_onlyPhaseSwitchCount++ }
+if ($_onlyPhaseSwitchCount -gt 1) {
+    Write-Host "ERROR: -MildOnly, -ModerateOnly, and -WildOnly are mutually exclusive - pick one." -ForegroundColor Red
+    exit 1
+}
+if ($OnlyPhase) { $Soak = $true }   # implies -Soak's "skip the coverage cycle" behavior
+
 # ── Plan-only preview (no launches, no side effects) ────────────────────────
 
 if ($PlanOnly) {
@@ -745,8 +934,40 @@ if ($PlanOnly) {
     $elapsed = 0.0
     $cycleNum = 0
     Write-Host ""
-    Write-Host ("[cycle 0] sweep (pre)   planned {0}" -f (Format-Secs $SweepEstSecs))
-    $elapsed += $SweepEstSecs
+    if (-not $OnlyPhase) {
+        Write-Host ("[cycle 0] sweep (pre)   planned {0}" -f (Format-Secs $SweepEstSecs))
+        $elapsed += $SweepEstSecs
+    }
+
+    if ($OnlyPhase) {
+        $remaining = $null
+        if ($budgetSecs) { $remaining = $budgetSecs - $elapsed }
+        $soakDurations = Get-OnlyPhaseDuration -Phase $OnlyPhase -RemainingSecs $remaining
+        if ($null -eq $soakDurations) {
+            Write-Host ""
+            Write-Host "  budget too small for $OnlyPhaseSwitchName (need at least $MinUnitSecs seconds) - nothing to plan." -ForegroundColor Red
+            exit 1
+        }
+        Write-Host ""
+        $tmLabel = if ($Store) { "no tracemalloc (Store build)" } elseif ($Tracemalloc) { "--tracemalloc ON (-Tracemalloc)" } else { "no tracemalloc" }
+        Write-Host "[single-phase mode $OnlyPhaseSwitchName] nothing but $OnlyPhase, continuous ($tmLabel), no sweeps, no restarts:" -ForegroundColor DarkCyan
+        Write-Host ("    {0,-28} planned {1}" -f "Monkey $OnlyPhase (soak)", (Format-Secs $soakDurations[$OnlyPhase]))
+        $elapsed += $soakDurations[$OnlyPhase]
+        if ($budgetSecs) {
+            Write-Host "  (single lap, sized to consume the whole budget - no closing sweep)" -ForegroundColor DarkGray
+        } else {
+            Write-Host "  (repeats with rotating seeds until Ctrl+C - showing lap 1 only)" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+        Write-Host "============================================================" -ForegroundColor Cyan
+        if ($budgetSecs) {
+            Write-Host ("Estimated total: {0}" -f (Format-Secs $elapsed)) -ForegroundColor Cyan
+        } else {
+            Write-Host "Runs indefinitely - stop any time with Ctrl+C" -ForegroundColor Cyan
+        }
+        Write-Host "============================================================" -ForegroundColor Cyan
+        exit 0
+    }
 
     if ($Soak) {
         $remaining = $null
@@ -758,7 +979,7 @@ if ($PlanOnly) {
             exit 1
         }
         Write-Host ""
-        $tmLabel = if ($Store) { "no tracemalloc (Store build)" } else { "--tracemalloc on" }
+        $tmLabel = if ($Store) { "no tracemalloc (Store build)" } elseif ($Tracemalloc) { "--tracemalloc ON (-Tracemalloc)" } else { "no tracemalloc" }
         Write-Host "[soak mode -Soak] straight into long-haul soak from the start - mild/moderate/wild only, continuous ($tmLabel), no restarts:" -ForegroundColor DarkCyan
         Write-Host ("    {0,-28} planned {1}" -f "Monkey mild (soak)", (Format-Secs $soakDurations.mild))
         Write-Host ("    {0,-28} planned {1}" -f "Monkey moderate (soak)", (Format-Secs $soakDurations.moderate))
@@ -811,7 +1032,7 @@ if ($PlanOnly) {
             $soakDurations = Get-SoakDurations -RemainingSecs $remainingAfterCycle1
             if ($soakDurations) {
                 Write-Host ""
-                $tmLabel = if ($Store) { "no tracemalloc (Store build)" } else { "--tracemalloc on" }
+                $tmLabel = if ($Store) { "no tracemalloc (Store build)" } elseif ($Tracemalloc) { "--tracemalloc ON (-Tracemalloc)" } else { "no tracemalloc" }
                 Write-Host "[soak mode] long-haul tail after hour 1 - mild/moderate/wild only, continuous ($tmLabel), no restarts:" -ForegroundColor DarkCyan
                 Write-Host ("    {0,-28} planned {1}" -f "Monkey mild (soak)", (Format-Secs $soakDurations.mild))
                 Write-Host ("    {0,-28} planned {1}" -f "Monkey moderate (soak)", (Format-Secs $soakDurations.moderate))
@@ -906,20 +1127,35 @@ $meta = [pscustomobject]@{
 }
 
 try {
-    # Initial coverage sweep
+    # Initial coverage sweep - skipped entirely for -MildOnly/-ModerateOnly/
+    # -WildOnly, which want nothing but the one selected chaos phase.
     $sweepArgs = @(Get-LaunchModeArgs) + @("--pause", "0.4", "--focus-interval", "1.5")
-    if ($Store) { Start-StoreApp }
-    $r = Invoke-Phase -CycleNum 0 -Label "Systematic sweep (pre)" -Script "tools\systematic_test.py" `
-        -ScriptArgs $sweepArgs -OutDir (Join-Path $outRoot (Get-OutSub "sweep" 0 "")) `
-        -Chaos $null -Seed $null -PlannedSecs $SweepEstSecs
-    [void]$results.Add($r)
-    Write-AiReport -ReportPath $reportPath -Meta $meta -Results $results
+    if (-not $OnlyPhase) {
+        if ($Store) { Start-StoreApp }
+        $r = Invoke-Phase -CycleNum 0 -Label "Systematic sweep (pre)" -Script "tools\systematic_test.py" `
+            -ScriptArgs $sweepArgs -OutDir (Join-Path $outRoot (Get-OutSub "sweep" 0 "")) `
+            -Chaos $null -Seed $null -PlannedSecs $SweepEstSecs
+        [void]$results.Add($r)
+        Write-AiReport -ReportPath $reportPath -Meta $meta -Results $results
+    }
 
     $cycleNum = 0
     $enterSoak = $false
     $soakDurations = $null
 
-    if ($Soak) {
+    if ($OnlyPhase) {
+        # -MildOnly/-ModerateOnly/-WildOnly: skip the coverage cycle AND both
+        # sweeps - the whole budget (or that phase's fixed lap length on an
+        # indefinite budget) goes to the one selected phase alone.
+        $remaining = $null
+        if ($deadline) { $remaining = ($deadline - (Get-Date)).TotalSeconds }
+        $soakDurations = Get-OnlyPhaseDuration -Phase $OnlyPhase -RemainingSecs $remaining
+        if ($soakDurations) {
+            $enterSoak = $true
+        } else {
+            Write-Host "  $OnlyPhaseSwitchName requested but budget too small to run - stopping." -ForegroundColor Red
+        }
+    } elseif ($Soak) {
         # -Soak: skip the coverage cycle, go straight into the long-haul soak
         # using the whole budget (the pre-sweep above is its opening bracket).
         $remaining = $null
@@ -991,12 +1227,14 @@ try {
     if ($enterSoak -and $soakDurations) {
         Write-Host ""
         Write-Host "============================================================" -ForegroundColor Cyan
-        if ($Soak) {
+        if ($OnlyPhase) {
+            Write-Host "[soak] ${OnlyPhaseSwitchName}: nothing but $OnlyPhase - no coverage cycle, no sweeps," -ForegroundColor Cyan
+        } elseif ($Soak) {
             Write-Host "[soak] -Soak: long-haul mode from the start - mild/moderate/wild only," -ForegroundColor Cyan
         } else {
             Write-Host "[soak] entering long-haul mode after coverage cycle - mild/moderate/wild only," -ForegroundColor Cyan
         }
-        $tmLabel = if ($Store) { "no tracemalloc (Store build)" } else { "--tracemalloc on" }
+        $tmLabel = if ($Store) { "no tracemalloc (Store build)" } elseif ($Tracemalloc) { "--tracemalloc ON (-Tracemalloc)" } else { "no tracemalloc" }
         Write-Host "       continuous ($tmLabel), no restarts between phases" -ForegroundColor Cyan
         Write-Host "============================================================" -ForegroundColor Cyan
 
@@ -1012,10 +1250,19 @@ try {
                 if ($secs -le 0) { continue }
                 $outDir = Join-Path $outRoot (Get-OutSub "soak" $lap $def.Key)
                 $seed = $def.SeedBase + $soakSeedOffset
-                $useTracemalloc = -not $Store
+                # OFF unless explicitly asked for (-Tracemalloc). It used to be on
+                # for every non-Store soak phase, which quietly made the memory hunt
+                # worse: a 2026-08-02 A/B found tracemalloc itself CAUSED the mid-soak
+                # hangs (0 hangs/0 restarts without it, vs 1-2 on every prior run,
+                # cdb-confirmed stuck in tracemalloc's own traceback capture), and its
+                # per-allocation cost distorts the very RSS numbers the soak exists to
+                # measure. It also never found this leak - the growth is native, which
+                # is why five rounds of tracemalloc saw nothing.
+                $useTracemalloc = $Tracemalloc -and (-not $Store)
                 $scriptArgs = @(Get-LaunchModeArgs -SupportsMaxRestarts) + @("--duration", "$secs", "--focus-interval", "1.5",
                                  "--chaos", $def.Chaos, "--seed", "$seed", "--mem-limit", "$($def.MemLimit)")
                 if ($useTracemalloc) { $scriptArgs += "--tracemalloc" }
+                if ($Procdump) { $scriptArgs += "--procdump" }
 
                 if ($Store) { Start-StoreApp }
                 $r = Invoke-Phase -CycleNum $coverageCycles -Label "$($def.Label) [lap $lap]" -Script $def.Script `
@@ -1029,12 +1276,18 @@ try {
             if ($deadline) {
                 # Finite budget: the lap was sized to consume the rest of it -
                 # close out with one final sweep, same as the old .bat suites.
-                $outDir = Join-Path $outRoot (Get-OutSub "soaksweep" 0 "")
-                if ($Store) { Start-StoreApp }
-                $r = Invoke-Phase -CycleNum $coverageCycles -Label "Systematic sweep (post-soak)" -Script "tools\systematic_test.py" `
-                    -ScriptArgs $sweepArgs -OutDir $outDir -Chaos $null -Seed $null -PlannedSecs $SweepEstSecs
-                [void]$results.Add($r)
-                Write-AiReport -ReportPath $reportPath -Meta $meta -Results $results
+                # Skipped for -MildOnly/-ModerateOnly/-WildOnly, which want no
+                # sweeps at all (each has taken 25-28 min in practice - far more
+                # than the nominal 5-min estimate, and would dominate the
+                # runtime of a short single-phase verification run).
+                if (-not $OnlyPhase) {
+                    $outDir = Join-Path $outRoot (Get-OutSub "soaksweep" 0 "")
+                    if ($Store) { Start-StoreApp }
+                    $r = Invoke-Phase -CycleNum $coverageCycles -Label "Systematic sweep (post-soak)" -Script "tools\systematic_test.py" `
+                        -ScriptArgs $sweepArgs -OutDir $outDir -Chaos $null -Seed $null -PlannedSecs $SweepEstSecs
+                    [void]$results.Add($r)
+                    Write-AiReport -ReportPath $reportPath -Meta $meta -Results $results
+                }
                 break
             }
             # Indefinite budget: repeat laps with rotating seeds until Ctrl+C -
@@ -1065,11 +1318,12 @@ try {
             if (Test-Path $tmSrc) {
                 $tmDest = Join-Path $cp.OutDir "tracemalloc.log"
                 Copy-Item -Path $tmSrc -Destination $tmDest -Force -ErrorAction SilentlyContinue
-                if (Test-Path $tmDest) {
-                    $findings = [pscustomobject]@{ CrashFiles = @(); Tracebacks = @(); Screenshots = @() }
-                    $findings | Add-Member -NotePropertyName TracemallocSnapshots -NotePropertyValue (Get-TracemallocSnapshots -LogPath $tmDest) -Force
-                }
             }
+            # -OutDir (not -LogPath $tmDest): this phase may ALSO have one or more
+            # tracemalloc_pre_restart_*.log files already sitting in cp.OutDir from
+            # an internal MonkeyTest restart before this Ctrl+C - pick those up too.
+            $findings = [pscustomobject]@{ CrashFiles = @(); Tracebacks = @(); Screenshots = @() }
+            $findings | Add-Member -NotePropertyName TracemallocSnapshots -NotePropertyValue (Get-TracemallocSnapshots -OutDir $cp.OutDir) -Force
         }
 
         $crashes = $null; $exc = $null; $iters = $null; $focus = $null; $peak = $null
