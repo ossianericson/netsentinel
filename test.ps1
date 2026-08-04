@@ -39,9 +39,10 @@ param(
 
     [switch]$Soak,
     [switch]$PlanOnly,
-    [switch]$Store
+    [switch]$Store,
+    [switch]$Tracemalloc
 )
 
 $repoRoot = $PSScriptRoot
-& (Join-Path $repoRoot "tools\run_all_monkey_tests.ps1") $Duration -Soak:$Soak -PlanOnly:$PlanOnly -Store:$Store
+& (Join-Path $repoRoot "tools\run_all_monkey_tests.ps1") $Duration -Soak:$Soak -PlanOnly:$PlanOnly -Store:$Store -Tracemalloc:$Tracemalloc
 exit $LASTEXITCODE

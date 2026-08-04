@@ -724,7 +724,7 @@ class _NotifAlertHistoryMixin:
                 if snooze_expiry == 0:
                     status = "Snoozed ∞"
                 else:
-                    status = time.strftime("Snoozed →%H:%M", time.localtime(snooze_expiry))
+                    status = "Snoozed →" + time.strftime("%H:%M", time.localtime(snooze_expiry))
                 st_col = _s.TEXT_MUTED
             elif alert.get("acked_ts"):
                 status = "✓ Acked"

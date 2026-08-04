@@ -419,3 +419,371 @@ def test_total_rss_mb_returns_zero_with_no_process():
     t = _bare_tester(mod)
     t._proc = None
     assert t._total_rss_mb() == 0.0
+
+
+# ── Tracemalloc salvage before restart (wild-soak data-gap fix) ──────────────
+#
+# app.py truncates tracemalloc_snapshots.log fresh on every launch (RULE-TM1).
+# _restart_app() kills the current app.py and relaunches a new one on a hang/
+# crash/dead-window, so without a salvage step, every allocation snapshot
+# since phase start is destroyed the instant the new process starts — and
+# run_all_monkey_tests.ps1's end-of-phase copy only ever sees what
+# accumulated since the LAST restart. These tests would fail against the
+# pre-fix code (no _salvage_tracemalloc_log method at all).
+
+def test_salvage_tracemalloc_log_copies_before_restart_truncates(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    src = tmp_path / "tracemalloc_snapshots.log"
+    src.write_text("tracemalloc top-20 snapshot #1\nsome allocation line\n", encoding="utf-8")
+    monkeypatch.setattr(mod, "_tracemalloc_log_path", lambda: src)
+
+    t = _bare_tester(mod)
+    out_dir = tmp_path / "phase_out"
+    t.cfg = mod.Config(output_dir=str(out_dir), tracemalloc=True)
+    t.stats.restarts = 1
+
+    t._salvage_tracemalloc_log()
+
+    dest = out_dir / "tracemalloc_pre_restart_1.log"
+    assert dest.exists()
+    assert dest.read_text(encoding="utf-8") == src.read_text(encoding="utf-8")
+
+
+def test_salvage_tracemalloc_log_numbers_files_per_restart(monkeypatch, tmp_path):
+    """Two restarts in one phase must not clobber each other's salvaged log."""
+    mod = _import_monkey()
+    src = tmp_path / "tracemalloc_snapshots.log"
+    monkeypatch.setattr(mod, "_tracemalloc_log_path", lambda: src)
+
+    t = _bare_tester(mod)
+    out_dir = tmp_path / "phase_out"
+    t.cfg = mod.Config(output_dir=str(out_dir), tracemalloc=True)
+
+    src.write_text("tracemalloc top-20 snapshot #1\nfirst-process data\n", encoding="utf-8")
+    t.stats.restarts = 1
+    t._salvage_tracemalloc_log()
+
+    src.write_text("tracemalloc top-20 snapshot #7\nsecond-process data\n", encoding="utf-8")
+    t.stats.restarts = 2
+    t._salvage_tracemalloc_log()
+
+    assert "first-process data" in (out_dir / "tracemalloc_pre_restart_1.log").read_text(encoding="utf-8")
+    assert "second-process data" in (out_dir / "tracemalloc_pre_restart_2.log").read_text(encoding="utf-8")
+
+
+def test_salvage_tracemalloc_log_noop_when_tracemalloc_disabled(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    src = tmp_path / "tracemalloc_snapshots.log"
+    src.write_text("data", encoding="utf-8")
+    monkeypatch.setattr(mod, "_tracemalloc_log_path", lambda: src)
+
+    t = _bare_tester(mod)
+    out_dir = tmp_path / "phase_out"
+    t.cfg = mod.Config(output_dir=str(out_dir), tracemalloc=False)
+    t.stats.restarts = 1
+
+    t._salvage_tracemalloc_log()
+
+    assert not out_dir.exists()
+
+
+def test_salvage_tracemalloc_log_noop_when_source_missing(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    missing = tmp_path / "does_not_exist.log"
+    monkeypatch.setattr(mod, "_tracemalloc_log_path", lambda: missing)
+
+    t = _bare_tester(mod)
+    out_dir = tmp_path / "phase_out"
+    t.cfg = mod.Config(output_dir=str(out_dir), tracemalloc=True)
+    t.stats.restarts = 1
+
+    t._salvage_tracemalloc_log()   # must not raise
+
+    assert not out_dir.exists()
+
+
+def test_restart_app_salvages_tracemalloc_before_kill(monkeypatch, tmp_path):
+    """_restart_app() must salvage before _kill_stale_netsentinel() runs — the
+    kill is what triggers the relaunch that truncates the log."""
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    out_dir = tmp_path / "phase_out"
+    t.cfg = mod.Config(output_dir=str(out_dir), tracemalloc=True, use_source=True, max_restarts=3)
+    t._proc = None
+    t._win = None
+    t._stop = mod.threading.Event()
+
+    call_order = []
+    monkeypatch.setattr(t, "_salvage_tracemalloc_log", lambda: call_order.append("salvage"))
+    monkeypatch.setattr(t, "_kill_stale_netsentinel", lambda: call_order.append("kill"))
+    monkeypatch.setattr(t, "_launch_source", lambda: False)   # short-circuit; relaunch failing is fine here
+
+    t._restart_app()
+
+    assert call_order == ["salvage", "kill"]
+
+
+# ── ProcDump attach/detach (RULE-DBG2 wiring, 2026-07-31) ─────────────────────
+
+class _FakePopen:
+    """Stand-in for subprocess.Popen — no real process is ever spawned."""
+
+    def __init__(self, args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self._poll_result = None   # None = still running, like the real Popen.poll()
+        self.terminated = False
+
+    def poll(self):
+        return self._poll_result
+
+    def terminate(self):
+        self.terminated = True
+
+
+def test_procdump_path_prefers_shutil_which(monkeypatch):
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    monkeypatch.setattr(
+        mod.shutil, "which",
+        lambda name: r"C:\tools\procdump64.exe" if name == "procdump64" else None,
+    )
+    assert t._procdump_path() == r"C:\tools\procdump64.exe"
+
+
+def test_procdump_path_falls_back_to_winget_glob(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+    pkg_dir = (tmp_path / "AppData/Local/Microsoft/WinGet/Packages"
+               / "Microsoft.Sysinternals.Suite_Microsoft.Winget.Source_8wekyb3d8bbwe")
+    pkg_dir.mkdir(parents=True)
+    exe = pkg_dir / "procdump64.exe"
+    exe.write_text("", encoding="utf-8")
+    monkeypatch.setattr(mod.Path, "home", classmethod(lambda cls: tmp_path))
+    assert t._procdump_path() == str(exe)
+
+
+def test_procdump_path_returns_none_when_not_found(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+    monkeypatch.setattr(mod.Path, "home", classmethod(lambda cls: tmp_path))  # empty — nothing to glob
+    assert t._procdump_path() is None
+
+
+def test_attach_procdump_noop_when_disabled(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    t.cfg = mod.Config(output_dir=str(tmp_path / "out"), procdump=False)
+    t._procdump_proc = None
+    t._procdump_warned = False
+
+    def _fail_popen(*a, **kw):
+        raise AssertionError("Popen must not be called when procdump=False")
+    monkeypatch.setattr(mod.subprocess, "Popen", _fail_popen)
+
+    t._attach_procdump(1234)   # must not raise / not spawn anything
+
+
+def test_attach_procdump_warns_once_when_not_found(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    t.cfg = mod.Config(output_dir=str(tmp_path / "out"), procdump=True)
+    t._procdump_proc = None
+    t._procdump_warned = False
+    monkeypatch.setattr(t, "_procdump_path", lambda: None)
+
+    def _fail_popen(*a, **kw):
+        raise AssertionError("Popen must not be called when ProcDump isn't found")
+    monkeypatch.setattr(mod.subprocess, "Popen", _fail_popen)
+
+    t._attach_procdump(1234)
+
+    assert t._procdump_warned is True
+
+
+def test_attach_procdump_spawns_expected_command(monkeypatch, tmp_path):
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    out_dir = tmp_path / "out"
+    t.cfg = mod.Config(output_dir=str(out_dir), procdump=True)
+    t._procdump_proc = None
+    t._procdump_warned = False
+    monkeypatch.setattr(t, "_procdump_path", lambda: r"C:\tools\procdump64.exe")
+
+    captured = {}
+
+    def _fake_popen(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return _FakePopen(args, **kwargs)
+    monkeypatch.setattr(mod.subprocess, "Popen", _fake_popen)
+
+    t._attach_procdump(4242)
+
+    dump_dir = out_dir / "dumps"
+    assert dump_dir.is_dir()
+    assert captured["args"] == [
+        r"C:\tools\procdump64.exe", "-accepteula", "-ma", "-e", "1", "-n", "3",
+        "4242", str(dump_dir),
+    ]
+    assert t._procdump_proc is not None
+
+
+def test_attach_procdump_terminates_previous_instance(monkeypatch, tmp_path):
+    """A restart must not accumulate orphaned ProcDump processes from earlier legs."""
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    t.cfg = mod.Config(output_dir=str(tmp_path / "out"), procdump=True)
+    t._procdump_warned = False
+    old = _FakePopen([])
+    t._procdump_proc = old
+    monkeypatch.setattr(t, "_procdump_path", lambda: r"C:\tools\procdump64.exe")
+    monkeypatch.setattr(mod.subprocess, "Popen", lambda args, **kw: _FakePopen(args, **kw))
+
+    t._attach_procdump(9999)
+
+    assert old.terminated is True
+
+
+def test_detach_procdump_terminates_running_instance():
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    running = _FakePopen([])
+    t._procdump_proc = running
+
+    t._detach_procdump()
+
+    assert running.terminated is True
+    assert t._procdump_proc is None
+
+
+def test_detach_procdump_noop_when_already_exited():
+    mod = _import_monkey()
+    t = _bare_tester(mod)
+    exited = _FakePopen([])
+    exited._poll_result = 0   # already exited
+    t._procdump_proc = exited
+
+    t._detach_procdump()
+
+    assert exited.terminated is False   # already dead — nothing to terminate
+    assert t._procdump_proc is None
+
+
+# --- IFEO GlobalFlag (+ust) preflight -----------------------------------------
+# A leftover `gflags /i python.exe +ust` puts a stack trace on every heap
+# allocation process-wide: startup 5.8s -> 99s, suite 9min -> 68min, and every
+# RSS/timing number collected under it is an artifact. The probe that sets it
+# only printed a revert reminder on its success path, so any early exit left it
+# armed. These cover the gate that stops a chaos run from starting under it.
+
+def test_coerce_global_flag_parses_hex_string():
+    mod = _import_monkey()
+    assert mod._coerce_global_flag("0x00001000") == 0x1000
+
+
+def test_coerce_global_flag_parses_decimal_string():
+    mod = _import_monkey()
+    assert mod._coerce_global_flag("4096") == 0x1000
+
+
+def test_coerce_global_flag_parses_dword_int():
+    mod = _import_monkey()
+    assert mod._coerce_global_flag(4096) == 0x1000
+
+
+def test_coerce_global_flag_treats_zero_and_garbage_as_clear():
+    mod = _import_monkey()
+    assert mod._coerce_global_flag("0x00000000") == 0
+    assert mod._coerce_global_flag("00000000") == 0
+    assert mod._coerce_global_flag("") == 0
+    assert mod._coerce_global_flag("nonsense") == 0
+    assert mod._coerce_global_flag(None) == 0
+
+
+def test_ifeo_global_flag_returns_zero_for_absent_image():
+    """Unmocked registry read — an image with no IFEO key must read as clear.
+
+    RULE-WIN11 corollary: the mockable half of this helper proves nothing about
+    whether the real registry call works, so at least one test must run it.
+    """
+    mod = _import_monkey()
+    assert mod._ifeo_global_flag("definitely-not-a-real-image-xyzzy.exe") == 0
+
+
+def test_ust_traced_images_reports_only_images_with_the_ust_bit(monkeypatch):
+    mod = _import_monkey()
+    flags = {"python.exe": 0x1000, "NetSentinel.exe": 0x0, "other.exe": 0x40}
+    monkeypatch.setattr(mod, "_ifeo_global_flag", lambda img: flags.get(img, 0))
+
+    traced = mod._ust_traced_images(("python.exe", "NetSentinel.exe", "other.exe"))
+
+    assert [img for img, _ in traced] == ["python.exe"]
+
+
+def test_preflight_gflags_returns_none_when_clear(monkeypatch):
+    mod = _import_monkey()
+    monkeypatch.setattr(mod, "_ifeo_global_flag", lambda img: 0)
+    assert mod._preflight_gflags(allow_gflags=False) is None
+
+
+def test_preflight_gflags_aborts_and_names_the_clearing_command(monkeypatch):
+    mod = _import_monkey()
+    monkeypatch.setattr(mod, "_ifeo_global_flag",
+                        lambda img: 0x1000 if img == "python.exe" else 0)
+
+    msg = mod._preflight_gflags(allow_gflags=False)
+
+    assert msg is not None
+    assert "python.exe" in msg
+    assert "-ust" in msg            # the actual fix, not just a complaint
+    assert "--allow-gflags" in msg   # the deliberate-bypass escape hatch
+
+
+def test_preflight_gflags_respects_explicit_bypass(monkeypatch):
+    mod = _import_monkey()
+    monkeypatch.setattr(mod, "_ifeo_global_flag", lambda img: 0x1000)
+    assert mod._preflight_gflags(allow_gflags=True) is None
+
+
+def test_preflight_gflags_ignores_unrelated_global_flags(monkeypatch):
+    """Only the +ust bit distorts allocation timing — don't block on other flags."""
+    mod = _import_monkey()
+    monkeypatch.setattr(mod, "_ifeo_global_flag", lambda img: 0x40)
+    assert mod._preflight_gflags(allow_gflags=False) is None
+
+
+# --- soak instrumentation defaults --------------------------------------------
+
+def test_soak_phases_do_not_enable_tracemalloc_by_default():
+    """--tracemalloc must be opt-in (-Tracemalloc), never on by default.
+
+    A 2026-08-02 A/B established tracemalloc itself caused the mid-soak hangs
+    (0 hangs/0 restarts without it vs 1-2 on every prior run) and its
+    per-allocation cost distorts the RSS numbers the soak exists to measure.
+    Reverting this default silently costs a whole 4.5h+ run, so pin it.
+    """
+    ps1 = (TOOLS_ROOT / "run_all_monkey_tests.ps1").read_text(encoding="utf-8")
+    assert "$useTracemalloc = $Tracemalloc -and (-not $Store)" in ps1, (
+        "run_all_monkey_tests.ps1 must gate --tracemalloc on the -Tracemalloc "
+        "switch. An unconditional '$useTracemalloc = -not $Store' turns "
+        "allocation profiling back on for every soak phase."
+    )
+    assert ps1.count('$scriptArgs += "--tracemalloc"') == 1, (
+        "more than one place injects --tracemalloc; the -Tracemalloc gate only "
+        "covers the soak loop"
+    )
+
+
+def test_tracemalloc_switch_is_declared_and_forwarded():
+    """The switch must exist on the harness AND be forwarded by the test.ps1 shim."""
+    ps1 = (TOOLS_ROOT / "run_all_monkey_tests.ps1").read_text(encoding="utf-8")
+    shim = (TOOLS_ROOT.parent / "test.ps1").read_text(encoding="utf-8")
+    assert "[switch]$Tracemalloc" in ps1
+    assert "[switch]$Tracemalloc" in shim
+    assert "-Tracemalloc:$Tracemalloc" in shim, (
+        "test.ps1 declares -Tracemalloc but does not pass it through, so it "
+        "would be silently dropped (as -WildOnly already is)"
+    )

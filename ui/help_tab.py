@@ -36,10 +36,12 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.2.1"
+_WHATS_NEW_VERSION = "2.2.2"
 _WHATS_NEW_ENTRIES = [
-    ("The admin badge now tells you something", "Security Audit pages carried a red 'admin' badge at all times, including when you were already running NetSentinel as Administrator — where it warned about a restriction that no longer applied. The badge is now shown only when you are not elevated."),
-    ("See it before you open the menu", "The Security Audit icon in the left rail now shows an amber dot, and its tooltip says 'not running as Administrator', so you can tell those scans need elevation without opening the section first. Your unread-alert count on that icon is unchanged."),
+    ("Lighter when you are not looking", "Certificates, Uptime & SLA, Service Heartbeat and Maintenance Windows kept rebuilding their tables in the background even if you never opened them — as did the animated loading placeholder behind them. They now only do that work while actually on screen, which lowers memory and CPU use over a long session."),
+    ("Notifications no longer crash when snoozing", "Snoozing an alert could crash the Notifications page on a non-English Windows locale, because the time label used a character the system could not encode. Both the single-alert and bulk snooze paths are fixed."),
+    ("A smoother Network Timeline", "The timeline rebuilt every row from scratch on each refresh. It now reuses the rows it already has, so a full event feed stays responsive instead of stuttering every minute."),
+    ("Quieter modem monitoring", "The 5G modem plugin logged in again and re-read the entire Windows certificate store on every 30-second poll. It now keeps one connection and reuses it, reconnecting only when the modem actually drops the session."),
 ]
 
 

@@ -534,6 +534,41 @@ class TestAlertHistoryUnackedFilter:
         assert page._hist_time_combo.isEnabled() is True
 
 
+class TestAlertHistorySnoozeStatusRendering:
+    """Regression: notif_alert_history.py used to embed U+2192 ('->') directly
+    inside a time.strftime() format string. strftime format strings are passed
+    through the C-runtime's locale codec on Windows, and a non-UTF8 locale
+    can't encode the arrow -- this crashed two live chaos runs (2026-07-31)
+    with an unhandled UnicodeEncodeError, each ~1-7s before the app died with
+    a native Qt6Core.dll STATUS_STACK_BUFFER_OVERRUN fault."""
+
+    def test_active_snooze_status_survives_a_locale_that_cannot_encode_the_format_string(
+        self, monkeypatch
+    ):
+        import time as time_module
+
+        real_strftime = time_module.strftime
+
+        def fake_strftime(fmt, *a):
+            # Simulate a non-UTF8 locale codec: the C runtime encodes the
+            # format string itself, not just the substituted values.
+            fmt.encode("ascii")
+            return real_strftime(fmt, *a)
+
+        monkeypatch.setattr(time_module, "strftime", fake_strftime)
+
+        page = _make_page()
+        mock_router = MagicMock()
+        mock_router.get_all_snoozes.return_value = {"High RTT": time_module.time() + 3600}
+        page.set_router(mock_router)
+        page.set_store(_FakeStore(recent=[
+            {"id": 1, "ts": time_module.time(), "severity": "WARNING",
+             "host": "h", "rule_name": "High RTT"}
+        ]))
+        page.show()
+        page._refresh_alert_history()  # must not raise UnicodeEncodeError
+
+
 class TestSwitchToHistoryTabUnacked:
     def test_default_call_keeps_old_behaviour(self):
         page = _make_page()

@@ -124,6 +124,79 @@ class _Ev:
         self.severity = severity
 
 
+# ── Reusable event row ─────────────────────────────────────────────────────────
+
+class _EventRow(QFrame):
+    """One timeline row: built once, re-filled by `apply()` on every render.
+
+    Rebuilding these per 60 s tick was the confirmed native-RSS growth site —
+    a QFrame plus up to four QLabels per event, hundreds of events per reload.
+    """
+
+    clicked = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._dest = ""
+        _s.themed_ss(self, "QFrame {{ background:{BG_CARD}; border:none;"
+            " border-bottom:1px solid {BORDER}; }}"
+            "QFrame:hover {{ background:{BG_HOVER}; }}")
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 12, 0)
+        lay.setSpacing(0)
+
+        self._bar = QFrame()
+        self._bar.setFixedWidth(3)
+        lay.addWidget(self._bar)
+
+        self._ts_lbl = QLabel()
+        self._ts_lbl.setFixedWidth(80)
+        self._ts_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        _s.themed_ss(self._ts_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; padding:0 8px;")
+        lay.addWidget(self._ts_lbl)
+
+        self._src_chip = QLabel()
+        self._src_chip.setFixedWidth(84)
+        self._src_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self._src_chip)
+
+        text_col = QVBoxLayout()
+        text_col.setContentsMargins(0, 6, 0, 6)
+        text_col.setSpacing(1)
+        self._title_lbl = QLabel()
+        _s.themed_ss(self._title_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        text_col.addWidget(self._title_lbl)
+        self._detail_lbl = QLabel()
+        _s.themed_ss(self._detail_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent;")
+        text_col.addWidget(self._detail_lbl)
+        lay.addLayout(text_col, 1)
+
+    def apply(self, ev: _Ev) -> None:
+        """Re-point this row at `ev` — text and colours only, no construction."""
+        self._dest = _SOURCE_PAGE_MAP.get(ev.source, "")
+        self.setCursor(Qt.CursorShape.PointingHandCursor if self._dest
+                       else Qt.CursorShape.ArrowCursor)
+
+        src_color = _source_color(ev.source)
+        self._bar.setStyleSheet(f"background:{src_color}; border:none;")
+        self._ts_lbl.setText(_fmt_ts(ev.ts))
+        self._src_chip.setText(ev.source)
+        self._src_chip.setStyleSheet(
+            f"font-size:9px; font-weight:bold; color:{src_color};"
+            f" background:{alpha(src_color, 0x18)}; border:1px solid {alpha(src_color, 0x44)};"
+            f" border-radius:8px; padding:1px 6px; margin:4px 6px;"
+        )
+        self._title_lbl.setText(ev.title)
+        self._detail_lbl.setText(ev.detail)
+        self._detail_lbl.setVisible(bool(ev.detail))
+
+    def mousePressEvent(self, event) -> None:
+        if self._dest:
+            self.clicked.emit(self._dest)
+        super().mousePressEvent(event)
+
+
 # ── Page ──────────────────────────────────────────────────────────────────────
 
 class TimelinePage(QWidget):
@@ -139,6 +212,15 @@ class TimelinePage(QWidget):
         }
         self._events: list[_Ev] = []
         self._label_map: dict[str, str] = {}
+        # Reusable row/header widgets. _render() used to tear down and
+        # reconstruct every QFrame/QLabel from scratch on each 60 s tick —
+        # confirmed via UMDH as the native RSS-growth driver (see project
+        # memory). The pool grows to the largest simultaneous row/header
+        # count ever needed, then _render() only re-applies text/colour to
+        # existing widgets instead of constructing new ones.
+        self._row_pool: list[_EventRow] = []
+        self._header_pool: list[QLabel] = []
+        self._empty_label: QLabel | None = None
         #: Falls back to known_device / OUI when no scan has fed a label map,
         #: so device-change rows name the device instead of showing a bare MAC.
         self._resolver = DeviceLabelResolver(store=store)
@@ -455,11 +537,11 @@ class TimelinePage(QWidget):
     # ── Rendering ─────────────────────────────────────────────────────────────
 
     def _render(self) -> None:
-        # Remove old items (keep the trailing stretch)
+        # Detach everything from the layout WITHOUT destroying it — the row and
+        # header widgets are pooled and re-filled below. Rebuilding them here
+        # every 60 s tick was the confirmed native-memory growth site.
         while self._feed_layout.count() > 1:
-            item = self._feed_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            self._feed_layout.takeAt(0)
 
         visible = [e for e in self._events if e.source in self._active_sources]
 
@@ -477,77 +559,64 @@ class TimelinePage(QWidget):
 
         if not visible:
             msg = "No events match your search." if q else "No events in the last 7 days."
-            empty = QLabel(msg)
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            _s.themed_ss(empty, "font-size:12px; color:{TEXT_MUTED}; padding:40px; background:transparent;")
+            empty = self._empty_label
+            if empty is None:
+                empty = QLabel(self._feed_container)
+                empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                _s.themed_ss(empty, "font-size:12px; color:{TEXT_MUTED}; padding:40px; background:transparent;")
+                self._empty_label = empty
+            empty.setText(msg)
             self._feed_layout.insertWidget(0, empty)
+            empty.show()
+            self._hide_unused_pool(0, 0)
             return
 
+        rows_used = 0
+        headers_used = 0
         last_date = ""
-        for i, ev in enumerate(visible):
+        for ev in visible:
             date_str = _date_label(ev.ts)
             if date_str != last_date:
                 last_date = date_str
-                date_hdr = QLabel(date_str.upper())
-                _s.themed_ss(date_hdr, "font-size:9px; font-weight:bold; color:{TEXT_MUTED};"
-                    " background:transparent; padding:12px 0 4px 0;")
-                self._feed_layout.insertWidget(i, date_hdr)
+                hdr = self._header_widget(headers_used)
+                headers_used += 1
+                hdr.setText(date_str.upper())
+                self._feed_layout.insertWidget(self._feed_layout.count() - 1, hdr)
+                hdr.show()
 
-            row = self._make_event_row(ev)
+            row = self._row_widget(rows_used)
+            rows_used += 1
+            row.apply(ev)
             self._feed_layout.insertWidget(self._feed_layout.count() - 1, row)
+            row.show()
 
-    def _make_event_row(self, ev: _Ev) -> QFrame:
-        dest = _SOURCE_PAGE_MAP.get(ev.source, "")
-        row = QFrame()
-        _s.themed_ss(row, "QFrame {{ background:{BG_CARD}; border:none;"
-            " border-bottom:1px solid {BORDER}; }}"
-            "QFrame:hover {{ background:{BG_HOVER}; }}")
-        if dest:
-            row.setCursor(Qt.CursorShape.PointingHandCursor)
-            row.mousePressEvent = lambda _ev, d=dest: self.navigate_to.emit(d)
-        lay = QHBoxLayout(row)
-        lay.setContentsMargins(0, 0, 12, 0)
-        lay.setSpacing(0)
+        self._hide_unused_pool(rows_used, headers_used)
+        if self._empty_label is not None:
+            self._empty_label.hide()
 
-        # Source colour bar
-        bar = QFrame()
-        bar.setFixedWidth(3)
-        src_color = _source_color(ev.source)
-        bar.setStyleSheet(f"background:{src_color}; border:none;")
-        lay.addWidget(bar)
+    def _row_widget(self, index: int) -> _EventRow:
+        """Pooled event row at `index`, growing the pool only when needed."""
+        while len(self._row_pool) <= index:
+            row = _EventRow(self._feed_container)
+            row.clicked.connect(self.navigate_to)
+            self._row_pool.append(row)
+        return self._row_pool[index]
 
-        # Timestamp
-        ts_lbl = QLabel(_fmt_ts(ev.ts))
-        ts_lbl.setFixedWidth(80)
-        ts_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        _s.themed_ss(ts_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent; padding:0 8px;")
-        lay.addWidget(ts_lbl)
+    def _header_widget(self, index: int) -> QLabel:
+        """Pooled date-separator label at `index`."""
+        while len(self._header_pool) <= index:
+            hdr = QLabel(self._feed_container)
+            _s.themed_ss(hdr, "font-size:9px; font-weight:bold; color:{TEXT_MUTED};"
+                " background:transparent; padding:12px 0 4px 0;")
+            self._header_pool.append(hdr)
+        return self._header_pool[index]
 
-        # Source chip
-        src_chip = QLabel(ev.source)
-        src_chip.setFixedWidth(84)
-        src_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        src_chip.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{src_color};"
-            f" background:{alpha(src_color, 0x18)}; border:1px solid {alpha(src_color, 0x44)};"
-            f" border-radius:8px; padding:1px 6px; margin:4px 6px;"
-        )
-        lay.addWidget(src_chip)
-
-        # Title + detail
-        text_col = QVBoxLayout()
-        text_col.setContentsMargins(0, 6, 0, 6)
-        text_col.setSpacing(1)
-        title_lbl = QLabel(ev.title)
-        _s.themed_ss(title_lbl, "font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
-        text_col.addWidget(title_lbl)
-        if ev.detail:
-            detail_lbl = QLabel(ev.detail)
-            _s.themed_ss(detail_lbl, "font-size:10px; color:{TEXT_MUTED}; background:transparent;")
-            text_col.addWidget(detail_lbl)
-
-        lay.addLayout(text_col, 1)
-        return row
+    def _hide_unused_pool(self, rows_used: int, headers_used: int) -> None:
+        """Hide pooled widgets this render didn't need (they stay re-usable)."""
+        for row in self._row_pool[rows_used:]:
+            row.hide()
+        for hdr in self._header_pool[headers_used:]:
+            hdr.hide()
 
     # ── Today at a glance ─────────────────────────────────────────────────────
 
@@ -586,10 +655,11 @@ class TimelinePage(QWidget):
     # ── Theme ─────────────────────────────────────────────────────────────────
 
     def refresh_theme(self) -> None:
-        """Rebuild the transient event feed so per-row colours follow the theme.
+        """Re-render so per-row colours follow the theme.
 
         Persistent chrome (chips, glance tiles, headers) re-styles itself via
-        themed_ss; the event rows are rebuilt on each _render(), so re-render.
+        themed_ss; the per-source bar/chip colours are raw stylesheets applied
+        in _EventRow.apply(), so they only follow a theme switch on a re-render.
         """
         self._render()
 
@@ -604,10 +674,9 @@ class TimelinePage(QWidget):
     def hideEvent(self, event) -> None:
         """Stop the 60 s auto-refresh while the page isn't visible (RULE-WIN15).
 
-        Each _reload() re-queries the store and rebuilds the whole table —
-        hundreds of QTableWidgetItems, which are C++ objects and therefore
-        invisible to tracemalloc. Left running on a hidden page it is pure
-        native churn nobody can see.
+        Each _reload() re-queries the store and re-renders the whole feed —
+        hundreds of rows. Rows are pooled rather than rebuilt now, but the
+        query and the restyle pass are still pure churn on a hidden page.
         """
         self._timer.stop()
         super().hideEvent(event)

@@ -71,8 +71,31 @@ netsentinel/
 └── tools/
     ├── debug_launch.py         # GUI smoke-launch → netsentinel_debug.log (COMMIT GATE Step 3)
     ├── monkey_test.py          # Chaos/monkey tester (pywinauto UIA; --source/--connect/exe modes)
+    ├── run_all_monkey_tests.ps1  # One-command chaos runner — coverage cycle + mild/moderate/wild soak (see below)
     └── audit_check.py          # Runtime audit of scan-registry / Scan Center wiring
 ```
+
+### Chaos/monkey test log location (RULE-CHAOS3)
+
+`run_all_monkey_tests.ps1` (`.\test.ps1` wrapper) — the "let it run for hours" harness — **always**
+writes to `%USERPROFILE%\Documents\NetSentinel\test_output\run_<timestamp>\`, never to the repo's
+own `test_output\`. Full docs: `docs/chaos-testing.md`.
+
+- **`run_<timestamp>\AI_REPORT.md`** — start here. Rewritten after every phase (survives a hang or
+  Ctrl+C), has the phase results table (Peak RSS column — watch for a climb across mild → moderate
+  → wild) and, for any crashed/errored phase, embedded crash-file contents + tracebacks.
+- Per-phase subfolders (`sweep_00/`, `soak_01_mild/`, `soak_01_moderate/`, `soak_01_wild/`,
+  `sweep_soak_final/`, ...) hold the raw `monkey.log` / `systematic.log` and `monkey_summary.json`
+  behind each report row.
+- To find the run: `Get-ChildItem "$env:USERPROFILE\Documents\NetSentinel\test_output" -Directory |
+  Sort-Object LastWriteTime -Descending | Select -First 1`, or just take the newest `run_*` folder.
+- The repo-root `test_output\monkey.log` is a **different, unrelated** file — leftover from ad-hoc
+  single-shot `python tools\monkey_test.py` invocations without `--output-dir`. It is not what a
+  `run_all_monkey_tests.ps1` session writes to; do not mistake it for the current/latest run.
+- Independently verify "0 crashes / 0 exceptions" claims against
+  `%LOCALAPPDATA%\NetSentinel\netsentinel_crash.log` / `netsentinel_exceptions.log` **mtime**, not
+  just the harness's self-reported counts (RULE-CHAOS2 — a native fault doesn't always surface as
+  a caught exception).
 
 ## Key Architectural Patterns
 

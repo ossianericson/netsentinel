@@ -1969,6 +1969,25 @@ Enforced by `tests/test_page_timer_lifecycle.py` (constructed-but-never-shown pa
 active timers; timer must start on a real `QStackedWidget` show and stop on hide). Runtime rather
 than AST, deliberately — no realistic static check follows the signal-driven start above.
 
+**The runtime check needs a page instance, so its factory list is only as good as whoever
+maintained it.** That list was hand-curated for its first year and four pages
+(`cert_page`, `uptime_page`, `service_page`, `maintenance_page`) sat in the tree starting
+repeating timers straight from `__init__` with nothing to catch them — the rule was enforced
+only on pages someone had remembered to add. `test_every_page_with_a_repeating_timer_is_covered`
+closes that loop statically: it flags any `ui/pages/*.py` that connects to a `QTimer.timeout`
+without `setSingleShot(True)` and has no factory, against a shrink-only baseline. The AST pass
+cannot verify lifecycle *correctness* (that is still the runtime test's job) — it verifies
+*coverage*, which is the half that silently rots.
+
+**Corollary — a shared widget can carry this defect into pages that look clean.**
+`ui/widgets/skeleton.py` started a 650 ms pulse `QTimer` inside `insert_skeleton_rows()`, stopped
+only by `clear_skeleton_rows()` on the caller's refresh path. `ServicePage.__init__` inserts
+skeleton rows and then calls `_refresh()`, which returns early on `not self.isVisible()` — so on
+a never-opened page the rows were never cleared and the pulse ran all session, allocating a
+`QBrush` + `QColor` per skeleton cell per tick. The page's own timers were irrelevant; the leak
+came in through a helper. Fixed in the widget (a `_PulseController` event filter that pulses only
+while the table is visible), which covers all four call sites at once — the RULE-WIN17 precedent.
+
 ---
 
 ## QSettings State Hygiene
@@ -2652,7 +2671,7 @@ Currently tool-enforced (high reliability):
 - RULE-WIN14 → `test_window_chrome.py` (regression: restore that leaves the QWidget hidden must re-show it)
 - RULE-WIN16 → `test_single_instance.py` (real CreateMutexW round-trip) + `test_single_instance_race.py` (RED/GREEN regression)
 - RULE-WIN17 → `test_protocol_canvas.py` (hide/show timer lifecycle, step + live mode, nested QStackedWidget propagation)
-- RULE-WIN18 → `test_page_timer_lifecycle.py` (never-shown page has zero active timers; start-on-show/stop-on-hide via real QStackedWidget transitions)
+- RULE-WIN18 → `test_page_timer_lifecycle.py` (never-shown page has zero active timers; start-on-show/stop-on-hide via real QStackedWidget transitions; plus an AST coverage guard so a new page with a repeating timer cannot slip past the hand-maintained factory list)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 - RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
 - RULE-R1b → `test_version_consistency.py::test_whats_new_version` + `bump_version.py::_preflight_whats_new()` (aborts the bump before any file is written)

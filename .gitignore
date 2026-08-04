@@ -90,4 +90,5 @@ test_out.txt
 test_full_results.txt
 test_results_verbose.txt
 TEMP*.json
+myeasylog.log
 

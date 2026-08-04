@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.2.1**
+Current version: **v2.2.2**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -37,6 +37,7 @@ not kill the process, so "no crash" alone is not evidence of a clean run.
 | 2026-07-13/14 | ~7 h overnight (8 h budget, user-interrupted mid-wild) | 9,729 interactions across mild/moderate/wild soak laps (1,291 / 3,397 / 5,041) — clean, **zero crash-log growth** (baseline unchanged at 6,775,780 bytes from before the run to after). Zero exceptions logged at every progress checkpoint. Peak RSS 674 → 775 → 750 MB across the three laps — flat, no leak trend. |
 | 2026-07-21/22 (v2.1.39) | ~10 h overnight (15:26–01:23), 1 coverage cycle + soak lap 1 | 13,612 interactions across mild/moderate/wild/real-mouse-wild/scan-navigate + a full mild→moderate→wild soak lap (1,498 / 1,441 / 8,351) + 2 full 62-page systematic sweeps — clean, **zero crash-log growth** (`netsentinel_crash.log` byte-identical, mtime unchanged from before the run to after). Zero exceptions in every phase. One self-healed hang (47 s stall at iter 1535) mid-wild-soak — health monitor auto-restarted the app and the phase continued cleanly to iter 8,351. Three "shutdown hang" flags in the raw phase table were a `monkey_test.py` false positive, not an app defect: the titlebar-X click missed after a Win+Down chaos action resized the window, confirmed via `netsentinel_shutdown.log` showing no `closeEvent` entry at any of those three timestamps (vs. a clean, logged 2.39 s exit for the one phase that closed normally). **Open lead, unlike the flat 07-13/14 run:** Peak RSS rose across the soak ladder — mild 690 → moderate 967 → wild 1,432 MB — and tracemalloc's Python-level snapshots don't account for the growth, so it is very likely a native Qt/matplotlib-side leak (the same invisible-to-tracemalloc class as the already-fixed command-palette/dialog leaks), not yet isolated. |
 | 2026-07-23/24 (v2.1.43, RULE-CHAOS1 catch-up for v2.1.42) | ~11.5 h across the day, final 4.5 h wild-soak phase (19:37–00:04) at full 16,200 s budget | Earlier same-day phases (12:46–14:13) hit the already-diagnosed Win+Down/minimized-window false-restart and false-"shutdown hang" patterns — the exact defects fixed mid-run by `0977625`/`a69c7aa`/`c425f9b` in this release, so this run doubled as their validation. Final full-budget wild-soak phase: 9,656 iterations, **0 crashes, 0 exceptions**, **zero growth** in both `netsentinel_crash.log` and `netsentinel_exceptions.log` (mtimes predate the phase), clean titlebar-X shutdown (1.78 s). 2 restarts, both self-healed `[health]` hang-detections (46 s+ stalls), not app faults. **RSS lead still open, unchanged by this release's fixes (none targeted memory):** 549 MB → 1,440.8 MB peak over 4.5 h, same ballpark as the 07-21/22 wild-soak peak (1,432 MB) — not worsened, not resolved. |
+| 2026-08-03/04 (v2.2.2) | ~10 h overnight (21:37–07:46, user-interrupted mid soak-lap-2-mild) | 1 coverage cycle + soak lap 1 (mild/moderate/wild, full budget) — clean, **0 crashes, 0 exceptions**, `netsentinel_crash.log` byte-identical since 2026-07-30 (zero growth). 1 self-healed restart (window/process gone at iter 1616, foreground reclaimed in 15 s), 0 hangs. **Peak RSS 1,838 MB (wild soak lap 1)** — the first run confirmed free of the `+ust` instrumentation artifact below; RSS ladder back to the 07-21/22–07-23/24 ballpark (1,432–1,441 MB), not the 2,880–3,798 MB range seen while `+ust` was armed. See closure note below the table. |
 
 **The RSS lead carried by the 07-21/22 and 07-23/24 rows is closed as of v2.2.0.** Root cause
 was never navigation, native Qt/matplotlib retention, or Network Map: `ui/nav/lazy_page.py`'s
@@ -47,10 +48,20 @@ tracemalloc/UMDH/VMMap saw nothing. Measured on an idle Dashboard with a real `M
 **+556 MB/hr → −19.6 MB/hr**. Full narrative in
 `docs/spikes/idle-rss-leak-lazy-page-timers.md`; invariant captured as RULE-WIN18.
 
-**Caveat — the fix is bench-verified, not soak-verified.** The measurement above is an idle
-main-process RSS trend, not a wild-soak ladder. The next chaos run is the one that either
-confirms the peak-RSS ladder has flattened or reopens the lead; until a post-v2.2.0 row appears
-in the table above, treat "flat under chaos" as expected rather than established.
+**Chaos-verified and closed as of 2026-08-04.** The bench-only caveat above is resolved: the
+2,880 MB (07-27/28) and 3,798 MB (08-02) peaks that briefly reopened this lead after v2.2.0 turned
+out to be measured with a stray debugging gflag, `FLG_USER_STACK_TRACE_DB` (`+ust`), armed on
+`python.exe` — left set by an unrelated UMDH probing session. `+ust` captures a full native stack
+trace on every heap allocation, which inflates both startup time (5.8 s → 99 s measured) and
+reported RSS, and is invisible to Python-level tools (tracemalloc), which is why five earlier
+diagnostic rounds saw nothing conclusive. `tools/monkey_test.py` and
+`tools/run_all_monkey_tests.ps1` now refuse to start (`--allow-gflags` to override) if `+ust` is
+armed, so it cannot silently recur. The 2026-08-03/04 row above is the first full soak run
+confirmed clear of it, and its peak (1,838 MB) landed back in the pre-`+ust` ballpark instead of
+climbing further. A small residual drift remains (~150–200 MB within that one wild-soak lap,
+sample floor ~1,520 MB → ~1,700 MB) but is an order of magnitude below what motivated this
+investigation and is not being pursued further given the app's established crash-free record;
+revisit only if a future run shows the drift compounding lap-over-lap rather than resetting.
 
 The full version history lives in `CHANGELOG.md` (and the highlights in
 `README.md`). It is not duplicated here — a per-version chain in this file only
