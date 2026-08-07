@@ -20,7 +20,9 @@ from __future__ import annotations
 import time
 from typing import Dict, List, Optional
 
-from modules.alert_types import AlertFired
+from modules.alert_types import (
+    DEFAULT_MIN_CONSECUTIVE_BY_RULE_TYPE, AlertFired,
+)
 from modules.device_classifier import is_randomized_mac
 
 # GRADE_REGRESSION — worse rank = lower number
@@ -35,7 +37,9 @@ _MESH_WEAK_RSSI = -75.0
 # field) fires CRITICAL on its very first check and re-fires every cooldown
 # forever — indistinguishable from a real outage and a source of alert
 # fatigue that erodes trust in the app.
-_SERVICE_DOWN_MIN_CONSECUTIVE_FAILS = 3
+_SERVICE_DOWN_MIN_CONSECUTIVE_FAILS = (
+    DEFAULT_MIN_CONSECUTIVE_BY_RULE_TYPE["SERVICE_DOWN"]
+)
 
 
 class _AlertChecksMixin:
@@ -97,7 +101,14 @@ class _AlertChecksMixin:
                 self._service_down_since.setdefault(key, now)
                 streak = self._service_fail_streak.get(key, 0) + 1
                 self._service_fail_streak[key] = streak
-                if streak < _SERVICE_DOWN_MIN_CONSECUTIVE_FAILS:
+                # Phase 6: read the rule, not the module constant. Behaviour is
+                # unchanged for every existing caller — AlertRule resolves an
+                # unspecified min_consecutive from
+                # DEFAULT_MIN_CONSECUTIVE_BY_RULE_TYPE, which carries this same
+                # 3 — but a rule can now name its own grace period, and every
+                # other rule type gained the same field.
+                required = getattr(rule, "min_consecutive", None)
+                if streak < (required or _SERVICE_DOWN_MIN_CONSECUTIVE_FAILS):
                     continue
 
                 alert = self._fire_if_cooled(

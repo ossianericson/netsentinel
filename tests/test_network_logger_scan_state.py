@@ -121,6 +121,7 @@ def test_toggle_logger_start_sets_running_scan_state(monkeypatch):
             self.status = _FakeSignal()
             self.rotated = _FakeSignal()
             self.error = _FakeSignal()
+            self.dns_sample = _FakeSignal()   # DNS_LATENCY (Phase 4 C5)
 
         def start(self):
             self._running = True
@@ -160,6 +161,10 @@ def test_toggle_logger_start_sets_running_scan_state(monkeypatch):
 
         def _nav_set_scan_state(self, label, state, ts=None, error=None, verdict=None):
             calls.append((label, state))
+
+        def _on_dns_sample(self, dns_ms):
+            """Dashboard-level DNS_LATENCY handler (Phase 4 C5) — the mixin
+            connects to it, so the stand-in has to carry it too."""
 
     dash = _MockDash()
     dash._toggle_logger()  # start

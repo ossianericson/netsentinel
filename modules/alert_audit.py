@@ -78,15 +78,29 @@ def audit_alert_config(
     channels: list,
     escalation_policies: list,
 ) -> List[AuditFinding]:
-    from modules.alert_suppressor import rule_settings_key
+    from modules.alert_suppressor import default_enabled, rule_settings_key
     from modules.notification_router import ToastChannel, _severity_gte
 
     findings: List[AuditFinding] = []
 
     # RULES_OPT_IN
+    # _truthy(), not `is not True`: callers pass a raw QSettings reader, and on
+    # Windows (NativeFormat/registry) a stored boolean comes back as the STRING
+    # "true", so identity comparison reported every genuinely enabled rule as
+    # missing its opt-in. Never observed before because all 25 built-ins ship
+    # disabled — the check had only ever run in its passing state. TOAST_OPT_IN
+    # below already reads its setting this way.
+    #
+    # The default is `default_enabled(r.name)`, not False. Phase 6's curated
+    # set turns rules on with no stored key at all, so a hardcoded False here
+    # would report every default-on rule as "enabled without an opt-in" on
+    # every fresh install. A rule the user explicitly turned OFF while the code
+    # still has it enabled is still flagged — that mismatch is real.
     mismatched = [
         r.name for r in rules
-        if r.enabled and settings_get(rule_settings_key(r.name), False) is not True
+        if r.enabled and not _truthy(
+            settings_get(rule_settings_key(r.name), default_enabled(r.name))
+        )
     ]
     findings.append(AuditFinding(
         "RULES_OPT_IN", not mismatched,
@@ -138,7 +152,24 @@ def audit_alert_config(
     ))
 
     # DELIVERABILITY
-    undeliverable = []
+    #
+    # "Delivered" means the user can see it, not "an external channel exists".
+    # ui/dashboard.py::_surface_alert_in_app() is always on and never gated —
+    # status bar, tray badge, Alert History, the Home "Action needed" card and
+    # the alert drawer all receive every fired alert regardless of notification
+    # settings — so in-app surfacing is a real delivery path, and since Phase 5
+    # a ranked one.
+    #
+    # This mattered the moment Phase 6 turned rules on by default: desktop
+    # toasts are strictly opt-in (notif/toast_enabled defaults False, a
+    # deliberate decision pinned by tests/test_first_run_notif_optin.py), so the
+    # old "an enabled channel must accept it" rule would have failed for every
+    # user who had not configured one — i.e. for the default install.
+    #
+    # The check stays informative rather than becoming vacuous: rules that only
+    # reach the in-app surfaces are named, so the audit still tells the user
+    # what will never leave the app.
+    in_app_only = []
     for r in rules:
         if not r.enabled:
             continue
@@ -150,11 +181,13 @@ def audit_alert_config(
             for ch in channels
         )
         if not deliverable:
-            undeliverable.append(r.name)
+            in_app_only.append(r.name)
     findings.append(AuditFinding(
-        "DELIVERABILITY", not undeliverable,
-        "Every enabled rule has at least one channel that would accept it" if not undeliverable
-        else f"Enabled rules with no channel that would ever deliver them: {', '.join(undeliverable)}",
+        "DELIVERABILITY", True,
+        "Every enabled rule has at least one channel that would accept it"
+        if not in_app_only else
+        f"Every enabled rule reaches a surface; in-app only (no notification "
+        f"channel accepts them): {', '.join(in_app_only)}",
     ))
 
     return findings
@@ -255,7 +288,11 @@ ALLOWED_TRAY_FUNCTIONS: Dict[str, str] = {
                                   "snooze + ToastChannel.enabled + min_severity + rule_types",
     "closeEvent":                "one-time hide-to-tray hint, gated on tray/hide_hint_shown",
     "_check_weekly_digest":      "gated on notif/weekly_digest_enabled",
-    "_m1_track_devices":         "gated on tray/notify_new_device / tray/notify_device_gone",
+    "_m1_track_devices":         "gated on tray/notify_device_gone (the new-device "
+                                  "half moved to _surface_new_devices)",
+    "_surface_new_devices":      "gated on tray/notify_new_device — Signal Quality "
+                                  "Phase 5 consolidated the four new-device surfaces "
+                                  "out of _m1_track_devices; the opt-in moved with it",
     "main":                      "quiet notifier — gated on alerts/quiet_notify_enabled",
     "_do_morning_briefing_check": "gated on briefing/enabled",
 }

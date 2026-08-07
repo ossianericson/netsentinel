@@ -18,6 +18,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from modules.device_classifier import is_randomized_mac
+from modules.device_identity import IdentityClass, classify_identity
+from modules.device_stability import RoleEvidence
 from modules.device_stability import update_stability_for_device as _update_stability
 from modules.metric_store import KnownDevice, MetricStore
 from modules.service_mapper import get_services as _get_services
@@ -97,17 +100,32 @@ class DeviceTracker:
     gone_threshold_s : int
         Seconds since last_seen before a device is considered "gone" and a LEFT
         event is written. Default: 3600 (1 hour). Set to 0 to disable LEFT events.
+    evidence : RoleEvidence | None
+        Corroborating network facts (real gateway address, mesh node list) used
+        by role inference. Optional — omitting it keeps the pre-Phase-2
+        heuristics, it never produces a different wrong answer.
     """
 
     def __init__(
         self,
         store: MetricStore,
         gone_threshold_s: int = 3600,
+        evidence: Optional[RoleEvidence] = None,
     ):
         self._store             = store
         self._gone_threshold_s  = gone_threshold_s
+        self._evidence          = evidence
 
     # ── Public API ─────────────────────────────────────────────────────────────
+
+    def set_evidence(self, evidence: Optional[RoleEvidence]) -> None:
+        """Replace the corroborating evidence used by role inference.
+
+        The Dashboard caches one DeviceTracker for the app's lifetime but
+        re-reads net_info per scan, so the gateway address and mesh node list
+        must be refreshable rather than pinned at construction.
+        """
+        self._evidence = evidence
 
     def process_scan(
         self,
@@ -152,6 +170,17 @@ class DeviceTracker:
             td = _normalise(raw)
             if td is None:
                 continue
+            # Signal Quality Phase 1: a multicast/broadcast address is a
+            # destination group, not an endpoint, and must never enter the
+            # inventory. The reference database held the SSDP group
+            # (01:00:5e:7f:ff:fa / 239.255.255.250) as a known_device row that
+            # role inference had promoted to "infrastructure" — the gate
+            # is_device_alert_in_scope() uses — so a non-existent host was
+            # opted in to every device-scoped alert rule.
+            if classify_identity(
+                td.mac, td.hostname, td.vendor, td.ip
+            ).identity_class is IdentityClass.NOT_A_DEVICE:
+                continue
             seen_macs.add(td.mac)
             is_new = td.mac not in known
 
@@ -178,6 +207,11 @@ class DeviceTracker:
                 # name (fresh=True). None on a cache hit lets COALESCE preserve
                 # the original timestamp so the TTL clock doesn't reset.
                 hostname_resolved_at=(now if td.name_resolved_fresh else None),
+                # Signal Quality Phase 1: this column has existed since schema
+                # v21 and been read by the query layer, but no caller ever wrote
+                # it — so it was 0 for every row on every install. The importance
+                # model needs it to tell a privacy MAC from an OUI-backed one.
+                mac_randomized=is_randomized_mac(td.mac),
             )
             known_macs.add(td.mac)
 
@@ -189,6 +223,14 @@ class DeviceTracker:
                     self._store.record_ip_observation(td.mac, td.ip, ts=now)
                 except Exception:
                     pass  # non-fatal — history table may not exist on first run
+
+            # Signal Quality Phase 6: the device is here, so any absence
+            # episode is over. Clearing gone_notified_ts is what re-arms the
+            # NEXT departure — a stamp left behind would mute it forever.
+            try:
+                self._store.set_presence_state(td.mac, "present", gone_notified_ts=None)
+            except Exception:
+                pass  # non-fatal — presence columns may not exist on an old schema
 
             if is_new:
                 self._store.record_device_event(
@@ -236,6 +278,14 @@ class DeviceTracker:
                     device_type=td_ref.device_type or None,
                     custom_name=_custom,
                     store=self._store,
+                    # Signal Quality Phase 2: the identity gate needs a handle to
+                    # judge by. Without hostname/vendor every privacy MAC reads
+                    # as anonymous and loses its role, including ones the app can
+                    # name perfectly well. Fall back to the stored row when this
+                    # scan resolved neither.
+                    hostname=td_ref.hostname or (_kd.hostname if _kd else None),
+                    vendor=td_ref.vendor or (_kd.vendor if _kd else None),
+                    evidence=self._evidence,
                 )
             except Exception:
                 pass  # non-fatal — stability columns may not exist on old schema
@@ -247,17 +297,28 @@ class DeviceTracker:
                     continue
                 last_seen = kd.last_seen or 0
                 if now - last_seen >= self._gone_threshold_s:
-                    # Only emit LEFT once — suppress if we already emitted it
-                    # (detect by checking if the most recent event for this MAC
-                    #  within the threshold window is already LEFT)
-                    recent_events = self._store.query_device_events(
-                        hours=int(self._gone_threshold_s / 3600) + 1,
-                        ip=kd.ip or mac,
-                        event_types=["LEFT"],
-                    )
-                    already_emitted = any(
-                        e.mac == mac and (now - e.ts) < self._gone_threshold_s
-                        for e in recent_events
+                    # Emit LEFT once per ABSENCE EPISODE, not once per threshold
+                    # window. The original check looked back only
+                    # gone_threshold_s, so the prior LEFT had always just aged
+                    # out by the time the next scan ran and the device
+                    # re-announced its absence every hour, forever: 569 LEFT
+                    # events across 30 MACs on the reference network, 34-37 for
+                    # the worst offenders, 7 for the gateway itself.
+                    #
+                    # Phase 1 fixed that by re-deriving the answer from the
+                    # event table ("is there a LEFT newer than last_seen?").
+                    # Schema v22 holds it directly instead: gone_notified_ts is
+                    # stamped when this episode was reported and cleared the
+                    # moment the device is seen again, so the check is a column
+                    # read rather than a query per absent device per scan — and
+                    # it no longer depends on device_event retention outliving
+                    # the absence.
+                    #
+                    # A NULL stamp means "not reported", which is also the
+                    # correct reading for every row upgrading from v21.
+                    already_emitted = (
+                        kd.gone_notified_ts is not None
+                        and kd.gone_notified_ts > last_seen
                     )
                     if not already_emitted:
                         self._store.record_device_event(
@@ -270,6 +331,12 @@ class DeviceTracker:
                             ),
                             ts=now,
                         )
+                        try:
+                            self._store.set_presence_state(
+                                mac, "absent", gone_notified_ts=now
+                            )
+                        except Exception:
+                            pass  # non-fatal — column may not exist on an old schema
                         result.gone_devices.append(TrackedDevice(
                             mac=mac,
                             ip=kd.ip or "",
@@ -278,9 +345,23 @@ class DeviceTracker:
                             device_type=kd.device_type or "",
                         ))
 
+        # Signal Quality Phase 6 — materialise device_importance.Tier for the
+        # whole inventory, once, after inferred_role/scan_count/ip_stability
+        # have settled. modules/relevance.py ranks a whole claim list against
+        # this map in one read; recomputing per claim would be a query per row
+        # on every Timeline/Home render.
+        #
+        # A CACHE, never authority: the alert gate still calls
+        # get_device_importance_tier(), which recomputes. See
+        # MetricStore.refresh_importance_tiers().
+        try:
+            self._store.refresh_importance_tiers()
+        except Exception:
+            pass  # non-fatal — ranking degrades to untiered, scanning must not fail
+
         # known_macs already mirrors the final known_device row set: gone-detection
-        # (above) only writes device_events, never known_device, so no third read
-        # is needed (Phase B2 / F4).
+        # (above) writes only device_event rows and presence columns, never adding
+        # or removing a known_device row, so no third read is needed (Phase B2 / F4).
         result.total_known = len(known_macs)
         return result
 

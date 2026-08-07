@@ -19,7 +19,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
-from modules.alert_suppressor import rule_settings_key as _rule_key
+from modules.alert_suppressor import (
+    default_enabled as _rule_default,
+    rule_settings_key as _rule_key,
+)
 from ui.widgets.alert_drawer import AlertDrawer
 from ui.widgets.skeleton import insert_skeleton_rows
 
@@ -256,7 +259,9 @@ class NotificationsPage(
                 qs.value("notif/service_escalation_enabled", True, type=bool)
             )
             for name, chk in self._rule_checkboxes.items():
-                chk.setChecked(qs.value(_rule_key(name), False, type=bool))
+                chk.setChecked(
+                    qs.value(_rule_key(name), _rule_default(name), type=bool)
+                )
             from modules.alert_sensitivity import DEFAULT_SENSITIVITY
             level = qs.value("alerts/sensitivity", DEFAULT_SENSITIVITY, type=str)
             idx = self._combo_sensitivity.findData(level)

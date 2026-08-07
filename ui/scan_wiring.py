@@ -880,6 +880,100 @@ class ScanResultMixin(ScanEnrichmentMixin):
             topo_widget=getattr(self, "_topology_widget", None),
         )
 
+    def _surface_new_devices(self, new_devices: list) -> None:
+        """Announce a scan's new devices — one claim, several presentations.
+
+        Signal Quality Phase 5. These surfaces were four independent
+        announcements of the same fact, each with its own idea of what mattered:
+        a status line listing the first three devices in scan order, a Live
+        Bandwidth annotation, and a naming toast about `new_devices[0]` — again
+        scan order, so on a scan that discovered five devices the toast named
+        whichever one the scanner happened to answer first.
+
+        Consolidated here so the surfaces agree, and so the device they speak
+        about is the most *relevant* one (modules/relevance.py: importance tier
+        x recency) rather than the first one seen. A scan that finds a new
+        router and four IoT bulbs now says something about the router.
+
+        Ordering only — nothing here decides whether to speak. That is
+        `DeviceTracker` (identity, first-seen grace) and the NEW_DEVICE rule,
+        both upstream. The tray notification keeps its own opt-in gate, and the
+        MQTT feed is deliberately left out: it is a machine-readable event
+        stream, not a claim competing for the user's attention.
+        """
+        from ui.claim_ranking import rank_device_events
+
+        # Adapt to the shape the device_event adapter reads, so ranking uses the
+        # same tier lookup as every other surface rather than a private rule.
+        ranked = rank_device_events(
+            [
+                {"ts": self._last_scan_ts_epoch(), "ip": d.ip, "mac": d.mac,
+                 "event_type": "JOINED", "_device": d}
+                for d in new_devices
+            ],
+            self._store,
+        )
+        ordered = [r["_device"] for r in ranked] or list(new_devices)
+
+        if hasattr(self, "_live_bandwidth_page"):
+            self._live_bandwidth_page.annotate_event("Device joined", _s.GREEN)
+
+        msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})" for d in ordered[:3]]
+        extra = f" +{len(ordered) - 3} more" if len(ordered) > 3 else ""
+        self._set_status(
+            f"🆕 {len(ordered)} new device(s): {', '.join(msgs)}{extra}"
+        )
+
+        # Tray notification — only if the user opted in.
+        from PyQt6.QtCore import QSettings as _QS
+        if (
+            self._tray_manager.is_available()
+            and _QS("NetSentinel", "NetSentinel").value(
+                "tray/notify_new_device", False, type=bool
+            )
+        ):
+            summary = ", ".join(f"{d.ip or d.mac}" for d in ordered[:2])
+            if len(ordered) > 2:
+                summary += f" +{len(ordered) - 2} more"
+            self._tray_manager.show_notification("New Device Joined", summary, "WARNING")
+            self._tray_manager.increment_badge()
+
+        # Naming suggestion toast (S5-1) — at most one per scan, about the
+        # most relevant device rather than the first one the scanner returned.
+        try:
+            from modules.device_naming import suggest_device_name
+            first = ordered[0]
+            suggested = suggest_device_name(
+                first.hostname, first.vendor, first.device_type
+            )
+            if suggested != "Unnamed Device":
+                from ui.widgets.toast import ToastManager
+                _mac = first.mac
+
+                def _name_it(_checked=False, _mac=_mac, _name=suggested):
+                    self._nav_rail_go_to(L.INVENTORY_CHANGES)
+                    if hasattr(self, "_inventory_page"):
+                        self._inventory_page.open_device_drawer(_mac, _name)
+
+                ToastManager.show(
+                    f"New device: {suggested} ({first.ip or first.mac}) — name it?",
+                    "action",
+                    action_label="Name it",
+                    action_callback=_name_it,
+                )
+        except Exception:
+            pass  # non-fatal — naming suggestion must never break the scan handler
+
+    @staticmethod
+    def _last_scan_ts_epoch() -> int:
+        """Now, as the timestamp for devices discovered by the scan just done.
+
+        Python's clock, never PowerShell's — `Get-Date -UFormat %s` returns a
+        LOCAL-time epoch, which is hours off real epoch outside UTC.
+        """
+        import time as _t
+        return int(_t.time())
+
     def _m1_track_devices(
         self, data: dict, known: dict[str, "KnownDevice"] | None = None
     ) -> None:
@@ -887,65 +981,31 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # ── Persistent device tracking (MetricStore) ──────────────────────────
         if self._store is not None:
             try:
+                from modules.device_stability import RoleEvidence
                 from modules.device_tracker import DeviceTracker
                 if not hasattr(self, "_device_tracker"):
                     self._device_tracker = DeviceTracker(self._store)
+                # Signal Quality Phase 2: role inference now requires corroborating
+                # evidence rather than trusting device_type or uptime. The real
+                # gateway address and the mesh system's own node list live here,
+                # and are re-read per scan (the tracker itself is cached).
+                #
+                # Guarded separately from the tracking block below: evidence only
+                # ever *improves* inference, so failing to build it must degrade
+                # role accuracy for one scan, never skip persisting the scan.
+                try:
+                    self._device_tracker.set_evidence(RoleEvidence.from_network(
+                        getattr(self, "_net_info", None),
+                        getattr(self, "_mesh_units", None),
+                    ))
+                except Exception:
+                    pass  # non-fatal — inference falls back to its own heuristics
                 tr = self._device_tracker.process_scan(data.get("devices", []), known=known)
                 self._last_scan_new  = len(tr.new_devices)
                 self._last_scan_gone = len(tr.gone_devices)
                 self._last_new_ips: set = {d.ip for d in tr.new_devices if d.ip}
                 if tr.new_devices:
-                    if hasattr(self, "_live_bandwidth_page"):
-                        self._live_bandwidth_page.annotate_event("Device joined", _s.GREEN)
-                    msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})"
-                            for d in tr.new_devices[:3]]
-                    extra = f" +{len(tr.new_devices)-3} more" if len(tr.new_devices) > 3 else ""
-                    status_msg = f"🆕 {len(tr.new_devices)} new device(s): {', '.join(msgs)}{extra}"
-                    self._set_status(status_msg)
-                    # Tray notification — only if user opted in
-                    from PyQt6.QtCore import QSettings as _QS
-                    if (
-                        self._tray_manager.is_available()
-                        and _QS("NetSentinel", "NetSentinel").value(
-                            "tray/notify_new_device", False, type=bool
-                        )
-                    ):
-                        summary = ", ".join(
-                            f"{d.ip or d.mac}" for d in tr.new_devices[:2]
-                        )
-                        if len(tr.new_devices) > 2:
-                            summary += f" +{len(tr.new_devices)-2} more"
-                        self._tray_manager.show_notification(
-                            "New Device Joined",
-                            summary,
-                            "WARNING",
-                        )
-                        self._tray_manager.increment_badge()
-                    # ── Naming suggestion toast (S5-1) — only the first new device,
-                    # to avoid spamming a toast per device on a busy scan.
-                    try:
-                        from modules.device_naming import suggest_device_name
-                        first = tr.new_devices[0]
-                        suggested = suggest_device_name(
-                            first.hostname, first.vendor, first.device_type
-                        )
-                        if suggested != "Unnamed Device":
-                            from ui.widgets.toast import ToastManager
-                            _mac = first.mac
-
-                            def _name_it(_checked=False, _mac=_mac, _name=suggested):
-                                self._nav_rail_go_to(L.INVENTORY_CHANGES)
-                                if hasattr(self, "_inventory_page"):
-                                    self._inventory_page.open_device_drawer(_mac, _name)
-
-                            ToastManager.show(
-                                f"New device: {suggested} ({first.ip or first.mac}) — name it?",
-                                "action",
-                                action_label="Name it",
-                                action_callback=_name_it,
-                            )
-                    except Exception:
-                        pass  # non-fatal — naming suggestion must never break the scan handler
+                    self._surface_new_devices(tr.new_devices)
                 if tr.gone_devices:
                     gone_msgs = [f"{d.ip or d.mac}" for d in tr.gone_devices[:2]]
                     self._set_status(
@@ -1038,10 +1098,36 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     if hasattr(self, "_avail_worker") and self._avail_worker.isRunning():
                         self._avail_worker.set_targets(_targets)
                     else:
+                        # Signal Quality Phase 3b: reuse the DeviceBaselines
+                        # app.py built (None unless signal_quality_v2 is on), so
+                        # a rescan does not reset the learned per-device
+                        # thresholds to a cold cache.
+                        _baselines = getattr(self, "_device_baselines", None)
+                        # JITTER_HIGH data source, gateway only. `jitter_ms`
+                        # was -1.0 on every rtt_sample row ever written, so the
+                        # rule had nothing to read. Bounded to one host because
+                        # run_cycle() probes sequentially: three samples across
+                        # every LAN device would push a cycle past its own 60 s
+                        # interval whenever several hosts are timing out.
+                        # RULE-NET1: "gateway" is Optional[str], so `or ""`.
+                        _gw = (getattr(self, "_net_info", {}) or {}).get("gateway") or ""
                         self._avail_worker = AvailabilityWorker(
                             store=self._store, targets=_targets, interval_s=60,
+                            threshold_provider=(
+                                _baselines.degraded_threshold if _baselines else None
+                            ),
+                            confirm_down=_baselines is not None,
+                            jitter_hosts=[_gw] if _gw else None,
                         )
                         self._avail_worker.cycle_done.connect(self._on_avail_cycle_done)
+                        # Signal Quality Phase 4 (C3): also feed app.py's alert
+                        # engine hookup, so a gateway or infrastructure device
+                        # going down actually fires HOST_DOWN instead of only
+                        # updating history/MQTT. Absent under cli.py/svc.py,
+                        # which build no Dashboard.
+                        _cycle_handler = getattr(self, "_alert_cycle_handler", None)
+                        if _cycle_handler is not None:
+                            self._avail_worker.cycle_done.connect(_cycle_handler)
                         self._avail_worker.start()
         except Exception:
             pass  # non-fatal

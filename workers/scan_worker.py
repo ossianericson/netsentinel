@@ -398,6 +398,11 @@ class LoggerWorker(QThread):
     status         = pyqtSignal(str)
     error          = pyqtSignal(str)
     rotated        = pyqtSignal(str, int) # new filename, segment number
+    # Signal Quality Phase 4 (C5) — one per cycle, ms (-1.0 on probe failure),
+    # emitted whether or not `enable_dns` is set. Drives DNS_LATENCY's baseline
+    # and EvidenceGate; deliberately separate from entry_received so
+    # LogEntry.dns_ms keeps its existing display-gated meaning.
+    dns_sample     = pyqtSignal(float)
 
     def __init__(
         self,
@@ -445,6 +450,7 @@ class LoggerWorker(QThread):
             self._logger.start(
                 on_entry=lambda e: self.entry_received.emit(e),
                 on_rotate=lambda p, n: self.rotated.emit(p.name, n),
+                on_dns=lambda ms: self.dns_sample.emit(float(ms)),
             )
             self._logger._stop_event.wait()
         except Exception as exc:

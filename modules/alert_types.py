@@ -39,6 +39,8 @@ RULE_TYPES = frozenset({
     "ARP_SPOOF",
     "ROGUE_DHCP",
     "CONFIG_DRIFT",
+    "INFRA_UNREACHABLE",
+    "DNS_LATENCY",
 })
 
 
@@ -108,6 +110,24 @@ SECURITY_RELEVANT_RULE_TYPES = frozenset({
 # re-exports it for existing callers. 0 disables the hold.
 DEFAULT_ACK_HOLD_SECONDS = 86400  # 24 h
 
+# Per-rule-type default for AlertRule.min_consecutive (Signal Quality Phase 6).
+#
+# Keyed by rule TYPE, not left to the field's own default, because the value it
+# generalises — alert_engine_checks._SERVICE_DOWN_MIN_CONSECUTIVE_FAILS — was a
+# module constant applied to every SERVICE_DOWN rule however it was built. A
+# plain field default of 1 would have silently removed that grace period from
+# every hand-constructed rule (tests, the Notifications page, any caller that
+# does not know the field exists) while leaving only _default_rules() correct.
+#
+# Anything absent here defaults to 1: pure edge-triggering, which is the shipped
+# behaviour for every other rule type.
+DEFAULT_MIN_CONSECUTIVE_BY_RULE_TYPE = {
+    # A target that was never reachable — added by mistake, or a monkey-test
+    # click landing in the add-service field — must not fire CRITICAL on its
+    # very first check and then re-fire every cooldown forever.
+    "SERVICE_DOWN": 3,
+}
+
 
 # ── Data types ────────────────────────────────────────────────────────────────
 
@@ -128,12 +148,56 @@ class AlertRule:
     sigma:          float         = 2.0       # RTT_ANOMALY — std-devs above a host's own baseline mean
     cooldown_s:     int           = 300       # 5 min default
     enabled:        bool          = True
+    # Signal Quality Phase 2 — device_importance.Tier name this rule requires of
+    # a device before it will fire for it. None = use the engine's default floor
+    # (INFRASTRUCTURE, the tier equivalent of the legacy gateway/infrastructure
+    # gate), so an existing persisted rule does not change behaviour just
+    # because the field appeared. Only consulted once a tier provider is
+    # injected; see alert_suppressor._DeviceScopeMixin.
+    min_tier:       Optional[str] = None
+    # Signal Quality Phase 6 — consecutive symptomatic observations required
+    # before this rule speaks. Generalises _SERVICE_DOWN_MIN_CONSECUTIVE_FAILS
+    # (alert_engine_checks.py), a hardcoded 3 that only SERVICE_DOWN had and
+    # that no rule could tune.
+    #
+    # None = "use this rule type's own default" from
+    # DEFAULT_MIN_CONSECUTIVE_BY_RULE_TYPE, resolved in __post_init__ so the
+    # field is always a concrete int by the time anything reads it. That
+    # indirection is what preserves SERVICE_DOWN's grace period for callers
+    # that build a rule without naming the field.
+    #
+    # 1 = pure edge-triggering, the shipped behaviour for every other rule type
+    # and one that must stay so: HOST_DOWN's confirmation lives in the monitor
+    # layer (device_baseline.DOWN_CONFIRMATION_CYCLES), and stacking a second
+    # one here would put the first gateway alert past acceptance criterion 5's
+    # three-minute budget. See modules/evidence.py's DEFAULT_MIN_CONSECUTIVE.
+    min_consecutive: Optional[int] = None
 
     def __post_init__(self):
         rt = self.rule_type.upper()
         if rt not in RULE_TYPES:
             raise ValueError(f"Unknown rule_type {self.rule_type!r}. Valid: {sorted(RULE_TYPES)}")
         self.rule_type = rt
+        if self.min_consecutive is None:
+            self.min_consecutive = DEFAULT_MIN_CONSECUTIVE_BY_RULE_TYPE.get(rt, 1)
+        elif int(self.min_consecutive) < 1:
+            raise ValueError(
+                f"min_consecutive must be >= 1, got {self.min_consecutive!r} — "
+                f"0 would admit a condition that was never observed"
+            )
+        self.min_consecutive = int(self.min_consecutive)
+        if self.min_tier is not None:
+            # Imported here rather than at module scope: alert_types is imported
+            # by ui/ and by every alert_engine_* split, and none of them need
+            # the importance model unless a rule actually names a tier.
+            from modules.device_importance import Tier, tier_from_name
+            tier = tier_from_name(self.min_tier)
+            if tier is None:
+                raise ValueError(
+                    f"Unknown min_tier {self.min_tier!r}. "
+                    f"Valid: {sorted(t.value for t in Tier)}"
+                )
+            self.min_tier = tier.value
 
 
 @dataclass
@@ -151,3 +215,11 @@ class AlertFired:
     is_resolution: bool           = False  # True when this alert clears a previous one
     downtime_s:    Optional[int]  = None   # seconds the host/service was down (resolutions only)
     remediation:   str            = ""     # per-alert override; "" = use alert_remediation table
+    # Signal Quality Phase 6 — what corroborated this claim, carried through to
+    # `alert_fired` (schema v22) and read by modules/relevance.py for ordering.
+    # `confidence` is evidence.Evidence.confidence: an ordering aid in 0.0..1.0,
+    # NOT a probability and never a severity — RULE-A3's vocabulary is untouched.
+    # Both are None on the paths that have no evidence gate, which relevance
+    # treats as neutral rather than as low confidence.
+    confidence:    Optional[float] = None
+    evidence_json: Optional[str]   = None

@@ -28,12 +28,25 @@ def _mature_baseline(mean=20.0, stddev=5.0, sample_count=40, days_covered=8.0):
 # ── RTT_ANOMALY ──────────────────────────────────────────────────────────────
 
 def test_rtt_anomaly_fires_above_baseline_threshold():
+    """Signal Quality Phase 6 rewrote this as a PAIR, deliberately.
+
+    It used to assert that mean 20 / sigma 5 / observed 45 ms fires. Phase 6
+    added an absolute floor of 150 ms (= availability_monitor's
+    DEFAULT_DEGRADED_THRESHOLD) because fixing the maturity gate made stable
+    hosts learn thresholds as tight as 1.2-2.0 ms, so the gateway was "slower
+    than its usual pattern" on a 3 ms reply. 45 ms is now below the floor and
+    correctly does not fire; the rule needs BOTH conditions.
+    """
     engine = AlertEngine(rules=[
         AlertRule(name="rtt-anom", rule_type="RTT_ANOMALY", sigma=2.0, cooldown_s=0)
     ])
     learner = _StubLearner({"192.168.1.1": _mature_baseline(mean=20.0, stddev=5.0)})
-    # mean+2sigma = 30; 45 is well above
-    fired = engine.evaluate_rtt_anomaly_checks({"192.168.1.1": 45.0}, learner)
+
+    # Above mean+2sigma (30 ms) but below the 150 ms floor — not a real claim.
+    assert engine.evaluate_rtt_anomaly_checks({"192.168.1.1": 45.0}, learner) == []
+
+    # Above both.
+    fired = engine.evaluate_rtt_anomaly_checks({"192.168.1.1": 400.0}, learner)
     assert len(fired) == 1
     assert fired[0].rule_type == "RTT_ANOMALY"
     assert fired[0].host == "192.168.1.1"
@@ -78,7 +91,9 @@ def test_rtt_anomaly_resolution_when_back_to_normal():
         AlertRule(name="rtt-anom", rule_type="RTT_ANOMALY", sigma=2.0, cooldown_s=0)
     ])
     learner = _StubLearner({"192.168.1.1": _mature_baseline(mean=20.0, stddev=5.0)})
-    engine.evaluate_rtt_anomaly_checks({"192.168.1.1": 45.0}, learner)
+    # 400 ms, not the original 45 ms: Phase 6's absolute floor means 45 ms no
+    # longer opens an episode, so there would be nothing to resolve.
+    engine.evaluate_rtt_anomaly_checks({"192.168.1.1": 400.0}, learner)
     fired = engine.evaluate_rtt_anomaly_checks({"192.168.1.1": 21.0}, learner)
     assert len(fired) == 1
     assert fired[0].is_resolution is True

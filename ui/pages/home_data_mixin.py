@@ -431,7 +431,15 @@ class _HomeDataMixin:
                 item.widget().deleteLater()
 
         total = len(alerts)
-        alerts = alerts[:5]
+        # Signal Quality Phase 5 — rank before truncating. get_unacked_alerts()
+        # orders ts ASC, so this card used to show the five OLDEST unacked
+        # alerts: a gateway outage thirty seconds old was invisible behind five
+        # stale warnings from last week, on the one card whose entire job is
+        # "what needs attention". Ranking is severity x device importance x
+        # corroboration x recency (modules/relevance.py) — ordering only, no new
+        # severity vocabulary.
+        from ui.claim_ranking import rank_alert_rows
+        alerts = rank_alert_rows(alerts, self._store, limit=5)
 
         for alert in alerts:
             alert_id   = alert.get("id")

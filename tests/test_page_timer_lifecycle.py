@@ -150,6 +150,23 @@ def _make_maintenance_page():
     return _stubbed(MaintenancePage, _refresh_table=lambda self: None)()
 
 
+def _make_hardware_integration_page():
+    """HardwareIntegrationPage with plugin registry reads and poll workers stubbed.
+
+    Its __init__ reads the real registered-plugin list out of QSettings and starts
+    a poll worker per instance — RULE-WIN6's own worked example of a page whose
+    every persistent-storage reader must be patched, or the developer's real
+    plugins spawn threads that outlive teardown. None of it affects timer wiring.
+    """
+    from unittest.mock import patch
+    from ui.pages.hardware_integration_page import HardwareIntegrationPage
+
+    cls = _stubbed(HardwareIntegrationPage, _start_all_poll_workers=lambda self: None)
+    with patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
+         patch("ui.pages.hardware_integration_page._load_paths", return_value=[]):
+        return cls(parent=None)
+
+
 # (module stem under ui/pages/, factory). Do NOT hand-curate this list and hope:
 # test_every_page_with_a_repeating_timer_is_covered() below fails when a page
 # module wires a repeating QTimer without appearing here.
@@ -162,6 +179,7 @@ _PAGE_FACTORIES = [
     ("uptime_page", _make_uptime_page),
     ("service_page", _make_service_page),
     ("maintenance_page", _make_maintenance_page),
+    ("hardware_integration_page", _make_hardware_integration_page),
 ]
 
 
@@ -264,7 +282,6 @@ _PAGES_DIR = Path(__file__).resolve().parents[1] / "ui" / "pages"
 # entry here — never add a new one. Nothing in this set has been *cleared*; it
 # is known-unverified debt, not a clean bill of health.
 _UNCOVERED_BASELINE = {
-    "hardware_integration_page",
     "history_page",
     "home_automation_page",
     "inventory_page",

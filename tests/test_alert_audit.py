@@ -171,7 +171,21 @@ class TestEscalationRules:
 
 
 class TestDeliverability:
-    def test_fails_when_enabled_rule_has_no_matching_channel(self):
+    def test_reports_in_app_only_when_no_channel_would_accept_it(self):
+        """Signal Quality Phase 6 changed this from a failure to a named fact.
+
+        "Delivered" means the user can see it, not "an external channel
+        exists": ui/dashboard.py::_surface_alert_in_app() is always on and never
+        gated, so a fired alert reaches the status bar, tray badge, Alert
+        History, the Home card and the alert drawer regardless of notification
+        settings. Desktop toasts are strictly opt-in by a deliberate, separately
+        tested decision (tests/test_first_run_notif_optin.py) — so once Phase 6
+        turned the curated rules on by default, the old "must have an enabled
+        channel" rule would have failed for the default install.
+
+        It stays informative rather than vacuous: the rule is named as in-app
+        only, so the audit still says what will never leave the app.
+        """
         from modules.alert_audit import audit_alert_config
         from modules.alert_types import AlertRule
         from modules.notification_router import ToastChannel
@@ -183,8 +197,9 @@ class TestDeliverability:
             escalation_policies=[],
         )
         f = _finding(findings, "DELIVERABILITY")
-        assert f.ok is False
+        assert f.ok is True
         assert "Host Down" in f.detail
+        assert "in-app" in f.detail.lower()
 
     def test_passes_when_enabled_rule_has_a_matching_channel(self):
         from modules.alert_audit import audit_alert_config

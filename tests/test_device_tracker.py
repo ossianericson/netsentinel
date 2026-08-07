@@ -664,14 +664,36 @@ class TestRedundantReadElimination:
 
     def test_process_scan_reuses_injected_known_snapshot(self, store):
         """When the caller (ui/scan_wiring.py) already has a fresh snapshot, passing
-        it via known= must eliminate every internal known_device SELECT."""
+        it via known= must eliminate every re-read of that PRE-SCAN state.
+
+        Schema v22 added one read the snapshot structurally cannot serve: the
+        importance-tier pass runs after inferred_role/scan_count/ip_stability
+        have been written, so classifying the injected (pre-scan) snapshot would
+        cache stale verdicts. That read is therefore allowed — and pinned to be
+        that read, so a genuinely redundant snapshot re-read cannot come back
+        disguised as it.
+        """
         tracker = DeviceTracker(store=store)
         devices = _make_devices(25)
         snapshot = store.get_known_devices()
-        n = _count_known_device_selects(
-            store._conn, lambda: tracker.process_scan(devices, known=snapshot)
+
+        events: list = []
+        store._conn.set_trace_callback(events.append)
+        try:
+            tracker.process_scan(devices, known=snapshot)
+        finally:
+            store._conn.set_trace_callback(None)
+
+        selects = [
+            e for e in events
+            if e.strip().upper().startswith("SELECT") and "KNOWN_DEVICE" in e.upper()
+        ]
+        assert len(selects) <= 1, (
+            f"process_scan(known=...) issued {len(selects)} known_device SELECTs; "
+            "expected at most the post-write importance-tier pass"
         )
-        assert n == 0, (
-            f"process_scan(known=...) issued {n} known_device SELECTs; expected 0 "
-            "when the caller already supplied a snapshot"
-        )
+        for sql in selects:
+            assert "IMPORTANCE_TIER" in sql.upper(), (
+                "the only known_device SELECT left must be the importance-tier "
+                f"refresh, not a re-read of the injected snapshot:\n{sql}"
+            )

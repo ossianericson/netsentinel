@@ -176,3 +176,78 @@ def test_modem_sinr_dropped_insufficient_samples():
 def test_modem_sinr_dropped_none_current():
     from modules.alert_baseline import modem_sinr_dropped
     assert modem_sinr_dropped(None, [20.0] * 25, min_samples=20) is False
+
+
+# ── RollingSeries (Phase 4 C2 — in-memory baseline when logging is off) ───────
+
+def test_rolling_series_keeps_values_in_order():
+    from modules.alert_baseline import RollingSeries
+    s = RollingSeries(maxlen=10)
+    for v in (1.0, 2.0, 3.0):
+        s.append(v)
+    assert s.values() == [1.0, 2.0, 3.0]
+    assert len(s) == 3
+
+
+def test_rolling_series_drops_oldest_past_maxlen():
+    from modules.alert_baseline import RollingSeries
+    s = RollingSeries(maxlen=3)
+    for v in (1.0, 2.0, 3.0, 4.0):
+        s.append(v)
+    assert s.values() == [2.0, 3.0, 4.0]
+    assert len(s) == 3
+
+
+def test_rolling_series_ignores_none():
+    from modules.alert_baseline import RollingSeries
+    s = RollingSeries(maxlen=10)
+    s.append(1.0)
+    s.append(None)
+    s.append(3.0)
+    assert s.values() == [1.0, 3.0]
+
+
+def test_rolling_series_ignores_nan_and_inf():
+    from modules.alert_baseline import RollingSeries
+    s = RollingSeries(maxlen=10)
+    s.append(float("nan"))
+    s.append(float("inf"))
+    s.append(float("-inf"))
+    s.append(5.0)
+    assert s.values() == [5.0]
+
+
+def test_rolling_series_ignores_non_numeric():
+    from modules.alert_baseline import RollingSeries
+    s = RollingSeries(maxlen=10)
+    s.append("20")          # type: ignore[arg-type]  — plugin dicts are untyped
+    s.append(7.0)
+    assert s.values() == [7.0]
+
+
+def test_rolling_series_coerces_int():
+    from modules.alert_baseline import RollingSeries
+    s = RollingSeries(maxlen=10)
+    s.append(3)
+    assert s.values() == [3.0]
+    assert isinstance(s.values()[0], float)
+
+
+def test_rolling_series_values_is_a_copy():
+    from modules.alert_baseline import RollingSeries
+    s = RollingSeries(maxlen=10)
+    s.append(1.0)
+    out = s.values()
+    out.append(99.0)
+    assert s.values() == [1.0]
+
+
+def test_rolling_series_feeds_modem_sinr_dropped():
+    """The series is the fallback baseline for MODEM_SIGNAL_DROP with logging off."""
+    from modules.alert_baseline import RollingSeries, modem_sinr_dropped
+    s = RollingSeries(maxlen=240)
+    for _ in range(24):
+        s.append(20.0)
+    s.append(10.0)                       # one dip widens stddev
+    assert modem_sinr_dropped(2.0, s.values(), min_samples=20) is True
+    assert modem_sinr_dropped(20.0, s.values(), min_samples=20) is False

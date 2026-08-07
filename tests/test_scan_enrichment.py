@@ -878,3 +878,267 @@ def test_on_discovery_result_not_testable_sets_not_testable_state():
         error="No devices found by any method",
     )
     _cleanup(stub._recon_disc_table)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 C2 — the mesh snapshot write must not be gated on Monitor logging
+#
+# `mesh_signal_log` was 0 rows in every real database because the only
+# record_mesh_snapshot() call sat inside `if logging/mesh_enabled`, an opt-in
+# the user never turned on. MESH_DEGRADED history and acceptance criterion 6
+# ("mesh_signal_log is non-empty after a mesh poll") both depend on the write
+# happening on every poll. The toggle keeps gating the live log-hub entry.
+# ---------------------------------------------------------------------------
+
+class _FakeUnit:
+    """Stand-in for a mesh node as returned by the Deco/plugin providers."""
+
+    def __init__(self, name="Node", online=True, rssi=None):
+        self.name = name
+        self.online = online
+        self.rssi = rssi
+
+
+def _make_mesh_stub(monkeypatch, units, store=None, log_hub=None):
+    """Return a stub wired for _on_mesh_result plus the recorded snapshot calls."""
+    from unittest.mock import MagicMock
+    from ui.scan_enrichment import ScanEnrichmentMixin
+
+    class _S(ScanEnrichmentMixin):
+        def _update_m4_deco_chips(self):
+            pass  # WiFi page chips — not under test
+
+    calls: list = []
+    monkeypatch.setattr(
+        "ui.scan_enrichment.record_mesh_snapshot",
+        lambda store, **kw: calls.append(kw),
+    )
+
+    stub = _S()
+    stub._m1_result = {}
+    stub._m1_table = QTableWidget(0, 8)
+    stub._mesh_enrichment = {}
+    stub._plugin_enrichments = {}
+    stub._plugin_nodes = {}
+    stub._m1_group_by_node = False
+    stub._m1_status = MagicMock()
+    stub._store = store if store is not None else MagicMock()
+    stub._last_mesh_log_ts = 0.0
+    stub._alert_engine = None            # alert path covered by test_alert_engine_v6_sprint1
+    if log_hub is not None:
+        stub._log_hub_page = log_hub
+    stub._units = units
+    return stub, calls
+
+
+def _mesh_data(units):
+    return {"clients": [], "provider": "deco", "units": units}
+
+
+def test_mesh_snapshot_written_when_monitor_logging_is_off(monkeypatch):
+    """With logging/mesh_enabled unset (the default), the snapshot must still land.
+
+    Fails before fix: record_mesh_snapshot() is inside the toggle's branch, so
+    calls == [] and mesh_signal_log stays empty forever.
+    """
+    from unittest.mock import MagicMock
+
+    log_hub = MagicMock()
+    units = [_FakeUnit("Main", online=True, rssi=-50), _FakeUnit("Attic", online=False)]
+    stub, calls = _make_mesh_stub(monkeypatch, units, log_hub=log_hub)
+
+    stub._on_mesh_result(_mesh_data(units))
+
+    assert len(calls) == 1, (
+        "record_mesh_snapshot() must be called on every mesh poll regardless of "
+        f"the logging/mesh_enabled toggle; got {len(calls)} call(s)"
+    )
+    assert calls[0]["unit_count"] == 2
+    assert calls[0]["online_count"] == 1
+    assert calls[0]["worst_unit"] == "Main"
+    assert calls[0]["worst_rssi"] == -50
+
+    log_hub.add_mesh_entry.assert_not_called()   # the toggle still gates the live entry
+
+    _cleanup(stub._m1_table)
+
+
+def test_mesh_live_log_entry_still_gated_on_the_toggle(monkeypatch):
+    """logging/mesh_enabled ON must still drive add_mesh_entry — and the snapshot."""
+    from unittest.mock import MagicMock
+    from PyQt6.QtCore import QSettings
+
+    QSettings().setValue("logging/mesh_enabled", True)
+    log_hub = MagicMock()
+    units = [_FakeUnit("Main", online=True, rssi=-45)]
+    stub, calls = _make_mesh_stub(monkeypatch, units, log_hub=log_hub)
+
+    stub._on_mesh_result(_mesh_data(units))
+
+    log_hub.add_mesh_entry.assert_called_once()
+    assert len(calls) == 1
+
+    _cleanup(stub._m1_table)
+
+
+def test_mesh_snapshot_throttle_survives_the_hoist(monkeypatch):
+    """A second poll inside the interval must not write a second row."""
+    units = [_FakeUnit("Main", online=True, rssi=-45)]
+    stub, calls = _make_mesh_stub(monkeypatch, units)
+
+    stub._on_mesh_result(_mesh_data(units))
+    stub._on_mesh_result(_mesh_data(units))
+
+    assert len(calls) == 1, (
+        "the 5-minute _last_mesh_log_ts throttle must still apply after the "
+        f"write is hoisted out of the logging branch; got {len(calls)} writes"
+    )
+
+    _cleanup(stub._m1_table)
+
+
+def test_mesh_snapshot_skipped_when_no_units_reported(monkeypatch):
+    """A provider that returns no units says nothing about mesh health — no row."""
+    stub, calls = _make_mesh_stub(monkeypatch, [])
+
+    stub._on_mesh_result(_mesh_data([]))
+
+    assert calls == [], "a poll with zero units must not write a placeholder row"
+
+    _cleanup(stub._m1_table)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 C2 follow-up — the snapshot must be written from the path the real
+# Deco plugin actually takes.
+#
+# _on_mesh_result() carries both evaluate_mesh_checks() and
+# record_mesh_snapshot(), but nothing in production calls it — no .connect(),
+# no worker, no dynamic dispatch; only tests. A real Deco poll lands in
+# _on_hardware_plugin_result(), whose router/mesh branch enriched the Devices
+# table inline and never wrote a snapshot. So mesh_signal_log stayed empty
+# regardless of C2's toggle hoist, and acceptance criterion 6 was unreachable.
+# ---------------------------------------------------------------------------
+
+
+def _make_plugin_mesh_stub(monkeypatch, store=None):
+    """Stub wired for _on_hardware_plugin_result plus recorded snapshot calls."""
+    from unittest.mock import MagicMock
+    from ui.scan_enrichment import ScanEnrichmentMixin
+
+    class _S(ScanEnrichmentMixin):
+        def _update_m4_deco_chips(self):
+            pass  # WiFi page chips — not under test
+
+        def _refresh_hardware_badge(self):
+            pass  # lives on _MonitorStateMixin — not under test
+
+        def _on_modem_signal(self, data):
+            pass  # modem page routing — not under test
+
+    calls: list = []
+    monkeypatch.setattr(
+        "ui.scan_enrichment.record_mesh_snapshot",
+        lambda store, **kw: calls.append(kw),
+    )
+    monkeypatch.setattr(
+        "modules.network_infrastructure.hw_state.update_router",
+        lambda *a, **kw: None,
+    )
+
+    stub = _S()
+    stub._m1_result = {}
+    stub._m1_table = QTableWidget(0, 8)
+    stub._mesh_enrichment = {}
+    stub._plugin_enrichments = {}
+    stub._plugin_nodes = {}
+    stub._m1_group_by_node = False
+    stub._m1_status = MagicMock()
+    stub._net_info = {}
+    stub._store = store if store is not None else MagicMock()
+    stub._last_mesh_log_ts = 0.0
+    stub._alert_engine = None  # alert path covered by test_alert_engine_v6_sprint1
+    return stub, calls
+
+
+# Shaped exactly like plugins/deco_plugin.py::get_status() — note the nodes
+# carry no per-node online flag or RSSI, and HARDWARE_TYPE is "router".
+_DECO_NODES = [
+    {"name": "Main",  "mac": "aa:bb:cc:dd:ee:01", "ip": "192.168.68.1", "role": "master"},
+    {"name": "Attic", "mac": "aa:bb:cc:dd:ee:02", "ip": "192.168.68.2", "role": "slave"},
+]
+
+
+def _deco_plugin_data(nodes, hw_type="router"):
+    return {
+        "info":    {"name": "TP-Link Deco XE75", "type": hw_type, "ip": "192.168.68.1"},
+        "status":  {"extra": {"nodes": nodes}} if nodes else {"extra": {}},
+        "clients": [],
+        "_instance_id": "a9d9e01ef03b2e9f",
+        "_path":        "deco_plugin.py",
+    }
+
+
+def test_mesh_snapshot_written_from_the_real_plugin_poll_path(monkeypatch):
+    """A real Deco poll must write one mesh_signal_log row.
+
+    Fails before fix: the router/mesh branch of _on_hardware_plugin_result
+    enriches the Devices table and returns without ever calling
+    record_mesh_snapshot(), so calls == [] and mesh_signal_log stays empty no
+    matter how often the mesh is polled.
+    """
+    stub, calls = _make_plugin_mesh_stub(monkeypatch)
+
+    stub._on_hardware_plugin_result(_deco_plugin_data(_DECO_NODES))
+
+    assert len(calls) == 1, (
+        "a mesh/router plugin poll reporting nodes must write exactly one "
+        f"mesh_signal_log row; got {len(calls)}"
+    )
+    assert calls[0]["unit_count"] == 2
+    # Plugin node dicts carry no per-node online flag, so every reported node
+    # counts as online. Recorded truthfully rather than inferred.
+    assert calls[0]["online_count"] == 2
+
+    _cleanup(stub._m1_table)
+
+
+def test_plugin_mesh_snapshot_respects_the_throttle(monkeypatch):
+    """A second poll inside the interval must not write a second row."""
+    stub, calls = _make_plugin_mesh_stub(monkeypatch)
+
+    stub._on_hardware_plugin_result(_deco_plugin_data(_DECO_NODES))
+    stub._on_hardware_plugin_result(_deco_plugin_data(_DECO_NODES))
+
+    assert len(calls) == 1, (
+        f"the _last_mesh_log_ts throttle must apply here too; got {len(calls)} writes"
+    )
+
+    _cleanup(stub._m1_table)
+
+
+def test_router_reporting_no_nodes_writes_no_mesh_snapshot(monkeypatch):
+    """A plain single-AP router says nothing about mesh health — no row.
+
+    The branch synthesizes a placeholder node for topology when a router
+    returns clients but no nodes; that synthetic entry must not reach
+    mesh_signal_log as if it were a real mesh reading.
+    """
+    stub, calls = _make_plugin_mesh_stub(monkeypatch)
+
+    stub._on_hardware_plugin_result(_deco_plugin_data([]))
+
+    assert calls == [], "a router with no reported nodes must not write a row"
+
+    _cleanup(stub._m1_table)
+
+
+def test_modem_plugin_writes_no_mesh_snapshot(monkeypatch):
+    """Modem plugins return early — they have no mesh to report on."""
+    stub, calls = _make_plugin_mesh_stub(monkeypatch)
+
+    stub._on_hardware_plugin_result(_deco_plugin_data(_DECO_NODES, hw_type="modem"))
+
+    assert calls == [], "a modem poll must never write a mesh_signal_log row"
+
+    _cleanup(stub._m1_table)

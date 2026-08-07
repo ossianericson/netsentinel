@@ -106,8 +106,10 @@ def test_default_rules_count():
     # Sprint 4); V6 Sprint 4: +3 (ARP Spoof Detected, Rogue DHCP Server,
     # Config Drift); strict-opt-in-alerting Phase 7.5: +1 (Packet Loss /
     # LOSS_THRESHOLD — the one RULE_TYPES member with no default rule at all,
-    # so it could never fire regardless of settings)
-    assert len(rules) == 25
+    # so it could never fire regardless of settings); Signal Quality Phase 4:
+    # +1 (Infrastructure Unreachable / INFRA_UNREACHABLE); Signal Quality
+    # Phase 4 C5: +1 (DNS Latency / DNS_LATENCY)
+    assert len(rules) == 27
     assert all(not r.enabled for r in rules)
 
 

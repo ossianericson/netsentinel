@@ -52,11 +52,14 @@ from modules.alert_suppressor import (
     EscalationPolicy, _default_rules, rule_settings_key,
     _MaintenanceSuppressionMixin, _DeviceScopeMixin,
 )
+from modules.evidence import EvidenceGate
 from modules.alert_engine_checks import _AlertChecksMixin
 from modules.alert_engine_checks2 import _AlertChecksMixin2
 from modules.alert_engine_checks3 import _AlertChecksMixin3
 from modules.alert_engine_checks4 import _AlertChecksMixin4
-from modules.alert_engine_routing import cta_for_rule, append_action, RULE_CTA
+from modules.alert_engine_checks5 import _AlertChecksMixin5
+from modules.alert_engine_cycle import _AlertCycleMixin
+from modules.alert_engine_routing import cta_for_rule, append_action
 
 # Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
 __all__ = [
@@ -75,7 +78,7 @@ _cta_for_rule = cta_for_rule
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
-class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _AlertChecksMixin4, _MaintenanceSuppressionMixin, _DeviceScopeMixin):
+class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _AlertChecksMixin4, _AlertChecksMixin5, _AlertCycleMixin, _MaintenanceSuppressionMixin, _DeviceScopeMixin):
     """
     Stateless rule evaluator. Call the appropriate evaluate_* method after
     each monitoring cycle or scan result.
@@ -145,6 +148,23 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         self._ip_churn_since: Dict[str, int] = {}
         # ── V6 Sprint 2: resolution tracking for the dormant-engine rules ──────
         self._rtt_anomaly_since: Dict[str, int] = {}
+        # ── Signal Quality Phase 3: edge-triggering + duplicate-outage dedup ───
+        # Both None/False = the legacy level-triggered path, unchanged. Selected
+        # by experimental/signal_quality_v2 in app.py (RULE-EXP1).
+        self._availability_gate: Optional[EvidenceGate] = None
+        self._suppress_duplicate_outage: bool = False
+        # ── Signal Quality Phase 4: INFRA_UNREACHABLE (alert_engine_checks5) ───
+        # Built on first use so an engine that never polls hardware carries no
+        # gate state. device_key → ts_when_it_stopped_answering.
+        self._infra_gate: Optional[EvidenceGate] = None
+        self._infra_unreachable_since: Dict[str, int] = {}
+        # ── Signal Quality Phase 4: DNS_LATENCY (alert_engine_checks5) ─────────
+        # The baseline lives here, not in the caller: there is no logged DNS
+        # history anywhere in the app to prefer over it, so unlike
+        # MODEM_SIGNAL_DROP there is nothing for a caller to resolve.
+        self._dns_gate: Optional[EvidenceGate] = None
+        self._dns_series = None            # alert_baseline.RollingSeries, lazily built
+        self._dns_latency_since: Dict[str, int] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -199,6 +219,9 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         """Set how many simultaneous HOST_DOWN alerts trigger consolidation (default 5)."""
         self._consolidation_threshold = max(2, int(n))
 
+    # set_availability_edge_trigger / set_duplicate_outage_suppression —
+    # see _AlertCycleMixin in modules/alert_engine_cycle.py (RULE-AH1 split).
+
     def check_escalations(self, store: MetricStore) -> List[dict]:
         """
         Return fired alerts that are unacknowledged and past their escalation threshold.
@@ -229,116 +252,9 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
 
     _append_action = staticmethod(append_action)
 
-    def evaluate_cycle(self, cycle_result: dict) -> List[AlertFired]:
-        """
-        Evaluate rules against a CycleResult-style dict:
-          {"ts": int, "states": {host: state}, "rtts": {host: rtt_ms}}
-
-        Returns fired alerts (also calls on_alert for each).
-        """
-        fired: List[AlertFired] = []
-        states: Dict[str, str]   = cycle_result.get("states", {})
-        rtts:   Dict[str, float] = cycle_result.get("rtts",   {})
-        now = cycle_result.get("ts") or int(time.time())
-
-        # Record state history and rebuild flapping set before evaluating rules
-        self._update_state_history(states, now)
-        self._rebuild_flapping_hosts(now)
-
-        # ── S4-1: resolution — hosts that were down but are now UP ───────────
-        down_alerts: List[AlertFired] = []
-
-        for rule in self._rules:
-            if not rule.enabled:
-                continue
-            hosts_to_check = (
-                [rule.host] if rule.host and rule.host in states
-                else list(states.keys()) if rule.host is None
-                else []
-            )
-            for host in hosts_to_check:
-                alert = self._eval_rule_for_host(rule, host, states, rtts, now)
-                if alert:
-                    if alert.rule_type == "HOST_DOWN":
-                        down_alerts.append(alert)
-                        # Track when this host went down for downtime calc
-                        self._host_down_since.setdefault(host, now)
-                    else:
-                        fired.append(alert)
-                        if self._on_alert:
-                            self._on_alert(alert)
-
-        # ── S4-3: consolidation — group simultaneous HOST_DOWN alerts ─────────
-        if len(down_alerts) >= self._consolidation_threshold:
-            hosts_str = ", ".join(a.host for a in down_alerts[:8])
-            extra = len(down_alerts) - 8
-            suffix = f" (+{extra} more)" if extra > 0 else ""
-            consolidated = AlertFired(
-                rule_name=down_alerts[0].rule_name,
-                rule_type="HOST_DOWN",
-                host="(network)",
-                message=(
-                    f"{len(down_alerts)} devices lost connectivity simultaneously — "
-                    f"your internet connection may be down.  "
-                    f"Affected: {hosts_str}{suffix}.  "
-                    f"→ Check your router and modem  → Check your ISP status page"
-                ),
-                severity="CRITICAL",
-                ts=now,
-                cta_page="DNS & Stability",
-                cta_filter=None,
-            )
-            fired.append(consolidated)
-            if self._on_alert:
-                self._on_alert(consolidated)
-        else:
-            for alert in down_alerts:
-                fired.append(alert)
-                if self._on_alert:
-                    self._on_alert(alert)
-
-        # ── S4-1: resolution — check hosts that recovered ─────────────────────
-        recovered = [
-            h for h in list(self._host_down_since)
-            if states.get(h) == "UP"
-        ]
-        for host in recovered:
-            down_ts = self._host_down_since.pop(host)
-            # This site sits outside the rule loop above, so the rule must be
-            # looked up explicitly — it may have been disabled while the host
-            # was down, in which case there is no rule left to attribute the
-            # resolution to.
-            rule = next(
-                (r for r in self._rules if r.rule_type == "HOST_DOWN" and r.enabled), None
-            )
-            if rule is None:
-                continue
-            downtime = now - down_ts
-            mins, secs = divmod(downtime, 60)
-            if mins >= 60:
-                duration = f"{mins // 60}h {mins % 60}m"
-            elif mins > 0:
-                duration = f"{mins}m {secs}s"
-            else:
-                duration = f"{secs}s"
-            resolution = self._fire_resolution(
-                rule, host, now,
-                message=f"{host} is back online — was unreachable for {duration}.",
-                downtime_s=downtime,
-                cta_page=RULE_CTA["HOST_DOWN"],
-                cta_filter=host,
-            )
-            if resolution:
-                fired.append(resolution)
-                if self._on_alert:
-                    self._on_alert(resolution)
-
-        # Track hosts newly going down (not consolidated)
-        for alert in down_alerts:
-            if len(down_alerts) < self._consolidation_threshold:
-                self._host_down_since.setdefault(alert.host, now)
-
-        return fired
+    # evaluate_cycle() — see _AlertCycleMixin in modules/alert_engine_cycle.py
+    # (RULE-AH1 split). The whole availability-cycle pass moved there together:
+    # per-rule evaluation, HOST_DOWN consolidation, and recovery resolution.
 
     def evaluate_tracker_result(self, tracker_result) -> List[AlertFired]:
         """
@@ -393,88 +309,8 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
-    def _eval_rule_for_host(
-        self,
-        rule: AlertRule,
-        host: str,
-        states: Dict[str, str],
-        rtts:   Dict[str, float],
-        now: int,
-    ) -> Optional[AlertFired]:
-        rt = rule.rule_type
-        rtt = rtts.get(host, -1.0)
-        state = states.get(host, "")
-
-        if rt == "RTT_THRESHOLD":
-            if rtt >= 0 and rtt > rule.threshold_ms:
-                return self._fire_if_cooled(
-                    rule, host, now,
-                    message=self._append_action(
-                        f"{host} is responding slowly ({rtt:.0f} ms, normally under "
-                        f"{rule.threshold_ms:.0f} ms) — this may affect video calls "
-                        f"and real-time applications.",
-                        rt,
-                    ),
-                    severity="WARNING",
-                    value=rtt,
-                )
-        elif rt == "LOSS_THRESHOLD":
-            # Loss is expressed as loss_pct in metric_store but only rtt=-1
-            # signals a dropped packet at cycle level; detailed loss comes from
-            # store history. For cycle-level we treat rtt < 0 as 100% loss.
-            if rtt < 0:
-                return self._fire_if_cooled(
-                    rule, host, now,
-                    message=self._append_action(
-                        f"{host} is not responding — packets are being lost. "
-                        f"Check cables and power to this device.",
-                        rt,
-                    ),
-                    severity="CRITICAL",
-                    value=100.0,
-                )
-        elif rt == "HOST_DOWN":
-            if state == "DOWN" and host not in self._flapping_hosts:
-                if not self._is_dependency_suppressed(host, states):
-                    return self._fire_if_cooled(
-                        rule, host, now,
-                        message=self._append_action(
-                            f"{host} has gone offline and is not responding to pings.",
-                            rt,
-                        ),
-                        severity="CRITICAL",
-                        value=None,
-                    )
-        elif rt == "HOST_DEGRADED":
-            if state == "DEGRADED":
-                return self._fire_if_cooled(
-                    rule, host, now,
-                    message=self._append_action(
-                        f"{host} is responding slowly ({rtt:.0f} ms) — "
-                        f"network performance may be degraded.",
-                        rt,
-                    ),
-                    severity="WARNING",
-                    value=rtt,
-                )
-        elif rt == "FLAP":
-            history = self._state_history.get(host, [])
-            transitions = self._count_transitions(history, rule.flap_window_s, now)
-            if transitions >= rule.flap_count:
-                mins = rule.flap_window_s // 60
-                return self._fire_if_cooled(
-                    rule, host, now,
-                    message=self._append_action(
-                        f"{host} keeps going online and offline "
-                        f"({transitions} time{'s' if transitions != 1 else ''} "
-                        f"in {mins} minute{'s' if mins != 1 else ''}) — "
-                        f"check the connection or cable.",
-                        rt,
-                    ),
-                    severity="WARNING",
-                    value=float(transitions),
-                )
-        return None
+    # _eval_rule_for_host / _availability_admits / _host_down_rule_covers —
+    # see _AlertCycleMixin in modules/alert_engine_cycle.py (RULE-AH1 split).
 
     def _fire_if_cooled(
         self,
@@ -499,8 +335,12 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         # Maintenance suppression — drop when the host is in a window, but log it
         if self._maintenance_suppresses(host, rule.name, severity, message):
             return None
-        # Per-device opt-in scope — drop device-health alerts for out-of-scope hosts
-        if self._out_of_scope(scope_host if scope_host is not None else host, rule.rule_type):
+        # Per-device scope — drop device-health alerts for hosts below the floor
+        if self._out_of_scope(
+            scope_host if scope_host is not None else host,
+            rule.rule_type,
+            rule.min_tier,
+        ):
             return None
         key = f"{rule.name}::{host}"
         # Acknowledgement hold — the user has said "I know about this one".
@@ -549,6 +389,31 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
     def clear_ack_hold(self, rule_name: str, host: str) -> None:
         """Drop the hold — the condition resolved, so the next one is new."""
         self._ack_hold.pop(f"{rule_name}::{host or ''}", None)
+
+    def load_last_fired(self, rows) -> None:
+        """Seed cooldown state from persisted `alert_fired` history.
+
+        `_last_fired` is in-memory, so before this every restart reset every
+        cooldown: a condition that was still true at launch re-alerted
+        immediately, and a user who restarts often never stopped hearing about
+        it. The same defect `load_ack_holds()` fixes for acknowledgements.
+
+        `rows` is `{dedup_key: last_ts}` from
+        `MetricStore.get_last_fired_by_rule_host()` — derived from the alert
+        history itself rather than a second persistence path, so dedup state
+        cannot drift from what the user sees in Alert History. Resolutions are
+        excluded there: a resolution is not a firing, and seeding one would mute
+        the next genuine alert for a whole cooldown after every recovery.
+        """
+        for key, ts in (rows or {}).items():
+            if not key or not isinstance(key, str):
+                continue
+            try:
+                ts_i = int(ts)
+            except (TypeError, ValueError):
+                continue
+            if ts_i > self._last_fired.get(key, 0):
+                self._last_fired[key] = ts_i
 
     def load_ack_holds(self, acked_rows) -> None:
         """Seed holds from persisted `alert_fired` rows.
@@ -602,7 +467,11 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
             return None
         if self._maintenance_suppresses(host, rule.name, "HEALTHY", message):
             return None
-        if self._out_of_scope(scope_host if scope_host is not None else host, rule.rule_type):
+        if self._out_of_scope(
+            scope_host if scope_host is not None else host,
+            rule.rule_type,
+            rule.min_tier,
+        ):
             return None
         return AlertFired(
             rule_name=rule.name,
@@ -617,59 +486,10 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
             cta_filter=cta_filter,
         )
 
-    def _update_state_history(self, states: Dict[str, str], now: int) -> None:
-        """Append current states to per-host history and trim to 24h."""
-        cutoff = now - 86400
-        for host, state in states.items():
-            if host not in self._state_history:
-                self._state_history[host] = []
-            self._state_history[host].append((now, state))
-        # Trim old entries across all hosts
-        for host in list(self._state_history):
-            self._state_history[host] = [
-                (ts, s) for ts, s in self._state_history[host] if ts >= cutoff
-            ]
-            if not self._state_history[host]:
-                del self._state_history[host]
-
-    def _rebuild_flapping_hosts(self, now: int) -> None:
-        """Recompute the set of hosts currently considered to be flapping."""
-        flapping: set = set()
-        for rule in self._rules:
-            if not rule.enabled or rule.rule_type != "FLAP":
-                continue
-            hosts = (
-                list(self._state_history.keys())
-                if rule.host is None
-                else [rule.host]
-            )
-            for host in hosts:
-                history = self._state_history.get(host, [])
-                transitions = self._count_transitions(history, rule.flap_window_s, now)
-                if transitions >= rule.flap_count:
-                    flapping.add(host)
-        self._flapping_hosts = flapping
-
-    def _is_dependency_suppressed(self, host: str, states: Dict[str, str]) -> bool:
-        """
-        Return True if *host* is a registered child of a parent that is
-        currently in the DOWN state, meaning the alert should be suppressed.
-        """
-        for parent_ip, children in self._dependency_map.items():
-            if host in children and states.get(parent_ip) == "DOWN":
-                return True
-        return False
-
-    @staticmethod
-    def _count_transitions(history: list, window_s: int, now: int) -> int:
-        """Count state changes within the last window_s seconds."""
-        cutoff = now - window_s
-        windowed = [(ts, s) for ts, s in history if ts >= cutoff]
-        if len(windowed) < 2:
-            return 0
-        return sum(
-            1 for i in range(1, len(windowed))
-            if windowed[i][1] != windowed[i - 1][1]
-        )
+    # _update_state_history / _rebuild_flapping_hosts / _is_dependency_suppressed
+    # / _count_transitions — see _AlertCycleMixin in
+    # modules/alert_engine_cycle.py (RULE-AH1 split). They are reached through
+    # AlertEngine by inheritance, so `AlertEngine._count_transitions(...)`
+    # still resolves.
 
 

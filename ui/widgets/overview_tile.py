@@ -31,6 +31,33 @@ _TILE_HEIGHT      = 175   # uniform fixed height for every tile
 _EXPANDED_HEIGHT  = 280   # height when tile is expanded (OVERVIEW-1)
 _LAYOUT_VER   = 4     # bump when _DEFAULT_ORDER changes; triggers a one-time reset
 
+# Signal Quality Phase 5 — device_event has no severity column, so the activity
+# feed derives one to rank by. Values are RULE-A3's existing vocabulary; this
+# mirrors modules/relevance._EVENT_SEVERITY rather than inventing a scale.
+_DEVICE_EVENT_SEVERITY = {
+    "DOWN": "CRITICAL", "LEFT": "WARNING", "DEGRADED": "WARNING",
+    "JOINED": "WARNING", "UP": "HEALTHY", "RECOVERED": "HEALTHY",
+}
+
+
+def _unified_row_to_claim(row, tiers=None):
+    """Adapt one activity-feed tuple `(ts, colour, text, host, severity)`.
+
+    Local to this tile because the feed merges `device_event` and `alert_fired`
+    into a display tuple that matches neither table's shape.
+    """
+    from modules.relevance import Claim
+    ts, _colour, _text, host, severity = row
+    return Claim(
+        ts=int(ts or 0),
+        severity=str(severity or "INFO"),
+        rule_type="",
+        host=str(host or ""),
+        tier=(tiers or {}).get(host) if host else None,
+        confidence=None,
+        actionable=bool(host),
+    )
+
 
 # ── Animated count label ──────────────────────────────────────────────────────
 
@@ -899,7 +926,10 @@ class EventFeedTile(_BaseTile):
         if s is None:
             return
 
-        unified: list[tuple[int, str, str]] = []  # (ts, colour, text)
+        # (ts, colour, text, host, severity) — host/severity are not displayed;
+        # they exist so the 20-row cap below can be a relevance judgement rather
+        # than "whichever 20 are newest" (Signal Quality Phase 5).
+        unified: list[tuple[int, str, str, str, str]] = []
 
         # Device-state events
         try:
@@ -909,7 +939,8 @@ class EventFeedTile(_BaseTile):
                 ts    = int(e.ts if hasattr(e, "ts") else e.get("ts", 0))
                 colour = getattr(_s, self._TYPE_COLOUR.get(etype, "ACCENT"))
                 label  = etype.replace("_", " ").lower()
-                unified.append((ts, colour, f"[device]  {ip}  {label}"))
+                unified.append((ts, colour, f"[device]  {ip}  {label}", ip,
+                                _DEVICE_EVENT_SEVERITY.get(etype.upper(), "INFO")))
         except Exception:
             pass  # non-fatal
 
@@ -924,13 +955,17 @@ class EventFeedTile(_BaseTile):
                 msg    = f"{sev.lower()}  {rtype}"
                 if host:
                     msg += f"  ({host})"
-                unified.append((ts, colour, f"[alert]  {msg}"))
+                unified.append((ts, colour, f"[alert]  {msg}", host, sev))
         except Exception:
             pass  # non-fatal
 
-        # Sort newest-first, cap at 20
-        unified.sort(key=lambda x: x[0], reverse=True)
-        unified = unified[:20]
+        # Signal Quality Phase 5 — relevance chooses which 20 survive the cap,
+        # then the feed is shown newest-first as before. Same split as the
+        # Timeline: the cap is a relevance decision, the display order is not.
+        from ui.claim_ranking import top_by_relevance
+        unified = top_by_relevance(
+            unified, _unified_row_to_claim, s, limit=20, key=lambda x: x[0],
+        )
 
         # Rebuild rows
         for lbl in self._event_labels:
@@ -945,7 +980,7 @@ class EventFeedTile(_BaseTile):
             self._event_labels.append(lbl)
             return
 
-        for idx, (ts, colour, text) in enumerate(unified):
+        for idx, (ts, colour, text, _host, _sev) in enumerate(unified):
             t_str = (datetime.datetime.fromtimestamp(ts).strftime("%b %d %H:%M")
                      if ts else "")
             row_lbl = QLabel(f"{t_str}  {text}" if t_str else text)

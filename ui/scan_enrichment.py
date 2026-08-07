@@ -27,6 +27,18 @@ if TYPE_CHECKING:
     pass
 
 
+def _mesh_field(unit, name: str, default=None):
+    """Read one field from a mesh node that may be an object or a plain dict.
+
+    The native Deco client yields ``MeshUnit`` dataclasses; a hardware plugin
+    yields the plain dicts its ``get_status()`` put in ``extra["nodes"]``. Both
+    reach the same health computation, so field access has to cover both.
+    """
+    if isinstance(unit, dict):
+        return unit.get(name, default)
+    return getattr(unit, name, default)
+
+
 def _oui_identity(mac: str) -> tuple:
     """Return (vendor, device_type) for a synthesized row's MAC.
 
@@ -96,21 +108,59 @@ class ScanEnrichmentMixin:
             f"{summary}  ·  {provider}: {matched} device{'s' if matched != 1 else ''} enriched"
         )
 
-        # Compute mesh health once — used by both alert evaluation and snapshot logging.
-        units        = self._mesh_units
-        unit_count   = len(units)
-        online_count = sum(1 for u in units if getattr(u, "online", True))
+        self._evaluate_and_log_mesh_health(self._mesh_units)
+
+        from PyQt6.QtCore import QSettings
+        s = QSettings()
+
+        # Monitor logging — live log-hub entry only; still opt-in
+        if hasattr(self, "_log_hub_page") and s.value("logging/mesh_enabled", False, type=bool):
+            self._log_hub_page.add_mesh_entry(data)
+
+    def _evaluate_and_log_mesh_health(self, units: list) -> None:
+        """MESH_DEGRADED evaluation + throttled mesh_signal_log snapshot.
+
+        Shared by both mesh entry points. ``units`` may be ``MeshUnit`` objects
+        (the native Deco client) or plain dicts (a hardware plugin's reported
+        nodes), so every field is read through ``_mesh_field()``.
+
+        Both are written on every poll, independent of the Monitor logging
+        toggle: gating them on an unrelated opt-in left mesh_signal_log
+        permanently empty (Phase 4 C2).
+
+        The Deco path now reports a real per-node ``online`` flag, derived from
+        the API's ``group_status`` (deco_client._node_online). Verified live on
+        a 5-node XE75: an unplugged satellite stays in the node list as
+        ``disconnected``, so ``online_count`` drops while ``unit_count`` holds
+        — the shape MESH_DEGRADED already tested for. Until that projection
+        existed the predicate was permanently False and the rule could not fire
+        at all.
+
+        ``worst_rssi`` is still None on this path, deliberately: the Deco
+        reports ``signal_level`` as a 1-3 bar scale per band, and
+        ``_MESH_WEAK_RSSI`` is -75.0 dBm. Feeding bars into a column named for
+        dBm would make the stored history mean two different things, so the
+        weak-backhaul half of the predicate stays dormant rather than wrong.
+        A provider that reports true dBm can populate ``rssi`` and it works
+        with no further change here.
+        """
+        unit_count = len(units)
+        if unit_count == 0:
+            return  # a provider reporting no nodes says nothing about mesh health
+
+        online_count = sum(1 for u in units if _mesh_field(u, "online", True))
         worst_name, worst_rssi = None, None
         for u in units:
-            rssi = getattr(u, "rssi", None) or getattr(u, "signal_level", None)
+            rssi = _mesh_field(u, "rssi") or _mesh_field(u, "signal_level")
             if rssi is not None and (worst_rssi is None or rssi < worst_rssi):
                 worst_rssi = rssi
-                worst_name = getattr(u, "name", "") or getattr(u, "device_id", "")
+                worst_name = _mesh_field(u, "name", "") or _mesh_field(u, "device_id", "")
 
-        # V6 Sprint 1 — MESH_DEGRADED: evaluated on every mesh result, independent
-        # of whether Monitor logging is enabled below.
-        if unit_count > 0 and self._alert_engine is not None:
-            for a in self._alert_engine.evaluate_mesh_checks(unit_count, online_count, worst_name, worst_rssi):
+        # V6 Sprint 1 — MESH_DEGRADED
+        if self._alert_engine is not None:
+            for a in self._alert_engine.evaluate_mesh_checks(
+                unit_count, online_count, worst_name, worst_rssi
+            ):
                 self._surface_alert_in_app(a)
                 self._home_page.on_alert(a)
                 if self._store is not None:
@@ -119,27 +169,22 @@ class ScanEnrichmentMixin:
                     except Exception:
                         pass  # non-fatal — persistence failure must not block the scan handler
 
-        # Monitor logging — live entry + throttled DB write
-        if hasattr(self, "_log_hub_page"):
-            from PyQt6.QtCore import QSettings
-            import time as _time
-            s = QSettings()
-            if s.value("logging/mesh_enabled", False, type=bool):
-                self._log_hub_page.add_mesh_entry(data)
-                interval_s = s.value("logging/mesh_interval_min", 5, type=int) * 60
-                now = _time.time()
-                if self._store and now - self._last_mesh_log_ts >= interval_s:
-                    try:
-                        record_mesh_snapshot(
-                            self._store,
-                            unit_count=unit_count,
-                            online_count=online_count,
-                            worst_unit=worst_name,
-                            worst_rssi=worst_rssi,
-                        )
-                        self._last_mesh_log_ts = now
-                    except Exception:
-                        pass  # non-fatal
+        from PyQt6.QtCore import QSettings
+        import time as _time
+        interval_s = QSettings().value("logging/mesh_interval_min", 5, type=int) * 60
+        now = _time.time()
+        if self._store and now - self._last_mesh_log_ts >= interval_s:
+            try:
+                record_mesh_snapshot(
+                    self._store,
+                    unit_count=unit_count,
+                    online_count=online_count,
+                    worst_unit=worst_name,
+                    worst_rssi=worst_rssi,
+                )
+                self._last_mesh_log_ts = now
+            except Exception:
+                pass  # non-fatal
 
     def _on_hardware_plugin_result(self, data: dict) -> None:
         """Route a successful plugin Test result to the relevant existing page.
@@ -221,6 +266,16 @@ class ScanEnrichmentMixin:
         # If the plugin returned clients but no nodes (single-AP router),
         # synthesize one node so topology and "Group by node" still work.
         nodes = status.get("extra", {}).get("nodes", [])
+
+        # Phase 4 — this is the only mesh reading production ever takes.
+        # _on_mesh_result() holds the same two calls but has no caller (no
+        # .connect(), no worker, no dynamic dispatch), so gating criterion 6 on
+        # it left mesh_signal_log empty forever. Evaluated against the nodes the
+        # plugin actually reported, BEFORE the single-AP fallback below — a
+        # synthesized placeholder node is a topology aid, not a mesh reading,
+        # and must never reach mesh_signal_log as if it were one.
+        self._evaluate_and_log_mesh_health(nodes)
+
         if not nodes and clients and hw_type in ("router", "mesh", "ap"):
             nodes = [{"name": hw_name, "role": "primary",
                       "ip": info.get("ip", ""), "mac": ""}]

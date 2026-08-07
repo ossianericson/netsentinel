@@ -122,6 +122,141 @@ def test_is_device_alert_in_scope_infra_role_true_without_opt_in(store):
     assert store.is_device_alert_in_scope("192.168.1.1") is True
 
 
+def test_is_device_alert_in_scope_checks_every_mac_at_an_ip(store):
+    """REGRESSION: the query matched `ip = ? OR mac = ?` but only ever read
+    rows[0], so with several MACs at one address the answer depended on row
+    order. Found live: after the Phase 2 role migration the reference network's
+    mesh AP (192.168.68.64) shares its IP with two stale privacy MACs, and the
+    gate reported it out of scope purely because one of those sorted first."""
+    store.upsert_known_device(mac="3a:41:94:e8:e2:5f", ip="192.168.68.64")
+    store.upsert_known_device(mac="f0:72:ea:51:d3:b8", ip="192.168.68.64")
+    store.upsert_known_device(mac="2a:06:0f:d0:53:59", ip="192.168.68.64")
+    store.update_device_stability(
+        mac="f0:72:ea:51:d3:b8", scan_count=6, ip_stability=0.67,
+        inferred_role="infrastructure",
+    )
+
+    assert store.is_device_alert_in_scope("192.168.68.64") is True
+
+
+def test_is_device_alert_in_scope_honours_an_opt_in_on_any_mac_at_an_ip(store):
+    store.upsert_known_device(mac="3a:41:94:e8:e2:5f", ip="192.168.68.64")
+    store.upsert_known_device(mac="2a:06:0f:d0:53:59", ip="192.168.68.64")
+    store.set_device_alert_opt_in("2a:06:0f:d0:53:59", True)
+
+    assert store.is_device_alert_in_scope("192.168.68.64") is True
+
+
+def test_clear_inferred_role_removes_a_stale_role(store):
+    """update_device_stability() deliberately never clears a role, so the
+    Phase 2 migration needs an explicit path to undo the 9 wrong promotions
+    the deleted always-on catch-all wrote."""
+    store.upsert_known_device(mac="5c:93:a2:5c:47:19", ip="192.168.68.69")
+    store.update_device_stability(
+        mac="5c:93:a2:5c:47:19", scan_count=588, ip_stability=0.99,
+        inferred_role="infrastructure",
+    )
+    assert store.is_device_alert_in_scope("192.168.68.69") is True
+
+    store.clear_inferred_role("5c:93:a2:5c:47:19")
+
+    assert store.is_device_alert_in_scope("192.168.68.69") is False
+
+
+def test_clear_inferred_role_is_safe_for_an_unknown_mac(store):
+    store.clear_inferred_role("00:00:00:00:00:01")  # must not raise
+
+
+def test_delete_known_device_removes_the_inventory_row(store):
+    """Program acceptance criterion 3 — a NOT_A_DEVICE entry must be *absent*
+    from known_device, not merely stripped of its role. Phase 1 stopped new
+    multicast rows being written and Phase 2 cleared the role, but the SSDP
+    group was still physically in the reference inventory with 654 scans."""
+    store.upsert_known_device(mac="01:00:5e:7f:ff:fa", ip="239.255.255.250")
+    assert "01:00:5e:7f:ff:fa" in store.get_known_devices()
+
+    store.delete_known_device("01:00:5e:7f:ff:fa")
+
+    assert "01:00:5e:7f:ff:fa" not in store.get_known_devices()
+
+
+def test_delete_known_device_leaves_event_history_intact(store):
+    """The record/claim split is load-bearing: known_device is an inventory
+    *claim*, while device_event/device_ip_history are append-only *records*.
+    Retracting the claim must not destroy the forensics."""
+    mac = "01:00:5e:7f:ff:fa"
+    store.upsert_known_device(mac=mac, ip="239.255.255.250")
+    store.record_ip_observation(mac, "239.255.255.250")
+    store.record_device_event("239.255.255.250", "JOINED", mac=mac)
+
+    store.delete_known_device(mac)
+
+    assert store.get_total_seen_count(mac) == 1
+    assert len(store.query_device_events(ip="239.255.255.250")) == 1
+
+
+def test_delete_known_device_is_safe_for_an_unknown_mac(store):
+    store.delete_known_device("00:00:00:00:00:01")  # must not raise
+
+
+def test_delete_known_device_normalises_mac_case(store):
+    """upsert stores whatever case it is given; every other write method in
+    this family lowercases, so the delete must match on the same terms."""
+    store.upsert_known_device(mac="01:00:5e:7f:ff:fa", ip="239.255.255.250")
+
+    store.delete_known_device("01:00:5E:7F:FF:FA")
+
+    assert "01:00:5e:7f:ff:fa" not in store.get_known_devices()
+
+
+def test_importance_tier_recomputes_and_ignores_a_stale_role(store):
+    """The tier is derived on every call, never read from a stored column —
+    the stored values this replaces are known to be wrong."""
+    store.upsert_known_device(
+        mac="5c:93:a2:5c:47:19", ip="192.168.68.69", hostname="PS4-C8208A",
+        vendor="Liteon Technology Corporation", device_type="Games Console",
+    )
+    store.update_device_stability(
+        mac="5c:93:a2:5c:47:19", scan_count=588, ip_stability=0.99,
+        inferred_role="printer",
+    )
+    assert store.get_device_importance_tier("192.168.68.69") == "personal"
+
+
+def test_importance_tier_for_the_gateway_is_critical(store):
+    store.upsert_known_device(
+        mac="3c:64:cf:e0:27:02", ip="192.168.68.1",
+        vendor="TP-Link (Deco mesh / RE series extenders)",
+    )
+    store.update_device_stability(
+        mac="3c:64:cf:e0:27:02", scan_count=662, ip_stability=1.0,
+        inferred_role="gateway",
+    )
+    assert store.get_device_importance_tier("192.168.68.1") == "critical"
+    assert store.get_device_importance_tier("3c:64:cf:e0:27:02") == "critical"
+
+
+def test_importance_tier_for_an_unknown_device_is_transient(store):
+    assert store.get_device_importance_tier("192.168.1.222") == "transient"
+
+
+def test_importance_tier_takes_the_highest_of_several_macs_at_one_ip(store):
+    """The reference network has three MACs at 192.168.68.64 — the mesh AP and
+    two stale privacy MACs. Alerts are keyed by IP, so taking whichever row the
+    database returned first would let row order decide whether the AP is
+    alertable."""
+    store.upsert_known_device(mac="3a:41:94:e8:e2:5f", ip="192.168.68.64")
+    store.upsert_known_device(
+        mac="f0:72:ea:51:d3:b8", ip="192.168.68.64",
+        vendor="Google Nest / Nest Wifi / Google Wifi Router",
+        device_type="Video Doorbell",
+    )
+    store.upsert_known_device(mac="2a:06:0f:d0:53:59", ip="192.168.68.64")
+
+    assert store.get_device_importance_tier("192.168.68.64") == "critical"
+    assert store.get_device_importance_tier("3a:41:94:e8:e2:5f") == "transient"
+
+
 def test_is_device_alert_in_scope_not_opted_in_false(store):
     store.upsert_known_device("aa:bb:cc:dd:ee:ff", ip="192.168.1.5", hostname="phone")
     assert store.is_device_alert_in_scope("192.168.1.5") is False

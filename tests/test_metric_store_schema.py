@@ -85,8 +85,8 @@ def test_migrations_list_is_nonempty():
     assert all(isinstance(m, str) for m in _MIGRATIONS)
 
 
-def test_schema_version_is_21():
-    assert _SCHEMA_VERSION == 21
+def test_schema_version_is_22():
+    assert _SCHEMA_VERSION == 22
 
 
 def test_known_device_has_hostname_resolved_at_column():
@@ -102,7 +102,8 @@ def test_known_device_has_hostname_resolved_at_column():
 
 def test_migrated_from_v20_db_gains_hostname_resolved_at_column():
     """A DB with only the v20 known_device shape must gain the new nullable
-    column (and report v21) the next time apply_sqlite_schema runs."""
+    column (and report the current version) the next time apply_sqlite_schema
+    runs."""
     conn = _make_conn()
     lock = threading.Lock()
     conn.executescript(
@@ -113,7 +114,7 @@ def test_migrated_from_v20_db_gains_hostname_resolved_at_column():
     cols = {r[1] for r in conn.execute("PRAGMA table_info(known_device)").fetchall()}
     assert "hostname_resolved_at" in cols
     rows = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchall()
-    assert int(rows[0][0]) == 21
+    assert int(rows[0][0]) == _SCHEMA_VERSION
 
 
 def test_known_device_hostname_resolved_at_defaults_to_none():

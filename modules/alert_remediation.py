@@ -171,6 +171,25 @@ REMEDIATION: Dict[str, str] = {
         "another device on the network is saturating the link.\n"
         "After making changes, watch the Network Logger to confirm jitter returns to normal."
     ),
+    "DNS_LATENCY": (
+        "DNS is the phone book of the internet — every website you open needs a lookup "
+        "first. Yours is answering much slower than it normally does, which makes pages "
+        "feel sluggish to start even when your connection speed is perfectly fine.\n"
+        "Open DNS & Stability and run a DNS speed test to see how your current resolver "
+        "compares to the public ones.\n"
+        "If your router is the resolver, reboot it first — a router that has been up for "
+        "months is the usual cause. If it stays slow, set your router or PC to use a "
+        "public resolver such as 1.1.1.1 or 8.8.8.8 and re-test."
+    ),
+    "INFRA_UNREACHABLE": (
+        "A piece of your network hardware — a modem, router, access point or switch — has "
+        "stopped answering NetSentinel. Anything connected through it is offline too, so fix "
+        "this before chasing individual devices. Open Hardware to see which one it is.\n"
+        "Check it has power and that its cables are seated at both ends, then power-cycle it "
+        "and wait a full minute for it to come back.\n"
+        "If it stays unreachable, check whether it moved to a different IP address — a device "
+        "that took a new DHCP lease looks identical to one that died."
+    ),
     "MESH_DEGRADED": (
         "One or more nodes in your mesh network are offline or have a weak signal. Open "
         "Hardware to see the status of each node.\n"

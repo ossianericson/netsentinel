@@ -46,13 +46,23 @@ class AvailabilityWorker(QThread):
         targets: Optional[List[TargetConfig]] = None,
         interval_s: int = 60,
         parent=None,
+        threshold_provider=None,
+        confirm_down: bool = False,
+        jitter_hosts=None,
     ):
+        """threshold_provider / confirm_down are the Signal Quality Phase 3b
+        options, passed straight through to AvailabilityMonitor. Both default to
+        the pre-Phase-3 behaviour; app.py supplies them only when
+        `experimental/signal_quality_v2` is on (RULE-EXP1)."""
         super().__init__(parent)
         self._stop_requested = False
         self._monitor = AvailabilityMonitor(
             store=store,
             targets=targets,
             interval_s=interval_s,
+            threshold_provider=threshold_provider,
+            confirm_down=confirm_down,
+            jitter_hosts=jitter_hosts,
         )
 
     # ── Public API ────────────────────────────────────────────────────────────

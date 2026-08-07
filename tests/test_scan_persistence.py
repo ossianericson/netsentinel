@@ -41,9 +41,14 @@ def test_persist_alert_unpacks_object():
         message="rtt high", ts=1234, rule_type="RTT_THRESHOLD",
     )
     assert persist_alert(store, alert) == 42
+    # Schema v22 widened the row to every AlertFired field. The getattr()
+    # defaults matter: this alert object is a SimpleNamespace carrying only the
+    # original six, and a producer that predates the new fields must still
+    # persist cleanly rather than raising AttributeError on the write path.
     store.record_alert_fired.assert_called_once_with(
         "High RTT", "10.0.0.1", "WARNING", "rtt high",
         ts=1234, rule_type="RTT_THRESHOLD",
+        value=None, confidence=None, evidence_json=None, is_resolution=False,
     )
 
 

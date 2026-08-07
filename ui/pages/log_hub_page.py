@@ -109,6 +109,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._challenge_banner_ts: float      = 0.0
         self._cap_shown:           bool       = False
         self._anim_row_ts:         list[float] = []
+        self._fade_final_colors: list[tuple[int, Optional[QColor]]] = []
         self._toggle_btns:    dict[str, QPushButton] = {}
         self._db_btns:        dict[str, QPushButton] = {}
         self._interval_combos: dict[str, QComboBox]  = {}
@@ -127,6 +128,17 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         _t.setSingleShot(True)
         _t.timeout.connect(self._load_history)
         _t.start(300)
+
+        # Reused across every row fade. A QTimer(self) built per fade survives
+        # firing as a child of this page, so the per-row pair leaked one QObject
+        # each for the life of the session (RULE-WIN8) — invisible to tracemalloc,
+        # since the retained mass is the C++ object, not the Python wrapper.
+        self._fade_t1 = QTimer(self)
+        self._fade_t1.setSingleShot(True)
+        self._fade_t1.timeout.connect(lambda: self._apply_row_fade(0.8))
+        self._fade_t2 = QTimer(self)
+        self._fade_t2.setSingleShot(True)
+        self._fade_t2.timeout.connect(lambda: self._apply_row_fade(1.0))
 
     def showEvent(self, event) -> None:
         from ui.table_utils import restore_column_widths
@@ -477,37 +489,30 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         if len(self._anim_row_ts) > 5:
             return
 
-        from PyQt6.QtGui import QColor
-
         n_cols = self._table.columnCount()
-        final_colors: list[tuple[int, QColor | None]] = []
+        final_colors: list[tuple[int, Optional[QColor]]] = []
         for col in range(n_cols):
             item = self._table.item(0, col)
             final_colors.append((col, QColor(item.foreground().color()) if item else None))
+        self._fade_final_colors = final_colors
 
+        self._apply_row_fade(0.6)
+        self._fade_t1.start(100)
+        self._fade_t2.start(200)
+
+    def _apply_row_fade(self, weight: float) -> None:
+        """Blend row 0's text from the card background toward its final colour."""
         bg = QColor(_s.BG_CARD)
-
-        def _apply(weight: float) -> None:
-            for col, final in final_colors:
-                if final is None:
-                    continue
-                item = self._table.item(0, col)
-                if not item:
-                    continue
-                r = int(bg.red()   + (final.red()   - bg.red())   * weight)
-                g = int(bg.green() + (final.green() - bg.green()) * weight)
-                b = int(bg.blue()  + (final.blue()  - bg.blue())  * weight)
-                item.setForeground(QColor(r, g, b))
-
-        _apply(0.6)
-        _t1 = QTimer(self)
-        _t1.setSingleShot(True)
-        _t1.timeout.connect(lambda: _apply(0.8))
-        _t1.start(100)
-        _t2 = QTimer(self)
-        _t2.setSingleShot(True)
-        _t2.timeout.connect(lambda: _apply(1.0))
-        _t2.start(200)
+        for col, final in self._fade_final_colors:
+            if final is None:
+                continue
+            item = self._table.item(0, col)
+            if not item:
+                continue
+            r = int(bg.red()   + (final.red()   - bg.red())   * weight)
+            g = int(bg.green() + (final.green() - bg.green()) * weight)
+            b = int(bg.blue()  + (final.blue()  - bg.blue())  * weight)
+            item.setForeground(QColor(r, g, b))
 
     def _apply_filter(self) -> None:
         filt = self._search_box.text().strip().lower()
@@ -853,13 +858,17 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
             return
 
         alerts = self._store.get_recent_alerts(hours=1)
-        nearby = sorted(
+        # Signal Quality Phase 5 — this was a hand-rolled severity ladder
+        # (critical / warning / everything else), i.e. a second, weaker copy of
+        # the ranking rule. It now uses the shared one, which also weighs the
+        # device's importance tier and corroboration — so of two CRITICALs
+        # within the same 10-minute window, the one about the gateway sorts
+        # above the one about a sleeping streaming stick.
+        from ui.claim_ranking import rank_alert_rows
+        nearby = rank_alert_rows(
             [a for a in alerts if abs(a.get("ts", 0) - ts) <= 600],
-            key=lambda a: (
-                0 if a.get("severity", "").lower() == "critical" else
-                1 if a.get("severity", "").lower() == "warning" else 2
-            ),
-        )[:5]
+            self._store, limit=5,
+        )
 
         while self._alert_corr_rows_lay.count():
             child = self._alert_corr_rows_lay.takeAt(0)

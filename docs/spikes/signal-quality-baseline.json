@@ -1,0 +1,27 @@
+{
+  "span_days": 25.355,
+  "observed_total": 1939,
+  "observed_per_day": 76.474,
+  "observed_by_type": {
+    "device_event.DEGRADED": 490,
+    "device_event.DOWN": 192,
+    "device_event.JOINED": 2,
+    "device_event.LEFT": 569,
+    "device_event.RECOVERED": 657,
+    "alert_fired.DEVICE_GONE/WARNING": 13,
+    "alert_fired.IP_CHURN/WARNING": 1,
+    "alert_fired.MODEM_SIGNAL_DROP/WARNING": 2,
+    "alert_fired.NEW_OPEN_PORT/WARNING": 13
+  },
+  "replay_gated_total": 2169,
+  "replay_ungated_total": 4064,
+  "replay_gated_per_day": 85.545,
+  "replay_by_rule_type": {
+    "RTT_THRESHOLD": 265,
+    "LOSS_THRESHOLD": 479,
+    "HOST_DEGRADED": 281,
+    "HOST_DOWN": 983,
+    "HOST_DOWN/resolved": 101,
+    "FLAP": 60
+  }
+}

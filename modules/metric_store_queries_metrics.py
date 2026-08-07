@@ -12,6 +12,15 @@ from modules.metric_store_schema import (
     MeshSignalPoint, ModemSignalPoint, RttPoint, SpeedTestPoint,
 )
 
+# Every alert_fired column the read layer exposes. Named once so the three
+# alert queries cannot drift apart — they had already been copy-pasted three
+# times when schema v22 added six columns to the table.
+_ALERT_COLS = (
+    "id, ts, rule_name, host, severity, message, "
+    "acked_ts, acked_by, acked_comment, escalated, rule_type, "
+    "value, confidence, evidence_json, dedup_key, resolved_ts, is_resolution"
+)
+
 
 class _MetricsQueriesMixin:
     """Time-series metric query methods.
@@ -72,6 +81,27 @@ class _MetricsQueriesMixin:
             "SELECT DISTINCT host FROM rtt_sample WHERE ts >= ?", (since,)
         )
         return [r["host"] for r in rows]
+
+    def query_rtt_first_seen_by_host(self) -> Dict[str, int]:
+        """Oldest retained rtt_sample timestamp per host, across ALL history.
+
+        Deliberately unbounded, unlike every other query here: its caller
+        (alert_baseline.BaselineLearner) needs "how long have we been watching
+        this host?", which is a different question from "what should the mean
+        be computed over?". Answering the first from a bounded window made
+        RTT_ANOMALY's maturity gate unsatisfiable by construction.
+
+        One grouped scan rather than a MIN(ts) per host — covered by
+        idx_rtt_host (host, ts), so this is an index scan, not a table scan.
+        """
+        rows = self._execute_read(
+            "SELECT host, MIN(ts) AS first_ts FROM rtt_sample GROUP BY host"
+        )
+        return {
+            r["host"]: int(r["first_ts"])
+            for r in rows
+            if r["host"] and r["first_ts"] is not None
+        }
 
     # ── Speed test history ────────────────────────────────────────────────────
 
@@ -146,8 +176,7 @@ class _MetricsQueriesMixin:
         """
         cutoff = int(time.time()) - older_than_s
         sql = (
-            "SELECT id, ts, rule_name, host, severity, message, "
-            "acked_ts, acked_by, acked_comment, escalated, rule_type "
+            f"SELECT {_ALERT_COLS} "
             "FROM alert_fired WHERE acked_ts IS NULL AND ts <= ?"
         )
         params: List = [cutoff]
@@ -163,8 +192,7 @@ class _MetricsQueriesMixin:
         """Return recent fired alerts, newest first."""
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
-            "SELECT id, ts, rule_name, host, severity, message, "
-            "acked_ts, acked_by, acked_comment, escalated, rule_type "
+            f"SELECT {_ALERT_COLS} "
             "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         )
@@ -189,12 +217,55 @@ class _MetricsQueriesMixin:
             return [dict(r) for r in rows]
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
-            "SELECT id, ts, rule_name, host, severity, message, "
-            "acked_ts, acked_by, acked_comment, escalated, rule_type "
+            f"SELECT {_ALERT_COLS} "
             "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         )
         return [dict(r) for r in rows]
+
+    def get_last_fired_by_rule_host(self, max_age_s: int = 86400) -> Dict[str, int]:
+        """Return {dedup_key: newest_ts} for alerts fired within `max_age_s`.
+
+        Seeds `AlertEngine._last_fired`, which is in-memory: without this a
+        restart resets every cooldown, so a still-true condition re-alerts
+        immediately on launch and a user who restarts often never stops hearing
+        about it. Derived from the `alert_fired` record rather than a second
+        persistence path, so the dedup state cannot drift from the history the
+        user is looking at.
+
+        Resolutions are excluded — a resolution is not a firing, and seeding it
+        would mute the next genuine alert for a whole cooldown after every
+        recovery. Rows written before schema v22 have no `dedup_key`; they are
+        reconstructed from rule_name/host, which is exactly how the key is
+        built.
+        """
+        since = int(time.time()) - int(max_age_s)
+        rows = self._execute_read(
+            "SELECT COALESCE(dedup_key, rule_name || '::' || COALESCE(host, '')) AS k, "
+            "MAX(ts) AS last_ts FROM alert_fired "
+            "WHERE ts >= ? AND is_resolution = 0 GROUP BY k",
+            (since,),
+        )
+        return {r["k"]: int(r["last_ts"]) for r in rows if r["k"]}
+
+    def get_dismissal_counts(self, days: float = 30.0) -> Dict[str, int]:
+        """Return {rule_type: times the user acknowledged one} over `days`.
+
+        Feeds `relevance.score(dismissals=...)`. Acknowledging is this app's
+        dismissal gesture — there is no separate "hide this" action — so a rule
+        type the user acks on sight is one they have repeatedly told us they do
+        not want at the top of the list. The penalty is bounded and can never
+        reorder a CRITICAL below an INFO (see modules/relevance.py), so this
+        de-ranks a nuisance class without ever silencing a real one.
+        """
+        since = int(time.time()) - int(days * 86400)
+        rows = self._execute_read(
+            "SELECT rule_type, COUNT(*) AS n FROM alert_fired "
+            "WHERE acked_ts IS NOT NULL AND acked_ts >= ? AND rule_type != '' "
+            "GROUP BY rule_type",
+            (since,),
+        )
+        return {r["rule_type"]: int(r["n"]) for r in rows}
 
     def get_recent_acks(self, since_ts: int) -> List[dict]:
         """Alerts acknowledged at or after `since_ts`, oldest ack first.

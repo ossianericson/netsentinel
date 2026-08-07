@@ -45,6 +45,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from modules.alert_suppressor import DEFAULT_ENABLED_RULES
 from ui import styles as _s
 
 # ── Keyring constants (exported so notifications_page.py can import them) ─────
@@ -170,7 +171,13 @@ def _severity_combo(default: str = "WARNING") -> QComboBox:
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_RECOMMENDED_RULES = {"Host Down", "New Device", "High RTT", "Cert Expiring", "Host Flapping"}
+# The curated set, re-exported from the model layer rather than restated here.
+# It used to be a second, older list — {Host Down, New Device, High RTT, Cert
+# Expiring, Host Flapping} — that predated the Signal Quality program, so the
+# first-run overlay and the "Enable recommended" button both offered a set with
+# none of Phase 4's real signals in it and one level-triggered rule that has
+# since been dropped. One definition, in modules/alert_suppressor.py.
+_RECOMMENDED_RULES = DEFAULT_ENABLED_RULES
 
 _ALERT_RULE_DEFS = [
     ("High RTT",      "RTT_THRESHOLD",  "Fires when a host's round-trip time exceeds the threshold"),
@@ -213,6 +220,10 @@ _ALERT_RULE_DEFS = [
      "Fires when a background DHCP watch cycle sees an offer from an unexpected server"),
     ("Config Drift", "CONFIG_DRIFT",
      "Fires when a device is added, removed, or changes role versus your blessed baseline snapshot"),
+    ("Infrastructure Unreachable", "INFRA_UNREACHABLE",
+     "Fires when a modem, router, access point or switch stops answering its poll — once per outage"),
+    ("DNS Latency", "DNS_LATENCY",
+     "Fires when DNS lookups get slow relative to what your resolver normally does — once per episode"),
 ]
 
 

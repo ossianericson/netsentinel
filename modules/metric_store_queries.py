@@ -160,7 +160,8 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             "COALESCE(ip_stability, 0.0) AS ip_stability, "
             "inferred_role, "
             "COALESCE(alert_opt_in, 0) AS alert_opt_in, "
-            "hostname_resolved_at "
+            "hostname_resolved_at, "
+            "presence_state, gone_notified_ts, importance_tier, importance_source "
             "FROM known_device",
             (),
         )
@@ -182,6 +183,10 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
                 inferred_role=r["inferred_role"],
                 alert_opt_in=bool(r["alert_opt_in"]),
                 hostname_resolved_at=r["hostname_resolved_at"],
+                presence_state=r["presence_state"],
+                gone_notified_ts=r["gone_notified_ts"],
+                importance_tier=r["importance_tier"],
+                importance_source=r["importance_source"],
             )
             for r in rows
         }

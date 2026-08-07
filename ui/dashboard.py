@@ -1802,6 +1802,32 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 )
             except Exception:
                 pass  # non-fatal
+        # V6 Sprint 1 — MODEM_SIGNAL_DROP.  Evaluated on every poll (~30 s), and
+        # deliberately ahead of the Monitor logging block below rather than inside
+        # it: the rule compares the current sample against a *prior* baseline, and
+        # with logging off nothing ever wrote modem_signal_log, so there was no
+        # baseline and the rule could never fire.  An unrelated opt-in toggle was
+        # silently disabling the alert, not just the log.
+        _cur_type = data.get("network_type")
+        _cur_sinr = (
+            data.get("nr5g_sinr_db") if _cur_type and "5G" in _cur_type
+            else data.get("lte_snr_db")
+        )
+        if self._alert_engine is not None:
+            _prior_type, _prior_sinr = self._modem_signal_history()
+            for a in self._alert_engine.evaluate_modem_checks(
+                _cur_type, _cur_sinr, _prior_sinr, _prior_type,
+            ):
+                self._surface_alert_in_app(a)
+                self._home_page.on_alert(a)
+                try:
+                    persist_alert(self._store, a)
+                except Exception:
+                    pass  # non-fatal — persistence failure must not block modem UI updates
+        # Fold this sample in only after evaluating, so the baseline stays "prior".
+        self._modem_sinr_series.append(_cur_sinr)
+        self._modem_prev_network_type = _cur_type
+
         # Monitor logging — live entry + throttled DB write
         if hasattr(self, "_log_hub_page"):
             from PyQt6.QtCore import QSettings
@@ -1812,22 +1838,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 interval_s = s.value("logging/modem_interval_min", 5, type=int) * 60
                 now = _time.time()
                 if self._store and now - self._last_modem_log_ts >= interval_s:
-                    # V6 Sprint 1 — MODEM_SIGNAL_DROP: capture the prior 7-day SINR
-                    # history before this row is inserted, so it forms the baseline.
-                    _prior_type = None
-                    _prior_sinr: list = []
-                    if self._alert_engine is not None:
-                        try:
-                            _hist = self._store.query_modem_signal_log(hours=168.0, limit=500)
-                        except Exception:
-                            _hist = []
-                        if _hist:
-                            _prior_type = _hist[0].network_type
-                            _prior_sinr = [
-                                (p.nr5g_sinr if p.network_type and "5G" in p.network_type else p.lte_snr)
-                                for p in _hist
-                            ]
-                            _prior_sinr = [v for v in _prior_sinr if v is not None]
                     try:
                         record_modem_signal(
                             self._store,
@@ -1852,23 +1862,104 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                             lte_earfcn=data.get("lte_earfcn"),
                         )
                         self._last_modem_log_ts = now
+                        # A new row exists — drop the cached copy so the next poll
+                        # re-reads it (see _modem_signal_history).
+                        self._modem_hist_cache = None
                     except Exception:
                         pass  # log_modem_entry is best-effort; DB write failure is non-fatal
-                    if self._alert_engine is not None:
-                        _cur_type = data.get("network_type")
-                        _cur_sinr = (
-                            data.get("nr5g_sinr_db") if _cur_type and "5G" in _cur_type
-                            else data.get("lte_snr_db")
-                        )
-                        for a in self._alert_engine.evaluate_modem_checks(
-                            _cur_type, _cur_sinr, _prior_sinr, _prior_type,
-                        ):
-                            self._surface_alert_in_app(a)
-                            self._home_page.on_alert(a)
-                            try:
-                                persist_alert(self._store, a)
-                            except Exception:
-                                pass  # non-fatal — persistence failure must not block modem UI updates
+
+    @pyqtSlot(str, bool, str, str)
+    def _on_plugin_reachability(
+        self, instance_id: str, unreachable: bool, label: str, reason: str,
+    ) -> None:
+        """INFRA_UNREACHABLE — one hardware-plugin poll outcome (Phase 4 C4).
+
+        Called for successful polls too: the healthy observation is what ends
+        the EvidenceGate episode and lets a recovery be reported.
+        """
+        if self._alert_engine is None:
+            return
+        for a in self._alert_engine.evaluate_infra_unreachable_checks(
+            instance_id, unreachable, label=label, reason=reason,
+        ):
+            self._surface_alert_in_app(a)
+            self._home_page.on_alert(a)
+            try:
+                persist_alert(self._store, a)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block plugin polling
+
+    @pyqtSlot(float)
+    def _on_dns_sample(self, dns_ms: float) -> None:
+        """DNS_LATENCY — one DNS latency measurement from the logger (Phase 4 C5).
+
+        Arrives every cycle whether or not the user enabled DNS *logging*, and
+        for failed probes too (-1.0), which the engine needs in order to ignore
+        them without ending an open episode.
+        """
+        if self._alert_engine is None:
+            return
+        for a in self._alert_engine.evaluate_dns_latency_checks(
+            dns_ms, outage_hosts=self._dns_outage_hosts(),
+        ):
+            self._surface_alert_in_app(a)
+            self._home_page.on_alert(a)
+            try:
+                persist_alert(self._store, a)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block the logger
+
+    def _dns_outage_hosts(self) -> tuple:
+        """Hosts whose being down makes slow DNS a symptom, not a finding.
+
+        The gateway plus the availability monitor's internet probes — not the
+        whole of `_host_down_since`, which has held every scanned LAN device
+        since C3 routed the LAN availability worker into the engine. One dead
+        printer must not mute DNS alerting.
+        """
+        from modules.availability_monitor import DEFAULT_TARGETS
+        # RULE-NET1: "gateway" is Optional[str] and is present-but-None on a
+        # VPN or a just-flushed ARP cache, so .get(k, "") is not enough.
+        gw = (self._net_info.get("gateway") or "") if self._net_info else ""
+        return tuple([h for h in (gw,) if h] + list(DEFAULT_TARGETS))
+
+    def _modem_signal_history(self):
+        """Return ``(prior_network_type, prior_sinr_series)`` for MODEM_SIGNAL_DROP.
+
+        Prefers the persisted 7-day `modem_signal_log` — it is the richer
+        baseline and keeps the Monitor-logging-on path behaving exactly as it
+        did — but falls back to an in-memory rolling window so the rule still
+        works with logging off, which is the default and was previously a state
+        in which it could never fire at all.  Whichever series has more samples
+        wins, so a stale single logged row cannot starve the rule of the history
+        it needs to reach `rule.min_samples`.
+
+        The logged copy is cached because `_on_modem_signal` is the only writer
+        of that table: between writes a fresh query returns identical rows, so
+        re-running it on every 30 s poll would buy nothing.
+        """
+        db_type = None
+        db_sinr: list = []
+        if self._store is not None:
+            if self._modem_hist_cache is None:
+                try:
+                    self._modem_hist_cache = self._store.query_modem_signal_log(
+                        hours=168.0, limit=500,
+                    )
+                except Exception:
+                    self._modem_hist_cache = []  # DB unavailable — use memory only
+            if self._modem_hist_cache:
+                db_type = self._modem_hist_cache[0].network_type
+                db_sinr = [
+                    v for v in (
+                        (p.nr5g_sinr if p.network_type and "5G" in p.network_type else p.lte_snr)
+                        for p in self._modem_hist_cache
+                    ) if v is not None
+                ]
+
+        mem_sinr = self._modem_sinr_series.values()
+        prior_type = db_type if db_type is not None else self._modem_prev_network_type
+        return prior_type, (db_sinr if len(db_sinr) >= len(mem_sinr) else mem_sinr)
 
     @pyqtSlot(dict)
     def _on_avail_cycle_done(self, result: dict) -> None:

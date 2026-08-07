@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.2.2**
+Current version: **v2.2.3**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -38,6 +38,25 @@ not kill the process, so "no crash" alone is not evidence of a clean run.
 | 2026-07-21/22 (v2.1.39) | ~10 h overnight (15:26–01:23), 1 coverage cycle + soak lap 1 | 13,612 interactions across mild/moderate/wild/real-mouse-wild/scan-navigate + a full mild→moderate→wild soak lap (1,498 / 1,441 / 8,351) + 2 full 62-page systematic sweeps — clean, **zero crash-log growth** (`netsentinel_crash.log` byte-identical, mtime unchanged from before the run to after). Zero exceptions in every phase. One self-healed hang (47 s stall at iter 1535) mid-wild-soak — health monitor auto-restarted the app and the phase continued cleanly to iter 8,351. Three "shutdown hang" flags in the raw phase table were a `monkey_test.py` false positive, not an app defect: the titlebar-X click missed after a Win+Down chaos action resized the window, confirmed via `netsentinel_shutdown.log` showing no `closeEvent` entry at any of those three timestamps (vs. a clean, logged 2.39 s exit for the one phase that closed normally). **Open lead, unlike the flat 07-13/14 run:** Peak RSS rose across the soak ladder — mild 690 → moderate 967 → wild 1,432 MB — and tracemalloc's Python-level snapshots don't account for the growth, so it is very likely a native Qt/matplotlib-side leak (the same invisible-to-tracemalloc class as the already-fixed command-palette/dialog leaks), not yet isolated. |
 | 2026-07-23/24 (v2.1.43, RULE-CHAOS1 catch-up for v2.1.42) | ~11.5 h across the day, final 4.5 h wild-soak phase (19:37–00:04) at full 16,200 s budget | Earlier same-day phases (12:46–14:13) hit the already-diagnosed Win+Down/minimized-window false-restart and false-"shutdown hang" patterns — the exact defects fixed mid-run by `0977625`/`a69c7aa`/`c425f9b` in this release, so this run doubled as their validation. Final full-budget wild-soak phase: 9,656 iterations, **0 crashes, 0 exceptions**, **zero growth** in both `netsentinel_crash.log` and `netsentinel_exceptions.log` (mtimes predate the phase), clean titlebar-X shutdown (1.78 s). 2 restarts, both self-healed `[health]` hang-detections (46 s+ stalls), not app faults. **RSS lead still open, unchanged by this release's fixes (none targeted memory):** 549 MB → 1,440.8 MB peak over 4.5 h, same ballpark as the 07-21/22 wild-soak peak (1,432 MB) — not worsened, not resolved. |
 | 2026-08-03/04 (v2.2.2) | ~10 h overnight (21:37–07:46, user-interrupted mid soak-lap-2-mild) | 1 coverage cycle + soak lap 1 (mild/moderate/wild, full budget) — clean, **0 crashes, 0 exceptions**, `netsentinel_crash.log` byte-identical since 2026-07-30 (zero growth). 1 self-healed restart (window/process gone at iter 1616, foreground reclaimed in 15 s), 0 hangs. **Peak RSS 1,838 MB (wild soak lap 1)** — the first run confirmed free of the `+ust` instrumentation artifact below; RSS ladder back to the 07-21/22–07-23/24 ballpark (1,432–1,441 MB), not the 2,880–3,798 MB range seen while `+ust` was armed. See closure note below the table. |
+| 2026-08-06/07 (v2.2.2, post-Signal-Quality) | ~11 h overnight (21:39–08:34, user-interrupted mid soak-lap-2-moderate) | 1 coverage cycle + soak lap 1 (full budget) + partial lap 2 — clean, **0 crashes, 0 exceptions**, `netsentinel_crash.log` byte-identical to its run-start baseline (6,784,379 bytes, mtime still 2026-07-30). Both systematic sweeps 68/68 pages. The only `netsentinel_exceptions.log` growth is `KeyboardInterrupt` frames timestamped at the user's Ctrl+C — teardown noise, not a defect. 3 restarts, all the foreground-stuck escape hatch (`f2e483b`/`0e1575d`) firing correctly after 20 consecutive focus-reclaim failures — this run is that fix's first live validation. **Read the peak-RSS column with care here:** see the measurement note below the table. |
+
+**Peak RSS is the max of a noisy oscillating signal — compare steady-state medians instead.**
+The 2026-08-06/07 run's `AI_REPORT.md` peak column suggested a +38.7% wild-soak regression
+(1,838 → 2,550 MB) against the 08-03/04 row. Medians from the same runs' `Progress iter=… rss=…MB`
+series tell a much smaller story — mild 556 → 561 MB (noise), moderate 1,086 → 1,218 MB (+12%),
+wild 1,237 → 1,488 MB (+20%) — and the *shape* is a sawtooth plateau, not a climb (moderate
+oscillates 1,014 → 1,294 → 1,002 → 1,301, nothing like the monotone +556 MB/hr signature of the
+lazy-page-timer leak). Decisively, the drift **resets lap-over-lap**: mild lap 1 median 556 MB vs
+lap 2 median 554 MB in a fresh process. That is exactly the criterion the closure note below sets
+for reopening this lead, and it is not met — so it stays closed. This is the same
+peak-vs-plateau trap already recorded for the 2026-07-31 run; prefer medians for any future
+run-over-run comparison.
+
+One tempting hypothesis was killed by measurement rather than code reading: that the Signal
+Quality workstream's default-on alert rules exploded the unacked backlog, making the Home card's
+new per-refresh ranking O(N) over a growing N. Only **9 alerts fired across the entire 11-hour
+run**, and the unacked backlog is **128 rows** — ranking 128 rows every 30 s is free. Check the
+`alert_fired` table before building on any alert-volume theory.
 
 **The RSS lead carried by the 07-21/22 and 07-23/24 rows is closed as of v2.2.0.** Root cause
 was never navigation, native Qt/matplotlib retention, or Network Map: `ui/nav/lazy_page.py`'s

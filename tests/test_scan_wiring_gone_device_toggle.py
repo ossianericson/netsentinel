@@ -20,6 +20,10 @@ from modules.device_tracker import TrackedDevice, TrackerResult
 class _FakeDeviceTracker:
     def __init__(self, store) -> None:
         self._store = store
+        self.evidence = None
+
+    def set_evidence(self, evidence):
+        self.evidence = evidence
 
     def process_scan(self, devices, known=None):
         return TrackerResult(gone_devices=[

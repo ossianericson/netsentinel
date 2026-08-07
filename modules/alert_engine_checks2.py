@@ -21,6 +21,33 @@ from typing import Dict, List
 
 from modules.alert_types import AlertFired
 
+# RTT_ANOMALY's absolute floor — applied in Phase 6, measured in Phase 4.
+#
+# Fixing the maturity gate (see alert_baseline._refresh_host_baselines) took the
+# reference database from 0 to 21 of 26 hosts mature, and a very stable host
+# learns a very tight mean+2*sigma: 1.2 ms on one host, 2.0 ms on the gateway.
+# Without a floor the gateway is "responding slower than its usual pattern" on
+# any 3 ms reply — technically true, and a claim no user would call real.
+#
+# Measured over 6.9 days, upper bound with no cooldown applied:
+#
+#                          | no floor  | with this floor
+#   ungated (legacy path)  | 121.3/day |  55.9/day
+#   v2 tier gate           |   2.48/day|   0.15/day
+#
+# 150 ms is not invented — it is availability_monitor.DEFAULT_DEGRADED_THRESHOLD,
+# the app's existing definition of a slow host, and the same shape as
+# _DNS_ABSOLUTE_FLOOR_MS in alert_engine_checks5.py. It is a FLOOR and never a
+# ceiling, so a host that normally answers in 600 ms keeps its higher learned
+# threshold and the rule cannot become a mute button.
+#
+# This deliberately changes semantics two tests in
+# tests/test_alert_engine_v6_sprint2.py used to pin (mean 20 / sigma 5, observed
+# 45 ms, fired). Both were rewritten as a pair asserting each half — below the
+# floor never fires, above the floor AND above mean+sigma*stddev does — because
+# the semantics are the thing being changed, not an obstacle to it.
+_RTT_ANOMALY_FLOOR_MS = 150.0
+
 # IOT_BEHAVIOR — modules.iot_baseline.IoTAlert.severity -> AlertFired.severity
 _IOT_SEVERITY_MAP = {
     "CRITICAL": "CRITICAL",
@@ -57,7 +84,12 @@ class _AlertChecksMixin2:
                 if metric is None or not metric.is_valid or metric.days_covered < 7:
                     continue
 
-                threshold = metric.anomaly_threshold(rule.sigma)
+                # A FLOOR, never a ceiling: a host that normally answers in
+                # 600 ms keeps its higher learned threshold, so learning can
+                # still only make the rule quieter about that host, never
+                # louder. See _RTT_ANOMALY_FLOOR_MS.
+                threshold = max(metric.anomaly_threshold(rule.sigma),
+                                _RTT_ANOMALY_FLOOR_MS)
                 if rtt > threshold:
                     alert = self._fire_if_cooled(
                         rule, host, now,

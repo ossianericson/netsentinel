@@ -33,12 +33,23 @@ def record_rtt(store: Any, host: str, rtt_ms: float, **kwargs: Any) -> None:
 def persist_alert(store: Any, alert: Any) -> int:
     """Persist a fired alert object (wraps MetricStore.record_alert_fired).
 
-    Unpacks the AlertFired dataclass so callers pass the whole object instead of
-    repeating its six fields at every site. Returns the new alert row id.
+    **The single choke point for writing an alert.** Unpacks the whole
+    AlertFired dataclass so callers pass the object rather than repeating its
+    fields — and so a field added to the dataclass reaches history everywhere
+    at once. Schema v22 widened the row from 6 of 12 fields to all of them;
+    before that, `app.py` also carried eight hand-written
+    `store.record_alert_fired(...)` calls, so any widening would have landed on
+    some alerts and not others.
+
+    Returns the new alert row id.
     """
     return store.record_alert_fired(
         alert.rule_name, alert.host, alert.severity, alert.message,
         ts=alert.ts, rule_type=alert.rule_type,
+        value=getattr(alert, "value", None),
+        confidence=getattr(alert, "confidence", None),
+        evidence_json=getattr(alert, "evidence_json", None),
+        is_resolution=bool(getattr(alert, "is_resolution", False)),
     )
 
 

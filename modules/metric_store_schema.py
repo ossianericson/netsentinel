@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 21
+_SCHEMA_VERSION = 22
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -84,7 +84,23 @@ CREATE TABLE IF NOT EXISTS known_device (
     -- resolution attempt for this MAC (NULL = never actively resolved).
     -- Distinct from last_seen, which updates on every scan regardless of
     -- whether resolution ran that cycle.
-    hostname_resolved_at INTEGER
+    hostname_resolved_at INTEGER,
+    -- Presence episode state (schema v22) — 'present' | 'absent' | NULL.
+    -- gone_notified_ts is when LEFT was last emitted for the CURRENT absence,
+    -- so one absence episode produces exactly one LEFT. It replaces a
+    -- query_device_events() lookback that ran once per absent device per scan
+    -- (see DeviceTracker.process_scan).
+    presence_state   TEXT,
+    gone_notified_ts INTEGER,
+    -- Materialised device_importance.Tier (schema v22) — a CACHE for display
+    -- and claim ranking (modules/relevance.py), refreshed set-wise once per
+    -- scan by refresh_importance_tiers(). It is deliberately NOT the alert
+    -- gate's source: get_device_importance_tier() still recomputes from the
+    -- live row every time, because the stored columns this model replaced were
+    -- wrong for 8 of 13 devices on the reference network and a cache of a
+    -- verdict is only ever as fresh as its last write.
+    importance_tier   TEXT,
+    importance_source TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_known_device_last_seen ON known_device(last_seen DESC);
 
@@ -233,10 +249,34 @@ CREATE TABLE IF NOT EXISTS alert_fired (
     acked_comment TEXT,
     escalated     INTEGER NOT NULL DEFAULT 0,
     -- Stable rule-type enum for badge/query filtering (schema v19)
-    rule_type     TEXT    NOT NULL DEFAULT ''
+    rule_type     TEXT    NOT NULL DEFAULT '',
+    -- Signal Quality Phase 6 (schema v22) — the six AlertFired fields
+    -- record_alert_fired() silently dropped. Without them history could not
+    -- tell a resolution from an alert except by inferring it from
+    -- severity = 'HEALTHY', and nothing recorded WHY a claim was made.
+    --   confidence    — evidence.Evidence.confidence; ordering aid, not a
+    --                   probability, and never a severity (RULE-A3 unaffected)
+    --   evidence_json — the corroboration behind the claim, as JSON
+    --   dedup_key     — "<rule_name>::<host>", the AlertEngine._last_fired key.
+    --                   Indexed so cooldown state survives a restart with one
+    --                   read instead of a second persistence path.
+    --   resolved_ts   — stamped on the OPENING row when its resolution lands,
+    --                   so an outage's duration is readable without pairing
+    --                   rows by hand
+    --   is_resolution — explicit, replacing the severity inference
+    --   value         — the triggering metric value
+    confidence    REAL,
+    evidence_json TEXT,
+    dedup_key     TEXT,
+    resolved_ts   INTEGER,
+    is_resolution INTEGER NOT NULL DEFAULT 0,
+    value         REAL
 );
 CREATE INDEX IF NOT EXISTS idx_af_ts    ON alert_fired(ts);
 CREATE INDEX IF NOT EXISTS idx_af_acked ON alert_fired(acked_ts);
+-- idx_af_dedup is created in _POST_MIGRATION_INDEXES, not here: this script
+-- runs before the ALTER TABLEs, so on an upgrading database dedup_key does not
+-- exist yet and executescript() would raise "no such column".
 
 -- Network grade history — one row per grading run (schema v8; append-only since V6 Sprint 1)
 CREATE TABLE IF NOT EXISTS grade_result (
@@ -387,6 +427,27 @@ _MIGRATIONS = [
     "ALTER TABLE alert_fired ADD COLUMN rule_type TEXT NOT NULL DEFAULT ''",
     # schema v21 — hostname TTL cache (Part 2/L8)
     "ALTER TABLE known_device ADD COLUMN hostname_resolved_at INTEGER",
+    # schema v22 — Signal Quality Phase 6: the six AlertFired fields
+    # record_alert_fired() dropped, plus presence episodes and the
+    # materialised importance tier. See the DDL above for what each carries.
+    "ALTER TABLE alert_fired ADD COLUMN confidence REAL",
+    "ALTER TABLE alert_fired ADD COLUMN evidence_json TEXT",
+    "ALTER TABLE alert_fired ADD COLUMN dedup_key TEXT",
+    "ALTER TABLE alert_fired ADD COLUMN resolved_ts INTEGER",
+    "ALTER TABLE alert_fired ADD COLUMN is_resolution INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE alert_fired ADD COLUMN value REAL",
+    "ALTER TABLE known_device ADD COLUMN presence_state TEXT",
+    "ALTER TABLE known_device ADD COLUMN gone_notified_ts INTEGER",
+    "ALTER TABLE known_device ADD COLUMN importance_tier TEXT",
+    "ALTER TABLE known_device ADD COLUMN importance_source TEXT",
+]
+
+# Indexes that only exist once a v22 migration column does. The _DDL block
+# above creates them for a fresh database, but CREATE INDEX in that script runs
+# BEFORE the ALTER TABLEs on an upgrading one, where the column does not exist
+# yet — so an upgrading database would silently never get the index.
+_POST_MIGRATION_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_af_dedup ON alert_fired(dedup_key, ts)",
 ]
 
 
@@ -399,6 +460,11 @@ def apply_sqlite_schema(conn: sqlite3.Connection, write_lock: threading.Lock) ->
                 conn.execute(col_def)
             except sqlite3.OperationalError:
                 pass  # column already exists
+        for index_def in _POST_MIGRATION_INDEXES:
+            try:
+                conn.execute(index_def)
+            except sqlite3.OperationalError:
+                pass  # index already exists, or its column migration was skipped
         conn.execute(
             "INSERT INTO meta(key, value) VALUES(?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -540,6 +606,10 @@ class KnownDevice:
     inferred_role: Optional[str] = None
     alert_opt_in: bool = False
     hostname_resolved_at: Optional[int] = None
+    presence_state: Optional[str] = None
+    gone_notified_ts: Optional[int] = None
+    importance_tier: Optional[str] = None
+    importance_source: Optional[str] = None
 
 
 @dataclass

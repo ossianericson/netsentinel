@@ -79,10 +79,15 @@ def _smoke_test() -> None:
         "modules.scheduler",
         "ui.topology_widget",
         "modules.device_classifier",
+        "modules.device_identity",
+        "modules.device_importance",
+        "modules.device_baseline",
+        "modules.evidence",
         "modules.device_admin",
         "modules.cve_admin",
         "modules.scan_persistence",
         "modules.scan_status_md",
+        "modules.relevance",
         "modules.risk_scorer",
         "modules.syn_scanner",
         "modules.cve_lookup",
@@ -103,6 +108,8 @@ def _smoke_test() -> None:
         "modules.speed_tester_servers",
         "modules.firewall_rules",
         "modules.alert_engine",
+        "modules.alert_engine_cycle",
+        "modules.alert_engine_checks5",
         "modules.service_escalation",
         "modules.proactive_digest",
         "modules.digest_bullets",
@@ -219,7 +226,9 @@ def _gather_alert_audit_findings() -> list:
         audit_alert_config, audit_static_coverage, audit_source_tree,
         channels_from_settings,
     )
-    from modules.alert_suppressor import _default_rules, EscalationPolicy
+    from modules.alert_suppressor import (
+        _default_rules, default_enabled, EscalationPolicy,
+    )
     from modules.alert_sensitivity import apply_sensitivity, DEFAULT_SENSITIVITY
     from modules.alert_engine import rule_settings_key as _rk
 
@@ -237,7 +246,7 @@ def _gather_alert_audit_findings() -> list:
 
     rules = _default_rules()
     for r in rules:
-        r.enabled = qs.value(_rk(r.name), False, type=bool)
+        r.enabled = qs.value(_rk(r.name), default_enabled(r.name), type=bool)
     sensitivity = qs.value("alerts/sensitivity", DEFAULT_SENSITIVITY, type=str)
     apply_sensitivity(rules, sensitivity)
 
@@ -499,6 +508,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     import time as _time
     from PyQt6.QtCore import QSettings
     from modules.alert_types import AlertFired
+    from modules.scan_persistence import persist_alert
     from modules.service_escalation import (
         ServiceEscalationTracker, layer_to_message, parse_service_key,
         to_alert_severity,
@@ -514,7 +524,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
         # this sprint, so get_recent_alerts()-backed digest bullets would
         # otherwise always report "nothing happened" in the live app.
         try:
-            store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+            persist_alert(store, a)
         except Exception:
             pass  # non-fatal — persistence failure must not block notification delivery
 
@@ -662,6 +672,14 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
 
     avail_worker.cycle_done.connect(_on_cycle)
 
+    # Signal Quality Phase 4 (C3) — this worker only ever monitors DEFAULT_TARGETS
+    # (8.8.8.8 / 1.1.1.1); the worker that watches the LAN, including the gateway,
+    # is built per-scan in ui/scan_wiring.py and until now reached only HistoryPage
+    # and MQTT, so losing the gateway produced history but never an alert. Publish
+    # the handler so that worker feeds this same engine instance — one hookup, so
+    # HOST_DOWN's edge trigger and outage dedup stay shared rather than duplicated.
+    window._alert_cycle_handler = _on_cycle
+
 
 def _wire_speedtest_scheduling(window, worker, alerts, store):
     """
@@ -671,10 +689,12 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
     alert flows through the same window._surface_alert_in_app() +
     window._home_page.on_alert() path every other evaluate_* caller uses.
 
-    Sprint 4: also persists via store.record_alert_fired() so
+    Sprint 4: also persists via scan_persistence.persist_alert() so
     modules.digest_bullets._speed_trend_bullet() has overnight BASELINE_DROP
     history to summarize in the Morning Briefing.
     """
+    from modules.scan_persistence import persist_alert
+
     def _on_probe_done(result) -> None:
         fired = alerts.evaluate_baseline_metrics(
             result.download_mbps, result.prior_downloads,
@@ -684,7 +704,7 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
             window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
 
@@ -711,12 +731,14 @@ def _wire_port_sweep(window, worker, alerts, store, cert_worker):
     3.3 auto-TLS enrolment (hosts with 443/8443 open feed the Cert page)
     and 3.5 scan-registry freshness (reuses the "Port Scan (TCP)" label
     already shown on the Security Overview Scan Status card)."""
+    from modules.scan_persistence import persist_alert
+
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_port_sweep_checks(report):
             window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         try:
@@ -741,12 +763,14 @@ def _wire_port_sweep(window, worker, alerts, store, cert_worker):
 def _wire_cve_recheck(window, worker, alerts, store):
     """V6 Sprint 3.2/3.5 — scheduled CVE re-check for already-fingerprinted
     services, diffed against cve_lifecycle for NEW_CVE alerts."""
+    from modules.scan_persistence import persist_alert
+
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_cve_recheck_checks(report):
             window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._nav_set_scan_state(
@@ -764,12 +788,14 @@ def _wire_cve_recheck(window, worker, alerts, store):
 def _wire_exposure_watch(window, worker, alerts, store):
     """V6 Sprint 3.4/3.5 — weekly internet-exposure check, diffed against the
     prior week's snapshot for NEW_EXPOSURE alerts."""
+    from modules.scan_persistence import persist_alert
+
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_exposure_checks(report):
             window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._nav_set_scan_state(
@@ -790,12 +816,14 @@ def _wire_arp_watch(window, worker, alerts, store):
     fixed interval, independent of whether the ARP Spoof Watch page is open."""
     from ui.styles import GREEN, RED
 
+    from modules.scan_persistence import persist_alert
+
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_arp_watch_checks(report):
             window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._set_flyout_dot("ARP Spoof Watch", RED if report.events else GREEN)
@@ -814,12 +842,14 @@ def _wire_dhcp_watch(window, worker, alerts, store):
     open."""
     from ui.styles import GREEN, RED
 
+    from modules.scan_persistence import persist_alert
+
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_dhcp_watch_checks(report):
             window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._set_flyout_dot("DHCP Rogue Monitor", RED if report.rogue_offers else GREEN)
@@ -837,12 +867,14 @@ def _wire_trend_forecast(window, worker, alerts, store):
     completed report is evaluated against the TREND_FORECAST rule; fired
     early-warning alerts flow through the same toast/home-page/persist path
     every other evaluate_* caller uses."""
+    from modules.scan_persistence import persist_alert
+
     def _on_probe_done(report) -> None:
         for a in alerts.evaluate_trend_checks(report):
             window._surface_alert_in_app(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
 
@@ -1084,7 +1116,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.2.2")
+    app.setApplicationVersion("2.2.3")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1235,7 +1267,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.2.2")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.2.3")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1346,10 +1378,13 @@ def main():
     # Restore user-configured rule enabled states from QSettings.
     # All rules default to disabled (opt-in); missing key → treat as disabled.
     from modules.alert_engine import rule_settings_key as _rk
+    from modules.alert_suppressor import default_enabled as _rule_default
     _rule_qs = QSettings("NetSentinel", "NetSentinel")
     _rules = alerts.get_rules()
     for _r in _rules:
-        _r.enabled = _rule_qs.value(_rk(_r.name), False, type=bool)
+        _r.enabled = _rule_qs.value(
+            _rk(_r.name), _rule_default(_r.name), type=bool
+        )
 
     # V6 Sprint 5.4 — global alert-fatigue guardrail. Scales every rule's
     # noise-relevant thresholds by the user's chosen sensitivity; default
@@ -1376,6 +1411,16 @@ def main():
     except Exception:
         pass  # non-fatal — holds simply start empty this session
 
+    # Signal Quality Phase 6 — cooldown dedup across restarts, the same defect
+    # one level down. _last_fired is in-memory too, so a still-true condition
+    # re-announced itself on every launch regardless of its cooldown. Windowed
+    # on the longest cooldown any built-in rule uses (86400 s, Cert Expiring),
+    # so the seed stays bounded.
+    try:
+        alerts.load_last_fired(store.get_last_fired_by_rule_host(max_age_s=86400))
+    except Exception:
+        pass  # non-fatal — dedup simply starts empty this session
+
     from modules.notification_router import NotificationRouter
     notif_router = NotificationRouter()
 
@@ -1395,6 +1440,131 @@ def main():
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
     alerts.set_alert_scope_checker(store.is_device_alert_in_scope)
+
+    # ── Signal Quality Phase 2 — device importance tiers ─────────────────────
+    # One-time role migration. The alert gate reads known_device.inferred_role,
+    # and the pre-Phase-2 "10+ scans and a stable IP" catch-all wrote it wrong
+    # for 9 of 30 rows on the reference network. Those values cannot self-heal:
+    # update_device_stability() never clears a role, and a device that is never
+    # seen again is never re-evaluated at all. Recomputes from stored columns
+    # only — no network access — and runs once per install.
+    #
+    # Deliberately runs without RoleEvidence: net_info is not resolved this early
+    # in startup, and fetching it here would put real work on the main thread for
+    # no lasting gain. Inference falls back to the .1/.254 gateway heuristic, and
+    # the first scan re-derives every present device's role with real evidence.
+    _sq_settings = QSettings("NetSentinel", "NetSentinel")
+    import logging as _sq_logging
+    _sq_log = _sq_logging.getLogger("netsentinel.signal_quality")
+    # Its own logger + FileHandler under get_app_data_dir(), independent of root
+    # logging config — nothing in the app calls logging.basicConfig(), so a bare
+    # log.info() is dropped at the default WARNING root level (same reason
+    # ui/shutdown.py and ui/styles.py each carry their own handler). These lines
+    # are the only durable record of a migration that DELETES rows from the
+    # user's device inventory, so they have to actually land.
+    try:
+        from modules.utils import get_app_data_dir as _sq_dir
+        if not _sq_log.handlers:
+            _sq_h = _sq_logging.FileHandler(
+                str(_sq_dir() / "netsentinel_signal_quality.log"),
+                mode="a", encoding="utf-8",
+            )
+            _sq_h.setFormatter(_sq_logging.Formatter("%(asctime)s %(message)s"))
+            _sq_log.addHandler(_sq_h)
+            _sq_log.setLevel(_sq_logging.INFO)
+            _sq_log.propagate = False
+    except Exception:
+        pass  # instrumentation is best-effort; must never block startup
+    # Both run-once flags are scoped to the database they migrated, not just to
+    # the user. QSettings is per-user but MetricStore._default_path() is per
+    # install path, so a source run and the installed app use different
+    # databases — with a bare key, whichever launched first marked the migration
+    # done and the other skipped it permanently. See device_stability.migration_key().
+    from modules.device_stability import migration_key as _sq_key
+    _sq_db = store.get_db_path()
+    _sq_roles_key = _sq_key("roles_recomputed_v2", _sq_db)
+    _sq_purge_key = _sq_key("non_devices_purged_v1", _sq_db)
+    if not _sq_settings.value(_sq_roles_key, False, type=bool):
+        try:
+            from modules.device_stability import recompute_roles
+            _changed = recompute_roles(store)
+            _sq_settings.setValue(_sq_roles_key, True)
+            _sq_log.info(
+                "recomputed inferred_role for %d device(s)", len(_changed)
+            )
+        except Exception as _exc:
+            _sq_log.warning("role recompute skipped (%s)", _exc)
+
+    # One-time purge of rows that are not endpoints at all. Runs AFTER the role
+    # recompute above, deliberately: the recompute's device count is the number
+    # verified against a byte-copy of the reference database, and purging first
+    # would silently change it. Nothing in the tree deleted a known_device row
+    # before this, so Phase 1 (stop writing multicast rows) and Phase 2 (stop
+    # them holding a role) both left the SSDP group physically in the inventory.
+    if not _sq_settings.value(_sq_purge_key, False, type=bool):
+        try:
+            from modules.device_stability import purge_non_devices
+            _purged = purge_non_devices(store)
+            _sq_settings.setValue(_sq_purge_key, True)
+            _sq_log.info(
+                "purged %d non-device row(s) from known_device%s",
+                len(_purged),
+                f": {', '.join(sorted(_purged))}" if _purged else "",
+            )
+        except Exception as _exc:
+            _sq_log.warning("non-device purge skipped (%s)", _exc)
+
+    # Signal Quality Phase 6 — materialise device_importance.Tier into
+    # known_device.importance_tier so modules/relevance.py can rank a whole
+    # claim list from one read instead of a query per row. Runs at startup as
+    # well as per scan, so an inventory that is never rescanned still ranks.
+    #
+    # RECOMPUTED, never trusted: the migration re-derives every tier from the
+    # live row. That is the same discipline recompute_roles() above applies for
+    # the same reason — the stored values this model replaced were wrong for 8
+    # of 13 devices, so a stored tier is a starting point for correction, never
+    # an input to it. Unlike the two migrations above this is NOT run-once: it
+    # is a cache refresh, and it must re-run whenever the rows move.
+    try:
+        _sq_tiers = store.refresh_importance_tiers()
+        if _sq_tiers:
+            _sq_log.info("refreshed importance tier for %d device(s)", _sq_tiers)
+    except Exception as _exc:
+        _sq_log.warning("importance tier refresh skipped (%s)", _exc)
+
+    # The tier gate itself stays behind the experimental flag (RULE-EXP1) — the
+    # legacy boolean checker above remains wired and selected by default until
+    # the program's acceptance criteria pass in the live app.
+    # Logged either way: the flag is the only thing selecting between two very
+    # different alert-volume regimes (measured 91.9/day vs 6.6/day), and with no
+    # UI and no log line there was no way to confirm from a running app which
+    # one was actually wired — RULE-T6 needs an observable.
+    _sq_v2 = _sq_settings.value("experimental/signal_quality_v2", False, type=bool)
+    _sq_baselines = None
+    if _sq_v2:
+        alerts.set_device_tier_provider(store.get_device_importance_tier)
+        # ── Signal Quality Phase 3 ────────────────────────────────────────────
+        # Phase 2 changed *who* the app speaks about; Phase 3 changes how often
+        # it repeats itself about them. HOST_DOWN was level-triggered — 1,637
+        # firings against 164 resolutions, ~240 alerts for one overnight outage
+        # — and the same outage was reported a second time under LOSS_THRESHOLD.
+        from modules.device_baseline import DeviceBaselines
+        from modules.evidence import DEFAULT_MIN_CONSECUTIVE
+        alerts.set_availability_edge_trigger(DEFAULT_MIN_CONSECUTIVE)
+        alerts.set_duplicate_outage_suppression(True)
+        # Phase 3b — per-device normals for the monitor. Constructed here beside
+        # the MetricStore (ARCH RULE 2) and shared with the worker rebuilt after
+        # each scan in ui/scan_wiring.py, so both use one cache.
+        from modules.availability_monitor import DEFAULT_DEGRADED_THRESHOLD
+        _sq_baselines = DeviceBaselines(
+            store, default_degraded_ms=DEFAULT_DEGRADED_THRESHOLD
+        )
+        _sq_log.info(
+            "alert scope gate: importance tiers + edge-triggered availability "
+            "(signal_quality_v2 ON)"
+        )
+    else:
+        _sq_log.info("alert scope gate: legacy inferred_role boolean (signal_quality_v2 OFF)")
 
     # Sprint 5 — wire the previously-dead record_suppression() plumbing so
     # suppressed alerts actually appear in the maintenance suppression log.
@@ -1423,7 +1593,20 @@ def main():
         pass  # optional dep — not installed; Deco hardware plugin will surface the error gracefully
 
     _splash_msg("Starting background workers…")
-    avail_worker = AvailabilityWorker(store=store, interval_s=60)
+    from modules.availability_monitor import DEFAULT_TARGETS
+    avail_worker = AvailabilityWorker(
+        store=store, interval_s=60,
+        threshold_provider=(
+            _sq_baselines.degraded_threshold if _sq_baselines else None
+        ),
+        confirm_down=_sq_baselines is not None,
+        # JITTER_HIGH's only data source. This worker monitors DEFAULT_TARGETS
+        # (8.8.8.8 / 1.1.1.1) and nothing else, so measuring jitter here is two
+        # hosts' worth of extra probes and gives the rule the internet-path
+        # stability signal it is actually about. The LAN worker nominates the
+        # gateway alone, for the same bounded reason (ui/scan_wiring.py).
+        jitter_hosts=DEFAULT_TARGETS,
+    )
     avail_worker.start()
 
     cert_worker = CertWorker(store=store, interval_s=3600)
@@ -1599,6 +1782,11 @@ def main():
                        cve_recheck_worker, exposure_watch_worker,
                        arp_watch_worker, dhcp_watch_worker, rest_api_worker):
         window.register_external_worker(_bg_worker)
+
+    # Signal Quality Phase 3b — ui/scan_wiring.py rebuilds the availability
+    # worker with per-device targets after each scan; it reads this to keep the
+    # same baseline cache rather than starting a cold one every scan.
+    window._device_baselines = _sq_baselines
 
     _wire_logging(window, passive_observer_worker, snmp_trap_worker, syslog_worker)
     _wire_notifications(window, alerts, notif_router, maint_manager, report_worker)

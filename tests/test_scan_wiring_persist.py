@@ -29,11 +29,16 @@ class _FakeStore:
     def __init__(self):
         self.fired_alerts: list = []
 
-    def record_alert_fired(self, rule_name, host, severity, message, ts, rule_type):
-        self.fired_alerts.append(
-            {"rule_name": rule_name, "host": host, "severity": severity,
-             "message": message, "ts": ts, "rule_type": rule_type}
-        )
+    def record_alert_fired(self, rule_name, host, severity, message, ts,
+                           rule_type, **extra):
+        # **extra absorbs the schema-v22 fields persist_alert() now passes
+        # (value / confidence / evidence_json / is_resolution). Without it the
+        # TypeError is swallowed by the caller's non-fatal except and this test
+        # reports "nothing was persisted" for the wrong reason.
+        row = {"rule_name": rule_name, "host": host, "severity": severity,
+               "message": message, "ts": ts, "rule_type": rule_type}
+        row.update(extra)
+        self.fired_alerts.append(row)
         return len(self.fired_alerts)
 
 
@@ -43,6 +48,10 @@ class _FakeDeviceTracker:
 
     def __init__(self, store):
         self._store = store
+        self.evidence = None
+
+    def set_evidence(self, evidence):
+        self.evidence = evidence
 
     def process_scan(self, devices, known=None):
         return TrackerResult(new_devices=[], gone_devices=[])

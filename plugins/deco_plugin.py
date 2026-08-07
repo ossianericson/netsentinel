@@ -117,12 +117,32 @@ def _fmt_err(exc: Exception) -> str:
     status = getattr(getattr(exc, 'response', None), 'status_code', None)
     if status in (401, 403):
         return 'AUTH: ' + msg
-    if any(w in type(exc).__name__ for w in ('Connection', 'Timeout')):
-        return 'NET: ' + msg
+    # Walk the __cause__/__context__ chain, not just the outermost type: a
+    # transport failure is routinely re-raised as a library-specific error
+    # whose own type name says nothing, and whose *message* may be phrased in
+    # auth terms. A chained ConnectionError/Timeout is decisive evidence that
+    # nothing answered.
+    _seen: set = set()
+    _cur: 'BaseException | None' = exc
+    while _cur is not None and id(_cur) not in _seen:
+        _seen.add(id(_cur))
+        if any(w in type(_cur).__name__ for w in ('Connection', 'Timeout')):
+            return 'NET: ' + msg
+        _cur = _cur.__cause__ or _cur.__context__
     lm = msg.lower()
     # Check network errors BEFORE auth keywords — a timeout inside an auth call
     # (e.g. "Deco login failed … Read timed out") must be classified as NET, not AUTH.
-    if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network is')):
+    #
+    # The urllib3/requests signatures matter as much as the plain-English ones:
+    # a blocked socket reports "Max retries exceeded"/"Failed to establish a new
+    # connection", never "refused", and the trailing OS strerror is LOCALISED
+    # (Swedish on the machine where this was found), so an English-keyword-only
+    # net misses the whole class. Found live: criterion 5, 2026-08-06.
+    if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route',
+                             'network is', 'max retries exceeded',
+                             'failed to establish a new connection',
+                             'newconnectionerror', 'connectionpool',
+                             'cannot reach', 'no answer on')):
         return 'NET: ' + msg
     if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
         return 'AUTH: ' + msg
@@ -153,7 +173,16 @@ def get_status() -> dict:
             "connected_clients": len(clients),
             "mesh_nodes":        len(units),
             "extra": {
-                "nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip, "role": u.role}
+                # "online" is what MESH_DEGRADED counts — without it every node
+                # reads as up and the rule can never fire.
+                #
+                # getattr, not u.online: a plugin resolves modules.deco_client
+                # from whichever NetSentinel install it is running under, so it
+                # must not hard-require a field a older client may not carry.
+                # Default True for the same reason _node_online() does — absent
+                # evidence must not manufacture an outage.
+                "nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip,
+                           "role": u.role, "online": getattr(u, "online", True)}
                           for u in units],
             },
         }
@@ -224,7 +253,9 @@ if "--netsentinel" in _sys.argv:
             "wan_ip": None, "uptime_sec": None, "download_mbps": None,
             "upload_mbps": None, "signal_dbm": None,
             "connected_clients": len(_client_list), "mesh_nodes": len(_units),
-            "extra": {"nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip, "role": u.role}
+            "extra": {"nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip,
+                                 "role": u.role,
+                                 "online": getattr(u, "online", True)}
                                  for u in _units]},
         }
         _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": _host,

@@ -51,6 +51,7 @@ from ui.widgets.hub_card import (
     _load_instances, _save_instances,
     _is_consented, _record_consent,
     _migrate_stale_paths,
+    refresh_stale_bundled_plugins,
     _load_last_result, _save_last_result,
     _record_success, _record_error, _reset_health,
     _load_instance_config,
@@ -74,6 +75,11 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
 
     # data dict has "_path" embedded so dashboard knows which plugin
     plugin_result     = pyqtSignal(dict)
+    # Signal Quality Phase 4 (C4) — one per poll outcome, both directions:
+    # (instance_id, unreachable, label, reason). Drives INFRA_UNREACHABLE's
+    # EvidenceGate, which needs the healthy observations too in order to end an
+    # episode; without them a recovered device would stay "down" forever.
+    plugin_reachability = pyqtSignal(str, bool, str, str)
     plugin_page_added = pyqtSignal(str, str)   # (script_path, display_label)
     plugin_page_removed = pyqtSignal(str)      # script_path
     plugin_renamed    = pyqtSignal(str, str, str)  # (path, old_label, new_label)
@@ -92,15 +98,26 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
 
         self._build_ui()
 
+        # Started on show, not here: this page is constructed eagerly by the lazy
+        # chunk-builder, so a timer started in __init__ ticks all session on a page
+        # the user may never open (RULE-WIN18).
         self._tick_timer = QTimer(self)
         self._tick_timer.setInterval(30_000)
         self._tick_timer.timeout.connect(self._tick_timestamps)
-        self._tick_timer.start()
 
         self._file_watcher = QFileSystemWatcher(self)
         self._file_watcher.fileChanged.connect(self._on_plugin_file_changed)
 
         self._start_all_poll_workers()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._tick_timer.isActive():
+            self._tick_timer.start()
+
+    def hideEvent(self, event) -> None:
+        self._tick_timer.stop()
+        super().hideEvent(event)
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -386,6 +403,21 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
 
     def _start_all_poll_workers(self) -> None:
         self._migrate_stale_paths()
+        # An upgrade that ships an updated bundled plugin leaves the deployed
+        # AppData copy stale, so verify_signature() reports a hash mismatch and
+        # _start_poll_worker_inst() refuses to build the worker — that device
+        # then stops being polled entirely, with no surface outside its card.
+        # Repair before any worker starts, so the restored file is what gets run.
+        try:
+            restored = refresh_stale_bundled_plugins(self._bundled_plugins_dir())
+            if restored:
+                self._set_status(
+                    "Updated " + ", ".join(restored) + " to this version "
+                    "(the previous copy was kept as .stale.bak).",
+                    error=False,
+                )
+        except Exception:
+            pass  # non-fatal — a failed repair must not stop workers starting
         for i, inst in enumerate(_load_instances()):
             inst_id = inst["id"]
             _t1 = QTimer(self)
@@ -579,15 +611,25 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         err_in_data = (data.get("status") or {}).get("extra", {}).get("error", "")
         if err_in_data:
             h = _record_error(instance_id, err_in_data)
+            self._emit_reachability(instance_id, not err_in_data.startswith("AUTH:"), err_in_data)
             if h.get("disabled"):
                 self._stop_poll_worker(instance_id)
         else:
             _record_success(instance_id)
+            self._emit_reachability(instance_id, False, "")
         card = self._cards.get(instance_id)
         if card:
             card.update_result(data, ts)
             card.refresh_health_ui()
         self.plugin_result.emit(data)
+
+    def _emit_reachability(self, instance_id: str, unreachable: bool, reason: str) -> None:
+        """Report one poll outcome for INFRA_UNREACHABLE evaluation."""
+        card = self._cards.get(instance_id)
+        label = getattr(card, "_label", "") if card else ""
+        self.plugin_reachability.emit(
+            instance_id, unreachable, label or instance_id, reason,
+        )
 
     def _instance_id_for_path(self, path: str) -> "str | None":
         for iid, card in self._cards.items():
@@ -612,6 +654,11 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
 
     def _on_plugin_error(self, instance_id: str, msg: str) -> None:
         h = _record_error(instance_id, msg)
+        # An AUTH failure means the device answered and rejected us — that is a
+        # credentials problem, not an unreachable one. Mirrors _record_error()'s
+        # own carve-out; without it a mistyped password would raise "your modem
+        # is not responding".
+        self._emit_reachability(instance_id, not msg.startswith("AUTH:"), msg)
         card = self._cards.get(instance_id)
         if card:
             classified = _classify_error(msg)

@@ -113,15 +113,50 @@ def _date_label(ts: float) -> str:
 # ── Event data class ───────────────────────────────────────────────────────────
 
 class _Ev:
-    __slots__ = ("ts", "source", "title", "detail", "severity")
+    # `host` (Signal Quality Phase 5) is the device this event is about, when
+    # the source knows one. It is not displayed — it exists so the 200-row cap
+    # can weigh a claim by the device's importance tier (see _fetch_events).
+    __slots__ = ("ts", "source", "title", "detail", "severity", "host")
 
     def __init__(self, ts: float, source: str, title: str,
-                 detail: str = "", severity: str = "info"):
+                 detail: str = "", severity: str = "info", host: str = ""):
         self.ts       = ts
         self.source   = source
         self.title    = title
         self.detail   = detail
         self.severity = severity
+        self.host     = host
+
+
+# `_Ev.severity` is this page's own display vocabulary, not the alert engine's:
+# rows built from device events and log outages use "warn"/"critical" directly,
+# while rows built from alert_fired lowercase whatever the engine wrote. Mapping
+# it here keeps modules/relevance.py free of a third vocabulary (RULE-A3) —
+# anything unlisted falls through to relevance's own neutral default rather than
+# being guessed at.
+_EV_SEVERITY_TO_CLAIM = {"warn": "WARNING", "warning": "WARNING"}
+
+
+def _ev_to_claim(ev: "_Ev", tiers=None):
+    """Adapt one timeline row to a relevance.Claim.
+
+    A page-local adapter because `_Ev` is a page-local shape — it merges six
+    unrelated sources (device events, alerts, CVEs, speed tests, inventory
+    changes, logger outages) into one row type that matches neither
+    `alert_fired` nor `device_event`.
+    """
+    from modules.relevance import Claim
+    sev = str(getattr(ev, "severity", "") or "").lower()
+    host = str(getattr(ev, "host", "") or "")
+    return Claim(
+        ts=int(getattr(ev, "ts", 0) or 0),
+        severity=_EV_SEVERITY_TO_CLAIM.get(sev, sev.upper()),
+        rule_type=str(getattr(ev, "source", "") or ""),
+        host=host,
+        tier=(tiers or {}).get(host) if host else None,
+        confidence=None,      # the merged feed carries no per-row evidence
+        actionable=bool(host),
+    )
 
 
 # ── Reusable event row ─────────────────────────────────────────────────────────
@@ -401,6 +436,7 @@ class TimelinePage(QWidget):
                         title  = f"Device {verb}: {e.ip or e.mac or '?'}",
                         detail = e.detail or "",
                         severity = "info" if e.event_type == "join" else "warn",
+                        host   = e.ip or e.mac or "",
                     ))
             except Exception:
                 pass  # non-fatal
@@ -416,6 +452,7 @@ class TimelinePage(QWidget):
                         title  = f"{a.get('rule_name','Alert')}: {a.get('host','')}",
                         detail = a.get("message", ""),
                         severity = sev,
+                        host   = str(a.get("host", "") or ""),
                     ))
             except Exception:
                 pass  # non-fatal
@@ -531,8 +568,16 @@ class TimelinePage(QWidget):
             except Exception:
                 pass  # non-fatal — log dir may not exist yet
 
-        events.sort(key=lambda e: e.ts, reverse=True)
-        return events[:200]
+        # Signal Quality Phase 5 — relevance decides WHICH 200 survive; the
+        # timeline stays chronological. The cap was always a relevance
+        # judgement, it was just being made by accident as "whichever happen to
+        # be newest", so a chatty source could push a gateway outage off the
+        # page entirely. Display order is untouched: a record that is not in
+        # time order is not a record.
+        from ui.claim_ranking import top_by_relevance
+        return top_by_relevance(
+            events, _ev_to_claim, self._store, limit=200, key=lambda e: e.ts,
+        )
 
     # ── Rendering ─────────────────────────────────────────────────────────────
 

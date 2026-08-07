@@ -54,6 +54,7 @@ from ui.widgets.hub_helpers import (
     _load_instances, _save_instances,  # noqa: F401
     _is_consented, _record_consent,  # noqa: F401
     _migrate_stale_paths,  # noqa: F401
+    refresh_stale_bundled_plugins,  # noqa: F401
     _load_last_result, _save_last_result,  # noqa: F401
     _record_success, _record_error,  # noqa: F401
     _save_health,  # noqa: F401
@@ -68,6 +69,7 @@ __all__ = [
     "_load_instances", "_save_instances",
     "_is_consented", "_record_consent",
     "_migrate_stale_paths",
+    "refresh_stale_bundled_plugins",
     "_load_last_result", "_save_last_result",
     "_record_success", "_record_error",
     "_save_health",

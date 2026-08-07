@@ -113,3 +113,113 @@ def test_empty_paths_list_no_op(tmp_path):
     """No registered plugins → _save_paths is never called."""
     result = _migrate([], tmp_path)
     assert result is None
+
+
+# ── Stale bundled-plugin redeploy (RULE-T3) ───────────────────────────────────
+#
+# A release that updates a bundled plugin also updates data/plugin_hashes.json,
+# but the deployed copy under get_app_data_dir()/plugins/ is only ever written
+# when it is ABSENT (_resolve_path / _migrate_stale_paths both take an existing
+# copy as-is). The recorded hash then matches the BUNDLED file while the
+# deployed copy still holds the previous release's bytes, so verify_signature()
+# reports "HASH MISMATCH -- possible tampering" and _start_poll_worker_inst()
+# returns before creating the worker. That device silently stops being polled,
+# with no surface outside the Hardware page card.
+#
+# Observed live 2026-08-06: a ZTE modem plugin updated in the repo on 2026-08-03
+# left the deployed copy stale, and modem monitoring was dead for three days.
+
+
+def _hash(p: Path) -> str:
+    from modules.plugin_tools import _file_hash
+    return _file_hash(p)
+
+
+def _setup_stale(tmp_path, *, deployed_body: str, bundled_body: str):
+    """Build a bundled dir + an AppData dir holding a differing deployed copy."""
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    appdata = tmp_path / "appdata"
+    (appdata / "plugins").mkdir(parents=True)
+
+    src = bundled / "zte_plugin.py"
+    src.write_text(bundled_body, encoding="utf-8")
+    deployed = appdata / "plugins" / "zte_plugin.py"
+    deployed.write_text(deployed_body, encoding="utf-8")
+    return bundled, appdata, src, deployed
+
+
+def test_stale_deployed_bundled_plugin_is_refreshed(tmp_path):
+    """A deployed copy that no longer matches the recorded hash is restored.
+
+    Fails before fix: refresh_stale_bundled_plugins does not exist, so the
+    stale copy stays on disk and its poll worker never starts again.
+    """
+    bundled, appdata, src, deployed = _setup_stale(
+        tmp_path, deployed_body="# old\n", bundled_body="# new\n",
+    )
+    db = {"zte_plugin.py": _hash(src)}
+
+    with patch("modules.plugin_tools._load_hash_db", return_value=db), \
+         patch("modules.utils.get_app_data_dir", return_value=appdata):
+        from ui.widgets.hub_helpers import refresh_stale_bundled_plugins
+        refreshed = refresh_stale_bundled_plugins(bundled_dir=bundled)
+
+    assert refreshed == ["zte_plugin.py"], f"expected a refresh, got {refreshed}"
+    assert _hash(deployed) == db["zte_plugin.py"], (
+        "deployed copy must now match the hash this release signed"
+    )
+    backup = deployed.parent / "zte_plugin.py.stale.bak"
+    assert backup.exists(), "the stale copy must be kept as a .stale.bak"
+    assert backup.read_text(encoding="utf-8") == "# old\n"
+
+
+def test_current_deployed_copy_is_left_alone(tmp_path):
+    """A copy already matching the recorded hash must not be touched."""
+    bundled, appdata, src, deployed = _setup_stale(
+        tmp_path, deployed_body="# same\n", bundled_body="# same\n",
+    )
+    db = {"zte_plugin.py": _hash(src)}
+
+    with patch("modules.plugin_tools._load_hash_db", return_value=db), \
+         patch("modules.utils.get_app_data_dir", return_value=appdata):
+        from ui.widgets.hub_helpers import refresh_stale_bundled_plugins
+        refreshed = refresh_stale_bundled_plugins(bundled_dir=bundled)
+
+    assert refreshed == []
+    assert not (deployed.parent / "zte_plugin.py.stale.bak").exists()
+
+
+def test_unsigned_user_plugin_is_never_touched(tmp_path):
+    """A plugin absent from the hash DB is the user's own — never overwrite it."""
+    bundled, appdata, src, deployed = _setup_stale(
+        tmp_path, deployed_body="# mine\n", bundled_body="# theirs\n",
+    )
+
+    with patch("modules.plugin_tools._load_hash_db", return_value={}), \
+         patch("modules.utils.get_app_data_dir", return_value=appdata):
+        from ui.widgets.hub_helpers import refresh_stale_bundled_plugins
+        refreshed = refresh_stale_bundled_plugins(bundled_dir=bundled)
+
+    assert refreshed == []
+    assert deployed.read_text(encoding="utf-8") == "# mine\n"
+
+
+def test_untrustworthy_bundled_source_is_not_deployed(tmp_path):
+    """If the bundled file itself doesn't match the recorded hash, restore nothing.
+
+    Guards against replacing one unverifiable file with another: we only ever
+    write back content whose hash is exactly what this release signed.
+    """
+    bundled, appdata, src, deployed = _setup_stale(
+        tmp_path, deployed_body="# old\n", bundled_body="# also-not-signed\n",
+    )
+    db = {"zte_plugin.py": "0" * 64}
+
+    with patch("modules.plugin_tools._load_hash_db", return_value=db), \
+         patch("modules.utils.get_app_data_dir", return_value=appdata):
+        from ui.widgets.hub_helpers import refresh_stale_bundled_plugins
+        refreshed = refresh_stale_bundled_plugins(bundled_dir=bundled)
+
+    assert refreshed == []
+    assert deployed.read_text(encoding="utf-8") == "# old\n"

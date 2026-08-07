@@ -266,6 +266,65 @@ def _record_consent(path: str) -> None:
     s.setValue(_CONSENTED_HASHES_KEY, json.dumps(sorted(consented)))
 
 
+def refresh_stale_bundled_plugins(bundled_dir: "Path | None" = None) -> list[str]:
+    """Re-deploy a bundled plugin whose AppData copy was left behind by an upgrade.
+
+    A release that updates a bundled plugin also updates
+    ``data/plugin_hashes.json``, but the deployed copy under
+    ``get_app_data_dir()/plugins/`` is only ever written when it is *absent* —
+    ``_resolve_path()`` and ``_migrate_stale_paths()`` both take an existing copy
+    as-is. The recorded hash then matches the BUNDLED file while the deployed
+    copy still holds the previous release's bytes, so ``verify_signature()``
+    reports "HASH MISMATCH — possible tampering" and
+    ``_start_poll_worker_inst()`` returns before creating the worker. That
+    device silently stops being polled: no signal history, no
+    INFRA_UNREACHABLE, and no surface outside the Hardware page card.
+
+    Observed live 2026-08-06 — a ZTE modem plugin updated in the repo on
+    2026-08-03 left the deployed copy stale and modem monitoring dead for three
+    days, discovered only because an unrelated alert test failed.
+
+    A file is replaced only when it is BOTH mismatched AND has a bundled sibling
+    whose hash is exactly the recorded one, so the only thing ever written back
+    is content this release signed. The stale copy is preserved as
+    ``<name>.stale.bak`` — a user edit is quarantined, never destroyed.
+
+    Returns the filenames refreshed.
+    """
+    import shutil as _sh
+    from modules.plugin_tools import _file_hash, _load_hash_db
+    from modules.utils import get_app_data_dir as _gad
+
+    if bundled_dir is None:
+        bundled_dir = Path(__file__).parent.parent.parent / "plugins"
+
+    refreshed: list[str] = []
+    try:
+        deployed_dir = _gad() / "plugins"
+        db = _load_hash_db()
+    except Exception:
+        return refreshed  # non-fatal — never block startup on this
+    if not deployed_dir.exists():
+        return refreshed
+
+    for deployed in sorted(deployed_dir.glob("*.py")):
+        recorded = db.get(deployed.name)
+        if recorded is None:
+            continue  # not a signed bundled plugin — the user's own file, leave it
+        try:
+            if _file_hash(deployed) == recorded:
+                continue  # already current
+            src = bundled_dir / deployed.name
+            if not src.exists() or _file_hash(src) != recorded:
+                continue  # no source whose hash this release signed — restore nothing
+            _sh.copy2(deployed, deployed.parent / (deployed.name + ".stale.bak"))
+            _sh.copy2(src, deployed)
+            refreshed.append(deployed.name)
+        except Exception:
+            continue  # one unreadable file must not stop the others being repaired
+    return refreshed
+
+
 def _migrate_stale_paths() -> None:
     """Module-level function: replace stale _MEI* paths with stable AppData copies.
 

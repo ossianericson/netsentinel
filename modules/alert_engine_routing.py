@@ -50,6 +50,8 @@ RULE_CTA: Dict[str, str] = {
     "ARP_SPOOF":          NavLabel.ARP_SPOOF_WATCH,
     "ROGUE_DHCP":         NavLabel.DHCP_ROGUE_MONITOR,
     "CONFIG_DRIFT":       NavLabel.CONFIG_SNAPSHOTS,
+    "INFRA_UNREACHABLE":  NavLabel.HARDWARE,
+    "DNS_LATENCY":        NavLabel.DNS_STABILITY,
 }
 
 
@@ -89,6 +91,8 @@ ACTION_STEPS: Dict[str, str] = {
     "RTT_ANOMALY":       "→ Compare against the host's own history in Network Logger  → Check for new traffic on the link",
     "IOT_BEHAVIOR":      "→ Open IoT Behaviour to see what changed  → Block the device in your router if you do not recognise the destination",
     "TREND_FORECAST":    "→ Open Trend Forecasts to see the projection  → Act before the threshold is crossed",
+    "INFRA_UNREACHABLE": "→ Check the device has power and its cables are seated  → Power-cycle it and wait 60 seconds  → Open Hardware to confirm it reconnects",
+    "DNS_LATENCY":       "→ Open DNS & Stability and run a DNS speed test  → Try a public resolver (1.1.1.1 or 8.8.8.8) in your router  → Reboot your router if it is acting as the resolver",
 }
 
 

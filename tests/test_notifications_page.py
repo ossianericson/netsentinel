@@ -69,20 +69,28 @@ class TestAlertRuleCheckboxes:
                 f"Expected checkbox for rule {name!r} but it is missing"
             )
 
-    def test_all_checkboxes_unchecked_by_default(self):
-        """All rules must default to unchecked (opt-in only)."""
-        # Clear any saved rule states so a fresh page starts with all off.
+    def test_checkbox_defaults_match_the_curated_set(self):
+        """Signal Quality Phase 6 replaced "all rules default to unchecked".
+
+        Every rule shipping disabled is why the alert engine measured as
+        "nearly silent" while the ungated event stream carried 147 claims/day —
+        it was not quiet, it was switched off, including the modem/mesh/gateway
+        signals the user calls real. A fresh page now reflects
+        DEFAULT_ENABLED_RULES exactly: the curated set on, everything else off.
+        """
         from PyQt6.QtCore import QSettings
         from modules.alert_engine import rule_settings_key
+        from modules.alert_suppressor import DEFAULT_ENABLED_RULES
         qs = QSettings("NetSentinel", "NetSentinel")
         for name in _default_rule_names():
             qs.remove(rule_settings_key(name))
         qs.sync()
         page = _make_page()
-        for name, chk in page._rule_checkboxes.items():
-            assert not chk.isChecked(), (
-                f"Rule {name!r} checkbox must default to unchecked"
-            )
+        checked = {n for n, chk in page._rule_checkboxes.items() if chk.isChecked()}
+        assert checked == set(DEFAULT_ENABLED_RULES), (
+            f"unexpectedly on: {sorted(checked - set(DEFAULT_ENABLED_RULES))}; "
+            f"unexpectedly off: {sorted(set(DEFAULT_ENABLED_RULES) - checked)}"
+        )
 
     def test_defs_match_default_rules(self):
         """_ALERT_RULE_DEFS names must be a superset of _default_rules() names."""
@@ -110,14 +118,24 @@ class TestAlertEngineWiring:
         page.set_alert_engine(eng)
         assert page._alert_engine is eng
 
-    def test_apply_to_engine_propagates_disabled(self):
-        """With all checkboxes unchecked, all rules remain disabled in the engine."""
+    def test_apply_to_engine_propagates_unchecked_boxes(self):
+        """An unchecked box must disable its rule in the live engine.
+
+        Was "all rules remain disabled": since Phase 6 the curated set starts
+        checked, so the invariant under test is the correspondence between box
+        and rule, not a blanket "everything off".
+        """
         page = _make_page()
         eng = self._make_engine()
         page.set_alert_engine(eng)
-        for rule in eng.get_rules():
-            assert rule.enabled is False, (
-                f"Rule {rule.name!r} should be disabled after set_alert_engine with unchecked boxes"
+        by_name = {r.name: r for r in eng.get_rules()}
+        for name, chk in page._rule_checkboxes.items():
+            rule = by_name.get(name)
+            if rule is None:
+                continue
+            assert rule.enabled is chk.isChecked(), (
+                f"Rule {name!r} is enabled={rule.enabled} but its checkbox is "
+                f"{chk.isChecked()}"
             )
 
     def test_checking_checkbox_enables_rule_in_engine(self):

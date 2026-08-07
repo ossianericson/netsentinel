@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import math
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
@@ -111,6 +112,44 @@ def modem_sinr_dropped(
     return current_sinr < metric.low_threshold(sigma)
 
 
+# ── In-memory rolling series ──────────────────────────────────────────────────
+
+class RollingSeries:
+    """A bounded, append-only window of numeric samples held in memory.
+
+    Exists because several signals must be evaluated even when the user has not
+    opted in to the Monitor logging that persists them — with logging off there
+    is no DB history to learn a baseline from, so the rule could never fire.
+    Feed it every sample as it arrives and pass ``values()`` to whichever
+    baseline predicate needs a prior series (e.g. `modem_sinr_dropped`).
+
+    Non-finite and non-numeric inputs are dropped rather than raising: the
+    samples come from hardware-plugin dicts, which are untyped and routinely
+    carry ``None`` for a field the device did not report.
+    """
+
+    def __init__(self, maxlen: int = 240) -> None:
+        self._values: deque[float] = deque(maxlen=maxlen)
+
+    def append(self, value: Any) -> None:
+        """Add *value*; silently ignore None, NaN, +/-inf and non-numeric input."""
+        if value is None or isinstance(value, bool):
+            return
+        if not isinstance(value, (int, float)):
+            return
+        v = float(value)
+        if not math.isfinite(v):
+            return
+        self._values.append(v)
+
+    def values(self) -> List[float]:
+        """Return the samples oldest-first, as a copy the caller may mutate."""
+        return list(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+
 # ── Core learner ──────────────────────────────────────────────────────────────
 
 class BaselineLearner:
@@ -160,8 +199,31 @@ class BaselineLearner:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _refresh_host_baselines(self, store, now: float) -> None:
-        """Per-host RTT and loss baselines from rtt_sample."""
+        """Per-host RTT and loss baselines from rtt_sample.
+
+        Two different lookbacks, deliberately:
+
+        * the **statistics** (mean/sigma) come from the last `_BASELINE_DAYS`,
+          so a host that used to be slow and is fast now is judged on what it
+          does today;
+        * `days_covered` — the *confidence* input `Baseline.is_mature` reads —
+          comes from the host's first-ever sample.
+
+        Taking both from the same bounded window is what made RTT_ANOMALY
+        undeployable: `days_covered` was `(now - oldest row IN the 7-day
+        window)`, so it was always < 7 while `is_mature` demanded >= 7.
+        Measured on the live database before this change: 6.9876 days on the
+        richest host and 0 of 3 hosts mature, against 29.86 days of history.
+        """
         hosts = store.query_all_rtt_hosts(hours=_BASELINE_DAYS * 24.0)
+        try:
+            first_seen = store.query_rtt_first_seen_by_host()
+        except Exception:
+            # An older store without the query still learns statistics; it just
+            # keeps the previous (never-mature) behaviour rather than crashing.
+            first_seen = {}
+        if not isinstance(first_seen, dict):
+            first_seen = {}
         for host in hosts:
             points = store.query_rtt_history(host, hours=_BASELINE_DAYS * 24.0)
             if not points:
@@ -170,10 +232,20 @@ class BaselineLearner:
             rtts  = [p.rtt_ms  for p in points if p.rtt_ms >= 0]
             losses = [p.loss_pct for p in points if p.loss_pct is not None]
 
+            window_oldest = min(p.ts for p in points)
+            _first = first_seen.get(host)
+            # Type-checked because this value feeds arithmetic: a store that
+            # returns something unexpected must degrade to the window, not
+            # raise inside an hourly refresh timer.
+            oldest_ts = (
+                min(_first, window_oldest)
+                if isinstance(_first, (int, float)) and not isinstance(_first, bool)
+                else window_oldest
+            )
+            days = (now - oldest_ts) / 86400.0
+
             if rtts:
                 mean, std = _mean_stddev(rtts)
-                oldest_ts = min(p.ts for p in points)
-                days = (now - oldest_ts) / 86400.0
                 rtt_metric = BaselineMetric(
                     mean=mean, stddev=std,
                     sample_count=len(rtts), days_covered=days,
@@ -183,8 +255,6 @@ class BaselineLearner:
 
             if losses:
                 mean, std = _mean_stddev(losses)
-                oldest_ts = min(p.ts for p in points)
-                days = (now - oldest_ts) / 86400.0
                 loss_metric = BaselineMetric(
                     mean=mean, stddev=std,
                     sample_count=len(losses), days_covered=days,

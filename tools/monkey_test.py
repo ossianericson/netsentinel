@@ -372,6 +372,9 @@ class Config:
     vmem_census: bool = False        # enable in-process VirtualQuery region-type census in app
     procdump: bool = False           # attach Sysinternals ProcDump to the launched process (RULE-DBG2)
     max_restarts: int = 3            # auto-restart app when window vanishes unexpectedly
+    max_consecutive_focus_skips: int = 20  # restart app if a system window (e.g. the
+                                            # desktop) holds foreground this many
+                                            # iterations in a row — see _run_one()
     warmup_secs: float = 5.0        # seconds to wait after overlay dismissal before first click
     connect_timeout_secs: float = 60.0  # seconds to wait for the window after launch
     unresponsive_secs: float = 45.0     # seconds without a completed iteration before hang alarm
@@ -805,23 +808,31 @@ def _force_foreground(hwnd: int) -> None:
     """Force a window to the foreground using the AttachThreadInput trick.
 
     Plain SetForegroundWindow silently fails from background processes after
-    Windows engages focus-theft protection.  Attaching to the target thread's
-    input queue grants the required permission.
+    Windows engages focus-theft protection. The documented bypass is to attach
+    this thread's input queue to the thread that CURRENTLY holds foreground —
+    that borrows the foreground thread's permission to change the foreground
+    window. Attaching to the target window's own thread (the previous code
+    here) does not do this: it shares input state with the window we're
+    trying to promote, not with whoever is blocking it, so SetForegroundWindow
+    stays subject to the same restriction. Found live 2026-08-06: with the
+    desktop (Progman) holding foreground, this previously left every single
+    reclaim attempt failing for an entire chaos phase.
     """
     try:
         user32   = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
         cur_tid  = kernel32.GetCurrentThreadId()
-        tgt_tid  = user32.GetWindowThreadProcessId(hwnd, None)
-        attached = (tgt_tid and cur_tid != tgt_tid and
-                    bool(user32.AttachThreadInput(cur_tid, tgt_tid, True)))
+        fg_hwnd  = user32.GetForegroundWindow()
+        fg_tid   = user32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+        attached = (fg_tid and cur_tid != fg_tid and
+                    bool(user32.AttachThreadInput(cur_tid, fg_tid, True)))
         try:
             user32.ShowWindow(hwnd, 9)        # SW_RESTORE (un-minimise if needed)
             user32.BringWindowToTop(hwnd)
             user32.SetForegroundWindow(hwnd)
         finally:
             if attached:
-                user32.AttachThreadInput(cur_tid, tgt_tid, False)
+                user32.AttachThreadInput(cur_tid, fg_tid, False)
     except Exception:
         pass  # non-fatal — best-effort; health monitor catches real window loss
 
@@ -1090,6 +1101,9 @@ class MonkeyTester:
         self._procdump_proc: Optional[subprocess.Popen] = None
         self._procdump_warned = False
         self._last_iter_time = time.time()
+        # Consecutive iterations skipped by _assert_focus() (system window stuck
+        # in foreground) — reset on any successful reclaim, see _run_one().
+        self._consecutive_focus_skips = 0
         self._stop = threading.Event()
         # White-frame/hang investigation (2026-07-19): exit code of the last
         # process _alive() observed disappearing, so a crash report can say
@@ -1978,6 +1992,7 @@ class MonkeyTester:
         self._kill_stale_netsentinel()
         self._proc = None
         self._win = None
+        self._consecutive_focus_skips = 0
 
         # Clear stop so new threads can run
         self._stop.clear()
@@ -2190,7 +2205,24 @@ class MonkeyTester:
             self.stats.skipped += 1
             self.stats.completed += 1
             self._last_iter_time = time.time()
+            self._consecutive_focus_skips += 1
+            if self._consecutive_focus_skips >= self.cfg.max_consecutive_focus_skips:
+                # A system window (e.g. the desktop) has held foreground for
+                # max_consecutive_focus_skips iterations straight — _assert_focus()'s
+                # bounded per-iteration escalation (_escalate_app_reclaim) cannot
+                # dislodge it on its own, and skipping forever burns the rest of the
+                # phase doing nothing (observed live: 100% of a phase's iterations
+                # skipped, 2026-08-06). Treat it like a hang and let the main loop's
+                # existing restart path (which already caps at max_restarts) relaunch
+                # the app instead of stalling.
+                self.log.error(
+                    "[focus] %d consecutive iterations skipped (foreground stuck) "
+                    "— forcing a restart instead of stalling the rest of the phase",
+                    self._consecutive_focus_skips,
+                )
+                return False
             return True
+        self._consecutive_focus_skips = 0
         time.sleep(0.08)
 
         # Choose: navigation action or random control

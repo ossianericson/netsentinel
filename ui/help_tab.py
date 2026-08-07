@@ -36,12 +36,13 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.2.2"
+_WHATS_NEW_VERSION = "2.2.3"
 _WHATS_NEW_ENTRIES = [
-    ("Lighter when you are not looking", "Certificates, Uptime & SLA, Service Heartbeat and Maintenance Windows kept rebuilding their tables in the background even if you never opened them — as did the animated loading placeholder behind them. They now only do that work while actually on screen, which lowers memory and CPU use over a long session."),
-    ("Notifications no longer crash when snoozing", "Snoozing an alert could crash the Notifications page on a non-English Windows locale, because the time label used a character the system could not encode. Both the single-alert and bulk snooze paths are fixed."),
-    ("A smoother Network Timeline", "The timeline rebuilt every row from scratch on each refresh. It now reuses the rows it already has, so a full event feed stays responsive instead of stuttering every minute."),
-    ("Quieter modem monitoring", "The 5G modem plugin logged in again and re-read the entire Windows certificate store on every 30-second poll. It now keeps one connection and reuses it, reconnecting only when the modem actually drops the session."),
+    ("What needs attention now shows up first", "The Home \"Action needed\" card was quietly showing the five oldest unread alerts instead of the most urgent ones, so a fresh gateway outage could sit hidden behind week-old warnings. Alerts across the app are now ordered by how much they matter, not just when they arrived."),
+    ("More alerts on by default", "Eight core alerts — including gateway loss, a mesh node dropping off, modem signal drops and unreachable infrastructure — now come switched on for new installs instead of arriving silent."),
+    ("One alert per outage, not two hundred", "A device going down and staying down used to fire a fresh alert roughly every two minutes for the same outage. It now fires once when it goes down and once when it recovers."),
+    ("A stale plugin update no longer stops monitoring quietly", "An updated bundled plugin (like the 5G modem) could silently stop being polled after an app update, with no obvious error. It's now kept current automatically."),
+    ("Cleaner device inventory", "Multicast/broadcast network traffic could be tracked and even mistaken for real infrastructure devices. It's no longer counted as a device at all."),
 ]
 
 

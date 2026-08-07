@@ -4,6 +4,31 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.3
+
+**Added**
+- Alerts are now ranked by relevance (confidence + importance tier) wherever a claim list has a cap, instead of raw chronological or scan order — the Home "Action needed" card, the Overview feed and the log hub's critical/warning/other ladder now surface what matters most first
+- Eight alert rules — including gateway loss, mesh node drop-off, modem signal drop and unreachable infrastructure — are now enabled by default on a fresh install, instead of every rule shipping off
+- New `INFRA_UNREACHABLE` rule: alerts when a modem, router, access point or switch plugin stops responding, and resolves when it answers again
+- `MESH_DEGRADED` now actually fires when a Deco mesh node drops offline
+- New `DNS_LATENCY` rule: alerts when DNS resolution goes slow, with a self-learned per-network baseline
+- Gateway loss (`HOST_DOWN`) now reaches the alert engine from real LAN monitoring, not just the two fixed internet-health targets
+- Jitter measurement now feeds the `JITTER_HIGH` rule, which previously had no data source at all
+- Devices are now ranked by corroborated importance (critical / infrastructure / personal / transient) instead of a single unreliable "infrastructure" flag, for deciding which devices are eligible to raise an alert
+
+**Fixed**
+- The Home "Action needed" card was showing the five oldest unacknowledged alerts instead of the most relevant ones
+- A repeat outage on the same device fired a fresh `HOST_DOWN` alert roughly every two minutes instead of once per outage
+- The RTT baseline behind `RTT_ANOMALY` could never mature, so the rule could never fire no matter how long a device had been monitored
+- `python app.py --audit` misread every genuinely-enabled alert rule as missing its opt-in on Windows, because a stored `"true"` string wasn't recognised as boolean `True`
+- An updated bundled plugin (e.g. the 5G modem) could silently stop being polled after an app update, with the only trace being an error on a Hardware page card the user may never open
+- Mesh and modem alerts were unintentionally disabled whenever the unrelated "Monitor logging" setting was off
+- Multicast/SSDP groups could be tracked and even promoted to "infrastructure" as if they were real devices; a device going offline and back repeatedly re-announced its absence every hour instead of once per departure
+- Non-device inventory rows (like multicast groups) were never removed from the device list, and DHCP-server evidence wasn't reaching device role inference
+- `Log Hub` and `Hardware` pages could leave background timers running after being closed, or even if never opened
+
+---
+
 ### v2.2.2
 
 **Fixed**

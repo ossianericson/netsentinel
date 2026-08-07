@@ -141,6 +141,19 @@ class MetricStore(
         if prune_on_init:
             self.prune_old_data()
 
+    def get_db_path(self) -> Optional[str]:
+        """The resolved on-disk database path, or None for a non-sqlite backend.
+
+        Public because callers legitimately need to know *which* database they
+        are talking to, and `_db_path` is private to the MetricStore family
+        (ARCH RULE 2). The motivating case: `MetricStore._default_path()` is
+        tier-1 "exe dir (portable)", so a source run and an installed run use
+        different databases while sharing one per-user QSettings namespace — a
+        run-once migration flag keyed without this silently applies to whichever
+        database got there first. See device_stability.migration_key().
+        """
+        return str(self._db_path) if self._db_path is not None else None
+
     # ── SQLAlchemy engine setup ───────────────────────────────────────────────
 
     def _init_sqlalchemy(self, url: str):
@@ -461,18 +474,68 @@ class MetricStore(
         message: str,
         ts: Optional[int] = None,
         rule_type: str = "",
+        value: Optional[float] = None,
+        confidence: Optional[float] = None,
+        evidence_json: Optional[str] = None,
+        dedup_key: Optional[str] = None,
+        is_resolution: bool = False,
     ) -> int:
+        """Persist one fired alert. Returns the new row id.
+
+        Schema v22 widened this to carry every AlertFired field. It used to
+        persist 6 of 12, so alert history could not distinguish a resolution
+        from an alert except by inferring it from `severity == 'HEALTHY'`, and
+        the evidence behind a claim was discarded at the moment it was recorded.
+
+        A resolution also closes its episode: the most recent still-open row
+        sharing its `dedup_key` gets `resolved_ts` stamped, so an outage's
+        duration is readable straight from history. Prefer
+        `scan_persistence.persist_alert()` over calling this directly — it is
+        the single choke point that unpacks the whole dataclass.
+        """
         now = ts or int(time.time())
+        key = dedup_key if dedup_key is not None else f"{rule_name}::{host or ''}"
         self._execute_write(
-            "INSERT INTO alert_fired (ts, rule_name, host, severity, message, rule_type) "
-            "VALUES(?,?,?,?,?,?)",
-            (now, rule_name, host, severity, message, rule_type),
+            "INSERT INTO alert_fired (ts, rule_name, host, severity, message, rule_type, "
+            "value, confidence, evidence_json, dedup_key, is_resolution) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (now, rule_name, host, severity, message, rule_type,
+             value, confidence, evidence_json, key, int(bool(is_resolution))),
         )
         rows = self._execute_read(
             "SELECT id FROM alert_fired WHERE ts=? AND rule_name=? AND host=? ORDER BY id DESC LIMIT 1",
             (now, rule_name, host),
         )
-        return rows[0]["id"] if rows else -1
+        new_id = rows[0]["id"] if rows else -1
+        if is_resolution:
+            self.mark_alert_resolved(key, now, before_id=new_id)
+        return new_id
+
+    def mark_alert_resolved(
+        self, dedup_key: str, resolved_ts: int, before_id: Optional[int] = None
+    ) -> None:
+        """Stamp `resolved_ts` on the most recent still-open alert for `dedup_key`.
+
+        Scoped to one row, not `WHERE resolved_ts IS NULL`, so a second outage's
+        closure cannot retroactively re-stamp an earlier episode that was
+        already closed — and `before_id` keeps the resolution row itself out of
+        its own candidate set.
+        """
+        if not dedup_key:
+            return
+        params: tuple = (dedup_key,)
+        guard = ""
+        if before_id is not None and before_id > 0:
+            guard = " AND id < ?"
+            params = (dedup_key, before_id)
+        self._execute_write(
+            "UPDATE alert_fired SET resolved_ts = ? WHERE id = ("
+            "  SELECT id FROM alert_fired"
+            f"  WHERE dedup_key = ? AND is_resolution = 0 AND resolved_ts IS NULL{guard}"
+            "  ORDER BY ts DESC, id DESC LIMIT 1"
+            ")",
+            (resolved_ts,) + params,
+        )
 
     def acknowledge_alert(
         self,

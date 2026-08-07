@@ -260,15 +260,185 @@ class _DeviceWritesMixin:
 
         Infrastructure-role devices are always in scope; everything else requires
         explicit opt-in. A device with no matching row is out of scope by default.
+
+        Answers across ALL matching rows, not just the first. One IP routinely
+        maps to several MACs — the reference network has three at
+        192.168.68.64, one of them the mesh AP — so reading `rows[0]` made the
+        verdict depend on row order, and reported the AP out of scope whenever a
+        stale privacy MAC happened to sort first.
+
+        The legacy gate — superseded by get_device_importance_tier() when
+        `experimental/signal_quality_v2` is on, kept intact per RULE-EXP1.
         """
         rows = self._execute_read(
             "SELECT inferred_role, alert_opt_in FROM known_device WHERE ip = ? OR mac = ?",
             (identifier, identifier),
         )
+        return any(
+            row["inferred_role"] in ("gateway", "infrastructure")
+            or bool(row["alert_opt_in"])
+            for row in rows
+        )
+
+    def get_device_importance_tier(self, identifier: str) -> str:
+        """Importance tier name for `identifier` (an IP or a MAC).
+
+        Always recomputed from the row's current columns — never read back from
+        a stored tier — because the `inferred_role` values this replaces are
+        known to be wrong for 8 of 13 devices on the reference network. A device
+        with no matching row is TRANSIENT, matching is_device_alert_in_scope()'s
+        "unknown means out of scope" default.
+
+        **Returns the HIGHEST tier among matching rows, not the first.** One IP
+        routinely maps to several MACs — the reference network has three at
+        192.168.68.64, one of them the mesh AP and two stale privacy MACs — and
+        alerts are keyed by IP. Taking `rows[0]` (what is_device_alert_in_scope()
+        does) would let arbitrary row order decide whether the gateway is
+        alertable.
+        """
+        from modules.device_importance import Tier, classify_known_device
+
+        rows = self._execute_read(
+            "SELECT mac, ip, hostname, vendor, device_type, custom_name, is_pinned, "
+            "mac_randomized, scan_count, ip_stability, inferred_role, alert_opt_in "
+            "FROM known_device WHERE ip = ? OR mac = ?",
+            (identifier, identifier),
+        )
         if not rows:
-            return False
-        row = rows[0]
-        return row["inferred_role"] in ("gateway", "infrastructure") or bool(row["alert_opt_in"])
+            return Tier.TRANSIENT.value
+        return max(
+            (classify_known_device(dict(r)).tier for r in rows),
+            default=Tier.TRANSIENT,
+        ).value
+
+    # ── Write/read: presence episodes (schema v22) ───────────────────────────
+
+    def set_presence_state(
+        self, mac: str, state: str, gone_notified_ts: Optional[int] = None
+    ) -> None:
+        """Record whether a MAC is currently present, and when LEFT was emitted.
+
+        `gone_notified_ts` is always written, including when None — clearing it
+        on return is what re-arms the device's NEXT absence. A "only overwrite
+        when not None" COALESCE here would leave a stale stamp behind and
+        silently suppress the following episode's LEFT forever.
+        """
+        if not mac:
+            return
+        self._execute_write(
+            "UPDATE known_device SET presence_state = ?, gone_notified_ts = ? "
+            "WHERE mac = ?",
+            (state or None, gone_notified_ts, mac.lower()),
+        )
+
+    # ── Write/read: materialised importance tier (schema v22) ────────────────
+
+    def refresh_importance_tiers(self) -> int:
+        """Recompute `importance_tier`/`importance_source` for every row.
+
+        Returns how many rows changed. One pass over the inventory rather than
+        a per-device recompute on the scan path: the reference network has ~30
+        rows, and the ranking layer wants the whole map at once anyway.
+
+        **Recomputes; never reads the stored value.** The column is a cache for
+        display and claim ranking, and the values it caches replaced an
+        `inferred_role` that was wrong for 8 of 13 devices — trusting a stored
+        verdict is the exact mistake device_importance exists to correct. The
+        alert gate does not read this column at all; see
+        get_device_importance_tier(), which recomputes per call.
+        """
+        from modules.device_importance import classify_known_device
+
+        rows = self._execute_read(
+            "SELECT mac, ip, hostname, vendor, device_type, custom_name, is_pinned, "
+            "mac_randomized, scan_count, ip_stability, inferred_role, alert_opt_in, "
+            "importance_tier, importance_source FROM known_device",
+            (),
+        )
+        changed = 0
+        for r in rows:
+            try:
+                verdict = classify_known_device(dict(r))
+            except Exception:
+                continue  # one bad row must not abort the pass
+            if (
+                r["importance_tier"] == verdict.tier.value
+                and r["importance_source"] == verdict.source
+            ):
+                continue
+            self._execute_write(
+                "UPDATE known_device SET importance_tier = ?, importance_source = ? "
+                "WHERE mac = ?",
+                (verdict.tier.value, verdict.source, r["mac"]),
+            )
+            changed += 1
+        return changed
+
+    def get_importance_tiers(self) -> dict:
+        """Return {ip_or_mac: tier_name} for the whole inventory, in one read.
+
+        Keyed by both identifiers because claims are keyed by whichever the
+        producing layer had. When several MACs share an IP the HIGHEST tier
+        wins, matching get_device_importance_tier() — the reference network has
+        three MACs at 192.168.68.64, one of them the mesh AP, so first-row-wins
+        would let arbitrary row order decide how a gateway claim is ranked.
+        """
+        from modules.device_importance import Tier, tier_from_name
+
+        rows = self._execute_read(
+            "SELECT mac, ip, importance_tier FROM known_device "
+            "WHERE importance_tier IS NOT NULL",
+            (),
+        )
+        out: dict = {}
+
+        def _offer(key: Optional[str], tier: Optional[Tier]) -> None:
+            if not key or tier is None:
+                return
+            current = tier_from_name(out.get(key))
+            if current is None or tier > current:
+                out[key] = tier.value
+
+        for r in rows:
+            tier = tier_from_name(r["importance_tier"])
+            _offer(r["mac"], tier)
+            _offer(r["ip"], tier)
+        return out
+
+    def clear_inferred_role(self, mac: str) -> None:
+        """Set inferred_role back to NULL for one MAC.
+
+        update_device_stability() deliberately never clears a role — a
+        momentarily-blank device_type must not wipe a good one — so undoing a
+        wrong promotion needs its own path. Used by
+        device_stability.recompute_roles() (Signal Quality Phase 2).
+        """
+        self._execute_write(
+            "UPDATE known_device SET inferred_role = NULL WHERE mac = ?",
+            (mac.lower(),),
+        )
+
+    def delete_known_device(self, mac: str) -> None:
+        """Remove one MAC from the device inventory. Safe for an unknown MAC.
+
+        The only deletion path for a `known_device` row — there was none at all
+        before Signal Quality Phase 2's closeout, which is why the SSDP
+        multicast group `01:00:5e:7f:ff:fa` stayed in the reference inventory
+        with 654 scans against it after Phase 1 stopped writing new multicast
+        rows and Phase 2 cleared its role.
+
+        Deliberately narrow: it retracts an inventory *claim* and touches
+        nothing else. `device_ip_history`, `device_event`, `device_state` and
+        `device_events` rows for this MAC are append-only *records* and are left
+        intact as forensics — no schema-level foreign key exists to cascade
+        them, and none should. Driven by device_stability.purge_non_devices().
+        """
+        if not mac:
+            return
+        self._execute_write(
+            "DELETE FROM known_device WHERE mac = ?",
+            (mac.lower(),),
+        )
 
     # ── Write: Classification overrides ──────────────────────────────────────
 

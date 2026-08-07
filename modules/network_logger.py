@@ -151,6 +151,7 @@ class NetworkLogger:
         self._lock = threading.Lock()
         self._on_entry: Optional[Callable[[LogEntry], None]] = None
         self._on_rotate: Optional[Callable[[Path, int], None]] = None
+        self._on_dns: Optional[Callable[[float], None]] = None
         self._arp_baseline: Dict[str, str] = {}
         self._file_start_time: float = 0.0
         self._segment: int = 1
@@ -188,10 +189,18 @@ class NetworkLogger:
         self,
         on_entry: Optional[Callable[[LogEntry], None]] = None,
         on_rotate: Optional[Callable[[Path, int], None]] = None,
+        on_dns: Optional[Callable[[float], None]] = None,
     ):
-        """Start the logging loop in a background thread."""
+        """Start the logging loop in a background thread.
+
+        on_dns — called once per cycle with the measured DNS latency in ms
+        (-1.0 on failure), **regardless of `enable_dns`**. That flag gates what
+        gets logged and displayed; it must not gate whether the alert engine
+        gets to see the measurement (Signal Quality Phase 4 C5).
+        """
         self._on_entry = on_entry
         self._on_rotate = on_rotate
+        self._on_dns = on_dns
         self._stop_event.clear()
         self._segment = 1
         self._file_start_time = time.time()
@@ -226,8 +235,21 @@ class NetworkLogger:
             http_ms: float = -1.0
             arp_event: str = ""
 
-            if self.enable_dns and not self._stop_event.is_set():
-                dns_ms = _dns_latency_system("google.com")
+            # Measured every cycle, not only when enable_dns is set. The
+            # checkbox governs the CSV column and the live table; DNS_LATENCY
+            # alerting gets its own channel via _on_dns, so an opt-in *logging*
+            # toggle cannot silently disable an unrelated *alert* (the C2 defect
+            # shape). entry.dns_ms stays gated exactly as before — it has five
+            # display consumers, one of which raises a Lab Mode live challenge.
+            if not self._stop_event.is_set():
+                probe_ms = _dns_latency_system("google.com")
+                if self._on_dns:
+                    try:
+                        self._on_dns(probe_ms)
+                    except Exception:
+                        pass  # non-fatal — a downstream slot must not kill the loop
+                if self.enable_dns:
+                    dns_ms = probe_ms
 
             if self.enable_http and not self._stop_event.is_set():
                 http_status, http_ms = _http_check_204()

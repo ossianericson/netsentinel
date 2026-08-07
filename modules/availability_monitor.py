@@ -32,10 +32,13 @@ Architecture note (ARCH RULE 1 + 2):
 
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Sequence
 
 from modules.network_logger import _ping_once as _ping   # reuse existing ping helper
+from modules.network_logger import _ping_jitter          # 3-sample stddev, JITTER_HIGH
 from modules.metric_store import MetricStore
+from modules.device_baseline import DOWN_CONFIRMATION_CYCLES
+from modules.evidence import EvidenceGate
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -43,6 +46,10 @@ from modules.metric_store import MetricStore
 DEFAULT_INTERVAL_S        = 60      # seconds between scan cycles
 DEFAULT_DEGRADED_THRESHOLD = 150.0  # ms above which a host is DEGRADED not UP
 DEFAULT_TARGETS = ["8.8.8.8", "1.1.1.1"]
+
+# States meaning "the host answered". Used by the Phase 3b DOWN confirmation to
+# decide whether there is a reachable prior state worth holding.
+_REACHABLE_STATES = ("UP", "DEGRADED")
 
 
 # ── Data types ────────────────────────────────────────────────────────────────
@@ -97,6 +104,16 @@ class AvailabilityMonitor:
     on_cycle : callable | None
         Optional callback(CycleResult) invoked after each cycle completes.
         Called synchronously — keep it fast (queue work, don't block).
+    threshold_provider : callable | None
+        Signal Quality Phase 3b. callable(host) -> DEGRADED threshold in ms,
+        normally `DeviceBaselines.degraded_threshold`. None (the default) uses
+        each target's own `degraded_threshold_ms`, i.e. the global 150 ms
+        constant — the behaviour every release up to now has shipped.
+    confirm_down : bool
+        Signal Quality Phase 3b. When True, a host must fail
+        `DOWN_CONFIRMATION_CYCLES` consecutive checks before it is *classified*
+        DOWN. One dropped ping is a dropped ping, not an outage. The raw RTT is
+        never altered — only the classification waits.
     """
 
     def __init__(
@@ -105,13 +122,24 @@ class AvailabilityMonitor:
         targets: Optional[List[TargetConfig]] = None,
         interval_s: int = DEFAULT_INTERVAL_S,
         on_cycle: Optional[Callable[[CycleResult], None]] = None,
+        threshold_provider: Optional[Callable[[str], float]] = None,
+        confirm_down: bool = False,
+        jitter_hosts: Optional[Sequence[str]] = None,
     ):
         self._store     = store
         self._targets   = targets or [TargetConfig(h) for h in DEFAULT_TARGETS]
         self.interval_s = interval_s
         self._on_cycle  = on_cycle
+        # Hosts to measure jitter for. Bounded on purpose — see run_cycle().
+        self._jitter_hosts = frozenset(jitter_hosts or ())
         # host → current state string (UP / DEGRADED / DOWN / None)
         self._current_state: Dict[str, Optional[str]] = {}
+        # ── Signal Quality Phase 3b (both off by default — RULE-EXP1) ─────────
+        self._threshold_provider = threshold_provider
+        self._down_gate: Optional[EvidenceGate] = (
+            EvidenceGate(min_consecutive=DOWN_CONFIRMATION_CYCLES)
+            if confirm_down else None
+        )
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -139,10 +167,19 @@ class AvailabilityMonitor:
         state_rows: list = []
 
         for cfg in list(self._targets):
-            rtt_ms = _ping(cfg.host)
-            new_state = self._classify(rtt_ms, cfg.degraded_threshold_ms)
+            # Jitter costs three ping.exe invocations instead of one, and this
+            # loop is sequential with a 2 s timeout per probe — so it is
+            # collected only for the nominated hosts (gateway + internet
+            # targets). Measuring every LAN device would put worst-case cycle
+            # time past the 60 s interval whenever several hosts are down.
+            if cfg.host in self._jitter_hosts:
+                rtt_ms, jitter_ms = _ping_jitter(cfg.host)
+            else:
+                rtt_ms, jitter_ms = _ping(cfg.host), -1.0
+            new_state = self._classify_confirmed(cfg, rtt_ms, now)
 
-            rtt_rows.append({"host": cfg.host, "rtt_ms": rtt_ms, "ts": now})
+            rtt_rows.append({"host": cfg.host, "rtt_ms": rtt_ms,
+                             "jitter_ms": jitter_ms, "ts": now})
             state_rows.append({
                 "ip": cfg.host,
                 "mac": cfg.mac,
@@ -186,6 +223,56 @@ class AvailabilityMonitor:
         return result
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _threshold_for(self, cfg: TargetConfig) -> float:
+        """The DEGRADED threshold to apply to `cfg` this cycle.
+
+        Phase 3b: a learned per-device threshold when a provider is injected,
+        otherwise the target's own (global 150 ms) value. A provider that raises
+        must never take the monitoring loop down — it is an optimisation, and
+        falling back to the global constant is exactly the old behaviour.
+        """
+        if self._threshold_provider is not None:
+            try:
+                return float(self._threshold_provider(cfg.host))
+            except Exception:
+                pass  # no baseline available — fall back to the fixed threshold
+        return cfg.degraded_threshold_ms
+
+    def _classify_confirmed(
+        self, cfg: TargetConfig, rtt_ms: float, now: int
+    ) -> str:
+        """Classify `rtt_ms`, holding an unconfirmed DOWN at the prior state.
+
+        Phase 3b. A device is not offline until it has failed to answer
+        `DOWN_CONFIRMATION_CYCLES` times running; until then the monitor keeps
+        reporting the last reachable state, so a single dropped ping produces no
+        DOWN event and no matching RECOVERED. That pair, repeated, is most of
+        the 1,226 DOWN/RECOVERED events measured on the reference network.
+
+        Only a transition *into* DOWN from a reachable state is debounced. A
+        host that is already DOWN stays DOWN, and a first-ever observation is
+        reported as it is measured — there is no prior reachability to hold, and
+        claiming UP would invent one.
+
+        The `rtt_sample` row keeps the raw `-1` either way: this changes the
+        classification, never the measurement.
+        """
+        raw_state = self._classify(rtt_ms, self._threshold_for(cfg))
+        if self._down_gate is None:
+            return raw_state
+
+        evidence = self._down_gate.observe(cfg.host, raw_state == "DOWN", now)
+        if raw_state != "DOWN":
+            return raw_state
+
+        previous = self._current_state.get(cfg.host)
+        if (
+            previous in _REACHABLE_STATES
+            and evidence.consecutive < DOWN_CONFIRMATION_CYCLES
+        ):
+            return previous
+        return raw_state
 
     @staticmethod
     def _classify(rtt_ms: float, degraded_threshold: float) -> str:

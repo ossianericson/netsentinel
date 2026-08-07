@@ -400,6 +400,7 @@ class _LoggerTabMixin:
             self._logger_start_ts = _time.time()
             self._logger_outage_count = 0
             self._logger_worker.entry_received.connect(self._on_log_entry)
+            self._logger_worker.dns_sample.connect(self._on_dns_sample)
             self._logger_worker.status.connect(self._log_status_lbl.setText)
             self._logger_worker.rotated.connect(self._on_log_rotate)
             self._logger_worker.error.connect(

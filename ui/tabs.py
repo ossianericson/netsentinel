@@ -149,6 +149,12 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._log_hub_page.navigate_to.connect(self._nav_rail_go_to)
         self._last_modem_log_ts: float = 0.0
         self._last_mesh_log_ts:  float = 0.0
+        # MODEM_SIGNAL_DROP baseline — see Dashboard._modem_signal_history().
+        # 240 samples at the 30 s modem poll is ~2 h; the rule needs 20.
+        from modules.alert_baseline import RollingSeries
+        self._modem_sinr_series = RollingSeries(maxlen=240)
+        self._modem_prev_network_type: Optional[str] = None
+        self._modem_hist_cache: Optional[list] = None
 
         from ui.pages.overview_page import OverviewPage
         self._overview_page = OverviewPage(store=self._store, parent=None)
@@ -348,6 +354,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
         self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
+        self._hardware_integration_page.plugin_reachability.connect(self._on_plugin_reachability)
         self._hardware_integration_page.plugin_page_added.connect(self._on_plugin_page_added)
         self._hardware_integration_page.plugin_page_removed.connect(self._on_plugin_page_removed)
         self._hardware_integration_page.plugin_renamed.connect(self._on_plugin_page_renamed)

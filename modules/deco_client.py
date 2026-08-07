@@ -41,6 +41,12 @@ class MeshUnit:
     mac:  str    # normalised lower  "60:83:e7:88:a6:c4"
     ip:   str
     role: str    # "master" | "slave" | "unknown"
+    # Is this node still part of the mesh? MESH_DEGRADED's whole predicate is
+    # `online_count < unit_count`, so without this the rule was structurally
+    # incapable of firing. Defaults True so a provider that reports no status
+    # (and every existing caller constructing a MeshUnit positionally) keeps
+    # the previous meaning instead of manufacturing an outage.
+    online: bool = True
 
 
 @dataclass
@@ -88,6 +94,29 @@ def _norm_mac(mac: Optional[str]) -> str:
     """Normalize a MAC string; tolerates None (net_info's gateway_mac can be
     unresolved -- RULE-NET1)."""
     return (mac or "").replace("-", ":").lower().strip()
+
+
+def _node_online(d: dict) -> bool:
+    """Is this device_list entry still a live member of the mesh?
+
+    `group_status` is the authority rather than `inet_status`: MESH_DEGRADED
+    asks whether a node dropped off the *mesh*, and a node can legitimately be
+    joined while the WAN behind it is down (that is INFRA_UNREACHABLE's or
+    HOST_DOWN's claim to make, not this one).
+
+    Verified live on a 5-node Deco XE75, 2026-08-06: unplugging a satellite
+    leaves it in device_list with `group_status: "disconnected"`,
+    `inet_status: "offline"` and `device_ip: None` — it does not disappear, so
+    unit_count holds steady while online_count drops, which is the shape
+    evaluate_mesh_checks() already expects.
+
+    A payload with no `group_status` key at all is treated as online: absent
+    evidence is not evidence of absence, and inventing an outage for a
+    firmware that omits the field would fire the rule on every poll.
+    """
+    if "group_status" not in d:
+        return True
+    return str(d.get("group_status") or "").strip().lower() == "connected"
 
 
 # ── TP-Link detect ─────────────────────────────────────────────────────────────
@@ -165,9 +194,20 @@ class DecoMeshClient:
             )
             try:
                 _client.authorize()
-            except requests.exceptions.Timeout as exc:
+            except (requests.exceptions.Timeout,
+                    requests.exceptions.ConnectionError) as exc:
+                # A refused/blocked/unroutable connection is the same class of
+                # evidence as a timeout — the device did not answer — so it must
+                # also fall through to the next protocol rather than being
+                # reported as a rejected login. Before this, a ConnectionError
+                # hit the generic handler below and came back as "Deco login
+                # failed … Check that the password is correct", which
+                # _fmt_err() classifies AUTH: and hardware_integration_page
+                # deliberately treats as *reachable* — so an unplugged router
+                # raised no INFRA_UNREACHABLE at all (found live, criterion 5).
                 _last_exc = exc
-                log.debug("Deco %s timed out, trying next protocol…", _url)
+                log.debug("Deco %s did not answer (%s), trying next protocol…",
+                          _url, type(exc).__name__)
                 continue
             except Exception as exc:
                 raise MeshAuthError(
@@ -181,8 +221,12 @@ class DecoMeshClient:
             log.debug("Deco authenticated via %s  stok=%.8s...", _url, _client._stok)
             return
 
-        raise MeshAuthError(
-            f"Cannot reach Deco at {self.host} — timed out on both HTTP and HTTPS.\n"
+        # MeshApiError, not MeshAuthError: nothing answered, so there is no
+        # evidence about the credentials either way. Every caller catches both
+        # together, so this changes no control flow — only the claim the app
+        # is allowed to make about *why* it failed.
+        raise MeshApiError(
+            f"Cannot reach Deco at {self.host} — no answer on HTTP or HTTPS.\n"
             "Check: (1) IP address is correct  "
             "(2) Deco is online  "
             "(3) local web interface is not disabled in the TP-Link app."
@@ -221,10 +265,11 @@ class DecoMeshClient:
                 or _norm_mac(raw_mac)
             )
             units.append(MeshUnit(
-                name = name,
-                mac  = _norm_mac(raw_mac),
-                ip   = d.get("device_ip", ""),
-                role = d.get("role", "unknown"),
+                name   = name,
+                mac    = _norm_mac(raw_mac),
+                ip     = d.get("device_ip", "") or "",
+                role   = d.get("role", "unknown"),
+                online = _node_online(d),
             ))
         return units
 
