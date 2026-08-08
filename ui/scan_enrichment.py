@@ -1030,8 +1030,17 @@ class ScanEnrichmentMixin:
 
         # Re-classify any device still showing "Unknown Device" that now has
         # a usable hostname from mesh/plugin enrichment.
+        #
+        # Device Identity Program Phase 3: the candidate label is submitted to
+        # self._classification_claims as a claim (mirroring
+        # classify_registry_first()'s own registry-then-heuristic precedence,
+        # via claim_from_scan()) rather than applied unconditionally. Kept
+        # narrow to the "still Unknown Device" case, same as before — a
+        # device that already has a real type is left to the passive/DHCP
+        # writers' own arbitration rather than re-litigated on every hostname
+        # sync pass.
         try:
-            from modules.device_classifier import classify_registry_first as _cd
+            from modules.device_classification import claim_from_scan
             from PyQt6.QtGui import QColor as _QC
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
             _mac_to_row: dict = {}
@@ -1039,25 +1048,59 @@ class ScanEnrichmentMixin:
                 _mi = self._m1_table.item(_r, 2)
                 if _mi and _mi.text():
                     _mac_to_row[_norm_mac(_mi.text())] = _r
+            _tracker = getattr(self, "_classification_claims", None)
             for _d in self._m1_result.get("devices", []):
                 _cur_type = (_d.device_type if not isinstance(_d, dict) else _d.get("device_type", "")) or ""
                 if _cur_type and _cur_type != "Unknown Device":
                     continue
                 _is_dict = isinstance(_d, dict)
-                _new_type = _cd(
-                    mac=_d.get("mac", "") if _is_dict else getattr(_d, "mac", ""),
+                _mac = (_d.get("mac", "") if _is_dict else getattr(_d, "mac", "")) or ""
+                if not _mac or _tracker is None:
+                    continue
+                _claim = claim_from_scan(
+                    mac=_mac,
                     vendor=_d.get("vendor", "") if _is_dict else getattr(_d, "vendor", ""),
                     hostname=_d.get("hostname", "") if _is_dict else getattr(_d, "hostname", ""),
                     open_ports=set(_d.get("open_ports", []) if _is_dict else (getattr(_d, "open_ports", []) or [])),
                     os_family=_d.get("os_family", "") if _is_dict else getattr(_d, "os_family", ""),
                 )
-                if not _new_type or _new_type == "Unknown Device":
+                _arbitrated = _tracker.add(_mac, _claim)
+                if _arbitrated is None:
+                    continue
+                _new_type = _arbitrated.device_type
+                if _new_type == (_cur_type or "Unknown Device"):
                     continue
                 if isinstance(_d, dict):
                     _d["device_type"] = _new_type
+                    _d["confidence"] = _arbitrated.confidence
                 else:
                     _d.device_type = _new_type
-                _dmac2 = _norm_mac(_d.mac if not isinstance(_d, dict) else _d.get("mac", ""))
+                    try:
+                        _d.confidence = _arbitrated.confidence
+                    except AttributeError:
+                        pass  # dataclass may be frozen
+
+                _store_ref3 = getattr(self, "_store", None)
+                if _store_ref3:
+                    try:
+                        from modules.device_tracker import record_event as _rec_ev2
+                        _rec_ev2(_mac, "class_changed", _cur_type or "Unknown Device",
+                                 _new_type, "hostname_sync", _store_ref3)
+                    except Exception:
+                        pass  # non-fatal — audit trail is best-effort
+                    try:
+                        # Device Identity Program Phase 4: persist the
+                        # arbiter's verdict immediately -- previously this
+                        # upgrade lived only on the in-memory DeviceInfo and
+                        # was silently overwritten by the next scan's
+                        # unrelated classify_registry_first() result.
+                        from modules.scan_persistence import upsert_known_device as _ukd2
+                        _ukd2(_store_ref3, _mac, device_type=_new_type,
+                              confidence=_arbitrated.confidence)
+                    except Exception:
+                        pass  # non-fatal — persistence is best-effort here
+
+                _dmac2 = _norm_mac(_mac)
                 _row2 = _mac_to_row.get(_dmac2)
                 if _row2 is not None:
                     _ti = _QTI(_new_type)
@@ -1515,26 +1558,34 @@ class ScanEnrichmentMixin:
 
     def _apply_dhcp_fingerprints(self) -> None:
         """
-        For each device still showing 'Unknown Device', look up its MAC in the DHCP
-        fingerprint cache.  If a high-confidence VCI match exists, upgrade device_type
-        (and os_family when missing) and update the corresponding table cell.
+        For each device with a cached DHCP VCI fingerprint, submit it as a
+        classification claim and apply the arbiter's verdict if it changes
+        device_type (and fill os_family when the device has none).
 
-        This runs after the DHCP scan window closes, so the cache is fully populated.
-        Priority relative to other enrichment:
-            is_gateway  →  Router/Gateway       (highest)
-            MAC registry model hit              (specific model)
-            DHCP VCI fingerprint (high conf)    ← this method
-            Passive protocol observation        (next)
-            OUI + hostname heuristics           (existing classifier)
-            "Unknown Device"                    (fallback)
+        This runs after the DHCP scan window closes, so the cache is fully
+        populated.
+
+        Device Identity Program Phase 3: previously gated on "only if
+        currently Unknown Device" and "only a high-confidence fingerprint" --
+        both ad-hoc stand-ins for weighing this claim against whatever else
+        is already known about the device, which is exactly what
+        self._classification_claims now does. A low-confidence fingerprint
+        can still win for a device with no other evidence; a high-confidence
+        one no longer silently overwrites a stronger existing claim.
         """
         if not self._m1_result:
             return
         try:
             from modules.dhcp_fingerprint import get_fingerprint as _get_fp
             from modules.deco_client import _norm_mac
+            from modules.device_classification import claim_from_dhcp
+            from modules.device_identity import IdentityClass, classify_identity
             from PyQt6.QtGui import QColor
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
+
+            tracker = getattr(self, "_classification_claims", None)
+            if tracker is None:
+                return
 
             _mac_to_row: dict = {}
             if hasattr(self, "_m1_table"):
@@ -1544,17 +1595,21 @@ class ScanEnrichmentMixin:
                         _mac_to_row[_norm_mac(_mi.text())] = _r
 
             for _d in self._m1_result.get("devices", []):
-                _cur_type = (
-                    _d.device_type if not isinstance(_d, dict)
-                    else _d.get("device_type", "")
-                ) or ""
-                if _cur_type and _cur_type != "Unknown Device":
-                    continue  # already classified — don't overwrite
-
                 _mac = (
                     _d.mac if not isinstance(_d, dict) else _d.get("mac", "")
                 ) or ""
                 if not _mac:
+                    continue
+
+                # Device Identity Program Phase 2: reject a non-endpoint MAC
+                # (multicast/malformed) before spending a fingerprint lookup
+                # on it -- this pass is already keyed by the device's own MAC,
+                # not IP, so the only gap left is a row that was never a real
+                # device to begin with.
+                _ip_for_identity = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
+                if classify_identity(
+                    _mac, None, None, _ip_for_identity
+                ).identity_class is IdentityClass.NOT_A_DEVICE:
                     continue
 
                 # Override guard — never touch user-overridden devices
@@ -1567,16 +1622,34 @@ class ScanEnrichmentMixin:
                         pass  # non-fatal
 
                 fp = _get_fp(_mac)
-                if not fp or fp.confidence != "high" or not fp.device_hint:
+                claim = claim_from_dhcp(fp)
+                if claim is None:
                     continue
+
+                arbitrated = tracker.add(_mac, claim)
+                if arbitrated is None:
+                    continue
+
+                _cur_type = (
+                    _d.device_type if not isinstance(_d, dict)
+                    else _d.get("device_type", "")
+                ) or ""
+                new_type = arbitrated.device_type
+                if new_type == (_cur_type or "Unknown Device"):
+                    continue  # the arbiter's verdict didn't change
 
                 # Upgrade device_type on DeviceInfo
                 if isinstance(_d, dict):
-                    _d["device_type"] = fp.device_hint
+                    _d["device_type"] = new_type
+                    _d["confidence"] = arbitrated.confidence
                     if fp.os_hint and not _d.get("os_family"):
                         _d["os_family"] = fp.os_hint
                 else:
-                    _d.device_type = fp.device_hint
+                    _d.device_type = new_type
+                    try:
+                        _d.confidence = arbitrated.confidence
+                    except AttributeError:
+                        pass  # dataclass may be frozen
                     if fp.os_hint and not getattr(_d, "os_family", ""):
                         try:
                             _d.os_family = fp.os_hint
@@ -1589,15 +1662,25 @@ class ScanEnrichmentMixin:
                     try:
                         from modules.device_tracker import record_event as _rec_ev
                         _rec_ev(_mac, "class_changed",
-                                _cur_type or "Unknown Device", fp.device_hint,
+                                _cur_type or "Unknown Device", new_type,
                                 "dhcp", _store_ref)
                     except Exception:
                         pass  # non-fatal — audit trail is best-effort
+                    try:
+                        # Device Identity Program Phase 4: persist the
+                        # arbiter's verdict immediately so it survives the
+                        # next scan instead of reverting to whatever
+                        # classify_registry_first() decides at scan time.
+                        from modules.scan_persistence import upsert_known_device as _ukd
+                        _ukd(_store_ref, _mac, device_type=new_type,
+                             confidence=arbitrated.confidence)
+                    except Exception:
+                        pass  # non-fatal — persistence is best-effort here
 
                 # Update Device Type cell (col 5) in the Devices table
                 _row = _mac_to_row.get(_norm_mac(_mac))
                 if _row is not None and hasattr(self, "_m1_table"):
-                    _ti = _QTI(fp.device_hint)
+                    _ti = _QTI(new_type)
                     _ti.setForeground(QColor(_s.TEXT_PRIMARY))
                     _ti.setToolTip(_s.safe_tooltip(fp.evidence or "Device type from DHCP VCI fingerprint"))
                     self._m1_table.setItem(_row, 5, _ti)
@@ -1612,29 +1695,66 @@ class ScanEnrichmentMixin:
         Upgrades the device_type of any scanned device that currently shows
         "Unknown Device" or has a lower-confidence classification.
         Only "high" confidence passive observations replace existing labels.
+
+        Device Identity Program Phase 2: matched by normalised MAC when the
+        observation carries one (PassiveObservation.mac is filled by an ARP
+        cache lookup after capture — see passive_observer.py), falling back
+        to IP only when no MAC could be resolved. IP-only matching attributes
+        an observation to whichever device currently holds that address, which
+        is wrong on this network's own reference database on any of the 7 IPs
+        presently claimed by more than one MAC (see
+        docs/spikes/device-identity-baseline.md).
+
+        Device Identity Program Phase 3: the observation is submitted to
+        self._classification_claims as a claim rather than applied directly —
+        it only overwrites device_type when the arbiter's verdict, weighed
+        against every other claim on record for this device this scan,
+        actually changes. This replaces the old "high confidence only
+        overwrites, low confidence only fills a blank" rule, which let
+        whichever source ran last silently win regardless of what a stronger
+        earlier claim had already established.
         """
         try:
-            from modules.device_classifier import classify_from_observation as _cfo
+            from modules.device_classification import claim_from_passive
+            from modules.device_identity import IdentityClass, classify_identity
+            from modules.deco_client import _norm_mac
             from PyQt6.QtGui import QColor
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
 
             if not self._m1_result:
                 return
 
-            obs_ip   = getattr(obs, "ip", "")
-            obs_conf = getattr(obs, "confidence", "low")
-            if not obs_ip:
+            obs_ip  = getattr(obs, "ip", "")
+            obs_mac = _norm_mac(getattr(obs, "mac", "") or "")
+            if not obs_ip and not obs_mac:
                 return
 
-            new_result = _cfo(obs)
-            new_type   = new_result.device_type
-            if not new_type or new_type == "Unknown Device":
+            # Reject an observation about a non-endpoint address (multicast,
+            # malformed) before spending a classification on it. Only checked
+            # when a MAC was actually resolved -- an empty obs_mac is the
+            # ordinary "ARP cache lookup hasn't resolved it yet" case, not a
+            # non-device signal, and must still fall through to IP matching.
+            if obs_mac and classify_identity(
+                obs_mac, None, None, obs_ip
+            ).identity_class is IdentityClass.NOT_A_DEVICE:
                 return
+
+            claim = claim_from_passive(obs)
+            if claim is None:
+                return
+
+            tracker = getattr(self, "_classification_claims", None)
 
             for _d in self._m1_result.get("devices", []):
-                _dip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
-                if _dip != obs_ip:
-                    continue
+                _dmac = _norm_mac((_d.get("mac", "") if isinstance(_d, dict)
+                                    else getattr(_d, "mac", "")) or "")
+                if obs_mac:
+                    if _dmac != obs_mac:
+                        continue
+                else:
+                    _dip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
+                    if _dip != obs_ip:
+                        continue
 
                 # Override guard — never touch user-overridden devices
                 _mac_ov = (
@@ -1649,17 +1769,22 @@ class ScanEnrichmentMixin:
                     except Exception:
                         pass  # non-fatal
 
+                if tracker is None or not _dmac:
+                    break  # no claim history to arbitrate against — skip
+
+                arbitrated = tracker.add(_dmac, claim)
+                if arbitrated is None:
+                    break
+
                 _cur = (_d.device_type if not isinstance(_d, dict)
                         else _d.get("device_type", "")) or ""
-                # Only overwrite if current label is unknown or the observation is high confidence
-                if _cur and _cur != "Unknown Device" and obs_conf != "high":
-                    break
-                # Don't overwrite a high-confidence existing label with a low-confidence one
-                if _cur and _cur not in ("Unknown Device", "") and obs_conf == "low":
-                    break
+                new_type = arbitrated.device_type
+                if new_type == (_cur or "Unknown Device"):
+                    break  # the arbiter's verdict didn't change — nothing to apply
 
                 if isinstance(_d, dict):
                     _d["device_type"] = new_type
+                    _d["confidence"] = arbitrated.confidence
                     _methods = _d.get("discovery_methods", [])
                     _proto = getattr(obs, "protocol", "")
                     _tag   = f"passive-{_proto}" if _proto else "passive"
@@ -1668,6 +1793,10 @@ class ScanEnrichmentMixin:
                         _d["discovery_methods"] = _methods
                 else:
                     _d.device_type = new_type
+                    try:
+                        _d.confidence = arbitrated.confidence
+                    except AttributeError:
+                        pass  # dataclass may be frozen in some code paths
                     _proto = getattr(obs, "protocol", "")
                     _tag   = f"passive-{_proto}" if _proto else "passive"
                     _methods = list(getattr(_d, "discovery_methods", None) or [])
@@ -1690,12 +1819,30 @@ class ScanEnrichmentMixin:
                                 "passive", _store_ref)
                     except Exception:
                         pass  # non-fatal — audit trail is best-effort
+                    try:
+                        # Device Identity Program Phase 4: persist the
+                        # arbiter's verdict immediately so it survives the
+                        # next scan instead of reverting to whatever
+                        # classify_registry_first() decides at scan time.
+                        from modules.scan_persistence import upsert_known_device as _ukd3
+                        _ukd3(_store_ref, _mac_str, device_type=new_type,
+                              confidence=arbitrated.confidence)
+                    except Exception:
+                        pass  # non-fatal — persistence is best-effort here
 
-                # Update the M1 table cell
+                # Update the M1 table cell — matched by the same key (MAC when
+                # known, else IP) used to find _d above, not re-derived from
+                # obs_ip alone: that would re-introduce the IP-collision bug
+                # this fix exists to close, one line lower in the same method.
                 if hasattr(self, "_m1_table"):
                     for _r in range(self._m1_table.rowCount()):
-                        _ri = self._m1_table.item(_r, 0)
-                        if _ri and _ri.text() == obs_ip:
+                        if _dmac:
+                            _ri = self._m1_table.item(_r, 2)
+                            _row_matches = bool(_ri) and _norm_mac(_ri.text()) == _dmac
+                        else:
+                            _ri = self._m1_table.item(_r, 0)
+                            _row_matches = bool(_ri) and _ri.text() == obs_ip
+                        if _row_matches:
                             _ti = _QTI(new_type)
                             _ti.setForeground(QColor(_s.TEXT_PRIMARY))
                             _summary = getattr(obs, "raw_summary", "")

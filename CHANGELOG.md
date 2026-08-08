@@ -4,6 +4,23 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.4
+
+**Added**
+- `tools/identity_replay.py` — read-only measurement harness for device classification churn, the identity-program counterpart to `tools/alert_replay.py`; reports class-change churn per device-day, no-op share, `known_device.device_type` agreement with its own audit trail, confidence coverage, and IP-collision count. Baseline: `docs/spikes/device-identity-baseline.md`
+- `modules/device_classification.py` — the arbiter that decides what a device *is* when several sources disagree: `arbitrate()` combines competing classification claims into one verdict, favouring corroboration from independent sources over whichever source ran last, and reducing confidence when sources genuinely conflict instead of silently picking the newest one
+- A confidence-and-evidence tooltip on the Devices page's Device Type column, naming why a device is classified the way it is (vendor match, hostname match, open ports, MAC registry hit)
+- `IDENTITY_CHURN` check in `python app.py --audit` — fails if classification churn or its no-op share regress past the program's thresholds
+
+**Fixed**
+- The device-classification audit trail recorded a "type changed" event even when the type hadn't actually changed — 47.5% of all recorded events on a real 31-device network were exactly this, from a writer that compared against a stale in-memory snapshot instead of the value it was about to write
+- Passive mDNS/SSDP device-type observations were matched to a device by IP address, so on any of the (commonly several) IP addresses currently shared by more than one MAC, an observation about one device could silently reclassify a different one
+- Five independent classification writers (scan-time heuristic, MAC-registry lookup, DHCP VCI fingerprint, passive mDNS/SSDP, hostname-triggered re-classify) each overwrote `device_type` unconditionally with no memory of competing evidence — measured at 219.5 audit-trail events/day (7.08/device-day) on a stable 31-device network, agreeing with the type actually shown to the user only 23.1% of the time. Every writer now submits a claim to a shared arbiter instead
+- `classify_with_evidence()`'s confidence score was computed on every classification and never stored anywhere — `known_device.confidence` was 0.0 on every row of every install. It's now persisted from the scan's own classification and from every passive/DHCP/hostname-sync upgrade that changes a device's type
+- Multicast, broadcast and other non-device addresses could still be classified and written into the passive-observation and DHCP-fingerprint enrichment paths despite already being excluded from the main scan write path
+
+---
+
 ### v2.2.3
 
 **Added**

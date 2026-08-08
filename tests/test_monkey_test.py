@@ -640,7 +640,7 @@ def test_attach_procdump_terminates_previous_instance(monkeypatch, tmp_path):
     old = _FakePopen([])
     t._procdump_proc = old
     monkeypatch.setattr(t, "_procdump_path", lambda: r"C:\tools\procdump64.exe")
-    monkeypatch.setattr(mod.subprocess, "Popen", lambda args, **kw: _FakePopen(args, **kw))
+    monkeypatch.setattr(mod.subprocess, "Popen", _FakePopen)
 
     t._attach_procdump(9999)
 

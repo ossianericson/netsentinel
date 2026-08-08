@@ -35,7 +35,11 @@ def test_tiers_are_ordered_critical_highest():
 def test_tier_comparison_is_usable_as_a_min_tier_floor():
     assert Tier.CRITICAL >= Tier.INFRASTRUCTURE
     assert not (Tier.PERSONAL >= Tier.INFRASTRUCTURE)
-    assert Tier.PERSONAL >= Tier.PERSONAL
+    # A floor of PERSONAL must admit PERSONAL itself, so >= has to be reflexive.
+    # Bound to a local because `Tier.PERSONAL >= Tier.PERSONAL` written out is
+    # reported by CodeQL py/comparison-of-identical-expressions.
+    floor = Tier.PERSONAL
+    assert Tier.PERSONAL >= floor
 
 
 def test_tier_values_are_stable_lowercase_strings():

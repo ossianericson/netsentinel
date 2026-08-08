@@ -225,6 +225,15 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._m5_result   = None
         self._lldp_result = None  # list[LldpNeighbor] from Sprint 5 LLDP worker
 
+        # Device Identity Program Phase 3: per-MAC classification-claim
+        # accumulator shared by scan_wiring.py (seeds the scan-time claim) and
+        # scan_enrichment.py (adds passive/DHCP/mesh-hostname claims as they
+        # arrive) — both are mixed into this same Dashboard instance. Reset in
+        # _m1_update_scan_registries() whenever a new scan result replaces the
+        # device list.
+        from modules.device_classification import ClaimTracker
+        self._classification_claims = ClaimTracker()
+
         # Security audit coordinator state
         self._pending_security_tools: list = []
 

@@ -118,6 +118,31 @@ class TestDeviceChangeEvents:
         macs = {e["mac"] for e in all_evs}
         assert {"aa:bb:cc:00:04:02", "aa:bb:cc:00:04:03"} <= macs
 
+    def test_noop_change_is_not_recorded(self, store):
+        """Device Identity Program Phase 1: old_value == new_value is a pure
+        no-op write -- 47.5% of class_changed rows on the reference network
+        were exactly this, from a writer that stamps old_value from an
+        in-memory DeviceInfo that was often already equal to what it wrote.
+        No row means the Timeline / device-detail audit trail stops rendering
+        "Type identified" for a device whose type never actually changed."""
+        mac = "aa:bb:cc:00:04:04"
+        store.record_device_change_event(mac, "class_changed", "Router", "Router", "scan")
+        assert store.get_device_change_events(mac) == []
+
+    def test_noop_change_with_both_empty_is_not_recorded(self, store):
+        mac = "aa:bb:cc:00:04:05"
+        store.record_device_change_event(mac, "class_changed", "", "", "scan")
+        assert store.get_device_change_events(mac) == []
+
+    def test_real_change_is_still_recorded(self, store):
+        """The guard must only suppress a true no-op -- a genuine change from
+        one value to another (including from/to blank) must still be written."""
+        mac = "aa:bb:cc:00:04:06"
+        store.record_device_change_event(mac, "class_changed", "", "Router", "scan")
+        store.record_device_change_event(mac, "class_changed", "Router", "Switch", "scan")
+        evs = store.get_device_change_events(mac)
+        assert len(evs) == 2
+
 
 class TestTopologySnapshots:
     def test_save_and_get_last(self, store):

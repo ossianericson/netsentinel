@@ -18,6 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from modules.device_classification import claim_from_scan
 from modules.device_classifier import is_randomized_mac
 from modules.device_identity import IdentityClass, classify_identity
 from modules.device_stability import RoleEvidence
@@ -85,6 +86,38 @@ def _normalise(d) -> Optional[TrackedDevice]:
         mac=mac, ip=ip, hostname=hn, vendor=vnd, device_type=dt,
         name_resolved_fresh=bool(fresh),
     )
+
+
+def _scan_confidence(raw, td: TrackedDevice) -> Optional[float]:
+    """Confidence for the device_type this scan is about to persist.
+
+    Device Identity Program Phase 4: claim_from_scan() recomputes the same
+    registry-then-heuristic precedence rogue_device.py's
+    classify_registry_first() already used to produce td.device_type — pure
+    and deterministic, so identical inputs reproduce that decision rather
+    than second-guessing it. Only trusted when the recomputed type actually
+    agrees with td.device_type: `raw` may carry a type this recomputation
+    cannot reproduce (no open_ports/os_family on it, or the caller assigned
+    the label directly, as a handful of tests do), and asserting a confidence
+    for a type we didn't independently derive would be dishonest. None lets
+    upsert_known_device()'s COALESCE leave whatever was already stored.
+    """
+    is_dict = isinstance(raw, dict)
+    open_ports = set(
+        (raw.get("open_ports", []) if is_dict else getattr(raw, "open_ports", [])) or []
+    )
+    os_family = (raw.get("os_family", "") if is_dict else getattr(raw, "os_family", "")) or ""
+    is_gateway = bool(
+        raw.get("is_gateway", False) if is_dict else getattr(raw, "is_gateway", False)
+    )
+    claim = claim_from_scan(
+        mac=td.mac, vendor=td.vendor, hostname=td.hostname,
+        open_ports=open_ports, os_family=os_family, is_gateway=is_gateway,
+    )
+    expected_type = td.device_type or "Unknown Device"
+    if claim.device_type != expected_type:
+        return None
+    return claim.confidence
 
 
 # ── Main class ────────────────────────────────────────────────────────────────
@@ -212,6 +245,7 @@ class DeviceTracker:
                 # it — so it was 0 for every row on every install. The importance
                 # model needs it to tell a privacy MAC from an OUI-backed one.
                 mac_randomized=is_randomized_mac(td.mac),
+                confidence=_scan_confidence(raw, td),
             )
             known_macs.add(td.mac)
 

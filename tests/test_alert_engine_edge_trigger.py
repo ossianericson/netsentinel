@@ -197,14 +197,6 @@ class TestDuplicateOutageSuppression:
 
     def test_loss_still_fires_for_a_lossy_host_that_is_not_down(self):
         """rtt < 0 with state != DOWN is a genuinely different fact."""
-        eng = _engine(
-            AlertRule("Host Down", "HOST_DOWN", cooldown_s=0),
-            AlertRule("Packet Loss", "LOSS_THRESHOLD", cooldown_s=0),
-        )
-        eng.set_duplicate_outage_suppression(True)
-        fired = _run(eng, [
-            {"10.0.0.9": "DEGRADED"},
-        ])
         # DEGRADED with a dropped packet — HOST_DOWN says nothing about this.
         eng2 = _engine(
             AlertRule("Host Down", "HOST_DOWN", cooldown_s=0),

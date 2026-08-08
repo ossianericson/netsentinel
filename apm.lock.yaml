@@ -37,7 +37,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:a6b8bc5a4c4674f3b83bf6ab7d38ca46fe50e6f0dbe58db949436adb2586da7c
+  content_hash: sha256:b86b2bb1029bbc71c01764e1c740dd364ea7180b745ef0f5cab662f96c3db94f
 - kind: project-relative
   target: claude
   value: .claude/rules/session-workflow.md
@@ -67,6 +67,6 @@ local_deployed_file_hashes:
   .claude/rules/architecture.md: sha256:d8b06925fd850d1c321e28357455c8d24d1159841983f014b69e2d299a948a40
   .claude/rules/changelog.md: sha256:a3223ba6da72d0faa0a43b7cd898362b985776f534fac0a83ba96e30dc71c496
   .claude/rules/development-rules.md: sha256:722672be83e54d551e67aad3aeda13319f30c5a7c40f67a1d39a47cece4b358c
-  .claude/rules/project-vision.md: sha256:a6b8bc5a4c4674f3b83bf6ab7d38ca46fe50e6f0dbe58db949436adb2586da7c
+  .claude/rules/project-vision.md: sha256:b86b2bb1029bbc71c01764e1c740dd364ea7180b745ef0f5cab662f96c3db94f
   .claude/rules/session-workflow.md: sha256:b767fc662ac6ae516f8e0aae3b9a021fb1c2c8cf67531ca3256eabe7c76e1922
   .claude/rules/tests.md: sha256:4efa31a980c768744c461b782d56c970dc1d43226897e531f7b9cd5bfe75f430

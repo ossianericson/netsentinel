@@ -6,7 +6,7 @@ returns AuditFinding(code, ok, detail), nothing here raises on a failed
 invariant — a FAIL is a normal, expected result until the phase that fixes
 the underlying defect lands.
 
-Two families of check:
+Three families of check:
   - Data-driven (CTA_LABELS_RESOLVE, CTA_TABLE_PARITY): take already-loaded
     Python data as plain arguments, so they are synthetically unit-testable
     with no filesystem/import dependency of their own.
@@ -15,6 +15,10 @@ Two families of check:
     tree, mirroring alert_audit.py::audit_source_tree()'s style — no import
     of the (PyQt-laden) ui/ files being inspected, so this module stays
     PyQt-free even though it reports on ui/ wiring.
+  - Live-database (IDENTITY_CHURN): reads a real NetSentinel.db when one is
+    present. Unlike the other two families this can genuinely have nothing to
+    check — a fresh install or a CI sandbox has no database yet — and that is
+    a PASS, not a violation; see audit_identity_churn()'s own docstring.
 
 Driven by ``python app.py --audit`` (app.py's CLI entry point, alongside the
 existing --audit-alerts) and exercised directly by
@@ -38,6 +42,7 @@ __all__ = [
     "audit_queue_terminates",
     "audit_guidance_render_paths",
     "audit_grade_gating",
+    "audit_identity_churn",
     "run_all",
 ]
 
@@ -436,6 +441,103 @@ def audit_grade_gating(repo_root: Path) -> List[AuditFinding]:
     )]
 
 
+# ── S8: Device Identity Program — classification churn regression gate ─────
+
+# Acceptance criteria from the Device Identity & Classification Program plan,
+# measured against docs/spikes/device-identity-baseline.md's baseline (47.5%
+# no-op share, 7.08 class_changed/device-day): criterion 1 (no-op share -> 0)
+# and criterion 2 (per-device-day <= 0.5). A trailing window, not full
+# history: device_events is an append-only audit log nothing ever prunes, so
+# the pre-fix churn baked into old rows would keep this permanently failing
+# if it were measured over all time. 7 days matches the plan's own "after a
+# normal week of use" framing for these criteria.
+IDENTITY_CHURN_WINDOW_DAYS = 7.0
+IDENTITY_CHURN_MAX_PER_DEVICE_DAY = 0.5
+IDENTITY_CHURN_MAX_NOOP_SHARE = 0.0
+
+
+def audit_identity_churn(db_path: Optional[Path] = None) -> List[AuditFinding]:
+    """class_changed churn must not regress past the Device Identity
+    Program's acceptance thresholds: 0% pure no-op writes (old_value ==
+    new_value -- the record_device_change_event() guard from that program's
+    Phase 1) and <= 0.5 class_changed events per device-day, both measured
+    over the trailing IDENTITY_CHURN_WINDOW_DAYS days.
+
+    PASSes with an explanatory detail when there is nothing to measure yet --
+    no database at all, or a database with no device_events history -- since
+    this is a live-database regression gate, not a structural correctness
+    check the way its sibling audits are. Every SQL string here is a literal
+    with no interpolated identifiers, so it carries no injection surface
+    despite not going through MetricStore's public API (this module is
+    intentionally DB-independent of MetricStore, mirroring alert_audit.py).
+    """
+    import datetime
+    import sqlite3
+
+    if db_path is None:
+        from modules.utils import get_app_data_dir
+        db_path = get_app_data_dir() / "NetSentinel.db"
+    if not db_path.exists():
+        return [AuditFinding(
+            "IDENTITY_CHURN", True,
+            f"No database at {db_path} — check skipped (nothing to measure yet)",
+        )]
+
+    uri = "file:" + str(db_path).replace("\\", "/") + "?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        bounds = conn.execute("SELECT MIN(ts), MAX(ts) FROM device_events").fetchone()
+        lo, hi = (bounds[0], bounds[1]) if bounds else (None, None)
+        if lo is None or hi is None:
+            return [AuditFinding(
+                "IDENTITY_CHURN", True,
+                "No device_events history yet — check skipped",
+            )]
+        hi_dt = datetime.datetime.strptime(hi, "%Y-%m-%d %H:%M:%S")
+        since = (hi_dt - datetime.timedelta(days=IDENTITY_CHURN_WINDOW_DAYS)).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        total = conn.execute(
+            "SELECT COUNT(*) FROM device_events WHERE event_type='class_changed' AND ts >= ?",
+            (since,),
+        ).fetchone()[0]
+        noop = conn.execute(
+            "SELECT COUNT(*) FROM device_events WHERE event_type='class_changed' "
+            "AND ts >= ? AND old_value = new_value",
+            (since,),
+        ).fetchone()[0]
+        n_devices = conn.execute("SELECT COUNT(*) FROM known_device").fetchone()[0]
+    finally:
+        conn.close()
+
+    noop_share = (noop / total) if total else 0.0
+    per_device_day = (
+        total / IDENTITY_CHURN_WINDOW_DAYS / n_devices if n_devices else 0.0
+    )
+
+    problems = []
+    if noop_share > IDENTITY_CHURN_MAX_NOOP_SHARE:
+        problems.append(
+            f"{noop}/{total} class_changed rows ({noop_share:.1%}) are pure "
+            f"no-ops (old_value == new_value) in the last "
+            f"{IDENTITY_CHURN_WINDOW_DAYS:.0f} days — the "
+            "record_device_change_event() no-op guard should make this 0"
+        )
+    if per_device_day > IDENTITY_CHURN_MAX_PER_DEVICE_DAY:
+        problems.append(
+            f"class_changed churn is {per_device_day:.2f}/device-day over the "
+            f"last {IDENTITY_CHURN_WINDOW_DAYS:.0f} days, above the "
+            f"{IDENTITY_CHURN_MAX_PER_DEVICE_DAY} ceiling"
+        )
+    return [AuditFinding(
+        "IDENTITY_CHURN", not problems,
+        "class_changed churn within the Device Identity Program's thresholds"
+        if not problems else "; ".join(problems),
+    )]
+
+
 # ── CLI entry point ────────────────────────────────────────────────────────────
 
 def run_all(repo_root: Path) -> List[AuditFinding]:
@@ -460,6 +562,7 @@ def run_all(repo_root: Path) -> List[AuditFinding]:
     findings += audit_queue_terminates(repo_root)
     findings += audit_guidance_render_paths(repo_root)
     findings += audit_grade_gating(repo_root)
+    findings += audit_identity_churn()
     return findings
 
 

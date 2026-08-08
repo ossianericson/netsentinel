@@ -100,8 +100,18 @@ class _DeviceWritesMixin:
         new_value: str,
         source: str,
     ) -> None:
-        """Write a row to the device_events audit table."""
-        if not mac:
+        """Write a row to the device_events audit table.
+
+        Device Identity Program Phase 1: a no-op write (old_value == new_value)
+        is never recorded. Callers pass old_value from an in-memory snapshot
+        that is frequently already equal to what they are about to write —
+        measured at 47.5% of all class_changed rows on the reference network —
+        and a row claiming a change that did not happen makes the audit trail
+        (Timeline, device-detail "Type identified") actively misleading rather
+        than merely noisy. This is the single choke point for the write, so
+        the guard covers every caller without touching them individually.
+        """
+        if not mac or (old_value or "") == (new_value or ""):
             return
         now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         self._execute_write(

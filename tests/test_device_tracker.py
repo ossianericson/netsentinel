@@ -697,3 +697,62 @@ class TestRedundantReadElimination:
                 "the only known_device SELECT left must be the importance-tier "
                 f"refresh, not a re-read of the injected snapshot:\n{sql}"
             )
+
+
+# ── Device Identity Program Phase 4 — confidence persisted per scan ──────────
+
+class TestClassificationConfidencePersisted:
+    """process_scan() must pass a real confidence to upsert_known_device()
+    instead of leaving the column at its 0.0 default forever (measured: 0 of
+    31 known_device rows had confidence > 0 on the reference network --
+    docs/spikes/device-identity-baseline.md). The confidence is only trusted
+    when a fresh recomputation via claim_from_scan() (the same registry-then-
+    heuristic precedence rogue_device.py's classify_registry_first() already
+    used) agrees with the device_type this scan is about to persist -- a
+    mismatch means the scan supplied a type this recomputation can't verify
+    (e.g. it lacked open_ports/os_family), and the column is left untouched
+    rather than asserting a confidence for the wrong reason.
+    """
+
+    def test_confidence_persisted_when_heuristic_agrees(self, tracker, store):
+        dev = {
+            "mac": "aa:bb:cc:00:07:01", "ip": "192.168.1.70",
+            "hostname": "", "vendor": "Lexmark",
+            "device_type": "Print Server", "open_ports": [9100],
+        }
+        tracker.process_scan([dev])
+        kd = store.get_known_devices()["aa:bb:cc:00:07:01"]
+        assert kd.confidence > 0.0
+
+    def test_confidence_left_unset_when_heuristic_disagrees(self, tracker, store):
+        """_dev()'s default device_type ("Laptop") is an externally-assigned
+        label the heuristic (vendor=Apple, no ports/hostname match) would not
+        independently reproduce -- confidence must not be asserted for it."""
+        tracker.process_scan([_dev()])
+        kd = store.get_known_devices()["aa:bb:cc:11:22:33"]
+        assert kd.confidence == 0.0
+
+    def test_confidence_from_registry_hit(self, tracker, store, monkeypatch):
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Streaming Stick"},
+        )
+        dev = {
+            "mac": "aa:bb:cc:00:07:02", "ip": "192.168.1.71",
+            "hostname": "", "vendor": "", "device_type": "Streaming Stick",
+        }
+        tracker.process_scan([dev])
+        kd = store.get_known_devices()["aa:bb:cc:00:07:02"]
+        assert kd.confidence >= 0.8
+
+    def test_confidence_persists_across_a_repeat_scan(self, tracker, store):
+        """The column must not be quietly reset back to 0 on every scan."""
+        dev = {
+            "mac": "aa:bb:cc:00:07:03", "ip": "192.168.1.72",
+            "hostname": "", "vendor": "Lexmark",
+            "device_type": "Print Server", "open_ports": [9100],
+        }
+        tracker.process_scan([dev])
+        tracker.process_scan([dev])
+        kd = store.get_known_devices()["aa:bb:cc:00:07:03"]
+        assert kd.confidence > 0.0

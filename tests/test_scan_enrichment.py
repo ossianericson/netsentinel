@@ -33,6 +33,7 @@ def _make_table(rows: list[tuple[str, str, str]]) -> QTableWidget:
 
 def _make_stub(table, m1_result, net_info, plugin_enrichments=None):
     """Return a minimal ScanEnrichmentMixin instance wired to a real QTableWidget."""
+    from modules.device_classification import ClaimTracker
     from ui.scan_enrichment import ScanEnrichmentMixin
 
     class _Stub(ScanEnrichmentMixin):
@@ -48,6 +49,7 @@ def _make_stub(table, m1_result, net_info, plugin_enrichments=None):
     stub._plugin_nodes = {}
     stub._m1_group_by_node = False
     stub._plugin_hardware_name = "TestRouter"
+    stub._classification_claims = ClaimTracker()
     return stub
 
 
@@ -1142,3 +1144,299 @@ def test_modem_plugin_writes_no_mesh_snapshot(monkeypatch):
     assert calls == [], "a modem poll must never write a mesh_signal_log row"
 
     _cleanup(stub._m1_table)
+
+
+# ---------------------------------------------------------------------------
+# Device Identity Program Phase 3 — hostname-sync re-classify pass routes
+# through the arbiter (ui/scan_enrichment.py::_apply_mesh_enrichment, writer 2
+# in the program plan's root-cause table)
+# ---------------------------------------------------------------------------
+
+def test_hostname_sync_reclassify_routes_through_arbiter_and_records_a_claim(monkeypatch):
+    """A device still 'Unknown Device' whose hostname the sync step just
+    filled in from the table gets a claim submitted to the tracker (so a
+    later passive/DHCP claim correctly corroborates or conflicts against it)
+    and an audit event, instead of an unconditional in-memory overwrite."""
+    from unittest.mock import MagicMock
+
+    ip, mac = "192.168.1.60", "aa:bb:cc:dd:ee:06"
+    table = _make_table([(ip, "printer1", mac)])
+    dev = _DevObj(ip, mac, device_type="Unknown Device")
+    dev.vendor = "Lexmark"
+    dev.hostname = ""
+    dev.open_ports = [9100]
+    dev.os_family = ""
+
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+    store = MagicMock()
+    store.get_classification_override.return_value = None
+    stub._store = store
+
+    stub._apply_mesh_enrichment()
+
+    assert dev.hostname == "printer1"  # sanity: the hostname sync step ran first
+    assert dev.device_type != "Unknown Device"
+    assert stub._classification_claims.claim_count(mac) == 1
+    store.record_device_change_event.assert_called_once()
+    call_args = store.record_device_change_event.call_args.args
+    assert call_args[0] == mac
+    assert call_args[1] == "class_changed"
+    assert call_args[2] == "Unknown Device"
+    assert call_args[3] == dev.device_type
+
+    # Device Identity Program Phase 4: the arbitrated result must also reach
+    # known_device immediately, not live only on the in-memory DeviceInfo.
+    # Routed through modules.scan_persistence.upsert_known_device() (ARCH
+    # RULE 1 — the UI layer never writes to MetricStore directly), which
+    # calls store.upsert_known_device(mac, **kwargs) with mac positional.
+    store.upsert_known_device.assert_called_once()
+    upsert_args, upsert_kwargs = store.upsert_known_device.call_args
+    assert upsert_args[0] == mac
+    assert upsert_kwargs["device_type"] == dev.device_type
+    assert upsert_kwargs["confidence"] > 0.0
+
+    _cleanup(table)
+
+
+def test_hostname_sync_reclassify_skips_an_already_classified_device():
+    """Unchanged from the pre-arbiter behaviour: a device with a real type
+    already is left alone by this pass."""
+    ip, mac = "192.168.1.61", "aa:bb:cc:dd:ee:07"
+    table = _make_table([(ip, "somehost", mac)])
+    dev = _DevObj(ip, mac, device_type="Games Console")
+    dev.vendor = ""
+    dev.hostname = ""
+    dev.open_ports = []
+    dev.os_family = ""
+
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+    stub._apply_mesh_enrichment()
+
+    assert dev.device_type == "Games Console"
+    assert stub._classification_claims.claim_count(mac) == 0
+
+    _cleanup(table)
+
+
+# ---------------------------------------------------------------------------
+# Device Identity Program Phase 2 — _on_passive_observation() matched by MAC
+# ---------------------------------------------------------------------------
+
+class _DevObj:
+    """A minimal object-shaped device — mirrors modules.rogue_device.DeviceInfo
+    closely enough to exercise the non-dict branch of _on_passive_observation."""
+
+    def __init__(self, ip, mac, device_type=""):
+        self.ip = ip
+        self.mac = mac
+        self.device_type = device_type
+        self.discovery_methods = []
+
+
+def _make_passive_obs(ip, mac="", device_hint="IP Camera", confidence="high", protocol="mdns"):
+    from modules.passive_observer import PassiveObservation
+    return PassiveObservation(
+        ip=ip, mac=mac, protocol=protocol, service_type="_test._tcp",
+        device_hint=device_hint, confidence=confidence,
+    )
+
+
+def test_passive_observation_matches_by_mac_not_ip_collision():
+    """Two devices share one IP (the exact confound the baseline measured on
+    7 addresses) — the observation must upgrade only the device whose own MAC
+    matches obs.mac, never the other device merely because it shares the IP."""
+    SHARED_IP = "192.168.1.50"
+    TARGET_MAC = "aa:bb:cc:dd:ee:01"
+    OTHER_MAC = "aa:bb:cc:dd:ee:02"
+
+    table = _make_table([
+        (SHARED_IP, "", OTHER_MAC),
+        (SHARED_IP, "", TARGET_MAC),
+    ])
+    target = _DevObj(SHARED_IP, TARGET_MAC, device_type="Unknown Device")
+    other = _DevObj(SHARED_IP, OTHER_MAC, device_type="Unknown Device")
+    # `other` deliberately listed FIRST: matching by IP alone (the old
+    # behaviour) would hit it before ever reaching `target`, upgrading the
+    # wrong device. MAC-based matching must find `target` regardless of order.
+    stub = _make_stub(table, {"devices": [other, target]}, net_info=None)
+
+    obs = _make_passive_obs(SHARED_IP, mac=TARGET_MAC)
+    stub._on_passive_observation(obs)
+
+    assert target.device_type == "IP Camera"
+    assert other.device_type == "Unknown Device", (
+        "matching by IP alone would have upgraded whichever device the loop "
+        "reached first, regardless of which one the observation was about"
+    )
+
+    _cleanup(table)
+
+
+def test_passive_observation_falls_back_to_ip_when_mac_unresolved():
+    """PassiveObservation.mac is '' until the ARP cache lookup resolves it —
+    that must still match by IP, not silently drop the observation."""
+    ip = "192.168.1.51"
+    mac = "aa:bb:cc:dd:ee:03"
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+
+    obs = _make_passive_obs(ip, mac="")
+    stub._on_passive_observation(obs)
+
+    assert dev.device_type == "IP Camera"
+    _cleanup(table)
+
+
+def test_dhcp_fingerprint_pass_rejects_multicast_mac():
+    """The DHCP VCI fingerprint pass is already keyed by the device's own MAC
+    (never IP) -- the Phase 2 gap here is only the non-device check, added
+    alongside the passive-observation fix for the same reason."""
+    from modules.dhcp_fingerprint import DhcpFingerprint, clear_cache, update_cache
+
+    ip = "239.255.255.250"
+    mcast_mac = "01:00:5e:7f:ff:fa"
+    table = _make_table([(ip, "", mcast_mac)])
+    dev = _DevObj(ip, mcast_mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+
+    clear_cache()
+    update_cache({mcast_mac: DhcpFingerprint(
+        device_hint="IP Camera", confidence="high", evidence="VCI: test",
+    )})
+    try:
+        stub._apply_dhcp_fingerprints()
+    finally:
+        clear_cache()
+
+    assert dev.device_type == "Unknown Device"
+    _cleanup(table)
+
+
+def test_dhcp_fingerprint_pass_persists_the_arbitrated_result():
+    """Device Identity Program Phase 4: same persistence requirement as the
+    passive-observation writer, for the DHCP VCI fingerprint writer."""
+    from unittest.mock import MagicMock
+    from modules.dhcp_fingerprint import DhcpFingerprint, clear_cache, update_cache
+
+    ip, mac = "192.168.1.55", "aa:bb:cc:dd:ee:09"
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+    store = MagicMock()
+    store.get_classification_override.return_value = None
+    stub._store = store
+
+    clear_cache()
+    update_cache({mac: DhcpFingerprint(
+        device_hint="Windows PC", confidence="high", evidence="VCI: MSFT 5.0",
+    )})
+    try:
+        stub._apply_dhcp_fingerprints()
+    finally:
+        clear_cache()
+
+    assert dev.device_type == "Windows PC"
+    store.upsert_known_device.assert_called_once()
+    args, kwargs = store.upsert_known_device.call_args
+    assert args[0] == mac
+    assert kwargs["device_type"] == "Windows PC"
+    assert kwargs["confidence"] > 0.0
+
+    _cleanup(table)
+
+
+def test_dhcp_fingerprint_pass_still_upgrades_a_real_device():
+    """Sanity check for the identity gate added above: a normal device must
+    still be upgraded exactly as before."""
+    from modules.dhcp_fingerprint import DhcpFingerprint, clear_cache, update_cache
+
+    ip = "192.168.1.52"
+    mac = "aa:bb:cc:dd:ee:04"
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+
+    clear_cache()
+    update_cache({mac: DhcpFingerprint(
+        device_hint="IP Camera", confidence="high", evidence="VCI: test",
+    )})
+    try:
+        stub._apply_dhcp_fingerprints()
+    finally:
+        clear_cache()
+
+    assert dev.device_type == "IP Camera"
+    _cleanup(table)
+
+
+def test_passive_observation_does_not_flip_a_stronger_seeded_claim():
+    """The Lexmark scenario from the baseline: a claim already on record for
+    this device this scan (as the real scan-time classification would leave
+    behind -- see ui/scan_wiring.py::_m1_seed_classification_claims) must not
+    be knocked over by one weaker passive guess. This is the actual churn
+    defect Phase 3 exists to close, exercised through the real
+    _on_passive_observation() method rather than the arbiter in isolation."""
+    from modules.device_classification import ClassificationClaim, ClaimTracker
+
+    ip = "192.168.1.53"
+    mac = "aa:bb:cc:dd:ee:05"
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Print Server")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+
+    stub._classification_claims = ClaimTracker()
+    stub._classification_claims.add(mac, ClassificationClaim(
+        device_type="Print Server", confidence=0.6, source="heuristic",
+        evidence="vendor:lexmark, any-ports:[9100]",
+    ))
+
+    obs = _make_passive_obs(ip, mac=mac, device_hint="Streaming Stick", confidence="low")
+    stub._on_passive_observation(obs)
+
+    assert dev.device_type == "Print Server"
+    _cleanup(table)
+
+
+def test_passive_observation_persists_the_arbitrated_result():
+    """Device Identity Program Phase 4: an upgrade must reach known_device
+    immediately, not live only on the in-memory DeviceInfo until the next
+    scan's classify_registry_first() call silently reverts it."""
+    from unittest.mock import MagicMock
+
+    ip, mac = "192.168.1.54", "aa:bb:cc:dd:ee:08"
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+    store = MagicMock()
+    store.get_classification_override.return_value = None
+    stub._store = store
+
+    obs = _make_passive_obs(ip, mac=mac, device_hint="IP Camera", confidence="high")
+    stub._on_passive_observation(obs)
+
+    assert dev.device_type == "IP Camera"
+    store.upsert_known_device.assert_called_once()
+    args, kwargs = store.upsert_known_device.call_args
+    assert args[0] == mac
+    assert kwargs["device_type"] == "IP Camera"
+    assert kwargs["confidence"] > 0.0
+
+    _cleanup(table)
+
+
+def test_passive_observation_rejects_multicast_mac():
+    """An observation naming a multicast/group MAC is not a device at all
+    (classify_identity() -> NOT_A_DEVICE) and must not classify anything,
+    even if a scanned device happens to share its IP."""
+    ip = "239.255.255.250"
+    mcast_mac = "01:00:5e:7f:ff:fa"
+    table = _make_table([(ip, "", mcast_mac)])
+    dev = _DevObj(ip, mcast_mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+
+    obs = _make_passive_obs(ip, mac=mcast_mac)
+    stub._on_passive_observation(obs)
+
+    assert dev.device_type == "Unknown Device"
+    _cleanup(table)

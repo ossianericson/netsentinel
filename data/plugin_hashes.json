@@ -10,5 +10,5 @@
   "synology_plugin.py": "da62d0d325e01962848ce5fec546cef3c4bf803ab6756cdd7aaa18b495b7de39",
   "template_plugin.py": "18c0c7a52de79ba634e4c0ac39e3fd474ec0238fd98108e9cfd19ed163dad918",
   "unifi_plugin.py": "700dd562dcd48f70fbb4d0af0b53b39c9831e453bf9936be3ffd92ffef607029",
-  "zte_plugin.py": "ca1e202fd9ddf6a0ca8324b36b9d2d208f922e86e07b150f0e9380c0a965d562"
+  "zte_plugin.py": "4ad537b67711fd8fe4688a1e069cc3129463ddc4ac406dd56009c5a005616c39"
 }

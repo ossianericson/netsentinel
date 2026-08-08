@@ -1,0 +1,216 @@
+{
+  "span_days": 50.921,
+  "device_count": 31,
+  "class_changed_total": 11176,
+  "class_changed_noop_total": 5313,
+  "class_changed_noop_share": 0.4754,
+  "class_changed_per_day": 219.476,
+  "class_changed_per_device_day": 7.0799,
+  "max_distinct_types_by_mac": 4,
+  "hotspots": [
+    {
+      "mac": "00:21:b7:a3:09:1a",
+      "events": 1842,
+      "distinct_types": 2
+    },
+    {
+      "mac": "3c:64:cf:e0:27:02",
+      "events": 1379,
+      "distinct_types": 1
+    },
+    {
+      "mac": "00:22:61:d8:ee:58",
+      "events": 1255,
+      "distinct_types": 4
+    },
+    {
+      "mac": "f4:ca:e7:80:31:02",
+      "events": 815,
+      "distinct_types": 3
+    },
+    {
+      "mac": "a4:77:33:f2:20:0e",
+      "events": 692,
+      "distinct_types": 3
+    },
+    {
+      "mac": "54:60:09:ee:10:2a",
+      "events": 688,
+      "distinct_types": 2
+    },
+    {
+      "mac": "88:3d:24:21:77:66",
+      "events": 685,
+      "distinct_types": 3
+    },
+    {
+      "mac": "5c:93:a2:5c:47:19",
+      "events": 619,
+      "distinct_types": 2
+    }
+  ],
+  "device_type_agreement_total": 26,
+  "device_type_agreement_count": 6,
+  "device_type_agreement_share": 0.2308,
+  "device_type_mismatches": [
+    {
+      "mac": "3c:64:cf:e0:27:02",
+      "known_device.device_type": "Mesh Network Node",
+      "newest_class_changed": "Router / Gateway",
+      "description": "TP-Link (Deco mesh / RE series extenders) / Mesh Network Node"
+    },
+    {
+      "mac": "00:22:61:d8:ee:58",
+      "known_device.device_type": "Smart Speaker / Audio",
+      "newest_class_changed": "Streaming Stick",
+      "description": "Barnens-rum / Sonos / Smart Speaker / Audio"
+    },
+    {
+      "mac": "5c:93:a2:5c:47:19",
+      "known_device.device_type": "Games Console",
+      "newest_class_changed": "Smart Speaker / Audio",
+      "description": "PS4-C8208A / Liteon Technology Corporation / Games Console"
+    },
+    {
+      "mac": "00:21:b7:a3:09:1a",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Print Server",
+      "description": "ET0021B7A3091A / Lexmark International, Inc. / Unknown Device"
+    },
+    {
+      "mac": "f8:7d:76:d1:2c:84",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Smart TV",
+      "description": "Lovisas-ny-iphone / Apple, Inc. / Unknown Device"
+    },
+    {
+      "mac": "92:ac:4a:bf:8d:10",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Streaming Stick",
+      "description": "Ossians-iPhone-2022 / Unknown / Unknown Device"
+    },
+    {
+      "mac": "78:c8:81:d7:9f:fe",
+      "known_device.device_type": "Games Console",
+      "newest_class_changed": "Router / Gateway",
+      "description": "PS5-D79FFE / Sony Interactive Entertainment / Games Console"
+    },
+    {
+      "mac": "dc:a6:32:2c:41:c7",
+      "known_device.device_type": "Single Board Computer",
+      "newest_class_changed": "Smart TV",
+      "description": "LIBREELEC / Raspberry Pi / Single Board Computer"
+    },
+    {
+      "mac": "d8:3a:dd:de:11:a7",
+      "known_device.device_type": "Games Console",
+      "newest_class_changed": "Router / Gateway",
+      "description": "PINAS / Microsoft / Games Console"
+    },
+    {
+      "mac": "ce:61:8e:b7:91:5b",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Smart TV",
+      "description": "Unknown / Unknown Device"
+    },
+    {
+      "mac": "02:a8:f1:3b:93:40",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Router / Gateway",
+      "description": "Unknown / Unknown Device"
+    },
+    {
+      "mac": "64:4a:7d:79:c5:d9",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Smart TV",
+      "description": "CWR-5CG6051CD0 / Intel Corporate / Unknown Device"
+    },
+    {
+      "mac": "6a:34:64:72:f8:f0",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Router / Gateway",
+      "description": "Unknown / Unknown Device"
+    },
+    {
+      "mac": "3a:41:94:e8:e2:5f",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Streaming Stick",
+      "description": "Unknown / Unknown Device"
+    },
+    {
+      "mac": "f0:72:ea:51:d3:b8",
+      "known_device.device_type": "Video Doorbell",
+      "newest_class_changed": "Streaming Stick",
+      "description": "Google Nest / Nest Wifi / Google Wifi Router / Video Doorbell"
+    },
+    {
+      "mac": "92:35:ca:16:8f:38",
+      "known_device.device_type": "Domain Controller",
+      "newest_class_changed": "Router / Gateway",
+      "description": "iPad-2 / Unknown / Domain Controller"
+    },
+    {
+      "mac": "e2:00:a7:e0:db:8e",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Router / Gateway",
+      "description": "Unknown / Unknown Device"
+    },
+    {
+      "mac": "2c:7b:a0:0d:37:8e",
+      "known_device.device_type": "Unknown Device",
+      "newest_class_changed": "Streaming Stick",
+      "description": "Unknown / Unknown Device"
+    },
+    {
+      "mac": "a0:c1:c5:ba:cc:91",
+      "known_device.device_type": "(blank)",
+      "newest_class_changed": "Streaming Stick",
+      "description": "Apple, Inc."
+    },
+    {
+      "mac": "64:e7:d8:6f:81:de",
+      "known_device.device_type": "(blank)",
+      "newest_class_changed": "Smart TV",
+      "description": "Samsung Electronics Co.,Ltd"
+    }
+  ],
+  "confidence_eligible": 31,
+  "confidence_covered": 0,
+  "confidence_coverage_share": 0.0,
+  "identity_breakdown": {
+    "identified": 25,
+    "anonymous": 6,
+    "not_a_device": 0
+  },
+  "ip_collision_count": 7,
+  "ip_collisions": [
+    {
+      "ip": "192.168.68.64",
+      "mac_count": 3
+    },
+    {
+      "ip": "192.168.68.58",
+      "mac_count": 3
+    },
+    {
+      "ip": "192.168.68.66",
+      "mac_count": 2
+    },
+    {
+      "ip": "192.168.68.61",
+      "mac_count": 2
+    },
+    {
+      "ip": "192.168.68.59",
+      "mac_count": 2
+    },
+    {
+      "ip": "192.168.68.56",
+      "mac_count": 2
+    },
+    {
+      "ip": "192.168.68.51",
+      "mac_count": 2
+    }
+  ]
+}

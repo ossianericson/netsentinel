@@ -36,13 +36,12 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.2.3"
+_WHATS_NEW_VERSION = "2.2.4"
 _WHATS_NEW_ENTRIES = [
-    ("What needs attention now shows up first", "The Home \"Action needed\" card was quietly showing the five oldest unread alerts instead of the most urgent ones, so a fresh gateway outage could sit hidden behind week-old warnings. Alerts across the app are now ordered by how much they matter, not just when they arrived."),
-    ("More alerts on by default", "Eight core alerts — including gateway loss, a mesh node dropping off, modem signal drops and unreachable infrastructure — now come switched on for new installs instead of arriving silent."),
-    ("One alert per outage, not two hundred", "A device going down and staying down used to fire a fresh alert roughly every two minutes for the same outage. It now fires once when it goes down and once when it recovers."),
-    ("A stale plugin update no longer stops monitoring quietly", "An updated bundled plugin (like the 5G modem) could silently stop being polled after an app update, with no obvious error. It's now kept current automatically."),
-    ("Cleaner device inventory", "Multicast/broadcast network traffic could be tracked and even mistaken for real infrastructure devices. It's no longer counted as a device at all."),
+    ("Device types now come from one decision-maker, not five", "The Devices page's Type column used to be set by five different classifiers that each overwrote each other with no memory of what came before — measured at over 7 \"type changed\" events per device per day on a stable network, and the type actually shown to you agreed with the app's own history barely a quarter of the time. Every source now submits its evidence to one arbiter, which favours agreement between independent sources over whichever one happened to run last."),
+    ("See why a device is classified the way it is", "The Devices page's Type column now shows a tooltip with a confidence level and the evidence behind it — vendor match, hostname match, open ports, or a MAC registry hit."),
+    ("Fixed device types flipping on networks with shared IPs", "A device-type observation from passive network listening was matched to a device by IP address. On a network where more than one device currently shares an address, this could silently reclassify the wrong device."),
+    ("Fixed a noisy, inaccurate device history", "The device-history log recorded a \"type changed\" entry even when nothing had actually changed — this made up nearly half of all such entries on a real network."),
 ]
 
 

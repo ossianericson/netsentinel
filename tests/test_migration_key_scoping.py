@@ -116,7 +116,8 @@ class TestKeyIsStable:
             f"migration_key is not stable across processes: {seen}. An "
             f"implementation built on hash() rather than hashlib would do this."
         )
-        assert seen.pop() == migration_key("roles_recomputed_v2", REPO_DB)
+        observed = seen.pop()
+        assert observed == migration_key("roles_recomputed_v2", REPO_DB)
 
 
 class TestStoreExposesItsPath:

@@ -133,6 +133,7 @@ hiddenimports: list = [
     "modules.deco_client",
     "modules.device_admin",
     "modules.device_baseline",
+    "modules.device_classification",
     "modules.device_classifier",
     "modules.device_identity",
     "modules.device_importance",

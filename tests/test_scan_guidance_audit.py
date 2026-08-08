@@ -398,9 +398,119 @@ class TestGradeGatingRealTree:
         assert _finding(findings, "GRADE_INPUTS_GATED").ok is True
 
 
+# ── audit_identity_churn ─────────────────────────────────────────────────────
+
+def _make_identity_db(tmp_path, events, n_devices=1, base_ts="2026-01-01 00:00:00"):
+    """A synthetic NetSentinel.db with `n_devices` known_device rows and
+    `events` (list of (old_value, new_value, ts) class_changed rows)."""
+    import sqlite3
+
+    from modules.metric_store_schema import _DDL
+
+    path = tmp_path / "NetSentinel.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(_DDL)
+    for i in range(n_devices):
+        conn.execute(
+            "INSERT INTO known_device (mac, ip, first_seen, last_seen) "
+            "VALUES (?, ?, ?, ?)",
+            (f"aa:bb:cc:00:00:{i:02x}", f"192.168.1.{i}", 1_780_000_000, 1_780_000_000),
+        )
+    for old, new, ts in events:
+        conn.execute(
+            "INSERT INTO device_events (mac, event_type, old_value, new_value, ts) "
+            "VALUES ('aa:bb:cc:00:00:00', 'class_changed', ?, ?, ?)",
+            (old, new, ts),
+        )
+    conn.commit()
+    conn.close()
+    return path
+
+
+class TestIdentityChurn:
+    def test_passes_with_no_database_at_all(self, tmp_path):
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        findings = audit_identity_churn(db_path=tmp_path / "nope.db")
+        f = _finding(findings, "IDENTITY_CHURN")
+        assert f.ok is True
+        assert "No database" in f.detail
+
+    def test_passes_with_a_database_but_no_device_events(self, tmp_path):
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(tmp_path, events=[], n_devices=1)
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is True
+
+    def test_passes_when_churn_and_noop_share_are_both_clean(self, tmp_path):
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(tmp_path, events=[
+            ("", "Print Server", "2026-01-01 00:00:00"),
+        ], n_devices=10)
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is True
+
+    def test_fails_on_any_noop_row_in_the_window(self, tmp_path):
+        """Phase 1's record_device_change_event() guard should make this
+        structurally impossible -- a nonzero share here means a new writer
+        somewhere is bypassing it."""
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(tmp_path, events=[
+            ("Router", "Router", "2026-01-01 00:00:00"),
+        ], n_devices=10)
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is False
+        assert "no-op" in f.detail
+
+    def test_fails_when_per_device_day_ceiling_is_exceeded(self, tmp_path):
+        from modules.scan_guidance_audit import (
+            IDENTITY_CHURN_MAX_PER_DEVICE_DAY, IDENTITY_CHURN_WINDOW_DAYS,
+            audit_identity_churn,
+        )
+
+        # 1 device, enough real (non-noop) class_changed events in the window
+        # to push per-device-day comfortably over the ceiling.
+        n_events = int(IDENTITY_CHURN_MAX_PER_DEVICE_DAY * IDENTITY_CHURN_WINDOW_DAYS) + 5
+        events = [
+            (f"Type{i}", f"Type{i + 1}", "2026-01-01 00:00:00")
+            for i in range(n_events)
+        ]
+        db_path = _make_identity_db(tmp_path, events=events, n_devices=1)
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is False
+        assert "device-day" in f.detail
+
+    def test_window_excludes_events_older_than_the_trailing_period(self, tmp_path):
+        """A device that churned badly a month ago but is clean now must not
+        keep failing the gate forever -- device_events is never pruned."""
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        old_noop_events = [
+            ("Router", "Router", "2025-11-01 00:00:00") for _ in range(50)
+        ]
+        recent_clean_event = [("", "Router", "2026-01-01 00:00:00")]
+        db_path = _make_identity_db(
+            tmp_path, events=old_noop_events + recent_clean_event, n_devices=10,
+        )
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is True
+
+    def test_included_in_run_all(self):
+        from modules.scan_guidance_audit import run_all
+
+        findings = run_all(REPO_ROOT)
+        f = _finding(findings, "IDENTITY_CHURN")
+        # This is the real installed/dev database (or none) -- just confirm
+        # the check ran and produced a real verdict, not that it passes.
+        assert f.ok in (True, False)
+
+
 # ── run_all / CLI wiring ───────────────────────────────────────────────────────
 
-def test_run_all_returns_all_seven_codes():
+def test_run_all_returns_all_eight_codes():
     from modules.scan_guidance_audit import run_all
 
     findings = run_all(REPO_ROOT)
@@ -408,7 +518,7 @@ def test_run_all_returns_all_seven_codes():
     assert codes == {
         "CTA_LABELS_RESOLVE", "CTA_TABLE_PARITY", "AUDIT_STATE_WIRED",
         "AUDIT_CARD_PARITY", "AUDIT_QUEUE_TERMINATES", "GUIDANCE_FITS",
-        "GRADE_INPUTS_GATED",
+        "GRADE_INPUTS_GATED", "IDENTITY_CHURN",
     }
 
 

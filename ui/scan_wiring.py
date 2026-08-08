@@ -663,6 +663,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._nav_set_scan_state(L.DEVICES, "fresh", ts=self._last_scan_time)
         self._m1_result = data
         devices = data.get("devices", [])
+        self._m1_seed_classification_claims(devices)
         if hasattr(self, "_overview_page") and devices:
             self._overview_page.set_has_results(True)
         if hasattr(self, "_security_overview_page"):
@@ -673,6 +674,38 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._monitor_overview_page.set_last_scan_time(_dt.datetime.now())
         if hasattr(self, "_home_page") and devices:
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
+
+    def _m1_seed_classification_claims(self, devices: list) -> None:
+        """Device Identity Program Phase 3: reset the per-scan claim tracker,
+        then seed each device's history with the classification
+        classify_registry_first() already produced during the scan itself.
+
+        Without this, the first passive/DHCP claim to arrive later this scan
+        would arbitrate against an empty history and win outright regardless
+        of strength -- silently overwriting a confident scan-time
+        classification with one weak observation, which is the exact defect
+        this program measures (docs/spikes/device-identity-baseline.md).
+        """
+        tracker = getattr(self, "_classification_claims", None)
+        if tracker is None:
+            return
+        tracker.reset()
+        from modules.device_classification import claim_from_scan
+
+        for _dev in devices:
+            _is_dict = isinstance(_dev, dict)
+            _mac = (_dev.get("mac", "") if _is_dict else getattr(_dev, "mac", "")) or ""
+            if not _mac:
+                continue
+            _ports = _dev.get("open_ports", []) if _is_dict else getattr(_dev, "open_ports", [])
+            tracker.add(_mac, claim_from_scan(
+                mac=_mac,
+                vendor=(_dev.get("vendor", "") if _is_dict else getattr(_dev, "vendor", "")) or "",
+                hostname=(_dev.get("hostname", "") if _is_dict else getattr(_dev, "hostname", "")) or "",
+                open_ports=set(_ports or []),
+                os_family=(_dev.get("os_family", "") if _is_dict else getattr(_dev, "os_family", "")) or "",
+                is_gateway=bool(_dev.get("is_gateway", False) if _is_dict else getattr(_dev, "is_gateway", False)),
+            ))
 
     def _m1_refresh_segments_and_inventory(
         self, data: dict, known: dict[str, "KnownDevice"] | None = None
@@ -797,6 +830,41 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     "Run a full port scan (Security Audit →\n"
                     "Port Scan) to improve classification."
                 ))
+            elif _dt_item:
+                # Device Identity Program Phase 4: confidence indicator naming
+                # the evidence behind the label, so a user can see *why* a
+                # device is classified the way it is — the one thing
+                # classify_with_evidence() has always computed and nothing
+                # persisted or showed (docs/spikes/device-identity-baseline.md).
+                # Recomputed rather than read from `d.confidence`, which is
+                # only ever set once an enrichment pass runs later this same
+                # scan cycle; guarded to only show when the recomputation
+                # agrees with the label actually on screen, so a device whose
+                # displayed type came from a source this can't see (mesh/
+                # plugin/registry) never shows a confidence for the wrong claim.
+                try:
+                    from modules.device_classification import claim_from_scan
+                    _is_dict = isinstance(d, dict)
+                    _ports = set(
+                        (d.get("open_ports", []) if _is_dict else getattr(d, "open_ports", []))
+                        or []
+                    )
+                    _osf = (d.get("os_family", "") if _is_dict else getattr(d, "os_family", "")) or ""
+                    _isgw = bool(
+                        d.get("is_gateway", False) if _is_dict else getattr(d, "is_gateway", False)
+                    )
+                    _claim = claim_from_scan(
+                        mac=mac or "", vendor=vendor or "", hostname=host or "",
+                        open_ports=_ports, os_family=_osf, is_gateway=_isgw,
+                    )
+                    if _claim.device_type == dtype:
+                        _pct = round(_claim.confidence * 100)
+                        _dt_item.setToolTip(_s.safe_tooltip(
+                            f"Confidence: {_pct}%\n"
+                            f"Evidence: {_claim.evidence or 'OUI lookup only'}"
+                        ))
+                except Exception:
+                    pass  # non-fatal — tooltip is best-effort
 
         self._m1_table.setSortingEnabled(True)
         # Re-apply search/chip filter and restore persisted sort (FILTER-1 / FILTER-2)
