@@ -36,12 +36,10 @@ from ui import styles as _s
 # _WHATS_NEW_VERSION rather than the live app version so that a missed update
 # reads as stale-but-truthful instead of mislabelled.
 # Enforced by tests/test_version_consistency.py::test_whats_new_version.
-_WHATS_NEW_VERSION = "2.2.4"
+_WHATS_NEW_VERSION = "2.2.5"
 _WHATS_NEW_ENTRIES = [
-    ("Device types now come from one decision-maker, not five", "The Devices page's Type column used to be set by five different classifiers that each overwrote each other with no memory of what came before — measured at over 7 \"type changed\" events per device per day on a stable network, and the type actually shown to you agreed with the app's own history barely a quarter of the time. Every source now submits its evidence to one arbiter, which favours agreement between independent sources over whichever one happened to run last."),
-    ("See why a device is classified the way it is", "The Devices page's Type column now shows a tooltip with a confidence level and the evidence behind it — vendor match, hostname match, open ports, or a MAC registry hit."),
-    ("Fixed device types flipping on networks with shared IPs", "A device-type observation from passive network listening was matched to a device by IP address. On a network where more than one device currently shares an address, this could silently reclassify the wrong device."),
-    ("Fixed a noisy, inaccurate device history", "The device-history log recorded a \"type changed\" entry even when nothing had actually changed — this made up nearly half of all such entries on a real network."),
+    ("Fixed randomized-MAC phones and streaming devices showing as \"Unknown Device\"", "When a device's manufacturer couldn't be looked up from its MAC address — the common case for iPhones, iPads, smart TVs, and streaming sticks with randomized MACs — the app was silently skipping its hostname-based device-type rules too, leaving those devices unidentified. Hostname-based identification (e.g. \"Ossians-iPhone\" → iPhone) now works correctly regardless of whether the vendor lookup succeeds."),
+    ("Fixed a false failure in the device-identity self-check after upgrading", "`python app.py --audit`'s `IDENTITY_CHURN` check could report a false failure for a week after upgrading to a version with the classification fix above, because it couldn't tell old pre-fix history apart from a real new regression. It now tracks when the fix was applied and only checks activity from that point forward."),
 ]
 
 

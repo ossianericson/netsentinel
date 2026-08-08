@@ -4,6 +4,15 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.5
+
+**Fixed**
+- `device_classifier.py`: `classify()`/`classify_with_evidence()`'s unconditional `vendor_re` gate silently overrode the earlier conditional one, making 9 `hostname_re`-keyed device labels (iPhone/iPad, Smart TV, Streaming Stick, etc.) unreachable whenever vendor lookup failed — exactly the randomized-MAC case those rules exist for
+- `python app.py --audit`'s `IDENTITY_CHURN` check used a flat 7-day trailing window and showed a false FAIL on every existing install for a week after upgrading; a meta-table timestamp now bounds the no-op check without affecting the per-device-day churn check
+- Removed an unreachable `else` branch in the passive-observation table-row match (CodeQL py/unreachable-statement)
+
+---
+
 ### v2.2.4
 
 **Added**

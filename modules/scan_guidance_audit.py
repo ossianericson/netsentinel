@@ -463,6 +463,20 @@ def audit_identity_churn(db_path: Optional[Path] = None) -> List[AuditFinding]:
     Phase 1) and <= 0.5 class_changed events per device-day, both measured
     over the trailing IDENTITY_CHURN_WINDOW_DAYS days.
 
+    The no-op check is bounded below by
+    metric_store_schema.IDENTITY_NOOP_GUARD_META_KEY, a meta-table timestamp
+    stamped once per database the first time a build carrying the no-op guard
+    opens it. Without this, every existing install shows a hard FAIL for a
+    full IDENTITY_CHURN_WINDOW_DAYS after upgrading -- the trailing window
+    still holds pre-guard no-op rows nothing will ever rewrite, indistinguishable
+    from a genuine regression. A guard-bounded no-op window turns that into a
+    check that fails on the first *post-guard* no-op instead. The
+    per-device-day churn check is intentionally left on its own full
+    IDENTITY_CHURN_WINDOW_DAYS window -- only the no-op check moves. An absent
+    marker (a database never opened by a guarded build, or the "no history
+    yet" early-return above) falls back to the full window, which is the
+    original, stricter behaviour -- never a false PASS.
+
     PASSes with an explanatory detail when there is nothing to measure yet --
     no database at all, or a database with no device_events history -- since
     this is a live-database regression gate, not a structural correctness
@@ -473,6 +487,8 @@ def audit_identity_churn(db_path: Optional[Path] = None) -> List[AuditFinding]:
     """
     import datetime
     import sqlite3
+
+    from modules.metric_store_schema import IDENTITY_NOOP_GUARD_META_KEY
 
     if db_path is None:
         from modules.utils import get_app_data_dir
@@ -499,30 +515,44 @@ def audit_identity_churn(db_path: Optional[Path] = None) -> List[AuditFinding]:
             "%Y-%m-%d %H:%M:%S"
         )
 
+        guard_row = conn.execute(
+            "SELECT value FROM meta WHERE key = ?", (IDENTITY_NOOP_GUARD_META_KEY,)
+        ).fetchone()
+        guard_since = guard_row[0] if guard_row else None
+        noop_since = max(since, guard_since) if guard_since else since
+
         total = conn.execute(
             "SELECT COUNT(*) FROM device_events WHERE event_type='class_changed' AND ts >= ?",
             (since,),
         ).fetchone()[0]
+        noop_total = conn.execute(
+            "SELECT COUNT(*) FROM device_events WHERE event_type='class_changed' AND ts >= ?",
+            (noop_since,),
+        ).fetchone()[0]
         noop = conn.execute(
             "SELECT COUNT(*) FROM device_events WHERE event_type='class_changed' "
             "AND ts >= ? AND old_value = new_value",
-            (since,),
+            (noop_since,),
         ).fetchone()[0]
         n_devices = conn.execute("SELECT COUNT(*) FROM known_device").fetchone()[0]
     finally:
         conn.close()
 
-    noop_share = (noop / total) if total else 0.0
+    noop_share = (noop / noop_total) if noop_total else 0.0
     per_device_day = (
         total / IDENTITY_CHURN_WINDOW_DAYS / n_devices if n_devices else 0.0
     )
 
     problems = []
     if noop_share > IDENTITY_CHURN_MAX_NOOP_SHARE:
+        window_desc = (
+            f"since the no-op guard was recorded active ({noop_since})"
+            if noop_since != since
+            else f"in the last {IDENTITY_CHURN_WINDOW_DAYS:.0f} days"
+        )
         problems.append(
-            f"{noop}/{total} class_changed rows ({noop_share:.1%}) are pure "
-            f"no-ops (old_value == new_value) in the last "
-            f"{IDENTITY_CHURN_WINDOW_DAYS:.0f} days — the "
+            f"{noop}/{noop_total} class_changed rows ({noop_share:.1%}) are pure "
+            f"no-ops (old_value == new_value) {window_desc} — the "
             "record_device_change_event() no-op guard should make this 0"
         )
     if per_device_day > IDENTITY_CHURN_MAX_PER_DEVICE_DAY:

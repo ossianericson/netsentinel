@@ -1830,18 +1830,16 @@ class ScanEnrichmentMixin:
                     except Exception:
                         pass  # non-fatal — persistence is best-effort here
 
-                # Update the M1 table cell — matched by the same key (MAC when
-                # known, else IP) used to find _d above, not re-derived from
-                # obs_ip alone: that would re-introduce the IP-collision bug
-                # this fix exists to close, one line lower in the same method.
+                # Update the M1 table cell — matched by MAC, not re-derived
+                # from obs_ip alone: that would re-introduce the IP-collision
+                # bug this fix exists to close, one line lower in the same
+                # method. _dmac is guaranteed non-empty here: the
+                # "not _dmac" branch above already broke out of the outer
+                # loop for any device with no resolved MAC.
                 if hasattr(self, "_m1_table"):
                     for _r in range(self._m1_table.rowCount()):
-                        if _dmac:
-                            _ri = self._m1_table.item(_r, 2)
-                            _row_matches = bool(_ri) and _norm_mac(_ri.text()) == _dmac
-                        else:
-                            _ri = self._m1_table.item(_r, 0)
-                            _row_matches = bool(_ri) and _ri.text() == obs_ip
+                        _ri = self._m1_table.item(_r, 2)
+                        _row_matches = bool(_ri) and _norm_mac(_ri.text()) == _dmac
                         if _row_matches:
                             _ti = _QTI(new_type)
                             _ti.setForeground(QColor(_s.TEXT_PRIMARY))

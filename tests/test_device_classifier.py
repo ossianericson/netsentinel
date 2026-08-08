@@ -282,6 +282,121 @@ def test_liteon_without_web_port_not_forced_router():
     assert result != "Router / Gateway"
 
 
+# ── vendor_re must be corroboration, not a hard gate, for rules that also ──
+# ── carry hostname_re/os_re (RULE-T3 regression) ────────────────────────────
+#
+# device_classifier.py made vendor_re an unconditional final gate in both
+# classify() and classify_with_evidence(), contradicting the comment 25 lines
+# above it ("only skip if there are no other discriminators") and making that
+# earlier block dead code. iOS/Android randomise the MAC by default, so
+# vendor lookup returns "" on exactly the device classes whose hostname rules
+# exist -- a hostname that literally reads "iPhone" classified as
+# Unknown Device. any_ports-only rules must stay vendor-gated: ports alone
+# are too broad a signal to stand in for vendor evidence.
+
+def test_hostname_iphone_no_vendor_classifies_as_iphone():
+    # The exact live defect: 92:ac:4a:bf:8d:10, vendor="" (randomised MAC,
+    # vendor lookup fails), hostname="Ossians-iPhone-2022".
+    result = classify(vendor="", hostname="Ossians-iPhone-2022", open_ports=set())
+    assert result == "iPhone / iPad"
+
+
+def test_hostname_ipad_no_vendor_classifies_as_iphone():
+    result = classify(vendor="", hostname="my-ipad", open_ports=set())
+    assert result == "iPhone / iPad"
+
+
+def test_hostname_echo_no_vendor_classifies_as_smart_speaker():
+    from modules.device_types import TYPE_SMART_SPEAKER
+    result = classify(vendor="", hostname="kitchen-echo", open_ports=set())
+    assert result == TYPE_SMART_SPEAKER
+
+
+def test_hostname_firestick_no_vendor_classifies_as_streaming_stick():
+    result = classify(vendor="", hostname="bedroom-firestick", open_ports=set())
+    assert result == "Streaming Stick"
+
+
+def test_hostname_iphone_no_vendor_confidence_is_hostname_only():
+    # classify_with_evidence() must still agree with classify() (existing
+    # invariant, test_classify_with_evidence_matches_classify), and score
+    # this as a hostname-only match: 0.30, not the 0.70 a vendor-corroborated
+    # match would earn.
+    result = classify_with_evidence(vendor="", hostname="Ossians-iPhone-2022")
+    assert result.device_type == "iPhone / iPad"
+    assert result.confidence == 0.30
+    assert any("hostname" in e for e in result.evidence)
+    assert not any(e.startswith("vendor") for e in result.evidence)
+
+
+def test_hostname_iphone_with_vendor_confidence_is_higher():
+    # A vendor-corroborated match must still score higher than the
+    # hostname-only case above -- vendor is a bonus, not a no-op.
+    hostname_only = classify_with_evidence(vendor="", hostname="Ossians-iPhone-2022")
+    with_vendor = classify_with_evidence(vendor="Apple, Inc.", hostname="Ossians-iPhone-2022")
+    assert with_vendor.device_type == "iPhone / iPad"
+    assert with_vendor.confidence > hostname_only.confidence
+
+
+def test_no_vendor_with_web_ports_does_not_become_router():
+    # any_ports-only discriminators must stay vendor-gated after the fix --
+    # a bare host with 80/443 open and no vendor evidence is not a router.
+    result = classify(vendor="", hostname="", open_ports={80, 443})
+    assert result != "Router / Gateway"
+
+
+def test_no_vendor_with_kasa_port_does_not_become_smart_plug():
+    from modules.device_types import TYPE_SMART_PLUG
+    result = classify(vendor="", hostname="", open_ports={9999})
+    assert result != TYPE_SMART_PLUG
+
+
+# ── Golden-set regression: live reference network (vendor, hostname) pairs ──
+#
+# Snapshotted from the reference home network's known_device table
+# (docs/spikes/device-identity-baseline.md) before this fix. Every pair
+# except Ossians-iPhone-2022 must classify identically before and after the
+# vendor_re gate change -- _RULES is first-match-wins, so a newly-reachable
+# broad hostname rule could shadow a later, more specific one (e.g. "Tablet"
+# vs "iPhone / iPad" both matching "ipad"). This is the real risk in the
+# change, not the targeted fix itself.
+_GOLDEN_SET = [
+    ("Lexmark International, Inc.", "ET0021B7A3091A", "Print Server"),
+    ("Sonos", "Barnens-rum", "Smart Speaker / Audio"),
+    ("Unknown", "", "Unknown Device"),
+    ("AzureWave Technology Inc.", "", "Unknown Device"),
+    ("TP-Link (Deco mesh / RE series extenders)", "", "Unknown Device"),
+    ("Amazon Technologies Inc.", "", "Unknown Device"),
+    ("Samsung", "Samsung", "Unknown Device"),
+    ("Google Chromecast / Google Home / Cast Audio", "", "Unknown Device"),
+    ("Liteon Technology Corporation", "PS4-C8208A", "Games Console"),
+    ("Intel Corporate", "CWR-5CG6051CD0", "Unknown Device"),
+    ("Samsung Electronics Co.,Ltd", "", "Unknown Device"),
+    ("Sony Interactive Entertainment", "PS5-D79FFE", "Games Console"),
+    ("Google", "", "Unknown Device"),
+    ("Unknown", "iPad-2", "Domain Controller"),  # pre-existing "ad-" substring
+    # bug in the Domain Controller rule -- unrelated to this fix, unaffected.
+    ("Unknown", "Ossians-iPhone-2022", "iPhone / iPad"),  # THE fix.
+    ("Apple, Inc.", "", "iPhone / iPad"),  # vendor-only rule, already worked.
+    ("Microsoft", "PINAS", "File / NAS Server"),
+    ("Raspberry Pi", "LIBREELEC", "Single Board Computer"),
+    ("Google Nest / Nest Wifi / Google Wifi Router", "", "Unknown Device"),
+    ("Intel Corporate", "FractalMSI", "Unknown Device"),
+    ("Arcadyan Corporation", "LGwebOSTV-EAg4-1", "Smart TV"),
+    ("Apple, Inc.", "Lovisas-ny-iphone", "iPhone / iPad"),  # already worked
+    # pre-fix (vendor AND hostname both matched the gated rule).
+]
+
+
+def test_golden_set_reference_network_classifications():
+    for vendor, hostname, expected in _GOLDEN_SET:
+        result = classify(vendor=vendor, hostname=hostname, open_ports=set())
+        assert result == expected, (
+            f"vendor={vendor!r} hostname={hostname!r}: "
+            f"got {result!r}, expected {expected!r}"
+        )
+
+
 # ── get_all_device_types() tests (Sprint 6) ──────────────────────────────────
 
 def test_get_all_device_types_returns_list():

@@ -12,6 +12,14 @@ from typing import Optional
 # ── Schema version — bump when adding columns ────────────────────────────────
 _SCHEMA_VERSION = 22
 
+# meta key stamped once, on the first schema apply that carries this guard,
+# recording when record_device_change_event()'s no-op de-dupe became active
+# for this specific database file. Read by
+# modules.scan_guidance_audit.audit_identity_churn() so an upgrading install's
+# pre-guard history doesn't fail the churn gate for its first
+# IDENTITY_CHURN_WINDOW_DAYS after upgrade.
+IDENTITY_NOOP_GUARD_META_KEY = "identity_noop_guard_since"
+
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
 PRAGMA journal_mode = WAL;
@@ -469,6 +477,16 @@ def apply_sqlite_schema(conn: sqlite3.Connection, write_lock: threading.Lock) ->
             "INSERT INTO meta(key, value) VALUES(?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             ("schema_version", str(_SCHEMA_VERSION)),
+        )
+        # Stamped once, ever, the first time this guarded build opens this
+        # database — DO NOTHING (not DO UPDATE) so a later schema apply never
+        # moves an already-recorded timestamp forward. datetime('now') matches
+        # device_events.ts's own format/clock so the two remain lexicographically
+        # comparable (see audit_identity_churn()).
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES(?, datetime('now')) "
+            "ON CONFLICT(key) DO NOTHING",
+            (IDENTITY_NOOP_GUARD_META_KEY,),
         )
         conn.commit()
         # Stability Sprint 1 (G2): a real VACUUM used to be attempted here on

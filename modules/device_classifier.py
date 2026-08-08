@@ -482,11 +482,16 @@ def classify(
     o = os_family.lower()
 
     for rule in _RULES:
-        # Vendor match
+        # Vendor match. vendor_re is corroboration, not a hard gate, when the
+        # rule also carries hostname_re/os_re: those are strong enough
+        # discriminators to stand on their own. iOS/Android randomise the
+        # MAC by default, so vendor lookup returns "" on exactly the device
+        # classes whose hostname rules exist -- a hostname that literally
+        # reads "iPhone" must still classify correctly. any_ports-only rules
+        # stay vendor-gated: ports alone are too broad a signal (80/443 open
+        # says nothing about being a router without the vendor).
         if "vendor_re" in rule and not re.search(rule["vendor_re"], v):
-            # If vendor_re is specified but doesn't match, only skip if
-            # there are no other discriminators in the rule
-            if len([k for k in rule if k not in ("label", "vendor_re")]) == 0:
+            if not ("hostname_re" in rule or "os_re" in rule):
                 continue
 
         # Hostname match
@@ -507,10 +512,6 @@ def classify(
 
         # Any-of ports (secondary — used in multi-any_ports rules like mail server)
         if "any_ports_b" in rule and not rule["any_ports_b"].intersection(open_ports):
-            continue
-
-        # All discriminators passed — check vendor_re wasn't required-but-failed
-        if "vendor_re" in rule and not re.search(rule["vendor_re"], v):
             continue
 
         return rule["label"]
@@ -575,7 +576,7 @@ def classify_with_evidence(
 
         # Mirror the gating logic from classify() exactly
         if "vendor_re" in rule and not v_match:
-            if len([k for k in rule if k not in ("label", "vendor_re")]) == 0:
+            if not ("hostname_re" in rule or "os_re" in rule):
                 continue
         if "hostname_re" in rule and not h_match:
             continue
@@ -586,8 +587,6 @@ def classify_with_evidence(
         if "any_ports" in rule and not ap_match:
             continue
         if "any_ports_b" in rule and not rule["any_ports_b"].intersection(open_ports):
-            continue
-        if "vendor_re" in rule and not v_match:
             continue
 
         # Rule matched — build evidence list and compute confidence

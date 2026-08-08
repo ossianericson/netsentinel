@@ -400,12 +400,17 @@ class TestGradeGatingRealTree:
 
 # ── audit_identity_churn ─────────────────────────────────────────────────────
 
-def _make_identity_db(tmp_path, events, n_devices=1, base_ts="2026-01-01 00:00:00"):
+def _make_identity_db(tmp_path, events, n_devices=1, base_ts="2026-01-01 00:00:00", guard_since=None):
     """A synthetic NetSentinel.db with `n_devices` known_device rows and
-    `events` (list of (old_value, new_value, ts) class_changed rows)."""
+    `events` (list of (old_value, new_value, ts) class_changed rows).
+
+    `guard_since`, when given, stamps metric_store_schema.IDENTITY_NOOP_GUARD_META_KEY
+    directly (bypassing apply_sqlite_schema(), which real databases go through
+    on open) -- letting a test pin the exact guard timestamp instead of
+    "whenever this test happened to run"."""
     import sqlite3
 
-    from modules.metric_store_schema import _DDL
+    from modules.metric_store_schema import _DDL, IDENTITY_NOOP_GUARD_META_KEY
 
     path = tmp_path / "NetSentinel.db"
     conn = sqlite3.connect(path)
@@ -421,6 +426,11 @@ def _make_identity_db(tmp_path, events, n_devices=1, base_ts="2026-01-01 00:00:0
             "INSERT INTO device_events (mac, event_type, old_value, new_value, ts) "
             "VALUES ('aa:bb:cc:00:00:00', 'class_changed', ?, ?, ?)",
             (old, new, ts),
+        )
+    if guard_since is not None:
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES(?, ?)",
+            (IDENTITY_NOOP_GUARD_META_KEY, guard_since),
         )
     conn.commit()
     conn.close()
@@ -506,6 +516,64 @@ class TestIdentityChurn:
         # This is the real installed/dev database (or none) -- just confirm
         # the check ran and produced a real verdict, not that it passes.
         assert f.ok in (True, False)
+
+    # ── identity_noop_guard_since version boundary ──────────────────────────
+
+    def test_noop_before_guard_marker_is_excluded(self, tmp_path):
+        """A no-op written before the guard was stamped for this database must
+        not fail the check, even though it falls inside the trailing 7-day
+        window -- this is exactly the "every existing install shows a hard
+        FAIL for a week after upgrading" defect (Finding 2). Without guard
+        awareness this would fail identically to
+        test_fails_on_any_noop_row_in_the_window above."""
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(
+            tmp_path,
+            events=[
+                ("Router", "Router", "2026-01-01 00:00:00"),  # pre-guard no-op
+                ("", "Print Server", "2026-01-03 00:00:00"),  # post-guard, real change
+            ],
+            n_devices=10,
+            guard_since="2026-01-02 00:00:00",
+        )
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is True
+
+    def test_noop_after_guard_marker_still_fails(self, tmp_path):
+        """The whole point of the marker: a no-op written AFTER the guard was
+        stamped must fail on that first occurrence, not be diluted by a
+        7-day average (Finding 2's stated fix)."""
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(
+            tmp_path,
+            events=[
+                ("Router", "Router", "2026-01-02 00:00:00"),  # post-guard no-op
+            ],
+            n_devices=10,
+            guard_since="2026-01-01 00:00:00",
+        )
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is False
+        assert "no-op" in f.detail
+
+    def test_absent_guard_marker_falls_back_to_full_window(self, tmp_path):
+        """A database never opened by a guarded build (or a fresh synthetic
+        fixture with no meta row) must fall back to the original, stricter
+        behaviour -- the full trailing window, exactly like
+        test_fails_on_any_noop_row_in_the_window. Never a silent false PASS."""
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(
+            tmp_path,
+            events=[("Router", "Router", "2026-01-01 00:00:00")],
+            n_devices=10,
+            guard_since=None,
+        )
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is False
+        assert "no-op" in f.detail
 
 
 # ── run_all / CLI wiring ───────────────────────────────────────────────────────

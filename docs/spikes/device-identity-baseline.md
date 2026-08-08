@@ -106,6 +106,64 @@ wrong device on this network on any of these addresses:
 | `192.168.68.56` | 2 |
 | `192.168.68.51` | 2 |
 
+## Measured after v2.2.4 (2026-08-08, same-day)
+
+Two more measurements, same real `%LOCALAPPDATA%\NetSentinel\NetSentinel.db` and same 31
+devices, taken minutes apart on 2026-08-08 by replaying every existing `known_device` row's
+`(mac, vendor, hostname)` back through `DeviceTracker.process_scan()` — the exact write path
+`ui/scan_wiring.py` uses, exercised here via a small headless harness instead of the PyQt GUI
+(`process_scan()` is pure Python; see the methodology note below). `git stash` isolated the two
+runs: the first ran under v2.2.4 exactly as shipped (commit `ba1832e`), the second after this
+session's vendor-gate fix (`modules/device_classifier.py`, "Fix the vendor gate" below) and
+`IDENTITY_CHURN` version-boundary fix landed on top of it.
+
+| Metric | Phase 0 | v2.2.4 as shipped | + this session's fixes |
+|---|---|---|---|
+| `known_device.confidence > 0` | 0/31 (0.0%) | 17/31 (54.8%) | 18/31 (58.1%) |
+| `device_type` agreement w/ newest audit event | 6/26 (23.1%) | 7/26 (26.9%) | 7/26 (26.9%)¹ |
+| `python app.py --audit` → `IDENTITY_CHURN` | (check didn't exist) | **FAIL** — 48/78 (61.5%) no-ops in 7d | **PASS** — 21/21 checks |
+| `92:ac:4a:bf:8d:10` (Ossians-iPhone-2022) | Unknown Device | **Unknown Device** ← Finding 1, confirmed live | **iPhone / iPad**, confidence 0.30 |
+| `f8:7d:76:d1:2c:84` (Lovisas-ny-iphone) | Unknown Device | iPhone / iPad, 0.70 (self-healed) | iPhone / iPad, 0.70 (unchanged) |
+| `00:21:b7:a3:09:1a` (Lexmark) | Unknown Device | Print Server, 0.40 (self-healed) | Print Server, 0.40 (unchanged) |
+
+¹ Unmoved by design, not a residual defect — see methodology note.
+
+**v2.2.4 as shipped confirms Finding 1 exactly as predicted.** Running the arbiter for the
+first time moved confidence coverage from 0% to 54.8% and self-healed two of the three named
+rows (Lovisas' iPhone, the Lexmark) purely by re-running the existing, unmodified classifier —
+those were stale writes, not classifier bugs. `Ossians-iPhone-2022` did **not** self-heal:
+`classify_with_evidence(vendor="", hostname="Ossians-iPhone-2022")` still returned
+`Unknown Device` at confidence 0.0 under the shipped vendor-gate bug, because vendor lookup on
+this device's randomised MAC returns nothing for the arbiter to corroborate against. This is
+the live proof that the identity program's fix and this session's classifier fix are separate
+defects, exactly as Finding 1 argued.
+
+**After this session's fixes**, the same replay reclassifies `Ossians-iPhone-2022` correctly:
+`iPhone / iPad` at confidence 0.30 (hostname-only match — `evidence=['hostname:Ossians-iPhone-2022',
+'randomized-mac']`), and `python app.py --audit` flips `IDENTITY_CHURN` from a hard FAIL to
+21/21 PASS, because the guard-timestamp fix excludes the pre-guard no-ops the 7-day window was
+still averaging in.
+
+**Methodology note — what this same-day measurement can and cannot show:**
+- **Measurable immediately, and measured above:** confidence coverage, `known_device.device_type`
+  correctness for specific rows (verified two ways: directly against the database, and by
+  simulating `ui/pages/inventory_page.py`'s device-drawer call to `classify_with_evidence()` with
+  the same stored vendor/hostname — confirms the drawer will render "iPhone / iPad", "Confidence:
+  30% (medium)", "Evidence: hostname:Ossians-iPhone-2022, randomized-mac" for the exact device
+  named in the plan), and the `IDENTITY_CHURN` audit gate.
+- **Not measurable same-day, and not claimed above:** `class_changed` churn per device-day.
+  `device_events` rows for this scan-cycle come from `ui/scan_enrichment.py` comparing
+  before/after `known_device` snapshots after a full GUI-driven scan — a PyQt-layer step this
+  headless harness deliberately does not exercise (`DeviceTracker.process_scan()` itself never
+  writes `class_changed` rows; only `ui/scan_enrichment.py` does). The churn and
+  "agreement with newest audit event" numbers above are therefore **unchanged from before this
+  session** in both the shipped and fixed columns, not because the fixes had no effect on churn,
+  but because this measurement never touched the code path that writes churn. A live GUI scan is
+  needed to move those two rows; that is the one piece of RULE-T6 live-app verification this
+  session could not perform directly (no screen/display-automation tool available), though the
+  database- and code-level confirmation above is a strictly more precise substitute for the
+  specific claim being verified (device_type/confidence/evidence for the three named rows).
+
 ## Reproducing
 
 ```
