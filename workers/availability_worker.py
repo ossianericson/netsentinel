@@ -71,6 +71,15 @@ class AvailabilityWorker(QThread):
         """Update targets; takes effect on the next cycle."""
         self._monitor.set_targets(targets)
 
+    def set_jitter_hosts(self, hosts) -> None:
+        """Update the jitter nomination; takes effect on the next cycle.
+
+        Paired with set_targets() on the rescan path: the gateway is only known
+        once network info has resolved, which can be after this worker was
+        built. See AvailabilityMonitor.set_jitter_hosts().
+        """
+        self._monitor.set_jitter_hosts(hosts)
+
     def stop(self) -> None:
         """Request graceful shutdown. Call wait() afterwards to join."""
         self._stop_requested = True

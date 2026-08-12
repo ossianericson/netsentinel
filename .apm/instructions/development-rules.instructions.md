@@ -1115,6 +1115,146 @@ def _total_rss_mb(proc: psutil.Process) -> float:
 Applies to any future memory-soak or leak-repro script, not only `monkey_test.py` — check
 `proc.children(recursive=True)` before trusting a single-PID RSS number as "the app's memory."
 
+### RULE-DBG5 (blocking): A fix that adds a preferred path plus a fallback is not shipped until something populates the field the preference branches on — and a test that hand-supplies that field cannot tell you whether anything does
+
+**Mechanism.** The shape is `if <field>: <correct path> else: <legacy fallback>`. It degrades
+*silently and totally* when nothing ever fills `<field>`: no exception, no log line, no failing
+test — 100% of traffic takes the fallback, and the fallback is the bug the fix was written to
+close. Everything downstream of the preference branch dies with it, including guards written
+against the same field.
+
+Live case (v2.2.4 → v2.2.5, `ui/scan_enrichment.py::_on_passive_observation()`). Passive
+mDNS/SSDP observations were being attributed to devices by IP; the fix added MAC matching with
+IP as the fallback, and its docstring stated `PassiveObservation.mac` "is filled by an ARP cache
+lookup after capture". The lookup existed — `modules/passive_observer.py::enrich_mac()` — and had
+**zero callers outside the test file**. `_record()` built every observation with the dataclass
+default `mac=""`, so `obs_mac` was always falsy, the MAC branch was unreachable, and the
+`IdentityClass.NOT_A_DEVICE` guard sitting above it (also gated on `obs_mac`) never ran either.
+Measured on the reference network: the live ARP cache disagreed with the stored owner on **10 of
+15 comparable addresses** because DHCP had rotated the pool, so IP attribution relabelled a
+powered-off LG TV as a Router / Gateway and then a Smart Speaker.
+
+**Why the tests were structurally blind, not merely thin.** The regression test for the fix was
+`test_passive_observation_matches_by_mac_not_ip_collision` — and it constructed its observation
+as `PassiveObservation(ip=..., mac=TARGET_MAC)`. Supplying by hand the exact value production
+never produces makes the assertion "the consumer behaves correctly *given* a resolved MAC",
+which is true and irrelevant. Same shape as RULE-WIN11's `is_store_app` monkeypatch and RULE-T6's
+"tests pass" ≠ "the flow works".
+
+```python
+# WRONG — the test hands in the value whose absence is the entire defect
+obs = PassiveObservation(ip=SHARED_IP, mac=TARGET_MAC)
+consumer._on_passive_observation(obs)
+assert target.device_type == "IP Camera"
+
+# CORRECT — drive the real producer and assert the field arrives populated
+_record("9.9.9.9", "mdns", "_x._tcp", "IP Camera", "high", "", results.append)
+assert results[0].mac == "aa:bb:cc:dd:ee:99"
+```
+
+**Checklist when adding a preferred/fallback pair:**
+1. `grep` the populating helper for callers *outside* `tests/`. Zero callers means the preferred
+   path is dead — finish the wiring before claiming the fix.
+2. Assert the field is populated by the real producer, in one test that constructs no part of it
+   by hand.
+3. Make the fallback safe on its own terms anyway. It will run whenever the preferred input is
+   genuinely unavailable, so it needs the same correctness bar — here, refusing to guess on an
+   ambiguous or stale IP rather than taking the first row (the v2.2.5 `label_for_host()`
+   principle: naming the wrong device is worse than naming none).
+
+Enforced by `tests/test_passive_observer.py` (`test_recorded_observation_carries_the_arp_resolved_mac`
+and its replay/lock/burst siblings, all driving the real `_record()`).
+
+### RULE-DBG6 (required): A "was this written by a fixed build?" marker must be a timestamp that ADVANCES on every guarded start — a write-once marker cannot see an older build writing after it
+
+**Mechanism.** A gate that excuses pre-fix history by stamping "the guard is active as of T" and
+counting only violations after T assumes every later write came from a guarded build. That
+assumption breaks whenever two builds share one database — the Store package auto-starting at
+login while a newer build is tested, a downgrade, a portable copy beside an installed one. An
+*older* build then writes violating rows *after* T, and the gate reports them as a live
+regression against code that cannot produce them.
+
+Observed live: `identity_noop_guard_since` was stamped `INSERT ... ON CONFLICT DO NOTHING`, so it
+froze at the first guarded open (2026-08-08 14:58:03). A pre-v2.2.4 Store package went on writing
+10 no-op `class_changed` rows the next morning, and `--audit`'s IDENTITY_CHURN failed on immutable
+history no code change could fix — the worst outcome for a gate, since it trains the reader to
+ignore a red check (RULE-ENFORCE1).
+
+```python
+# WRONG — frozen at the first guarded open; blind to any later unguarded writer
+"INSERT INTO meta(key, value) VALUES(?, datetime('now')) ON CONFLICT(key) DO NOTHING"
+
+# CORRECT — the window means "since the guarded build currently in charge took over"
+"INSERT INTO meta(key, value) VALUES(?, datetime('now')) "
+"ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+```
+
+This deliberately narrows the live check to the current session, which is the only window it can
+honestly attribute. The durable regression gate is the CI ratchet
+(`tests/test_identity_churn_ratchet.py`), not the live audit — see the v2.2.5 commit message for
+why those two need different shapes. An absent marker must still fall back to the full, stricter
+window: never a false PASS.
+
+Enforced by `tests/test_metric_store_schema.py::test_noop_guard_marker_advances_on_every_guarded_open`.
+
+---
+
+### RULE-ID1 (blocking): An IP address is a lease, not an identity — when a MAC is in hand, never write `ip or mac`; that expression prefers the ambiguous key over the exact one
+
+**Mechanism.** One address routinely maps to several MACs — DHCP lease reuse, iOS/Android
+privacy MACs, a device rejoining on a rotated slot. Measured on the reference network: **7 of 20
+addresses carry more than one MAC**, all 7 ambiguous for naming. So any structure keyed by IP —
+a dict index, a dedup key, an ack key, a snapshot join — silently merges rows belonging to
+different physical devices, and which one wins is decided by iteration order.
+
+The recurring code shape is `host = dev.ip or dev.mac`. It reads like a safe fallback and is the
+exact inversion of one: `or` returns the **first truthy** operand, so it prefers the ambiguous key
+and reaches the exact one only when the IP is missing. In every site found so far the MAC was
+*guaranteed* present — `device_tracker._normalise()` returns `None` without one, so every
+`TrackedDevice` has a MAC — meaning the precise key was in hand and deliberately passed over.
+
+This is the same defect v2.2.3, v2.2.4 and v2.2.5 each fixed once elsewhere (alert scope gate,
+passive-observation matcher, `label_for_host()`, the scan-wiring freshness join) without anyone
+sweeping for the rest.
+
+**Why it is worse than a display bug.** In `alert_engine._fire_if_cooled()` the same `host`
+string is the cooldown key, the acknowledgement key, and the tier-gate input:
+
+```python
+key = f"{rule.name}::{host}"     # cooldown dedup AND self._ack_hold
+```
+
+so on a shared address, acknowledging one device's alert **mutes a different device**, and
+`get_device_importance_tier()` — which correctly answers with the MAX tier across an ambiguous
+IP, since it cannot know which row is meant — hands every co-tenant the highest neighbour's
+eligibility. Measured live: 4 device rows alerting above their own tier, 2 of them inheriting the
+mesh AP's `critical` from a shared address.
+
+```python
+# WRONG — prefers the lease over the identity; `or` takes the FIRST truthy operand
+host = dev.ip or dev.mac
+self._store.record_device_event(ip=td.ip or td.mac, ...)
+
+# CORRECT — exact key first, address only when there is genuinely no MAC
+host = dev.mac or dev.ip
+```
+
+**Corollary — the fallback still needs its own correctness bar.** When only an IP is available,
+refusing to answer beats guessing: resolve an ambiguous address to the bare address rather than
+to one of its claimants (the v2.2.5 `label_for_host()` principle — naming the wrong device is
+worse than naming none). A scan-local index built from one ARP snapshot is exempt; the collision
+is a property of history, not of a single sweep.
+
+**Corollary — check before "fixing".** Two candidate sites found by grep were already correct:
+`config_baseline.diff_snapshots()` matches MAC-first with an explicit reused-lease guard, and
+`combined_discovery`'s sweep maps hold `DiscoveredDevice` objects that carry no MAC at all (a
+"which IPs answered" set, not an identity map). Measure the collision before changing a keying
+decision — the shape is not the defect, the ambiguity is.
+
+Enforced by `tests/test_ip_identity_keying.py` (AST guard: no `X.ip or X.mac` expression in
+`modules/`/`ui/`/`workers/`, shrink-only baseline) plus behavioural regressions in
+`tests/test_alert_engine.py` (ack on a shared address must not mute a co-tenant).
+
 ---
 
 ## Network Info Contracts
@@ -2663,6 +2803,9 @@ Currently tool-enforced (high reliability):
 - RULE-WIN8 → `test_command_palette_leak.py` (palette toggle-reopen case) + `test_dialog_leak_guard.py` (general AST guard: no bare dialog `.exec()` anywhere in `ui/`) + `test_dialog_utils.py` (`run_dialog()` behavior)
 - RULE-CHAOS2 → `test_monkey_chrome_coverage.py` (blacklist invariants + chrome-action coverage)
 - RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
+- RULE-DBG5 → `test_passive_observer.py` (the real `_record()` must emit an ARP-resolved MAC) + `test_scan_enrichment.py` (the IP fallback refuses ambiguous and offline rows) + `test_orphan_functions.py` (tree-wide sweep via `tools/check_orphan_functions.py`: shrink-only count of definitions only tests reference)
+- RULE-DBG6 → `test_metric_store_schema.py::test_noop_guard_marker_advances_on_every_guarded_open`
+- RULE-ID1 → `test_ip_identity_keying.py` (AST guard on `X.ip or X.mac`, shrink-only baseline) + `test_alert_engine.py` (ack on a shared address must not mute a co-tenant)
 - RULE-WIN2 → `test_native_chrome.py` (NC-message-set completeness + no-Qt-in-callback AST guard)
 - RULE-WIN10 → `test_uia_warmup.py` (AST guard that app.py calls the warmup + `monkey`-marked e2e)
 - RULE-WIN11 → `test_store_update_flow.py` (raw `GetPackageFamilyName` code must be 122/15700, never 6)

@@ -624,8 +624,13 @@ def test_attach_procdump_spawns_expected_command(monkeypatch, tmp_path):
 
     dump_dir = out_dir / "dumps"
     assert dump_dir.is_dir()
+    # Hang mode (-h), not exception mode (-e 1): _attach_procdump()'s docstring
+    # records why the switch was made — -e 1 fired on a benign *handled*
+    # pybind11::attribute_error during native-extension startup, which it cannot
+    # distinguish from a real fault, while -h targets the actual open bug
+    # (hang / high-RSS stalls). This assertion was left on the retired contract.
     assert captured["args"] == [
-        r"C:\tools\procdump64.exe", "-accepteula", "-ma", "-e", "1", "-n", "3",
+        r"C:\tools\procdump64.exe", "-accepteula", "-ma", "-h", "-n", "5",
         "4242", str(dump_dir),
     ]
     assert t._procdump_proc is not None
@@ -786,4 +791,49 @@ def test_tracemalloc_switch_is_declared_and_forwarded():
     assert "-Tracemalloc:$Tracemalloc" in shim, (
         "test.ps1 declares -Tracemalloc but does not pass it through, so it "
         "would be silently dropped (as -WildOnly already is)"
+    )
+
+
+# ── Restart-reason labelling (2026-08-11 chaos-run report defect) ─────────────
+
+def test_restart_reason_is_threaded_through_not_hardcoded_as_a_crash():
+    """A forced restart must be labelled by its real cause, not always "gone".
+
+    The 12.5 h run of 2026-08-11 reported `restart x2` with "Window/process gone
+    at iter 2181 — restarting app" and "App exited unexpectedly". Neither
+    happened: the app was healthy and a foreign window held the foreground for
+    20 consecutive iterations, so the focus escape hatch deliberately restarted
+    it. `netsentinel_shutdown.log` had no closeEvent in that window, confirming
+    the app never exited on its own — the harness killed it (exit code 15).
+
+    Both messages were emitted unconditionally for any `_run_one() -> False`, so
+    a working safety net was reported as a crash. That is not cosmetic: this
+    report is what a release decision is read from, and "2 crashes" against a
+    release candidate reads as blocking when the truth is "0 crashes".
+    """
+    mod = _import_monkey()
+    src = (TOOLS_ROOT / "monkey_test.py").read_text(encoding="utf-8")
+
+    # The focus escape hatch must record WHY it is forcing a restart.
+    assert "_restart_reason" in src, (
+        "no restart-reason channel exists; the focus-stuck path is still "
+        "indistinguishable from a genuine window loss in the log"
+    )
+    # And the reporting sites must consume it rather than hardcoding a crash.
+    assert 'log.warning(\n                        "[restart] Window/process gone' not in src
+
+    tester = mod.MonkeyTester.__new__(mod.MonkeyTester)
+    assert hasattr(tester, "_restart_reason") or "_restart_reason" in src
+
+
+def test_focus_escape_hatch_sets_a_non_crash_reason():
+    """The escape-hatch branch must name itself, so the log can tell the truth."""
+    src = (TOOLS_ROOT / "monkey_test.py").read_text(encoding="utf-8")
+    hatch = src[src.index("forcing a restart instead of stalling"):]
+    # Within the escape hatch's own block, a reason must be recorded before the
+    # `return False` that hands control to the restart path.
+    upto_return = hatch[: hatch.index("return False")]
+    assert "_restart_reason" in upto_return, (
+        "the focus escape hatch returns False without recording a reason, so "
+        "the restart path cannot distinguish it from a crash"
     )

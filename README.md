@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-7311-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-7351-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning 
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**7,311 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**7,351 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -174,7 +174,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**7,311 automated tests** across 532 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**7,351 automated tests** across 535 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -218,11 +218,13 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.2.5 (current)
+### v2.2.6 (current)
 
-- Fixed randomized-MAC phones, tablets, smart TVs and streaming devices being left as "Unknown Device" when vendor lookup failed — hostname-based identification now works regardless
-- Fixed a false failure in the `IDENTITY_CHURN` device-identity self-check (`python app.py --audit`) for a week after upgrading
-- Removed an unreachable code path in passive-observation device matching
+- Fixed device alerts being identified by IP address instead of MAC — on an address shared by two devices (routine after a DHCP lease is reused), acknowledging one device's alert silently muted a different one
+- Fixed passive device identification attributing observations to the wrong device, which could relabel a powered-off TV as a router and then a smart speaker
+- Fixed jitter never being measured for your router, leaving the `Jitter High` rule with no local data
+- The `RTT Anomaly` rule is now on by default — it learns each host's own normal latency rather than using a fixed threshold, measured at 0.15 alerts/day. Your own saved notification choices are untouched
+- An address claimed by several devices now shows as the plain address rather than guessing one of their names
 
 ---
 

@@ -3,7 +3,6 @@ Sprint 5 integration tests.
 
 Covers:
   - DiagnosisPage: 'service_unreachable' symptom tile exists and drives ServiceDiagnosticsWorker
-  - DiagnosisPage: _svc_result_to_diag() translation (all failure layers)
   - ServicePage:   diagnose_service signal exists; _find_service_id() lookup
   - ServiceDiagnosticsPage: set_service() pre-selects the correct combo item
 """
@@ -12,102 +11,54 @@ from __future__ import annotations
 import pytest
 
 
-# ── _svc_result_to_diag helper (pure logic, no Qt) ────────────────────────────
+# ── Category-vocabulary coverage ──────────────────────────────────────────────
+#
+# These maps are keyed by CorrelatedFinding.category, and the correlator is the
+# only thing that produces one. A key with no producer is dead weight that reads
+# like a live feature: v2.2.6 removed "Service Outage" / "External Routing Issue"
+# entries that only the (also-removed, never-wired) _svc_result_to_diag() helper
+# could ever have emitted, and the tests here asserted their presence -- green
+# the whole time, certifying data nothing could reach. Assert the relationship
+# instead of the literals, so neither side can drift again.
 
-def _make_svc_result(layer: str, name: str = "TestSvc", summary: str = "Summary text"):
-    """Build a minimal duck-typed ServiceDiagnosticResult for translation tests."""
-    from types import SimpleNamespace
-    return SimpleNamespace(failure_layer=layer, service_name=name, summary=summary)
+def _correlator_categories() -> set:
+    """Every category literal root_cause_correlator.py can emit."""
+    import ast
+    from pathlib import Path
 
-
-def test_svc_result_to_diag_none_layer():
-    from ui.pages.diagnosis_page import _svc_result_to_diag
-    result = _make_svc_result("none", name="Netflix", summary="Netflix is reachable.")
-    synth = _svc_result_to_diag(result)
-    assert synth.global_severity == "INFO"
-    assert len(synth.findings) == 0
-    assert "Netflix is reachable" in synth.plain_summary
-
-
-def test_svc_result_to_diag_dns_layer():
-    from ui.pages.diagnosis_page import _svc_result_to_diag
-    result = _make_svc_result("dns", name="Steam")
-    synth = _svc_result_to_diag(result)
-    assert synth.global_severity == "HIGH"
-    assert len(synth.findings) == 1
-    assert synth.findings[0].category == "DNS Resolution Failure"
-    assert synth.findings[0].severity == "HIGH"
-    assert "Steam" in synth.findings[0].headline
+    src = Path(__file__).resolve().parent.parent / "modules" / "root_cause_correlator.py"
+    tree = ast.parse(src.read_text(encoding="utf-8"))
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.keyword) and node.arg == "category":
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                found.add(node.value.value)
+    return found
 
 
-def test_svc_result_to_diag_local_network_layer():
-    from ui.pages.diagnosis_page import _svc_result_to_diag
-    result = _make_svc_result("local_network", name="PSN")
-    synth = _svc_result_to_diag(result)
-    assert synth.global_severity == "HIGH"
-    assert synth.findings[0].category == "Local Network / Router Unreachable"
+def test_correlator_categories_are_discoverable():
+    """Guard the guard — if this returns nothing the two tests below are vacuous."""
+    assert len(_correlator_categories()) >= 5
 
 
-def test_svc_result_to_diag_isp_layer():
-    from ui.pages.diagnosis_page import _svc_result_to_diag
-    result = _make_svc_result("isp", name="YouTube")
-    synth = _svc_result_to_diag(result)
-    assert synth.global_severity == "MEDIUM"
-    assert synth.findings[0].category == "External ISP Issue"
-
-
-def test_svc_result_to_diag_routing_layer():
-    from ui.pages.diagnosis_page import _svc_result_to_diag
-    result = _make_svc_result("routing", name="Xbox Live")
-    synth = _svc_result_to_diag(result)
-    assert synth.global_severity == "MEDIUM"
-    assert synth.findings[0].category == "External Routing Issue"
-    assert len(synth.findings) == 1
-
-
-def test_svc_result_to_diag_remote_outage_layer():
-    from ui.pages.diagnosis_page import _svc_result_to_diag
-    result = _make_svc_result("remote_outage", name="Twitch")
-    synth = _svc_result_to_diag(result)
-    assert synth.global_severity == "MEDIUM"
-    assert synth.findings[0].category == "Service Outage"
-
-
-def test_svc_result_to_diag_unknown_layer_treated_as_none():
-    """Unknown failure layers should produce no findings (safe fallback)."""
-    from ui.pages.diagnosis_page import _svc_result_to_diag
-    result = _make_svc_result("unknown_future_layer")
-    synth = _svc_result_to_diag(result)
-    assert synth.global_severity == "INFO"
-    assert len(synth.findings) == 0
-
-
-# ── _CTA_MAP coverage for new categories ─────────────────────────────────────
-
-def test_cta_map_has_service_outage():
+def test_every_cta_map_key_has_a_producer():
     from ui.pages.diagnosis_page import _CTA_MAP
-    assert "Service Outage" in _CTA_MAP
-    label, target = _CTA_MAP["Service Outage"]
-    assert target == "Service Diagnostics"
+
+    orphans = sorted(set(_CTA_MAP) - _correlator_categories())
+    assert not orphans, (
+        "_CTA_MAP keys that no correlator finding can ever produce: "
+        f"{orphans}. Remove them, or wire up whatever should emit them."
+    )
 
 
-def test_cta_map_has_external_routing():
-    from ui.pages.diagnosis_page import _CTA_MAP
-    assert "External Routing Issue" in _CTA_MAP
-    label, target = _CTA_MAP["External Routing Issue"]
-    assert target == "Service Diagnostics"
-
-
-def test_remediation_has_service_outage_steps():
+def test_every_remediation_key_has_a_producer():
     from ui.pages.diagnosis_page import _REMEDIATION
-    assert "Service Outage" in _REMEDIATION
-    assert len(_REMEDIATION["Service Outage"]) >= 3
 
-
-def test_remediation_has_external_routing_steps():
-    from ui.pages.diagnosis_page import _REMEDIATION
-    assert "External Routing Issue" in _REMEDIATION
-    assert len(_REMEDIATION["External Routing Issue"]) >= 3
+    orphans = sorted(set(_REMEDIATION) - _correlator_categories())
+    assert not orphans, (
+        "_REMEDIATION keys that no correlator finding can ever produce: "
+        f"{orphans}. Remove them, or wire up whatever should emit them."
+    )
 
 
 # ── ServicePage._find_service_id ──────────────────────────────────────────────

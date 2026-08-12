@@ -247,3 +247,57 @@ class TestSetTargets:
 
         assert "192.168.1.1" in result.states
         assert "1.1.1.1" not in result.states
+
+
+# ── RULE-DBG5: jitter nomination must survive a retarget ──────────────────────
+
+class TestJitterHostsAreRefreshable:
+    """`_jitter_hosts` was frozen at construction, so it could never be corrected.
+
+    JITTER_HIGH's only LAN data source is the gateway, nominated by
+    `ui/scan_wiring.py` as `jitter_hosts=[_gw]` where `_gw` comes from
+    `_net_info["gateway"]` -- Optional[str], and empty when the scan worker wins
+    the startup race against the network-info worker. The rescan path then calls
+    `set_targets()`, which replaced the targets but left the (empty) jitter
+    nomination untouched for the rest of the session.
+
+    Measured on the reference database before this fix: the gateway had 1,067
+    `rtt_sample` rows and **zero** carrying a jitter value, while 8.8.8.8 and
+    1.1.1.1 -- nominated at construction by app.py, where the value is a
+    constant and never empty -- had 287 each. Not a race that sometimes lost:
+    it never once won.
+    """
+
+    def test_set_jitter_hosts_updates_the_nomination(self, store):
+        mon = AvailabilityMonitor(store=store, targets=[TargetConfig("10.0.0.1")],
+                                  jitter_hosts=None)
+        assert mon.jitter_hosts == frozenset()
+        mon.set_jitter_hosts(["10.0.0.1"])
+        assert mon.jitter_hosts == frozenset({"10.0.0.1"})
+
+    def test_set_jitter_hosts_accepts_none_as_empty(self, store):
+        mon = AvailabilityMonitor(store=store, targets=[TargetConfig("10.0.0.1")],
+                                  jitter_hosts=["10.0.0.1"])
+        mon.set_jitter_hosts(None)
+        assert mon.jitter_hosts == frozenset()
+
+    def test_a_newly_nominated_host_is_jitter_probed(self, store):
+        """The whole point: nominate after construction, and the next cycle
+        must actually take the 3-sample path for that host."""
+        mon = AvailabilityMonitor(store=store, targets=[TargetConfig("10.0.0.1")],
+                                  jitter_hosts=None)
+        mon.set_jitter_hosts(["10.0.0.1"])
+        with patch("modules.availability_monitor._ping_jitter",
+                   return_value=(12.0, 3.5)) as mock_jitter, \
+             patch("modules.availability_monitor._ping", return_value=12.0):
+            mon.run_cycle()
+        assert mock_jitter.called, "nominated host did not take the jitter path"
+
+    def test_worker_exposes_set_jitter_hosts(self, store):
+        """scan_wiring's retarget path goes through the worker, not the monitor."""
+        from workers.availability_worker import AvailabilityWorker
+
+        w = AvailabilityWorker(store=store, targets=[TargetConfig("10.0.0.1")],
+                               jitter_hosts=None)
+        w.set_jitter_hosts(["10.0.0.1"])
+        assert w._monitor.jitter_hosts == frozenset({"10.0.0.1"})

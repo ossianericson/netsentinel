@@ -231,6 +231,73 @@ class TestLabelForHost:
         assert r.label_for_host("192.168.68.51") == "192.168.68.51"
 
 
+# ── Ambiguous IPs (one address, several named MACs) ───────────────────────────
+#
+# `known_device` routinely holds several MACs on one IP — 7 of 31 rows on the
+# reference network, 4 of them with more than one *nameable* row, including
+# 192.168.68.64 which is the mesh AP: one of only two devices the alert tier
+# gate admits at all. Alerts persist `host` as an IP for most rule types, so
+# whichever row happened to land last in `get_known_devices()` (a query with no
+# ORDER BY — rowid order, changed by any VACUUM) decided the name shown on the
+# Alert History row. Naming the wrong device is worse than naming none.
+#
+# Same bug class as the two already fixed at the query layer:
+# `is_device_alert_in_scope()` (read rows[0]) and the IP-keyed passive
+# observation matcher. This is the display-layer instance.
+
+class TestAmbiguousIpHost:
+    def test_two_named_macs_on_one_ip_render_the_bare_ip(self):
+        store = _Store({
+            "dc:a6:32:2c:41:c7": _KD(hostname="LIBREELEC", ip="192.168.68.64"),
+            "f0:72:ea:51:d3:b8": _KD(vendor="Google Nest / Nest Wifi", ip="192.168.68.64"),
+        })
+        r = DeviceLabelResolver(store=store)
+        assert r.label_for_host("192.168.68.64") == "192.168.68.64"
+
+    def test_an_unnamed_competing_row_does_not_make_the_ip_ambiguous(self):
+        """Only a second *nameable* row is a conflict. 3 of the reference
+        network's 7 collisions are one named row beside anonymous privacy MACs,
+        and those must keep resolving exactly as before."""
+        store = _Store({
+            "f8:7d:76:d1:2c:84": _KD(hostname="Lovisas-ny-iphone", ip="192.168.68.51"),
+            "e2:00:a7:e0:db:8e": _KD(vendor="Unknown", ip="192.168.68.51"),
+        })
+        r = DeviceLabelResolver(store=store)
+        assert r.label_for_host("192.168.68.51") == "Lovisas-ny-iphone"
+
+    def test_two_rows_agreeing_on_the_same_name_are_not_ambiguous(self):
+        """A device re-registered under a second MAC at the same address is not
+        a conflict — there is only one answer to give."""
+        store = _Store({
+            "dc:a6:32:2c:41:c7": _KD(hostname="LIBREELEC", ip="192.168.68.64"),
+            "dc:a6:32:2c:41:c8": _KD(hostname="LIBREELEC", ip="192.168.68.64"),
+        })
+        r = DeviceLabelResolver(store=store)
+        assert r.label_for_host("192.168.68.64") == "LIBREELEC"
+
+    def test_ambiguity_does_not_leak_into_mac_keyed_resolution(self):
+        """A MAC identifies exactly one row, so it is never ambiguous — the
+        collision only exists on the IP index."""
+        store = _Store({
+            "dc:a6:32:2c:41:c7": _KD(hostname="LIBREELEC", ip="192.168.68.64"),
+            "f0:72:ea:51:d3:b8": _KD(vendor="Google Nest / Nest Wifi", ip="192.168.68.64"),
+        })
+        r = DeviceLabelResolver(store=store)
+        assert r.label_for("dc:a6:32:2c:41:c7") == "LIBREELEC"
+        assert r.label_for_host("f0:72:ea:51:d3:b8") == "Google Nest / Nest Wifi"
+
+    def test_ambiguous_ip_is_left_alone_in_an_alert_message(self):
+        from ui.device_labels import resolve_alert_message
+
+        store = _Store({
+            "dc:a6:32:2c:41:c7": _KD(hostname="LIBREELEC", ip="192.168.68.64"),
+            "f0:72:ea:51:d3:b8": _KD(vendor="Google Nest / Nest Wifi", ip="192.168.68.64"),
+        })
+        r = DeviceLabelResolver(store=store)
+        msg = "192.168.68.64 stopped responding."
+        assert resolve_alert_message(r, "192.168.68.64", msg) == msg
+
+
 # ── resolve_alert_message (S4) ─────────────────────────────────────────────────
 
 class TestResolveAlertMessage:

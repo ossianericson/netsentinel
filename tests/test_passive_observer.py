@@ -173,6 +173,138 @@ def test_record_confidence_upgrade_fires_callback():
     assert obs is not None and obs.confidence == "high"
 
 
+# ── ARP enrichment at record time ──────────────────────────────────────────────
+#
+# The observation's `mac` is what ui/scan_enrichment.py::_on_passive_observation()
+# attributes the observation by. Every test that hands a MAC straight to
+# PassiveObservation(...) asserts the consumer's behaviour *given* a resolved
+# MAC, and is structurally incapable of noticing that nothing in production ever
+# resolves one -- which is exactly what happened: enrich_mac() shipped with zero
+# callers outside this file, so obs.mac was always "" and the MAC-matching path
+# was unreachable. These tests drive the real _record() entry point instead.
+
+def _reset_arp_cache(monkeypatch) -> None:
+    """Invalidate _record()'s TTL-cached ARP snapshot.
+
+    The cache is module-level, so a snapshot taken by an earlier test in the
+    same session is still warm and would swallow this test's lookup entirely.
+    monkeypatch (rather than a bare assignment) so the timestamp is restored
+    afterwards and the reset cannot leak into the next test.
+    """
+    monkeypatch.setattr("modules.passive_observer._arp_cache_at", 0.0)
+
+
+def _patch_arp(monkeypatch, table: dict) -> None:
+    """Point the ARP-cache helper at a fixed {ip: mac} map."""
+    monkeypatch.setattr("modules.utils_net.get_arp_snapshot", lambda: dict(table))
+    _reset_arp_cache(monkeypatch)
+
+
+def test_recorded_observation_carries_the_arp_resolved_mac(monkeypatch):
+    """A recorded observation must reach the callback already carrying the MAC
+    the ARP cache maps its source IP to -- not an empty string the consumer
+    then has to fall back to IP matching for."""
+    from modules.passive_observer import _record, _observations, _obs_lock
+
+    _patch_arp(monkeypatch, {"9.9.9.9": "aa:bb:cc:dd:ee:99"})
+    with _obs_lock:
+        _observations.clear()
+
+    results: list = []
+    _record("9.9.9.9", "mdns", "_arp-test._tcp", "IP Camera", "high",
+            "mDNS _arp-test._tcp", results.append)
+
+    assert len(results) == 1
+    assert results[0].mac.lower() == "aa:bb:cc:dd:ee:99", (
+        "the observation reached its consumer with mac=%r -- the consumer then "
+        "attributes it by IP, and on a DHCP network the IP's owner has moved"
+        % results[0].mac
+    )
+
+
+def test_replayed_observation_carries_the_arp_resolved_mac(monkeypatch):
+    """The buffered copy get_observations() replays after a scan must carry the
+    MAC too -- _apply_passive_observations() re-runs the whole buffer, so a MAC
+    resolved only for the live callback would be lost on every replay."""
+    from modules.passive_observer import (
+        _record, _observations, _obs_lock, get_observations,
+    )
+
+    _patch_arp(monkeypatch, {"9.9.9.8": "aa:bb:cc:dd:ee:98"})
+    with _obs_lock:
+        _observations.clear()
+
+    _record("9.9.9.8", "mdns", "_replay-test._tcp", "IP Camera", "high",
+            "mDNS _replay-test._tcp", lambda _obs: None)
+
+    buffered = [o for o in get_observations() if o.ip == "9.9.9.8"]
+    assert len(buffered) == 1
+    assert buffered[0].mac.lower() == "aa:bb:cc:dd:ee:98"
+
+
+def test_record_leaves_mac_empty_when_arp_cannot_resolve_the_ip(monkeypatch):
+    """An unresolvable IP must leave mac empty rather than inventing one -- the
+    consumer's own guard is what decides whether an unattributable observation
+    may still be matched by IP."""
+    from modules.passive_observer import _record, _observations, _obs_lock
+
+    _patch_arp(monkeypatch, {"1.1.1.1": "aa:bb:cc:dd:ee:11"})
+    with _obs_lock:
+        _observations.clear()
+
+    results: list = []
+    _record("9.9.9.7", "mdns", "_missing._tcp", "IP Camera", "high",
+            "mDNS _missing._tcp", results.append)
+
+    assert len(results) == 1
+    assert results[0].mac == ""
+
+
+def test_record_does_not_hold_the_observation_lock_across_the_arp_lookup(monkeypatch):
+    """The ARP read shells out to `arp -a` (~40 ms measured). Doing that while
+    holding _obs_lock would stall both listener threads behind every record."""
+    from modules.passive_observer import _record, _observations, _obs_lock
+
+    held: list = []
+
+    def _probe() -> dict:
+        held.append(_obs_lock.locked())
+        return {"9.9.9.6": "aa:bb:cc:dd:ee:96"}
+
+    monkeypatch.setattr("modules.utils_net.get_arp_snapshot", _probe)
+    _reset_arp_cache(monkeypatch)
+    with _obs_lock:
+        _observations.clear()
+
+    _record("9.9.9.6", "mdns", "_lock-test._tcp", "IP Camera", "high",
+            "mDNS _lock-test._tcp", lambda _obs: None)
+
+    assert held == [False], "ARP lookup ran while _obs_lock was held"
+
+
+def test_arp_snapshot_is_reused_across_a_burst_of_records(monkeypatch):
+    """A burst of distinct service types from one device must not spawn one
+    `arp -a` subprocess each on the listener thread."""
+    from modules.passive_observer import _record, _observations, _obs_lock
+
+    calls: list = []
+
+    def _counting() -> dict:
+        calls.append(1)
+        return {"9.9.9.5": "aa:bb:cc:dd:ee:95"}
+
+    monkeypatch.setattr("modules.utils_net.get_arp_snapshot", _counting)
+    _reset_arp_cache(monkeypatch)
+    with _obs_lock:
+        _observations.clear()
+
+    for i in range(8):
+        _record("9.9.9.5", "mdns", f"_burst{i}._tcp", "IP Camera", "high",
+                f"mDNS _burst{i}._tcp", lambda _obs: None)
+
+    assert len(calls) == 1, f"{len(calls)} ARP subprocess reads for 8 records"
+
+
 # ── get_observations ───────────────────────────────────────────────────────────
 
 def test_get_observations_returns_list():

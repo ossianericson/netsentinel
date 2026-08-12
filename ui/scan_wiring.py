@@ -1165,6 +1165,16 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 if _targets:
                     if hasattr(self, "_avail_worker") and self._avail_worker.isRunning():
                         self._avail_worker.set_targets(_targets)
+                        # Re-nominate the gateway for jitter on every retarget.
+                        # It is read from _net_info["gateway"], which is empty
+                        # when the scan worker beats the network-info worker at
+                        # startup -- and the nomination used to be frozen at
+                        # construction, so that one empty read disabled
+                        # JITTER_HIGH's only LAN data source for the whole
+                        # session. Measured before the fix: 1,067 gateway
+                        # rtt_sample rows, zero carrying a jitter value.
+                        _gw_now = (getattr(self, "_net_info", {}) or {}).get("gateway") or ""
+                        self._avail_worker.set_jitter_hosts([_gw_now] if _gw_now else None)
                     else:
                         # Signal Quality Phase 3b: reuse the DeviceBaselines
                         # app.py built (None unless signal_quality_v2 is on), so
@@ -1785,20 +1795,29 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if hasattr(self, "_inventory_page"):
             try:
                 if _map_cache:
-                    # Build IP → (display_state, last_seen_ts) from DB reconstruction
-                    _state_by_ip: dict = {}
+                    # Build MAC → (display_state, last_seen_ts) from DB
+                    # reconstruction. Keyed by MAC, not IP: one address
+                    # routinely carries several MACs (7 of 31 rows on the
+                    # reference network — DHCP lease reuse, privacy MACs), so
+                    # an IP key silently gave a device whichever colliding
+                    # row's freshness landed last. Both sides carry a real MAC,
+                    # so the join has an exact key available and does not have
+                    # to settle for a heuristic.
+                    _state_by_mac: dict = {}
                     for _kd in devices:
-                        _kd_ip = _kd.get("ip", "") if isinstance(_kd, dict) else getattr(_kd, "ip", "")
+                        _kd_mac = _kd.get("mac", "") if isinstance(_kd, dict) else getattr(_kd, "mac", "")
                         _kd_st = _kd.get("display_state", "") if isinstance(_kd, dict) else getattr(_kd, "display_state", "")
                         _kd_ls = _kd.get("last_seen_ts", 0) if isinstance(_kd, dict) else getattr(_kd, "last_seen_ts", 0)
-                        if _kd_ip:
-                            _state_by_ip[_kd_ip] = (_kd_st or "cached", int(_kd_ls or 0))
+                        _kd_mac = str(_kd_mac or "").strip().lower().replace("-", ":")
+                        if _kd_mac and _kd_mac != "?":
+                            _state_by_mac[_kd_mac] = (_kd_st or "cached", int(_kd_ls or 0))
                     # Enrich map-cache devices with display_state so Inventory shows
                     # correct freshness dots (◌ amber cached / ○ gray stale)
                     _inv_devices = []
                     for _cd in _map_cache["devices"]:
-                        _cd_ip = _cd.get("ip", "") if isinstance(_cd, dict) else getattr(_cd, "ip", "")
-                        _st, _ls = _state_by_ip.get(_cd_ip, ("cached", 0))
+                        _cd_mac = _cd.get("mac", "") if isinstance(_cd, dict) else getattr(_cd, "mac", "")
+                        _cd_mac = str(_cd_mac or "").strip().lower().replace("-", ":")
+                        _st, _ls = _state_by_mac.get(_cd_mac, ("cached", 0))
                         if isinstance(_cd, dict):
                             _copy = dict(_cd)
                             _copy["display_state"] = _st

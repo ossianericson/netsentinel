@@ -168,11 +168,25 @@ class EscalationPolicy:
 # healthy network (each is edge-triggered, one claim per episode). Roughly
 # 1 claim/day in total, against the 163.6/day an ungated engine produced.
 #
+# RTT_ANOMALY joined the set in v2.2.6, on measurement rather than intuition.
+# Phase 4 revived it but left it uncurated, and it was grouped with the
+# level-triggered rules below — a misfiling: it learns a per-host mean+2sigma
+# baseline instead of comparing against a fixed constant, which is the exact
+# property that got "High RTT" dropped. Measured over 28.8 days of the reference
+# database through the v2 tier gate: 0.15 claims/day, quieter than
+# MODEM_SIGNAL_DROP which already ships on. Phase 6 also gave it an absolute
+# floor (`_RTT_ANOMALY_FLOOR_MS`, alert_engine_checks2.py), so a host whose
+# baseline is a few milliseconds cannot alert on a harmless few-ms excursion —
+# the failure mode that would otherwise make a learned baseline noisy on a fast
+# LAN.
+#
 # Deliberately NOT here: RTT_THRESHOLD, HOST_DEGRADED, LOSS_THRESHOLD (level-
-# triggered), RTT_ANOMALY and JITTER_HIGH (revived in Phase 4, never curated),
-# and ARP_SPOOF/ROGUE_DHCP — correct candidates, but they only evaluate when
-# their background watcher is running, and a default-on rule whose producer may
-# be absent is a promise the app cannot keep.
+# triggered); JITTER_HIGH (producer works, but it is a fixed 20 ms threshold —
+# the same objection that dropped High RTT — and the gateway is not sampled, so
+# the measurement behind it is too thin to curate on); and ARP_SPOOF/ROGUE_DHCP
+# — correct candidates, but they only evaluate when their background watcher is
+# running, and a default-on rule whose producer may be absent is a promise the
+# app cannot keep.
 DEFAULT_ENABLED_RULES = frozenset({
     "Host Down",
     "New Device",
@@ -182,6 +196,7 @@ DEFAULT_ENABLED_RULES = frozenset({
     "Mesh Degraded",
     "Modem Signal Drop",
     "DNS Latency",
+    "RTT Anomaly",
 })
 
 

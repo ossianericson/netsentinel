@@ -147,6 +147,26 @@ class AvailabilityMonitor:
         """Replace the target list. Thread-safe if called between cycles."""
         self._targets = list(targets)
 
+    @property
+    def jitter_hosts(self) -> frozenset:
+        """Hosts currently nominated for 3-sample jitter measurement."""
+        return self._jitter_hosts
+
+    def set_jitter_hosts(self, hosts: Optional[Sequence[str]]) -> None:
+        """Replace the jitter nomination. Thread-safe if called between cycles.
+
+        Needed because the nomination's source can be unavailable at
+        construction time and only become known later. `ui/scan_wiring.py`
+        nominates the gateway from `_net_info["gateway"]`, which is
+        `Optional[str]` (RULE-NET1) and empty whenever the scan worker beats the
+        network-info worker at startup -- and the rescan path calls
+        `set_targets()`, which used to leave the empty nomination frozen for the
+        rest of the session. Measured before this existed: the gateway had 1,067
+        `rtt_sample` rows and zero carrying jitter, so JITTER_HIGH had no LAN
+        data source at all despite being wired for one.
+        """
+        self._jitter_hosts = frozenset(hosts or ())
+
     def get_current_states(self) -> Dict[str, Optional[str]]:
         """Return a snapshot of the last known state per host."""
         return dict(self._current_state)

@@ -781,6 +781,66 @@ replayed — the replay reads `device_state` rows already written under the old
 classification. The flag is on and the curated rules are now armed by default, so
 the next chaos run collects it.
 
+## The curation decision for the two revived rules — measured 2026-08-09
+
+Phase 4 fixed `JITTER_HIGH` and `RTT_ANOMALY` and left both out of the curated
+set, recorded as "revived in Phase 4, never curated" — a deferral with no
+scheduled decision behind it. Both were measured directly against the live
+database (read-only, `mode=ro`) rather than through `alert_replay`, which is
+structurally blind to both: it drives `evaluate_cycle()` only, while
+`app.py::_on_cycle` calls `evaluate_jitter_checks()` and
+`evaluate_rtt_anomaly_checks()` separately.
+
+**`JITTER_HIGH` — not enough evidence to curate. Recommend leaving it off.**
+
+The producer works. `rtt_sample.jitter_ms` is no longer `-1.0` on every row —
+but only **84 of 26,048 rows (0.3%)** carry a real value, spanning **41
+minutes**, because the app has run only briefly since v2.2.3 shipped the
+producer (daily `rtt_sample` volume on this machine runs 0–342, and every
+jitter-bearing row is from today).
+
+| | |
+|---|---|
+| 10-minute windows evaluated | 12 |
+| Windows that would fire at `threshold_ms=20.0` | **0** |
+| Observed jitter | 8.8.8.8 mean 3.6 ms / p95 10.1 / max 12.2; 1.1.1.1 mean 1.7 / p95 3.6 / max 4.0 |
+| Hosts with any jitter data | **2** — `8.8.8.8`, `1.1.1.1` |
+
+Forty-one minutes cannot support a per-day rate, and quoting one would be the
+exact thing the Phase 0 methodology note warns against. Two further reasons hold
+independently of how much data arrives later:
+
+- **The gateway is not sampled.** The Phase 4 note describes sampling as "bounded
+  to the gateway plus `DEFAULT_TARGETS`"; measured, only the two public DNS
+  resolvers carry jitter. So the rule currently speaks only about the uplink to
+  two external IPs — and `DNS_LATENCY`, already curated, covers that ground with
+  a self-learned per-network baseline rather than a fixed 20 ms constant.
+- **A fixed `threshold_ms=20.0` is the defect class this programme exists to
+  remove** — the same objection that dropped `High RTT` (fixed 200 ms) from the
+  curated set on the owner's call. Curating a second fixed-threshold rule would
+  reverse that decision by accident.
+
+**`RTT_ANOMALY` — the measurement supports curating it; the call is the owner's.**
+
+Unlike jitter, this one has real history behind it: **28.8 days**, and **18 of 24
+hosts** have exceeded the 150 ms absolute floor at some point in it, so the rule
+is neither dormant nor hair-trigger. Phase 6 already measured its rate through
+the v2 tier gate with the floor applied at **0.15/day** — quieter than
+`MODEM_SIGNAL_DROP` (0.40/day), which *is* curated, and it is a learned-baseline
+rule rather than a fixed-threshold one, so it does not carry the objection that
+disqualifies `JITTER_HIGH` and `High RTT`.
+
+The stated reason for exclusion is only that it was revived late, and no
+principled objection to it is recorded anywhere. Note what curating it would
+actually add: the tier gate admits 2 of 30 devices, and 14 of the 15 hosts that
+would trip the floored predicate are `transient`, so in practice this is the
+gateway reporting that it is answering unusually slowly *and* above 150 ms.
+
+Left as-is pending an explicit call, because `DEFAULT_ENABLED_RULES` is a
+shipped-defaults decision of the same kind the owner made by hand for the other
+eight, and changing what a fresh install alerts on is not a measurement's to
+make.
+
 ## Regression pinning
 
 `tests/test_signal_noise_ratchet.py` pins claims/day so a later change cannot

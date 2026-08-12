@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 _MAC_RE = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
 
@@ -74,6 +74,7 @@ class DeviceLabelResolver:
         self._label_map: Dict[str, str] = {}
         self._known: Dict[str, str] = {}         # mac -> name derived from known_device
         self._known_by_ip: Dict[str, str] = {}   # ip -> name derived from known_device
+        self._ambiguous_ips: Set[str] = set()    # ips several named MACs disagree on
         self._known_read_at = 0.0
         self._known_loaded = False
         self._resolved: Dict[str, str] = {}   # mac -> final answer (memoised)
@@ -96,6 +97,7 @@ class DeviceLabelResolver:
         self._resolved.clear()
         self._known.clear()
         self._known_by_ip.clear()
+        self._ambiguous_ips.clear()
         self._known_loaded = False
         self._known_read_at = 0.0
 
@@ -134,13 +136,24 @@ class DeviceLabelResolver:
         goes through the normal MAC resolution path; an IP is looked up
         directly against known_device.ip. Falls back to *host* unchanged
         (never the MAC/IP-shaped placeholder a fed-map lookup could produce,
-        since there is no fed map for a bare IP)."""
+        since there is no fed map for a bare IP).
+
+        An IP claimed by several *differently named* devices resolves to the
+        bare IP, not to one of them. Several MACs on one address is ordinary
+        (7 of 31 rows on the reference network -- DHCP lease reuse, privacy
+        MACs), and `get_known_devices()` has no ORDER BY, so choosing a name
+        would mean choosing whichever row rowid order happened to put last.
+        On Alert History the wrong device name is worse than no name: same
+        principle relevance.py runs on -- absence of information must never
+        be dressed up as information."""
         if not host:
             return ""
         host = str(host).strip()
         if _MAC_RE.match(host.lower().replace("-", ":")):
             return self.label_for(host)
         self._ensure_known()
+        if host in self._ambiguous_ips:
+            return host
         name = self._known_by_ip.get(host)
         if not _is_placeholder(name):
             return str(name)
@@ -180,6 +193,7 @@ class DeviceLabelResolver:
             return  # non-fatal — DB locked/unavailable; fall through to OUI/MAC
         names: Dict[str, str] = {}
         names_by_ip: Dict[str, str] = {}
+        ambiguous_ips: Set[str] = set()
         for mac, kd in devices.items():
             key = normalise_mac(mac)
             if not key:
@@ -194,9 +208,19 @@ class DeviceLabelResolver:
                 names[key] = resolved_name
                 ip = getattr(kd, "ip", None) if not isinstance(kd, dict) else kd.get("ip")
                 if ip:
-                    names_by_ip[str(ip).strip()] = resolved_name
+                    ip_key = str(ip).strip()
+                    prior = names_by_ip.setdefault(ip_key, resolved_name)
+                    # Only a second row that yields a DIFFERENT name is a
+                    # conflict. An anonymous row beside a named one (3 of the
+                    # reference network's 7 collisions) still has exactly one
+                    # answer, and so does the same device re-registered under a
+                    # second MAC -- neither is ambiguous, and marking them so
+                    # would drop names the app can legitimately give.
+                    if prior != resolved_name:
+                        ambiguous_ips.add(ip_key)
         self._known = names
         self._known_by_ip = names_by_ip
+        self._ambiguous_ips = ambiguous_ips
 
     @staticmethod
     def _lookup_oui(key: str) -> Optional[str]:

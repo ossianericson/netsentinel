@@ -248,6 +248,104 @@ class TestTrackerResult:
         assert len(fired) == 2
 
 
+# ── RULE-ID1: an address is a lease, not an identity ──────────────────────────
+
+class TestTrackerResultKeysByMacNotIp:
+    """`host = dev.ip or dev.mac` preferred the ambiguous key over the exact one.
+
+    `host` is not just a display string: `_fire_if_cooled()` builds
+    `f"{rule.name}::{host}"` and uses it as BOTH the cooldown dedup key and the
+    acknowledgement-hold key. On the 7-of-20 reference-network addresses claimed
+    by more than one MAC, that means one device's ack mutes a different device.
+
+    The pre-existing `TestTrackerResult` cases above are structurally blind to
+    this (RULE-DBG5's shape): they build `FakeDev(mac=...)` with the default
+    empty `ip`, so the `or` falls through to the MAC and passes either way.
+    Every device here carries BOTH fields, which is what production produces —
+    `device_tracker._normalise()` returns None without a MAC, so a TrackedDevice
+    always has one.
+    """
+
+    def _dev(self, mac: str, ip: str):
+        from dataclasses import dataclass
+
+        @dataclass
+        class FakeDev:
+            mac: str
+            ip: str = ""
+            hostname: str = ""
+            vendor: str = ""
+            device_type: str = ""
+
+        return FakeDev(mac=mac, ip=ip)
+
+    def _result(self, new=(), gone=()):
+        from dataclasses import dataclass, field
+        from typing import List
+
+        @dataclass
+        class FakeResult:
+            new_devices: List = field(default_factory=list)
+            gone_devices: List = field(default_factory=list)
+
+        return FakeResult(new_devices=list(new), gone_devices=list(gone))
+
+    SHARED_IP = "192.168.68.64"
+    MAC_A = "dc:a6:32:2c:41:c7"
+    MAC_B = "f0:72:ea:51:d3:b8"
+
+    def test_new_device_alert_is_keyed_by_mac(self):
+        eng = _engine_with(AlertRule("New", "NEW_DEVICE", cooldown_s=0))
+        tr = self._result(new=[self._dev(self.MAC_A, self.SHARED_IP)])
+        fired = eng.evaluate_tracker_result(tr)
+        assert len(fired) == 1
+        assert fired[0].host == self.MAC_A
+
+    def test_gone_device_alert_is_keyed_by_mac(self):
+        eng = _engine_with(AlertRule("Gone", "DEVICE_GONE", cooldown_s=0))
+        tr = self._result(gone=[self._dev(self.MAC_A, self.SHARED_IP)])
+        fired = eng.evaluate_tracker_result(tr)
+        assert len(fired) == 1
+        assert fired[0].host == self.MAC_A
+
+    def test_two_devices_sharing_an_address_do_not_share_a_cooldown(self):
+        # A long cooldown: with an IP key the second device is swallowed as a
+        # duplicate of the first, because both resolve to the same dedup key.
+        eng = _engine_with(AlertRule("Gone", "DEVICE_GONE", cooldown_s=3600))
+        tr = self._result(gone=[
+            self._dev(self.MAC_A, self.SHARED_IP),
+            self._dev(self.MAC_B, self.SHARED_IP),
+        ])
+        fired = eng.evaluate_tracker_result(tr)
+        assert len(fired) == 2, "a co-tenant on the same address was deduped away"
+        assert {a.host for a in fired} == {self.MAC_A, self.MAC_B}
+
+    def test_acking_one_device_does_not_mute_its_address_co_tenant(self):
+        eng = _engine_with(AlertRule("Gone", "DEVICE_GONE", cooldown_s=0))
+        eng.set_ack_hold_seconds(86400)
+
+        first = eng.evaluate_tracker_result(
+            self._result(gone=[self._dev(self.MAC_A, self.SHARED_IP)])
+        )
+        assert len(first) == 1
+        eng.note_acknowledged(first[0].rule_name, first[0].host)
+
+        # A DIFFERENT device that happens to hold the same address must still alert.
+        second = eng.evaluate_tracker_result(
+            self._result(gone=[self._dev(self.MAC_B, self.SHARED_IP)])
+        )
+        assert len(second) == 1, "ack on one MAC muted a different MAC on the same IP"
+        assert second[0].host == self.MAC_B
+
+    def test_address_is_still_used_when_the_device_has_no_mac(self):
+        # The fallback must stay intact: an IP is better than nothing.
+        eng = _engine_with(AlertRule("Gone", "DEVICE_GONE", cooldown_s=0))
+        tr = self._result(gone=[self._dev("", self.SHARED_IP)])
+        fired = eng.evaluate_tracker_result(tr)
+        assert len(fired) == 1
+        assert fired[0].host == self.SHARED_IP
+
+
 # ── set_rules / get_rules ─────────────────────────────────────────────────────
 
 class TestMaintenanceSuppressionRecording:

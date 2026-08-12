@@ -558,6 +558,54 @@ class TestIdentityChurn:
         assert f.ok is False
         assert "no-op" in f.detail
 
+    def test_noop_from_an_older_build_after_the_marker_is_excluded_once_restamped(
+        self, tmp_path
+    ):
+        """The mixed-build case (RULE-DBG6). A guarded build stamps the marker;
+        an OLDER, unguarded build sharing the same database then writes no-op
+        rows AFTER that stamp; the guarded build reopens and re-stamps.
+
+        Observed live on the reference install: a v2.2.5 build stamped
+        2026-08-08 14:58:03, then a pre-v2.2.4 Store package (auto-started at
+        login) wrote 10 no-op class_changed rows the next morning. With a
+        write-once marker those rows read as a live regression against a guard
+        that is provably a single choke point and provably intact -- a FAIL no
+        code change could clear, on immutable history."""
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(
+            tmp_path,
+            events=[
+                # written by the older, unguarded build AFTER the first stamp
+                ("Streaming Stick", "Streaming Stick", "2026-01-02 00:00:00"),
+                ("Router / Gateway", "Router / Gateway", "2026-01-02 00:00:01"),
+                # the guarded build's own post-restamp row: a real change
+                ("", "Print Server", "2026-01-03 12:00:00"),
+            ],
+            n_devices=10,
+            guard_since="2026-01-03 00:00:00",   # re-stamped on the latest open
+        )
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is True, f.detail
+
+    def test_noop_after_the_latest_restamp_still_fails(self, tmp_path):
+        """Narrowing the window must not blunt the check: a no-op written by
+        the build currently in charge still fails on first occurrence."""
+        from modules.scan_guidance_audit import audit_identity_churn
+
+        db_path = _make_identity_db(
+            tmp_path,
+            events=[
+                ("Streaming Stick", "Streaming Stick", "2026-01-02 00:00:00"),
+                ("Router / Gateway", "Router / Gateway", "2026-01-03 12:00:00"),
+            ],
+            n_devices=10,
+            guard_since="2026-01-03 00:00:00",
+        )
+        f = _finding(audit_identity_churn(db_path=db_path), "IDENTITY_CHURN")
+        assert f.ok is False
+        assert "no-op" in f.detail
+
     def test_absent_guard_marker_falls_back_to_full_window(self, tmp_path):
         """A database never opened by a guarded build (or a fresh synthetic
         fixture with no meta row) must fall back to the original, stricter

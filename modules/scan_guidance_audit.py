@@ -465,13 +465,28 @@ def audit_identity_churn(db_path: Optional[Path] = None) -> List[AuditFinding]:
 
     The no-op check is bounded below by
     metric_store_schema.IDENTITY_NOOP_GUARD_META_KEY, a meta-table timestamp
-    stamped once per database the first time a build carrying the no-op guard
-    opens it. Without this, every existing install shows a hard FAIL for a
-    full IDENTITY_CHURN_WINDOW_DAYS after upgrading -- the trailing window
-    still holds pre-guard no-op rows nothing will ever rewrite, indistinguishable
+    re-stamped every time a build carrying the no-op guard opens the database.
+    Without this, every existing install shows a hard FAIL for a full
+    IDENTITY_CHURN_WINDOW_DAYS after upgrading -- the trailing window still
+    holds pre-guard no-op rows nothing will ever rewrite, indistinguishable
     from a genuine regression. A guard-bounded no-op window turns that into a
-    check that fails on the first *post-guard* no-op instead. The
-    per-device-day churn check is intentionally left on its own full
+    check that fails on the first *post-guard* no-op instead.
+
+    The marker advances rather than being written once (RULE-DBG6), because a
+    single database is routinely shared by more than one build -- the Store
+    package auto-starting at login while a newer build is tested, a downgrade,
+    a portable copy beside an installed one. A write-once marker cannot see an
+    OLDER, unguarded build writing violating rows AFTER it was stamped, and
+    reports them as a live regression against code that cannot produce them
+    (observed on the reference install: 10 no-op rows written by a pre-v2.2.4
+    Store package the morning after a v2.2.5 build stamped the marker). An
+    advancing marker scopes the no-op check to the guarded build currently in
+    charge -- the only span it can honestly attribute. That deliberately
+    narrows this live check to the current session; the durable regression gate
+    is tests/test_identity_churn_ratchet.py, which drives the real arbitrate()
+    and the real write choke point and does not depend on any install's state.
+
+    The per-device-day churn check is intentionally left on its own full
     IDENTITY_CHURN_WINDOW_DAYS window -- only the no-op check moves. An absent
     marker (a database never opened by a guarded build, or the "no history
     yet" early-return above) falls back to the full window, which is the

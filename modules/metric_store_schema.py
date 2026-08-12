@@ -12,12 +12,11 @@ from typing import Optional
 # ── Schema version — bump when adding columns ────────────────────────────────
 _SCHEMA_VERSION = 22
 
-# meta key stamped once, on the first schema apply that carries this guard,
-# recording when record_device_change_event()'s no-op de-dupe became active
-# for this specific database file. Read by
-# modules.scan_guidance_audit.audit_identity_churn() so an upgrading install's
-# pre-guard history doesn't fail the churn gate for its first
-# IDENTITY_CHURN_WINDOW_DAYS after upgrade.
+# meta key re-stamped on every schema apply that carries the no-op guard,
+# recording when the guarded build currently in charge took over this specific
+# database file. Read by modules.scan_guidance_audit.audit_identity_churn() so
+# an upgrading install's pre-guard history — and any rows an older build shipped
+# into the same file afterwards — don't fail the churn gate (RULE-DBG6).
 IDENTITY_NOOP_GUARD_META_KEY = "identity_noop_guard_since"
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
@@ -478,14 +477,24 @@ def apply_sqlite_schema(conn: sqlite3.Connection, write_lock: threading.Lock) ->
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             ("schema_version", str(_SCHEMA_VERSION)),
         )
-        # Stamped once, ever, the first time this guarded build opens this
-        # database — DO NOTHING (not DO UPDATE) so a later schema apply never
-        # moves an already-recorded timestamp forward. datetime('now') matches
-        # device_events.ts's own format/clock so the two remain lexicographically
-        # comparable (see audit_identity_churn()).
+        # Re-stamped on EVERY guarded open — DO UPDATE, not DO NOTHING
+        # (RULE-DBG6). The marker's job is "were rows after this point written
+        # by a build carrying the no-op guard?", and a write-once timestamp
+        # cannot answer that: more than one build routinely shares one database
+        # (the Store package auto-starting at login while a newer build is
+        # tested, a downgrade, a portable copy), so an OLDER, unguarded build
+        # can write violating rows AFTER a newer one stamped. Observed live —
+        # the marker froze at 2026-08-08 14:58:03 while a pre-v2.2.4 Store
+        # package went on writing 10 no-op class_changed rows the next morning,
+        # failing --audit on immutable history no code change could fix.
+        # Advancing it narrows the window to the current session, which is the
+        # only span this marker can honestly attribute; the durable regression
+        # gate is tests/test_identity_churn_ratchet.py, not the live audit.
+        # datetime('now') matches device_events.ts's own format/clock so the two
+        # remain lexicographically comparable (see audit_identity_churn()).
         conn.execute(
             "INSERT INTO meta(key, value) VALUES(?, datetime('now')) "
-            "ON CONFLICT(key) DO NOTHING",
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (IDENTITY_NOOP_GUARD_META_KEY,),
         )
         conn.commit()

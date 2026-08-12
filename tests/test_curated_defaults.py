@@ -45,12 +45,25 @@ class TestTheCuratedSet:
     def test_the_level_triggered_noise_rules_stay_off(self):
         """Measured over 23.7 days on the reference network, through the v2 tier
         gate. These are level-triggered against fixed thresholds — the defect
-        class the whole program exists to stop — so they stay opt-in."""
-        for name in ("High RTT", "Host Degraded", "Packet Loss",
-                     "RTT Anomaly", "Jitter High"):
+        class the whole program exists to stop — so they stay opt-in.
+
+        "Jitter High" belongs here for the same reason despite being revived in
+        Phase 4: its threshold is a fixed 20 ms, which is precisely the
+        objection that dropped "High RTT"."""
+        for name in ("High RTT", "Host Degraded", "Packet Loss", "Jitter High"):
             assert name not in DEFAULT_ENABLED_RULES, (
                 f"{name} is level-triggered or unmeasured; it must stay opt-in"
             )
+
+    def test_rtt_anomaly_is_on_by_default(self):
+        """v2.2.6. It was grouped with the fixed-threshold rules above, which
+        misfiled it: RTT_ANOMALY learns a per-host mean+2sigma baseline rather
+        than comparing against a constant, so it does not carry the defect that
+        keeps the others off. Measured at 0.15 claims/day over 28.8 days through
+        the v2 tier gate — quieter than MODEM_SIGNAL_DROP, which already ships
+        on — and Phase 6 gave it an absolute floor so a host with a very low
+        baseline cannot alert on a harmless few-millisecond excursion."""
+        assert "RTT Anomaly" in DEFAULT_ENABLED_RULES
 
     def test_default_enabled_matches_the_set(self):
         for r in _default_rules():

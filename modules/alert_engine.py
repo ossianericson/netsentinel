@@ -269,7 +269,12 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
                 continue
             if rule.rule_type == "NEW_DEVICE":
                 for dev in getattr(tracker_result, "new_devices", []):
-                    host = dev.ip or dev.mac
+                    # RULE-ID1: the MAC is the exact key and is always present on
+                    # a TrackedDevice (_normalise() returns None without one).
+                    # `host` is the cooldown AND ack-hold key, so keying by the
+                    # address made one device's ack mute a co-tenant on a shared
+                    # lease -- 7 of 20 addresses on the reference network.
+                    host = dev.mac or dev.ip
                     label = dev.hostname or dev.vendor or "Unknown device"
                     alert = self._fire_if_cooled(
                         rule, host, now,
@@ -288,7 +293,7 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
 
             elif rule.rule_type == "DEVICE_GONE":
                 for dev in getattr(tracker_result, "gone_devices", []):
-                    host = dev.ip or dev.mac
+                    host = dev.mac or dev.ip          # RULE-ID1 — see NEW_DEVICE above
                     label = dev.hostname or dev.vendor or "Unknown device"
                     alert = self._fire_if_cooled(
                         rule, host, now,

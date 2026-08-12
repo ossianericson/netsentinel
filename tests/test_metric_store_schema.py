@@ -213,3 +213,60 @@ def test_modem_signal_point():
     )
     assert m.network_type == "5G"
     assert m.nr5g_rsrp == -85.0
+
+
+# ── identity no-op guard marker ────────────────────────────────────────────────
+#
+# The marker bounds audit_identity_churn()'s no-op window. Its job is to answer
+# "were rows after this point written by a build that carries the guard?" -- and
+# a timestamp stamped once, forever, cannot answer that. A machine routinely has
+# more than one build pointed at the same database (the Store package
+# auto-starting at login while a newer build is tested; a downgrade; a portable
+# copy), so an OLDER, unguarded build can and does write rows AFTER a newer one
+# stamped the marker. Observed live: the marker read 2026-08-08 14:58:03 while a
+# pre-v2.2.4 Store package went on writing 10 no-op rows the following morning,
+# failing the gate for a defect no code change could fix.
+
+def test_noop_guard_marker_is_stamped_on_first_open():
+    from modules.metric_store_schema import IDENTITY_NOOP_GUARD_META_KEY
+
+    conn = _make_conn()
+    apply_sqlite_schema(conn, threading.Lock())
+    row = conn.execute(
+        "SELECT value FROM meta WHERE key = ?", (IDENTITY_NOOP_GUARD_META_KEY,)
+    ).fetchone()
+    assert row is not None and row[0]
+
+
+def test_noop_guard_marker_advances_on_every_guarded_open():
+    """Each guarded open must move the marker to now, so the no-op window means
+    "since the guarded build currently in charge took over" rather than "since
+    any guarded build ever touched this file". Rows an older build wrote in
+    between are then correctly outside the window -- they are not attributable
+    to the build being gated."""
+    from modules.metric_store_schema import IDENTITY_NOOP_GUARD_META_KEY
+
+    conn = _make_conn()
+    lock = threading.Lock()
+    apply_sqlite_schema(conn, lock)
+    first = conn.execute(
+        "SELECT value FROM meta WHERE key = ?", (IDENTITY_NOOP_GUARD_META_KEY,)
+    ).fetchone()[0]
+
+    # Simulate an older, unguarded build writing a no-op row after that stamp,
+    # then the guarded build reopening the same database.
+    conn.execute(
+        "UPDATE meta SET value = '2000-01-01 00:00:00' WHERE key = ?",
+        (IDENTITY_NOOP_GUARD_META_KEY,),
+    )
+    conn.commit()
+    apply_sqlite_schema(conn, lock)
+    second = conn.execute(
+        "SELECT value FROM meta WHERE key = ?", (IDENTITY_NOOP_GUARD_META_KEY,)
+    ).fetchone()[0]
+
+    assert second != "2000-01-01 00:00:00", (
+        "the marker is frozen at whatever the first guarded open wrote, so it "
+        "cannot distinguish an unguarded build's later rows from a regression"
+    )
+    assert second >= first

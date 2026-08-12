@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.2.5**
+Current version: **v2.2.6**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -39,6 +39,32 @@ not kill the process, so "no crash" alone is not evidence of a clean run.
 | 2026-07-23/24 (v2.1.43, RULE-CHAOS1 catch-up for v2.1.42) | ~11.5 h across the day, final 4.5 h wild-soak phase (19:37–00:04) at full 16,200 s budget | Earlier same-day phases (12:46–14:13) hit the already-diagnosed Win+Down/minimized-window false-restart and false-"shutdown hang" patterns — the exact defects fixed mid-run by `0977625`/`a69c7aa`/`c425f9b` in this release, so this run doubled as their validation. Final full-budget wild-soak phase: 9,656 iterations, **0 crashes, 0 exceptions**, **zero growth** in both `netsentinel_crash.log` and `netsentinel_exceptions.log` (mtimes predate the phase), clean titlebar-X shutdown (1.78 s). 2 restarts, both self-healed `[health]` hang-detections (46 s+ stalls), not app faults. **RSS lead still open, unchanged by this release's fixes (none targeted memory):** 549 MB → 1,440.8 MB peak over 4.5 h, same ballpark as the 07-21/22 wild-soak peak (1,432 MB) — not worsened, not resolved. |
 | 2026-08-03/04 (v2.2.2) | ~10 h overnight (21:37–07:46, user-interrupted mid soak-lap-2-mild) | 1 coverage cycle + soak lap 1 (mild/moderate/wild, full budget) — clean, **0 crashes, 0 exceptions**, `netsentinel_crash.log` byte-identical since 2026-07-30 (zero growth). 1 self-healed restart (window/process gone at iter 1616, foreground reclaimed in 15 s), 0 hangs. **Peak RSS 1,838 MB (wild soak lap 1)** — the first run confirmed free of the `+ust` instrumentation artifact below; RSS ladder back to the 07-21/22–07-23/24 ballpark (1,432–1,441 MB), not the 2,880–3,798 MB range seen while `+ust` was armed. See closure note below the table. |
 | 2026-08-06/07 (v2.2.2, post-Signal-Quality) | ~11 h overnight (21:39–08:34, user-interrupted mid soak-lap-2-moderate) | 1 coverage cycle + soak lap 1 (full budget) + partial lap 2 — clean, **0 crashes, 0 exceptions**, `netsentinel_crash.log` byte-identical to its run-start baseline (6,784,379 bytes, mtime still 2026-07-30). Both systematic sweeps 68/68 pages. The only `netsentinel_exceptions.log` growth is `KeyboardInterrupt` frames timestamped at the user's Ctrl+C — teardown noise, not a defect. 3 restarts, all the foreground-stuck escape hatch (`f2e483b`/`0e1575d`) firing correctly after 20 consecutive focus-reclaim failures — this run is that fix's first live validation. **Read the peak-RSS column with care here:** see the measurement note below the table. |
+| 2026-08-11 (v2.2.6 release-readiness) | 12 h 34 min (10:22:34–22:56:33), 12 phases, user-interrupted mid soak-lap-2-moderate | 1 coverage cycle + soak lap 1 (full budget) + partial lap 2, ~27,839 interactions — clean, **0 crashes, 0 exceptions**. `netsentinel_crash.log` byte-identical at 6,784,379 bytes (mtime still 2026-07-30) against the baseline all 12 phases stamped individually; `netsentinel_exceptions.log` mtime 2026-08-07, predating the run entirely — not even Ctrl+C teardown noise this time. Zero tracebacks, zero `0x8001010d`, zero `STATUS_*`. Both systematic sweeps 68/68 pages, `passed=True`, every completed phase ending `real-quit phase PASSED`. **This run tested exactly the release HEAD** — all five v2.2.6 commits landed 10:10–10:12 on a clean tree, ten minutes before launch; rare enough to be worth imitating. **RSS lead stays closed:** medians at or below the previous run — mild 557.5 (vs 556), moderate 1,077 (vs 1,176.5), wild 1,239 (vs 1,436.5) — and the lap-over-lap reset criterion holds (mild lap 1 557.5 → lap 2 565 MB in a fresh process). 2 restarts, both the foreground-stuck escape hatch again (its second live validation) — read the mislabel note below the table before taking them for process deaths. |
+
+**A reported "restart" is not a crash — check the reason before reading it as one.** Both
+2026-08-11 restarts were the foreground-stuck escape hatch firing correctly on a healthy app: a
+foreign window held the foreground for 20 consecutive iterations, the hatch forced a restart
+rather than stalling the phase, and the *harness* killed the app (exit 15). Confirmed
+independently — `netsentinel_shutdown.log` has no `closeEvent` in that window, so the app never
+exited on its own. Until `c524856`, `monkey_test.py` logged "Window/process gone" and "App exited
+unexpectedly" unconditionally for any falsy `_run_one()`, so a working safety net was reported as
+a crash on the one artefact release decisions are read from. The reason is now threaded through;
+a restart with no reason attached is a genuine death.
+
+**Three further reading traps from that run.** (1) A phase's Q1 median is depressed when restarts
+land in the first quarter — do not read Q1→Q4 there as intra-phase growth. (2) `mem x1731` is one
+*fixed* 1,500 MB threshold tripping repeatedly against a plateau sitting above it, not 1,731
+distinct events. (3) **A Ctrl+C-interrupted final phase leaves `AI_REPORT.md` stale**: it is
+rewritten after each phase, so the 2026-08-11 report (last written 21:08) still said "No crashes
+or exceptions" while `soak_02_moderate` had logged one at 22:48 — a known-harmless pywinauto
+`COMError -2147220991`. Always check the per-phase logs when the run ended on an interrupt.
+
+**Behavioural verification belongs in the same run.** 2026-08-11 validated v2.2.6's two shipped
+changes against the database the run itself wrote (the repo-root DB, per the source-launch quirk):
+gateway jitter coverage **14.0% → 99.6%**, and `RTT Anomaly` firing exactly twice as a matched
+fire/resolve pair — the first such rows in that database's history, so both paths are proven, at
+6 alerts total in 12.57 h. A chaos run proves the app does not fall over; only this kind of check
+proves the release did what it claimed.
 
 **Peak RSS is the max of a noisy oscillating signal — compare steady-state medians instead.**
 The 2026-08-06/07 run's `AI_REPORT.md` peak column suggested a +38.7% wild-soak regression

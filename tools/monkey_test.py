@@ -1104,6 +1104,15 @@ class MonkeyTester:
         # Consecutive iterations skipped by _assert_focus() (system window stuck
         # in foreground) — reset on any successful reclaim, see _run_one().
         self._consecutive_focus_skips = 0
+        # Why the next restart is happening, when it is NOT a crash. None means
+        # "the window/process genuinely went away". The focus escape hatch sets
+        # it before returning False so the restart path can report the truth:
+        # the 2026-08-11 12.5 h run logged "Window/process gone" and "App exited
+        # unexpectedly" for two deliberate, healthy-app escape-hatch restarts,
+        # because both messages were emitted unconditionally for any falsy
+        # _run_one(). A release decision is read off that report, so a working
+        # safety net must never be labelled a crash.
+        self._restart_reason: Optional[str] = None
         self._stop = threading.Event()
         # White-frame/hang investigation (2026-07-19): exit code of the last
         # process _alive() observed disappearing, so a crash report can say
@@ -1979,10 +1988,15 @@ class MonkeyTester:
         past the spatial/blacklist filter).  Returns True if relaunch succeeded.
         """
         self.stats.restarts += 1
+        # getattr: some tests build a MonkeyTester via __new__ without __init__.
         self.log.info(
-            "[restart] App exited unexpectedly — relaunch attempt %d/%d",
+            "[restart] %s — relaunch attempt %d/%d",
+            getattr(self, "_restart_reason", None) or "App exited unexpectedly",
             self.stats.restarts, self.cfg.max_restarts,
         )
+        # Consumed — a later restart with no reason set is a genuine app death
+        # and must not inherit this one's label.
+        self._restart_reason = None
         # Signal old background threads to exit; threads using _stop.wait() respond immediately.
         self._stop.set()
         time.sleep(0.3)   # allow focus heartbeat (uses _stop.wait) to notice and exit
@@ -2220,6 +2234,10 @@ class MonkeyTester:
                     "— forcing a restart instead of stalling the rest of the phase",
                     self._consecutive_focus_skips,
                 )
+                self._restart_reason = (
+                    "foreground held by another window — app healthy, "
+                    "escape hatch forcing a restart"
+                )
                 return False
             return True
         self._consecutive_focus_skips = 0
@@ -2401,8 +2419,9 @@ class MonkeyTester:
             if not ok:
                 if self.stats.restarts < self.cfg.max_restarts:
                     self.log.warning(
-                        "[restart] Window/process gone at iter %d — "
+                        "[restart] %s at iter %d — "
                         "restarting app (attempt %d/%d)",
+                        getattr(self, "_restart_reason", None) or "Window/process gone",
                         i, self.stats.restarts + 1, self.cfg.max_restarts,
                     )
                     if self._restart_app():

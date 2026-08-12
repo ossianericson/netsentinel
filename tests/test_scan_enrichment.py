@@ -1288,6 +1288,99 @@ def test_passive_observation_falls_back_to_ip_when_mac_unresolved():
     _cleanup(table)
 
 
+def test_passive_observation_is_dropped_when_ip_ownership_is_ambiguous():
+    """An IP claimed by more than one device in the list identifies nobody.
+
+    Measured on the reference network: 7 addresses carry several MACs, and the
+    live ARP cache disagreed with known_device.ip on 10 of the 15 comparable
+    addresses -- DHCP had rotated the pool one slot, so every "first row holding
+    this IP" answer was a different device than the one that sent the packet.
+    Same principle v2.2.5 applied to label_for_host(): naming the wrong device
+    is worse than naming none.
+    """
+    SHARED_IP = "192.168.1.60"
+    table = _make_table([
+        (SHARED_IP, "", "aa:bb:cc:dd:ee:10"),
+        (SHARED_IP, "", "aa:bb:cc:dd:ee:11"),
+    ])
+    first = _DevObj(SHARED_IP, "aa:bb:cc:dd:ee:10", device_type="Games Console")
+    second = _DevObj(SHARED_IP, "aa:bb:cc:dd:ee:11", device_type="Smart TV")
+    stub = _make_stub(table, {"devices": [first, second]}, net_info=None)
+
+    obs = _make_passive_obs(SHARED_IP, mac="")   # ARP could not resolve it
+    stub._on_passive_observation(obs)
+
+    assert first.device_type == "Games Console", (
+        "the observation was attributed to whichever row the loop reached "
+        "first, which on a rotated DHCP pool is a different device entirely"
+    )
+    assert second.device_type == "Smart TV"
+
+    _cleanup(table)
+
+
+def test_passive_observation_is_not_attributed_to_an_offline_row():
+    """`_merge_scan_with_persistent()`/`_restore_cached_scan()` append offline
+    devices carrying their LAST-KNOWN IP. That address has since been leased to
+    somebody else, so a live observation from it is never about the offline row
+    -- this is how an LG webOS TV that was powered off became a Router / Gateway
+    and then a Smart Speaker on the reference network."""
+    ip = "192.168.1.61"
+    table = _make_table([(ip, "LGwebOSTV-EAg4-1", "aa:bb:cc:dd:ee:12")])
+    offline = {
+        "ip": ip,
+        "mac": "aa:bb:cc:dd:ee:12",
+        "hostname": "LGwebOSTV-EAg4-1",
+        "device_type": "Smart TV",
+        "display_state": "stale",
+    }
+    stub = _make_stub(table, {"devices": [offline]}, net_info=None)
+
+    obs = _make_passive_obs(ip, mac="", device_hint="Router / Gateway")
+    stub._on_passive_observation(obs)
+
+    assert offline["device_type"] == "Smart TV", (
+        "a stale row's IP is a last-known value, not a claim on the address now"
+    )
+
+    _cleanup(table)
+
+
+def test_passive_observation_still_matches_a_single_live_owner_by_ip():
+    """The two guards above must not close the ordinary case: one online device,
+    unambiguously holding the address, with no MAC resolved."""
+    ip = "192.168.1.62"
+    mac = "aa:bb:cc:dd:ee:13"
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+
+    stub._on_passive_observation(_make_passive_obs(ip, mac=""))
+
+    assert dev.device_type == "IP Camera"
+    _cleanup(table)
+
+
+def test_passive_observation_with_a_resolved_mac_ignores_stale_ip_rows():
+    """With the ARP-resolved MAC present, an observation reaches its real sender
+    even when a stale row still claims the source IP."""
+    ip = "192.168.1.63"
+    sender_mac = "aa:bb:cc:dd:ee:14"
+    stale_mac = "aa:bb:cc:dd:ee:15"
+    table = _make_table([(ip, "", stale_mac), ("192.168.1.64", "", sender_mac)])
+    stale = _DevObj(ip, stale_mac, device_type="Smart TV")
+    sender = _DevObj("192.168.1.64", sender_mac, device_type="Unknown Device")
+    stub = _make_stub(table, {"devices": [stale, sender]}, net_info=None)
+
+    # obs.ip is the address the stale row still claims; obs.mac is the truth.
+    obs = _make_passive_obs(ip, mac=sender_mac)
+    stub._on_passive_observation(obs)
+
+    assert sender.device_type == "IP Camera"
+    assert stale.device_type == "Smart TV"
+    _cleanup(table)
+
+
 def test_dhcp_fingerprint_pass_rejects_multicast_mac():
     """The DHCP VCI fingerprint pass is already keyed by the device's own MAC
     (never IP) -- the Phase 2 gap here is only the non-device check, added

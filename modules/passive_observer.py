@@ -115,10 +115,28 @@ _threads: list[threading.Thread] = []
 
 # ── ARP cache helper ───────────────────────────────────────────────────────────
 
+# get_arp_snapshot() shells out to `arp -a` (~40 ms measured). _record() runs on
+# the listener threads, so a burst of distinct service types from one device must
+# not spawn one subprocess each -- reuse a snapshot for _ARP_CACHE_TTL seconds.
+# Short enough that a DHCP lease moving mid-session is picked up on the next
+# observation, which is the whole point of resolving the MAC here at all.
+_ARP_CACHE_TTL = 5.0
+_arp_cache: dict[str, str] = {}
+_arp_cache_at = 0.0
+_arp_cache_lock = threading.Lock()
+
+
 def _mac_from_arp_cache(ip: str) -> str:
     """Return MAC for *ip* from the OS ARP cache, or '' if not found."""
+    global _arp_cache, _arp_cache_at
     from modules.utils_net import get_arp_snapshot
-    return get_arp_snapshot().get(ip, "").upper()
+
+    with _arp_cache_lock:
+        if time.time() - _arp_cache_at >= _ARP_CACHE_TTL:
+            _arp_cache = get_arp_snapshot()
+            _arp_cache_at = time.time()
+        snapshot = _arp_cache
+    return snapshot.get(ip, "").upper()
 
 
 # ── SSDP listener ──────────────────────────────────────────────────────────────
@@ -381,12 +399,26 @@ def _record(
         _confidence_rank = {"high": 1, "low": 0}
         new_rank = _confidence_rank.get(confidence, 0)
         old_rank = _confidence_rank.get(existing.confidence if existing else "", -1)
-        if existing is None or new_rank > old_rank:
+        record_it = existing is None or new_rank > old_rank
+        if record_it:
             _observations[key] = obs
-            try:
-                callback(obs)
-            except Exception:
-                pass  # non-fatal — callback errors must not crash the listener
+
+    if not record_it:
+        return
+
+    # Resolve who actually sent this, while the ARP entry is freshest. Consumers
+    # attribute an observation by MAC and fall back to IP only when none could be
+    # resolved -- and on a DHCP network the IP's current owner is routinely not
+    # the device the inventory last recorded there (10 of 15 addresses on the
+    # reference network). Done outside _obs_lock: the lookup can shell out, and
+    # holding the lock across it would stall both listener threads. Mutating
+    # `obs` in place also carries the MAC into get_observations(), which
+    # _apply_passive_observations() replays after every scan.
+    enrich_mac(obs)
+    try:
+        callback(obs)
+    except Exception:
+        pass  # non-fatal — callback errors must not crash the listener
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────

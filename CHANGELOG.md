@@ -4,6 +4,27 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.6
+
+**Changed**
+- The `RTT Anomaly` alert rule is now enabled by default. It had been grouped with the fixed-threshold rules that ship off, which misfiled it — it learns each host's own normal latency (mean + 2σ) instead of comparing against a constant, which is the property that keeps the others opt-in. Measured at 0.15 alerts/day over 28.8 days of the reference network: quieter than `Modem Signal Drop`, which already ships on. If you have ever pressed Save on the Notifications page, your own choices are untouched
+
+**Fixed**
+- "Device gone" and "New device" alerts were identified by IP address rather than by MAC, so on an address shared by more than one device — routine after a DHCP lease is reused, and true of 7 of 20 addresses on the reference network — **acknowledging one device's alert silently muted a different device**, and the two shared a cooldown so the second alert never fired at all. The MAC was already available at every one of those points. Alert history also now shows the device's real name on those rows instead of a bare address
+- Devices sharing an address could inherit a neighbour's alert priority: on the reference network 4 device rows were alerting at a tier above their own, 2 of them borrowing the mesh access point's `critical` rating from a shared address
+- Jitter was never actually measured for your router, so the `Jitter High` rule had no local data source at all despite being wired for one. The gateway is nominated for jitter sampling from network info that is not always resolved when monitoring starts, and that one empty reading was frozen for the rest of the session — measured on the reference database as 1,067 latency samples for the gateway carrying zero jitter values, against 287 each for the two internet targets. The nomination is now refreshed on every rescan
+- Passive mDNS/SSDP observations were attributed by IP because nothing ever resolved their MAC — the v2.2.4 fix that added MAC matching shipped inert, since the ARP lookup it depended on had no caller. A powered-off TV could be relabelled a Router / Gateway and then a Smart Speaker. Verified live: 8 of 8 observations now carry an ARP-resolved MAC, where 6 of 7 previously landed on the wrong device
+- An IP claimed by several devices resolved to whichever database row came back first when choosing a display name, which is undefined ordering. Such an address now resolves to the bare address — naming the wrong device is worse than naming none — while addresses with only one nameable device keep their name
+
+**Removed**
+- A superseded translation layer on the "What's Wrong?" page that rendered service diagnostics inline, along with two remediation entries only it could produce. The design that shipped opens the dedicated Service Diagnostics page instead; the removed code had no caller outside a test file that described it as an integration test
+
+**Internal**
+- `tools/check_orphan_functions.py` plus a CI ratchet: sweeps the tree for functions and methods that only tests reference. This is the shape that let the v2.2.4 passive-observation fix ship completely inert, and it is now caught by the suite rather than by a user report
+- RULE-ID1 and a CI guard against reintroducing address-keyed device identity
+
+---
+
 ### v2.2.5
 
 **Fixed**

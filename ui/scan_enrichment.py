@@ -39,6 +39,24 @@ def _mesh_field(unit, name: str, default=None):
     return getattr(unit, name, default)
 
 
+# Rows _merge_scan_with_persistent() / _restore_cached_scan() append for devices
+# the scan did NOT see. Their `ip` is a LAST-KNOWN address, so it says nothing
+# about who holds it now -- on the reference network the live ARP cache
+# disagreed with the stored owner on 10 of 15 comparable addresses after a DHCP
+# pool rotation.
+_OFFLINE_DISPLAY_STATES = frozenset({"pinned", "cached", "stale"})
+
+
+def _dev_field(dev, name: str, default: str = "") -> str:
+    """Read one field from a scan device that may be a DeviceInfo or a dict.
+
+    The live scan yields ``DeviceInfo`` dataclasses; the persistent-map merge
+    appends plain dicts. Both land in ``_m1_result["devices"]``.
+    """
+    value = dev.get(name, default) if isinstance(dev, dict) else getattr(dev, name, default)
+    return value or default
+
+
 def _oui_identity(mac: str) -> tuple:
     """Return (vendor, device_type) for a synthesized row's MAC.
 
@@ -1698,12 +1716,26 @@ class ScanEnrichmentMixin:
 
         Device Identity Program Phase 2: matched by normalised MAC when the
         observation carries one (PassiveObservation.mac is filled by an ARP
-        cache lookup after capture — see passive_observer.py), falling back
-        to IP only when no MAC could be resolved. IP-only matching attributes
-        an observation to whichever device currently holds that address, which
-        is wrong on this network's own reference database on any of the 7 IPs
-        presently claimed by more than one MAC (see
-        docs/spikes/device-identity-baseline.md).
+        cache lookup at capture time — passive_observer.py::_record()), falling
+        back to IP only when no MAC could be resolved.
+
+        The MAC is the whole fix, and it shipped inert: `enrich_mac()` existed
+        but nothing called it, so `obs.mac` was always "" and this method matched
+        by IP 100% of the time (RULE-DBG5). IP matching attributes an
+        observation to whichever row happens to hold that address, and an
+        address identifies a device only while its DHCP lease holds — measured
+        live, the ARP cache disagreed with the stored owner on 10 of the 15
+        comparable addresses after the pool rotated one slot, and 7 addresses
+        carry several MACs outright (docs/spikes/device-identity-baseline.md).
+        That relabelled a powered-off LG TV as a Router / Gateway and then a
+        Smart Speaker, and moved batches of unrelated devices to one label in a
+        single pass.
+
+        So the fallback now refuses to guess, the same way v2.2.5's
+        label_for_host() does: it matches only when exactly one device holds the
+        address AND that device is one the scan actually saw. An ambiguous
+        address, or an address whose only claimant is an offline row carrying a
+        last-known IP, resolves to no device at all.
 
         Device Identity Program Phase 3: the observation is submitted to
         self._classification_claims as a claim rather than applied directly —
@@ -1744,17 +1776,31 @@ class ScanEnrichmentMixin:
                 return
 
             tracker = getattr(self, "_classification_claims", None)
+            _devices = self._m1_result.get("devices", [])
 
-            for _d in self._m1_result.get("devices", []):
+            # No MAC resolved — fall back to the address, but only when it
+            # names exactly one device the scan actually saw. See the docstring:
+            # an offline row's IP is a last-known value, and a shared IP is not
+            # an identity at all.
+            _ip_owner = None
+            if not obs_mac:
+                _owners = [
+                    _dev for _dev in _devices
+                    if _dev_field(_dev, "ip") == obs_ip
+                    and _dev_field(_dev, "display_state") not in _OFFLINE_DISPLAY_STATES
+                ]
+                if len(_owners) != 1:
+                    return  # ambiguous or offline-only — attribute to nobody
+                _ip_owner = _owners[0]
+
+            for _d in _devices:
                 _dmac = _norm_mac((_d.get("mac", "") if isinstance(_d, dict)
                                     else getattr(_d, "mac", "")) or "")
                 if obs_mac:
                     if _dmac != obs_mac:
                         continue
-                else:
-                    _dip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
-                    if _dip != obs_ip:
-                        continue
+                elif _d is not _ip_owner:
+                    continue
 
                 # Override guard — never touch user-overridden devices
                 _mac_ov = (

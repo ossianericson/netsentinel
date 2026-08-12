@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import json as _json
 import time as _t
-from dataclasses import dataclass as _dc, field as _df
-from typing import Any, List, Optional
+from typing import Optional
 
 import datetime as _dt
 
@@ -67,8 +66,6 @@ _CTA_MAP: dict[str, tuple[str, str]] = {
     "Broadcast Storm":                           ("Open Broadcast Storm →",    "Broadcast Storm"),
     "Degraded IoT Device — Excessive Broadcasting": ("Open IoT Behaviour →",  "IoT Behaviour"),
     "Rogue Network Bridge":                      ("Open Rogue Bridge (STP) →", "Rogue Bridge (STP)"),
-    "Service Outage":                            ("Run Service Diagnostics →", "Service Diagnostics"),
-    "External Routing Issue":                    ("Run Service Diagnostics →", "Service Diagnostics"),
 }
 
 _REMEDIATION: dict[str, list[str]] = {
@@ -130,20 +127,6 @@ _REMEDIATION: dict[str, list[str]] = {
         "2. Disconnect it if it is not a managed switch.",
         "3. Enable BPDU Guard on switch ports that connect end devices.",
     ],
-    "Service Outage": [
-        "1. The service appears to be down or unreachable from your network.",
-        "2. Check the service's official status page (e.g. status.netflix.com, store.steampowered.com/status) for a known outage.",
-        "3. Try from another device or a mobile hotspot to rule out local network issues.",
-        "4. Open Service Diagnostics for a full DNS / TCP / latency / path breakdown.",
-        "5. If only you are affected, power-cycle your modem and router.",
-    ],
-    "External Routing Issue": [
-        "1. Your connection reaches the internet but the route to this service is degraded.",
-        "2. This is typically an ISP or CDN routing problem outside your control.",
-        "3. Power-cycling your modem can sometimes re-establish a better route.",
-        "4. Connecting via a VPN may route around the congested path.",
-        "5. Open Service Diagnostics with 'Include traceroute' enabled to inspect each hop.",
-    ],
 }
 
 _IDLE    = 0
@@ -151,68 +134,18 @@ _RUNNING = 1
 _DONE    = 2
 
 
-# ── Service-unreachable integration helpers ───────────────────────────────────
-
-@_dc
-class _SvcFinding:
-    severity: str
-    headline: str
-    remediation: str
-    category: str
-    verify_step: str = ""
-
-
-@_dc
-class _SynthDiagResult:
-    global_severity: str
-    plain_summary: str
-    findings: List[Any] = _df(default_factory=list)
-
-
-_LAYER_SEV_CAT: dict[str, tuple[str, str]] = {
-    "device":        ("HIGH",   "Local Network / Router Unreachable"),
-    "local_network": ("HIGH",   "Local Network / Router Unreachable"),
-    "dns":           ("HIGH",   "DNS Resolution Failure"),
-    "isp":           ("MEDIUM", "External ISP Issue"),
-    "routing":       ("MEDIUM", "External Routing Issue"),
-    "remote_outage": ("MEDIUM", "Service Outage"),
-}
-
-_LAYER_HEADLINE: dict[str, str] = {
-    "device":        "Local device or adapter problem — cannot reach the service",
-    "local_network": "Local network failure — service unreachable from this device",
-    "dns":           "DNS resolution failed for service hosts",
-    "isp":           "ISP-level connectivity problem detected",
-    "routing":       "Routing anomaly between your ISP and the service",
-    "remote_outage": "Service appears down or unreachable from multiple paths",
-}
-
-
-def _svc_result_to_diag(result: Any) -> _SynthDiagResult:
-    layer = getattr(result, "failure_layer", "none")
-    name  = getattr(result, "service_name",  "Service")
-    summary = getattr(result, "summary", "") or ""
-
-    if layer == "none" or layer not in _LAYER_SEV_CAT:
-        return _SynthDiagResult(
-            global_severity="INFO",
-            plain_summary=summary or f"{name} is reachable.",
-            findings=[],
-        )
-
-    sev, category = _LAYER_SEV_CAT[layer]
-    headline = f"{name}: {_LAYER_HEADLINE.get(layer, 'Service unreachable')}"
-    finding = _SvcFinding(
-        severity=sev,
-        headline=headline,
-        remediation=summary,
-        category=category,
-    )
-    return _SynthDiagResult(
-        global_severity=sev,
-        plain_summary=summary or f"{name}: {layer}",
-        findings=[finding],
-    )
+# NOTE: a `_svc_result_to_diag()` translation layer (plus `_SvcFinding`,
+# `_SynthDiagResult` and two failure-layer lookup tables) lived here until
+# v2.2.6. It rendered a ServiceDiagnosticResult inline as a synthetic finding
+# on this page -- a design superseded before release by the navigate-away one
+# that actually shipped: the `service_unreachable` symptom emits
+# `service_diag_requested`, and `tabs.py::_on_service_page_diagnose()` opens
+# the dedicated Service Diagnostics page instead. The cluster had no caller
+# outside tests/test_sprint5_integration.py, whose header advertised it as an
+# *integration* test while nothing integrated it (RULE-DBG5's shape at feature
+# scale). Its two exclusive categories ("Service Outage", "External Routing
+# Issue") went with it from _CTA_MAP/_REMEDIATION -- nothing else emits them.
+# Removed rather than wired: wiring it would be a new feature.
 
 
 def _save_diag_history(result) -> None:
