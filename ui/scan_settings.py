@@ -24,6 +24,12 @@ QSettings key ``scan/excluded_hosts`` (L6):
   JSON array of host strings that must never be actively port-scanned or
   credential-tested — a standing exclusion list for fragile devices (printers,
   embedded gear) shared across SYN/UDP/credentialed scan tools.
+
+``experimental/identity_arbitrate_registry`` (Identity A4) used to live here.
+It was promoted and the flag REMOVED, not defaulted True (the native_chrome
+precedent) -- a permanently-on flag is just a branch nobody tests. Registry and
+heuristic claims are now always both submitted to the arbiter; see
+``ui/scan_wiring.py::_m1_seed_classification_claims``.
 """
 from __future__ import annotations
 
@@ -36,11 +42,29 @@ _FLUSH_KEY = "scan/flush_caches"
 _SCOPE_KEY = "scan/bound_scope"
 _AUTH_PREFIX = "scan/net_auth/"
 _EXCLUDED_KEY = "scan/excluded_hosts"
+_STABLE_ARBITRATION_KEY = "experimental/identity_stable_arbitration"
 
 _POLITE_RATE_PPS = 50    # L6: unauthorized network — hard-capped regardless of kind
 _MANAGED_RATE_PPS = 150  # L6: authorized but vpn/corporate — still reduced from the
                           # user's requested rate; only an authorized home/large_subnet
                           # network gets the full requested rate
+
+
+def identity_stable_arbitration_enabled() -> bool:
+    """QSettings ``experimental/identity_stable_arbitration`` (RULE-EXP1).
+
+    OFF by default, so the shipped classification path stays byte-identical
+    while the new one proves itself. When ON, callers arbitrate with
+    ``arbitrate_stable()`` (order-independent tie-breaking + a margin a
+    challenger must clear before a stored label flips) and score the heuristic
+    with ``best_rule=True`` (highest-scoring rule, not first-listed).
+
+    Both address the same defect: identity was being decided by ORDER --
+    of the claim list, and of _RULES -- rather than by strength of evidence.
+    """
+    return QSettings("NetSentinel", "NetSentinel").value(
+        _STABLE_ARBITRATION_KEY, False, type=bool
+    )
 
 
 def effective_flush_caches() -> bool:

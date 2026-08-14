@@ -80,8 +80,13 @@ def test_ssdp_notify_router():
     assert results[0].protocol == "ssdp"
 
 
-def test_ssdp_media_renderer_tv():
-    """SSDP MediaRenderer → Smart TV."""
+def test_ssdp_media_renderer_is_a_capability_not_a_product():
+    """SSDP MediaRenderer → a recorded capability, and no product claim.
+
+    Anything that can play a stream advertises MediaRenderer -- a TV, a powered
+    speaker, an AV receiver, a phone. The observation is still recorded (the
+    capability is real), it just no longer names a product.
+    """
     from modules.passive_observer import _parse_ssdp
 
     packet = (
@@ -92,7 +97,9 @@ def test_ssdp_media_renderer_tv():
     )
     results: list = []
     _parse_ssdp(packet, "192.168.1.55", results.append)
-    assert results and results[0].device_hint == "Smart TV"
+    assert results, "the observation must still be recorded"
+    assert results[0].device_hint == ""
+    assert results[0].capability == "Media renderer (DLNA)"
 
 
 def test_ssdp_printer():
@@ -363,9 +370,10 @@ def test_classify_from_observation_no_hint():
 # ── mDNS classification table ──────────────────────────────────────────────────
 
 @pytest.mark.parametrize("svc_type,expected_hint,expected_conf", [
+    # Product-specific services only -- the announcement itself identifies a
+    # product class. The media-capability services deliberately have no entry
+    # here; see the capability tests below for what they must do instead.
     ("_printer._tcp",    "Print Server",          "high"),
-    ("_googlecast._tcp", "Streaming Stick",       "high"),
-    ("_airplay._tcp",    "Smart TV",              "high"),
     ("_homekit._tcp",    "IoT Device",            "high"),
     ("_ssh._tcp",        "Linux / Unix Host",     "low"),
     ("_smb._tcp",        "File / NAS Server",     "low"),
@@ -382,12 +390,14 @@ def test_mdns_hint_table(svc_type, expected_hint, expected_conf):
 # ── SSDP classification table ──────────────────────────────────────────────────
 
 @pytest.mark.parametrize("nt_fragment,expected_hint,expected_conf", [
+    # Product-specific services only -- see test_mdns_hint_table's note.
     ("internetgatewaydevice", "Router / Gateway",       "high"),
-    ("mediarenderer",         "Smart TV",               "high"),
     ("printer",               "Print Server",           "high"),
     ("binarylight",           "Smart Plug",             "high"),
     ("digitalsecuritycamera", "IP Camera",              "high"),
-    ("mediaserver",           "File / NAS Server",      "low"),
+    # A DLNA MediaServer is the mirror of MediaRenderer: it proves the device can
+    # SERVE media, not that it is a file server. Recorded as a capability instead.
+    ("mediaserver",           "",                       "low"),
 ])
 def test_ssdp_hint_table(nt_fragment, expected_hint, expected_conf):
     from modules.passive_observer import _SSDP_HINTS
@@ -396,6 +406,183 @@ def test_ssdp_hint_table(nt_fragment, expected_hint, expected_conf):
     _, (hint, conf) = matched[0]
     assert hint == expected_hint
     assert conf == expected_conf
+
+
+def test_a_capability_service_never_also_claims_a_product():
+    """The two are mutually exclusive, by definition.
+
+    A service that only proves what a device can DO cannot simultaneously prove
+    what it IS. This is the guard that stops a future edit re-adding a product
+    label to a capability entry -- the exact regression this rule exists for.
+    """
+    from modules.passive_observer import (
+        _CAPABILITY_LABELS, _MDNS_HINTS, _SSDP_HINTS,
+    )
+
+    offenders = []
+    for service_type in _CAPABILITY_LABELS:
+        table = _SSDP_HINTS if service_type.startswith("urn:") else _MDNS_HINTS
+        hint, conf = table.get(service_type, ("", "low"))
+        if hint:
+            offenders.append(f"{service_type} -> {hint!r} ({conf})")
+
+    assert not offenders, (
+        "these services carry a capability label AND claim a product type: "
+        + "; ".join(offenders)
+    )
+
+
+# ── Capability announcements must not assert product identity ──────────────────
+#
+# A service announcement proves a service is RUNNING. It never proves what the
+# device IS. Chromecast-built-in ships in TVs, powered speakers and smart
+# displays; AirPlay video in Apple TVs, TVs and Macs; RAOP (AirPlay *audio*) in
+# HomePods, AV receivers and speakers; Spotify Connect in all of those plus the
+# desktop app; UPnP MediaRenderer in anything that can play a stream.
+#
+# Mapping any of them to one product type at "high" (0.85) outranks the
+# vendor+hostname heuristic's 0.70 ceiling, so the announcement decides the
+# label outright -- and a device advertising two of them alternates between two
+# answers for as long as it stays on the network.
+#
+# Measured on the reference network before this fix: 16 of 34 devices carried
+# "Smart TV" or "Streaming Stick", every recent class_changed row had
+# source='passive', and one Philips audio device (hostname 'Barnens-rum')
+# had accumulated 688 x Smart TV + 560 x Smart Speaker / Audio + 11 x Streaming
+# Stick -- 1,259 rewrites of one device's identity, not one of them from
+# evidence about what the device is.
+
+_MEDIA_CAPABILITY_SERVICES = (
+    "_googlecast._tcp",
+    "_airplay._tcp",
+    "_raop._tcp",
+    "_spotify-connect._tcp",
+    "urn:schemas-upnp-org:device:mediarenderer",
+)
+
+
+def _observe(service_type: str, monkeypatch, ip: str = "10.9.9.9"):
+    """Drive the real _record() for *service_type* and return the observation.
+
+    Resolves hint AND capability from the production tables, exactly as
+    _parse_ssdp()/_parse_mdns() do, so the test cannot pass by hand-supplying a
+    value production never produces (RULE-DBG5).
+
+    The SSDP branch here uses an exact key, while _parse_ssdp() matches the
+    table key as a *substring* of the version-suffixed wire value -- so that
+    path additionally has a real-packet test,
+    test_ssdp_media_renderer_is_a_capability_not_a_product, which is what
+    caught the capability lookup missing "...:mediarenderer:1". The mDNS branch
+    needs no equivalent: _parse_mdns() looks up both tables with the same exact
+    key, so the two cannot diverge.
+    """
+    from modules.passive_observer import (
+        _CAPABILITY_LABELS, _MDNS_HINTS, _SSDP_HINTS,
+        _record, _observations, _obs_lock,
+    )
+    _patch_arp(monkeypatch, {})
+    table = _SSDP_HINTS if service_type.startswith("urn:") else _MDNS_HINTS
+    assert service_type in table, f"{service_type} missing from the hint tables"
+    hint, conf = table[service_type]
+    capability = _CAPABILITY_LABELS.get(service_type, "")
+    protocol = "ssdp" if service_type.startswith("urn:") else "mdns"
+    out: list = []
+    with _obs_lock:
+        _observations.clear()
+    _record(ip, protocol, service_type, hint, conf, "", out.append,
+            capability=capability)
+    assert out, f"_record() dropped the {service_type} observation"
+    return out[0]
+
+
+@pytest.mark.parametrize("service_type", _MEDIA_CAPABILITY_SERVICES)
+def test_media_capability_service_makes_no_product_claim(service_type, monkeypatch):
+    """A media-capability announcement must not name a product type at all.
+
+    Asserts the invariant (no product claim), not one particular remedy -- it
+    holds whether the hint is blanked, the confidence demoted, or the whole
+    entry removed from the table.
+    """
+    from modules.device_classification import claim_from_passive
+
+    obs = _observe(service_type, monkeypatch)
+    claim = claim_from_passive(obs)
+    assert claim is None, (
+        f"{service_type} claims device_type={claim.device_type!r} at "
+        f"{claim.confidence}. This announcement proves a service is running, "
+        f"not what the device is."
+    )
+
+
+def test_a_device_advertising_two_media_capabilities_gets_one_verdict(monkeypatch):
+    """The oscillation regression, stated as a property.
+
+    A device that speaks both Chromecast and AirPlay is ordinary (every modern
+    TV, every Sonos, every Nest Hub). The claims those two announcements produce
+    must not be able to disagree about what the device is.
+    """
+    from modules.device_classification import claim_from_passive
+
+    claimed_types = set()
+    for service_type in _MEDIA_CAPABILITY_SERVICES:
+        claim = claim_from_passive(_observe(service_type, monkeypatch))
+        if claim is not None:
+            claimed_types.add(claim.device_type)
+
+    assert len(claimed_types) <= 1, (
+        f"One device advertising these services would be assigned "
+        f"{sorted(claimed_types)} -- it flips label every time a different "
+        f"announcement arrives."
+    )
+
+
+@pytest.mark.parametrize("service_type", _MEDIA_CAPABILITY_SERVICES)
+def test_capability_announcement_cannot_outrank_an_identified_vendor(
+    service_type, monkeypatch
+):
+    """A speaker the vendor rules already identified must stay a speaker.
+
+    One capability at a time, because that is how they arrive -- testing the
+    whole set at once lets one service that happens to agree with the vendor
+    (Spotify Connect -> Smart Speaker) carry the verdict and hide the others.
+
+    Drives the real arbiter with the real claim constructors: nothing about the
+    outcome is hardcoded beyond "the vendor's answer survives".
+    """
+    from modules.device_classification import (
+        arbitrate, claim_from_heuristic, claim_from_passive,
+    )
+
+    heuristic = claim_from_heuristic(vendor="Sonos", hostname="Barnens-rum")
+    assert heuristic.device_type == "Smart Speaker / Audio", (
+        "precondition: the vendor rule must identify this device"
+    )
+
+    claims = [heuristic]
+    claim = claim_from_passive(_observe(service_type, monkeypatch))
+    if claim is not None:
+        claims.append(claim)
+
+    verdict = arbitrate(claims)
+    assert verdict.device_type == "Smart Speaker / Audio", (
+        f"a vendor-identified speaker became {verdict.device_type!r} because it "
+        f"announced {service_type}"
+    )
+
+
+@pytest.mark.parametrize("service_type", _MEDIA_CAPABILITY_SERVICES)
+def test_capability_announcement_is_recorded_as_a_capability(service_type, monkeypatch):
+    """What the announcement DOES prove still has to reach the user.
+
+    Dropping the product claim must not throw the observation away -- the
+    capability is real, useful information and belongs in known_device.services.
+    """
+    obs = _observe(service_type, monkeypatch)
+    capability = getattr(obs, "capability", "")
+    assert capability, (
+        f"{service_type} left no capability label; the observation now carries "
+        f"no information at all"
+    )
 
 
 # ── Worker lifecycle ───────────────────────────────────────────────────────────

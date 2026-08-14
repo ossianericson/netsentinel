@@ -99,6 +99,50 @@ through a string literal (`monkeypatch.setattr("mod.NAME", ...)`, `getattr(mod, 
 If a new global is flagged but is genuinely consumed that way, verify with a real grep for
 the literal name before adding it to the baseline — don't assume "the checker must be wrong."
 
+**Corollary — the local checker is looser than CodeQL in two ways, both live-confirmed.** It
+counts a cross-file `from mod import _NAME` as a use; CodeQL counts only same-module reads and
+`__all__` membership (so `device_classifier_rules._RULES` needed `__all__ = ["_RULES"]`). And
+its "read anywhere in its own file" test is flow-insensitive, where CodeQL is per-definition:
+a run-once guard's `_flag = True` store is reported as never-read, because CodeQL cannot model
+the *next* call reading it (`mac_registry._validated` → a mutated `dict` guard, which keeps
+every access a load). A green local run is not proof the CodeQL scan is green.
+
+### RULE-LINT7 (blocking): An import inside an `if`/`try`/loop makes that name local to the WHOLE function — alias it, or it shadows the module-level name at every other use site
+
+**Mechanism.** Python decides local-vs-global per *function*, statically, from the presence of
+a binding anywhere in the body — not per branch and not in execution order. So a bare
+`import logging` inside one `if` makes `logging` local across the entire function, and every
+*other* use of it raises `UnboundLocalError` whenever that branch is not taken. The
+module-level import is invisible from that point on. CodeQL: `py/uninitialized-local-variable`.
+
+It fails silently when the shadowed use sits in a `try`. Live case (v2.2.7, `app.py::main()`):
+the conditional import was in the `if not _instance_server.listen(...)` guard, and the shadowed
+use — the device re-enrichment log — sat inside `except Exception: pass`. On the normal path
+where `listen()` succeeds, that log line raised `UnboundLocalError`, was swallowed, and simply
+never printed. No crash, no log, nothing to notice; only the CodeQL scan saw it.
+
+```python
+# WRONG — `logging` is now local to the whole function; every other use is unbound
+if not server.listen(KEY):
+    import logging
+    logging.getLogger("x").warning(...)
+...
+logging.getLogger("x").info(...)        # UnboundLocalError on the normal path
+
+# CORRECT — the alias binds a different name, so the outer one is never shadowed
+if not server.listen(KEY):
+    import logging as _instance_logging
+    _instance_logging.getLogger("x").warning(...)
+```
+
+The optional-dependency guard idiom (RULE-AH4) is **not** a violation and is not reported: a
+`try: import X / except ImportError: return` closes the fall-through, so code after it is
+unreachable unless the import ran — as does a handler that re-binds the name, whether by
+re-importing it or by defining a fallback `def`.
+
+Enforced by `find_shadowed_import_violations()` in `tools/check_import_lint.py` via
+`tests/test_import_lint.py` and the RULE-CI1 pre-push hook.
+
 ### RULE 1: Single colour source
 Never hardcode a hex colour string in any UI file. Every colour must be imported from `ui/styles.py`.
 If a colour you need does not exist there, add it to `styles.py` first.
@@ -641,13 +685,26 @@ black background renders dark-on-black — illegible. This is why the bug shippe
 the lifetime of "Midnight Pro is the default theme" — nobody hit it until switching to Arctic
 Clean, and it affects every tooltip in the app, not one widget class.
 
+**Correction (2026-08-12): pin the PAIR, not the foreground.** The original remedy forced
+`color:{WHITE}` alone, which is correct only while the background really is the assumed black.
+Qt's choice of tooltip background is **not uniform across call sites**: a Devices-page row
+tooltip in Arctic Clean paints the *themed* near-white `TOOLTIP_BG` (`#EEF4FF`), so the forced
+white foreground rendered white-on-near-white — the same illegibility the rule was written to
+fix, arrived at from the opposite direction. A remedy that pins one half of a contrast pair
+against an assumption about the other half is a coin flip on that assumption; the fix has to
+carry its own ground. `safe_tooltip()` now emits `background-color` **and** `color` from the
+`TOOLTIP_INK_BG`/`TOOLTIP_INK_FG` token pair — deliberately identical in both themes, because
+the span only has to be legible against itself, never against whatever Qt puts behind it.
+
 ```python
 # WRONG — reads fine in Midnight Pro, illegible black-on-black in Arctic Clean
 btn.setToolTip("Layer 3 — Network Address Translation")
 item.setToolTip(f"{ip} is at {mac}")
 
-# CORRECT — forces a fixed light foreground via inline HTML, which Qt's rich-text
-# tooltip renderer honours directly, independent of the QSS/palette gap above
+# ALSO WRONG — pins only the ink; white-on-near-white wherever Qt honours TOOLTIP_BG
+return f"<span style='color:{WHITE};'>{safe}</span>"
+
+# CORRECT — the span carries its own ground, so the pair cannot mismatch
 from ui import styles as _s
 btn.setToolTip(_s.safe_tooltip("Layer 3 — Network Address Translation"))
 item.setToolTip(_s.safe_tooltip(f"{ip} is at {mac}"))
@@ -662,7 +719,9 @@ already-wrapped item and reassigned elsewhere, e.g. `ui/scan_enrichment.py`'s sa
 rebuild) must not be wrapped a second time — it is already rich text.
 
 Enforced by `tests/test_item_tooltip_wrap.py` (ratchet: `safe_tooltip` call-site count in `ui/`
-may only increase; ratchet floor lowers only if a call site is legitimately removed).
+may only increase; ratchet floor lowers only if a call site is legitimately removed — plus a
+computed WCAG contrast assertion on the emitted pair, which asserts the invariant rather than
+re-pinning whichever colour the current remedy happens to use).
 
 ### RULE-AX1 (blocking): Inline QPushButton stylesheets that set base `color:` must also set `color:` in explicit `:pressed` (and `:hover`) rules
 An inline `setStyleSheet()` overrides the global QSS, so the base `color:` leaks
@@ -2787,6 +2846,7 @@ Currently tool-enforced (high reliability):
 - RULE-LINT1 → `ruff` in commit gate
 - RULE-LINT5 → `tools/check_import_lint.py` + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook
 - RULE-LINT6 → `tools/check_import_lint.py` (`find_unused_global_violations`) + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook; local-variable half via tightened `dummy-variable-rgx` in `pyproject.toml`
+- RULE-LINT7 → `tools/check_import_lint.py` (`find_shadowed_import_violations`) + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook
 - RULE-AH1 → `test_module_loc.py`
 - RULE-NAV1 → `test_nav_completeness.py`
 - RULE-AX1 → `test_interactive_states.py`

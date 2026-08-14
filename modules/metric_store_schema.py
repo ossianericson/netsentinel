@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 22
+_SCHEMA_VERSION = 23
 
 # meta key re-stamped on every schema apply that carries the no-op guard,
 # recording when the guarded build currently in charge took over this specific
@@ -99,6 +99,17 @@ CREATE TABLE IF NOT EXISTS known_device (
     -- (see DeviceTracker.process_scan).
     presence_state   TEXT,
     gone_notified_ts INTEGER,
+    -- Observed capabilities (schema v23) — JSON list of what the device can DO
+    -- ("Cast target", "AirPlay audio"), accumulated from passive mDNS/SSDP
+    -- announcements. Deliberately NOT `services`, which service_mapper owns and
+    -- fills with expected internet services ("Netflix", "Spotify").
+    --
+    -- These announcements used to be written as device_type instead, at a
+    -- confidence that outranked the vendor+hostname heuristic — so a device
+    -- that speaks both Chromecast and AirPlay alternated identity forever, and
+    -- an iPhone could be relabelled "Smart TV". A capability is what the
+    -- announcement actually proves; it is additive and cannot conflict.
+    capabilities     TEXT,
     -- Materialised device_importance.Tier (schema v22) — a CACHE for display
     -- and claim ranking (modules/relevance.py), refreshed set-wise once per
     -- scan by refresh_importance_tiers(). It is deliberately NOT the alert
@@ -447,6 +458,8 @@ _MIGRATIONS = [
     "ALTER TABLE known_device ADD COLUMN gone_notified_ts INTEGER",
     "ALTER TABLE known_device ADD COLUMN importance_tier TEXT",
     "ALTER TABLE known_device ADD COLUMN importance_source TEXT",
+    # schema v23 — observed capabilities, split out of device_type. See the DDL.
+    "ALTER TABLE known_device ADD COLUMN capabilities TEXT",
 ]
 
 # Indexes that only exist once a v22 migration column does. The _DDL block

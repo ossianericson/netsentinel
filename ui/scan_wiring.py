@@ -685,12 +685,25 @@ class ScanResultMixin(ScanEnrichmentMixin):
         of strength -- silently overwriting a confident scan-time
         classification with one weak observation, which is the exact defect
         this program measures (docs/spikes/device-identity-baseline.md).
+
+        Identity A4: the registry hit and the vendor/hostname/ports heuristic
+        are seeded as two separate claims, instead of the registry
+        short-circuiting the heuristic, so the arbiter can see a disagreement
+        between them at all. Agreement raises the verdict's confidence; a real
+        conflict lowers it and names the losing claim in the evidence.
+
+        Shipped behind experimental/identity_arbitrate_registry and promoted
+        after measurement: 71 rows across both reference databases moved zero
+        device_type values, and all three confidence changes were upward, from
+        genuine registry+heuristic corroboration. The flag was removed rather
+        than defaulted True (the native_chrome precedent) -- a permanently-on
+        flag is just a branch nobody tests.
         """
         tracker = getattr(self, "_classification_claims", None)
         if tracker is None:
             return
         tracker.reset()
-        from modules.device_classification import claim_from_scan
+        from modules.device_classification import claims_from_scan
 
         for _dev in devices:
             _is_dict = isinstance(_dev, dict)
@@ -698,14 +711,16 @@ class ScanResultMixin(ScanEnrichmentMixin):
             if not _mac:
                 continue
             _ports = _dev.get("open_ports", []) if _is_dict else getattr(_dev, "open_ports", [])
-            tracker.add(_mac, claim_from_scan(
+            _kwargs = dict(
                 mac=_mac,
                 vendor=(_dev.get("vendor", "") if _is_dict else getattr(_dev, "vendor", "")) or "",
                 hostname=(_dev.get("hostname", "") if _is_dict else getattr(_dev, "hostname", "")) or "",
                 open_ports=set(_ports or []),
                 os_family=(_dev.get("os_family", "") if _is_dict else getattr(_dev, "os_family", "")) or "",
                 is_gateway=bool(_dev.get("is_gateway", False) if _is_dict else getattr(_dev, "is_gateway", False)),
-            ))
+            )
+            for _c in claims_from_scan(**_kwargs):
+                tracker.add(_mac, _c)
 
     def _m1_refresh_segments_and_inventory(
         self, data: dict, known: dict[str, "KnownDevice"] | None = None
@@ -843,7 +858,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 # displayed type came from a source this can't see (mesh/
                 # plugin/registry) never shows a confidence for the wrong claim.
                 try:
-                    from modules.device_classification import claim_from_scan
+                    from modules.device_classification import (
+                        arbitrate, claims_from_scan,
+                    )
                     _is_dict = isinstance(d, dict)
                     _ports = set(
                         (d.get("open_ports", []) if _is_dict else getattr(d, "open_ports", []))
@@ -853,15 +870,40 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     _isgw = bool(
                         d.get("is_gateway", False) if _is_dict else getattr(d, "is_gateway", False)
                     )
-                    _claim = claim_from_scan(
+                    _ckw = dict(
                         mac=mac or "", vendor=vendor or "", hostname=host or "",
                         open_ports=_ports, os_family=_osf, is_gateway=_isgw,
                     )
-                    if _claim.device_type == dtype:
-                        _pct = round(_claim.confidence * 100)
+                    # Identity A4: the arbitrated verdict, so a registry entry
+                    # that contradicts the vendor/hostname evidence shows a
+                    # REDUCED confidence and names the claim it beat -- rather
+                    # than the registry's flat 0.90 with no sign the sources
+                    # disagreed at all.
+                    from ui.scan_settings import (
+                        identity_stable_arbitration_enabled as _stable_on,
+                    )
+                    if _stable_on():
+                        from modules.device_classification import arbitrate_stable
+                        _ckw["best_rule"] = True
+                        _verdict = arbitrate_stable(
+                            claims_from_scan(**_ckw), incumbent=dtype or "",
+                        )
+                    else:
+                        _verdict = arbitrate(claims_from_scan(**_ckw))
+                    _type, _conf = _verdict.device_type, _verdict.confidence
+                    _why = "; ".join(_verdict.evidence)
+                    # An empty `sources` means the verdict is arbitrate_stable()'s
+                    # hysteresis hold -- it echoed the displayed label back
+                    # because nothing this scan outweighed it, not because this
+                    # recomputation derived it. Showing a confidence for that
+                    # would attribute a number to evidence that never ran, which
+                    # is the same defect the "displayed type disagrees" guard
+                    # below already exists to prevent.
+                    if _type == dtype and _verdict.sources:
+                        _pct = round(_conf * 100)
                         _dt_item.setToolTip(_s.safe_tooltip(
                             f"Confidence: {_pct}%\n"
-                            f"Evidence: {_claim.evidence or 'OUI lookup only'}"
+                            f"Evidence: {_why or 'OUI lookup only'}"
                         ))
                 except Exception:
                     pass  # non-fatal — tooltip is best-effort

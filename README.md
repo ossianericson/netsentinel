@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-7351-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-7502-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning 
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**7,351 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**7,502 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -174,7 +174,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**7,351 automated tests** across 535 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**7,502 automated tests** across 541 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -218,13 +218,13 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.2.6 (current)
+### v2.2.7 (current)
 
-- Fixed device alerts being identified by IP address instead of MAC — on an address shared by two devices (routine after a DHCP lease is reused), acknowledging one device's alert silently muted a different one
-- Fixed passive device identification attributing observations to the wrong device, which could relabel a powered-off TV as a router and then a smart speaker
-- Fixed jitter never being measured for your router, leaving the `Jitter High` rule with no local data
-- The `RTT Anomaly` rule is now on by default — it learns each host's own normal latency rather than using a fixed threshold, measured at 0.15 alerts/day. Your own saved notification choices are untouched
-- An address claimed by several devices now shows as the plain address rather than guessing one of their names
+- Fixed devices showing the wrong maker: the built-in device table overruled the official IEEE registry it should defer to, and 58 of its entries disagreed with it — a Raspberry Pi was showing as a Microsoft games console
+- Fixed device names being matched inside unrelated words, so an `iPad-2` was classified as a `Domain Controller` (it contains "ad-"), `Jonas-PC` as a NAS server, and `Camilla-iPhone` as an IP camera
+- What a device **can do** is now recorded separately from what it **is** — a speaker announcing AirPlay is no longer relabelled a Smart TV, and appears under "Can do" in the device drawer instead. This accounted for 69% of all device-type changes on our reference network
+- Devices already in your inventory are corrected on upgrade rather than waiting to be overwritten — 8 vendors and 15 device types were fixed on our reference network
+- Fixed unreadable grey-on-grey tooltips on the Devices page in the Arctic Clean theme
 
 ---
 

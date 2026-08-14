@@ -370,18 +370,33 @@ _GOLDEN_SET = [
     ("Samsung", "Samsung", "Unknown Device"),
     ("Google Chromecast / Google Home / Cast Audio", "", "Unknown Device"),
     ("Liteon Technology Corporation", "PS4-C8208A", "Games Console"),
-    ("Intel Corporate", "CWR-5CG6051CD0", "Unknown Device"),
+    # Was "Unknown Device" at confidence 0.0 -- one of the reference network's
+    # zero-confidence rows, and an ordinary work laptop. Intel puts its OUI on
+    # client NICs and sells no consumer routers, so the vendor is real evidence.
+    ("Intel Corporate", "CWR-5CG6051CD0", "Computer / Workstation"),
     ("Samsung Electronics Co.,Ltd", "", "Unknown Device"),
     ("Sony Interactive Entertainment", "PS5-D79FFE", "Games Console"),
     ("Google", "", "Unknown Device"),
-    ("Unknown", "iPad-2", "Domain Controller"),  # pre-existing "ad-" substring
-    # bug in the Domain Controller rule -- unrelated to this fix, unaffected.
+    # Was pinned here as "Domain Controller" with the note 'pre-existing "ad-"
+    # substring bug ... unrelated to this fix, unaffected'. The bug was real and
+    # live: this exact row rendered as a Domain Controller in the reference
+    # network's Devices page. Fixed by anchoring the rule; see
+    # test_a_device_named_after_a_person_is_not_classified_as_infrastructure.
+    ("Unknown", "iPad-2", "iPhone / iPad"),
     ("Unknown", "Ossians-iPhone-2022", "iPhone / iPad"),  # THE fix.
     ("Apple, Inc.", "", "iPhone / iPad"),  # vendor-only rule, already worked.
-    ("Microsoft", "PINAS", "File / NAS Server"),
+    # Deliberate, accepted loss from anchoring "nas". "PINAS" and "Jonas" are
+    # structurally identical -- both end in "nas" preceded by a letter -- so no
+    # pattern accepts one and rejects the other, and a person's PC mislabelled a
+    # NAS server is the worse error. Not harmed in practice: this row's real
+    # IEEE vendor is Raspberry Pi (the "Microsoft" here is the stale stored
+    # value), and both the vendor rule and the MAC registry answer
+    # "Single Board Computer" -- which is what the user actually sees.
+    ("Microsoft", "PINAS", "Unknown Device"),
+    ("Raspberry Pi", "PINAS", "Single Board Computer"),
     ("Raspberry Pi", "LIBREELEC", "Single Board Computer"),
     ("Google Nest / Nest Wifi / Google Wifi Router", "", "Unknown Device"),
-    ("Intel Corporate", "FractalMSI", "Unknown Device"),
+    ("Intel Corporate", "FractalMSI", "Computer / Workstation"),  # a desktop
     ("Arcadyan Corporation", "LGwebOSTV-EAg4-1", "Smart TV"),
     ("Apple, Inc.", "Lovisas-ny-iphone", "iPhone / iPad"),  # already worked
     # pre-fix (vendor AND hostname both matched the gated rule).
@@ -712,3 +727,189 @@ def test_classify_registry_first_falls_back_when_mac_not_in_registry():
 
 def test_classify_registry_first_respects_is_gateway():
     assert classify_registry_first(mac="", is_gateway=True) == "Router / Gateway"
+
+
+# ---------------------------------------------------------------------------
+# Hostname rules must not match inside an unrelated word
+# ---------------------------------------------------------------------------
+#
+# Every hostname_re is applied with a bare re.search(), so a short alternative
+# matches anywhere inside the name -- including inside a person's name. Measured
+# live before the fix, against the real shipped classifier:
+#
+#   iPad-2           -> Domain Controller   ("iPAD-2" contains "ad-")
+#   Jonas-PC         -> File / NAS Server   ("joNAS")
+#   Camilla-iPhone   -> IP Camera           ("CAMilla")
+#   Vlad-PC          -> Domain Controller
+#   BRAD-WORKSTATION -> Domain Controller
+#   natverk-printer  -> Smart TV            ("naTVerk", Swedish for "network")
+#
+# `iPad-2` was live in the reference network's inventory, shown to the user as a
+# Domain Controller. Rules are first-match-wins, so one over-broad alternative
+# early in the list also pre-empts every correct rule after it.
+
+_PERSONAL_NAMES = [
+    # English
+    "Adam", "Brad", "Brian", "Camilla", "Chad", "Daniel", "David", "Edward",
+    "Emma", "Grace", "Hannah", "Ian", "Jonas", "Jonathan", "Laura", "Madeline",
+    "Nathan", "Oliver", "Rachel", "Thomas", "Vlad", "William",
+    # Swedish / Nordic
+    "Anders", "Annika", "Bengt", "Birgitta", "Bjorn", "Elin", "Erik", "Gunnar",
+    "Hakan", "Ingrid", "Johan", "Karin", "Lars", "Lovisa", "Magnus", "Nils",
+    "Ossian", "Per", "Sigrid", "Sven", "Ulrika", "Viktor",
+    # Other common given names
+    "Ahmed", "Aisha", "Chen", "Fatima", "Hassan", "Ivan", "Nasrin", "Priya",
+    "Sofia", "Yusuf",
+]
+
+# Labels a device named after a person must never be given. Deliberately a
+# denylist of infrastructure/appliance types rather than an exact-match on
+# "Unknown Device": a personal machine legitimately classifying as a computer
+# is correct, and this test must not have to change when that becomes possible.
+_NOT_A_PERSONAL_DEVICE = {
+    "Domain Controller", "File / NAS Server", "IP Camera", "Print Server",
+    "Smart TV", "Streaming Stick", "Mesh Network Node", "Router / Gateway",
+    "Network Switch", "Wireless Access Point", "Mail Server", "Web / App Server",
+    "Video Doorbell / Intercom", "Smart Thermostat", "Smart Plug", "Smart Bulb",
+    "Smart Speaker / Audio", "Games Console", "Smart Home Hub",
+}
+
+
+def test_a_device_named_after_a_person_is_not_classified_as_infrastructure():
+    """The invariant: a hostname rule must not fire on a substring of a name."""
+    offenders = []
+    for name in _PERSONAL_NAMES:
+        for hostname in (name, f"{name}-PC", f"{name}s-Laptop", f"{name}-Desktop"):
+            result = classify_with_evidence(vendor="", hostname=hostname)
+            if result.device_type in _NOT_A_PERSONAL_DEVICE:
+                offenders.append(f"{hostname} -> {result.device_type}")
+
+    assert not offenders, (
+        f"{len(offenders)} hostname(s) built from a person's name matched a "
+        f"device rule as a substring:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_ipad_hostname_is_not_a_domain_controller():
+    """The exact row that was live in the reference inventory.
+
+    'iPad-2' contains 'ad-', an alternative of the Domain Controller rule.
+    """
+    result = classify_with_evidence(vendor="", hostname="iPad-2")
+    assert result.device_type != "Domain Controller"
+    assert result.device_type == "iPhone / iPad"
+
+
+def test_a_real_device_word_wins_over_a_substring_match_elsewhere_in_the_name():
+    """Rules are first-match-wins, so an over-broad alternative early in the
+    list silently pre-empts the correct rule later in it."""
+    assert classify_with_evidence(
+        vendor="", hostname="natverk-printer"
+    ).device_type == "Print Server"
+    assert classify_with_evidence(
+        vendor="", hostname="natverk-nas"
+    ).device_type == "File / NAS Server"
+
+
+def test_genuine_device_hostnames_still_classify():
+    """The other half of the invariant: anchoring must not stop real matches.
+
+    Every one of these is the kind of name the loosened alternatives exist for.
+    """
+    cases = {
+        "nas-01":            "File / NAS Server",
+        "diskstation":       "File / NAS Server",
+        "cam-frontdoor":     "IP Camera",
+        "ipcam-01":          "IP Camera",
+        "nvr-basement":      "IP Camera",
+        "tv-livingroom":     "Smart TV",
+        "roku-bedroom":      "Smart TV",
+        "dc01":              "Domain Controller",
+        "ad-server":         "Domain Controller",
+        "domaincontroller1": "Domain Controller",
+    }
+    wrong = {
+        h: classify_with_evidence(vendor="", hostname=h).device_type
+        for h, expected in cases.items()
+        if classify_with_evidence(vendor="", hostname=h).device_type != expected
+    }
+    assert not wrong, f"anchoring broke genuine matches: {wrong}"
+
+
+# ---------------------------------------------------------------------------
+# Ordinary computers had no classification path at all
+# ---------------------------------------------------------------------------
+#
+# Measured before this rule: Intel Corporate, Dell, Lenovo, ASUSTek and
+# Micro-Star all classified as Unknown Device at confidence 0.0, evidence
+# "no-rule-matched" -- the single most common device class on any network. The
+# existing "Windows PC" rule requires os_re "windows" AND ports {445,3389,5900},
+# none of which a passive scan has. On the reference network this was most of
+# the rows blocking the identity program's >=90% confidence-coverage target.
+
+def test_a_pc_nic_vendor_classifies_as_a_computer():
+    """These vendors put their OUI on client NICs and do not sell consumer
+    routers, so the vendor alone is real evidence of a computer."""
+    for vendor in ("Intel Corporate", "Dell Inc.", "LENOVO", "Micro-Star INTL",
+                   "GIGA-BYTE TECHNOLOGY CO.,LTD."):
+        result = classify_with_evidence(vendor=vendor, hostname="")
+        assert result.device_type == "Computer / Workstation", (
+            f"{vendor!r} -> {result.device_type!r}"
+        )
+        assert 0.0 < result.confidence <= 0.4, (
+            "a NIC vendor is weak evidence and must not outrank a hostname or "
+            "registry match"
+        )
+
+
+def test_a_vendor_that_also_makes_routers_is_not_called_a_computer():
+    """The invariant behind the rule, not the rule's membership list.
+
+    ASUSTek sells motherboards AND some of the most common consumer routers on
+    the same OUIs, so the vendor alone proves nothing about which it is. The
+    reference network has exactly such a device and its owner could not say
+    which it was either -- that is the signal to leave it unclassified.
+    """
+    result = classify_with_evidence(vendor="ASUSTek COMPUTER INC.", hostname="")
+    assert result.device_type != "Computer / Workstation"
+
+
+def test_a_specific_hostname_still_beats_the_generic_computer_rule():
+    """The rule sits last, so it fills a gap rather than pre-empting anything."""
+    assert classify_with_evidence(
+        vendor="Intel Corporate", hostname="nas-01"
+    ).device_type == "File / NAS Server"
+    assert classify_with_evidence(
+        vendor="Intel Corporate", hostname="office-printer"
+    ).device_type == "Print Server"
+
+
+# ---------------------------------------------------------------------------
+# HP sells laptops, printers and servers on the same vendor string
+# ---------------------------------------------------------------------------
+
+def test_hp_alone_is_not_a_print_server():
+    """Measured: "Hewlett Packard" -> Print Server at 0.4, so every HP laptop
+    on the network was a printer. Unlike Brother or Lexmark, HP's LAN presence
+    is mostly not printers."""
+    result = classify_with_evidence(vendor="Hewlett Packard", hostname="")
+    assert result.device_type != "Print Server"
+
+
+def test_hp_with_corroboration_is_a_print_server():
+    """The claim is fine once something else supports it."""
+    assert classify_with_evidence(
+        vendor="Hewlett Packard", hostname="", open_ports={9100}
+    ).device_type == "Print Server"
+    assert classify_with_evidence(
+        vendor="Hewlett Packard", hostname="hp-officejet-pro"
+    ).device_type == "Print Server"
+
+
+def test_unambiguous_printer_vendors_still_match_on_vendor_alone():
+    """Brother and Lexmark are printer companies; the HP fix must not
+    over-correct into them."""
+    for vendor in ("Brother Industries", "Lexmark International"):
+        assert classify_with_evidence(
+            vendor=vendor, hostname=""
+        ).device_type == "Print Server", vendor

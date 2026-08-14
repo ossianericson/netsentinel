@@ -79,11 +79,13 @@ def _smoke_test() -> None:
         "modules.scheduler",
         "ui.topology_widget",
         "modules.device_classifier",
+        "modules.vendor_hints",
         "modules.device_identity",
         "modules.device_importance",
         "modules.device_baseline",
         "modules.evidence",
         "modules.device_admin",
+        "modules.device_reenrichment",
         "modules.cve_admin",
         "modules.scan_persistence",
         "modules.scan_status_md",
@@ -1116,7 +1118,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.2.6")
+    app.setApplicationVersion("2.2.7")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1267,7 +1269,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.2.6")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.2.7")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1323,8 +1325,13 @@ def main():
         # The mutex already guarantees we are the only instance; a failure
         # here only means a future duplicate can't be signalled to raise
         # this window — log it, but there is nothing unsafe about continuing.
-        import logging
-        logging.getLogger("netsentinel").warning(
+        # Aliased, like every other in-function logging import in this file: a
+        # bare `import logging` here would make the name local to ALL of main(),
+        # so the re-enrichment log further down raised UnboundLocalError on the
+        # (normal) path where listen() succeeds -- silently, inside its own
+        # `except Exception: pass`. RULE-LINT7.
+        import logging as _instance_logging
+        _instance_logging.getLogger("netsentinel").warning(
             "Single-instance QLocalServer failed to listen: %s",
             _instance_server.errorString(),
         )
@@ -1372,6 +1379,27 @@ def main():
     # prune_old_data() off-thread immediately at startup — running it a second
     # time synchronously here was duplicated main-thread startup cost.
     store  = MetricStore(prune_on_init=False)   # uses default portable path
+
+    # Heal device rows written by an earlier build. Every classifier / vendor /
+    # MAC-registry fix only affects what is written NEXT, so without this the
+    # install that needed the fix keeps the wrong label until something happens
+    # to rewrite that row. Runs once per generation marker, upgrades only, and
+    # never touches a user override — see modules/device_reenrichment.py.
+    try:
+        from modules.device_reenrichment import reenrich_known_devices
+        from ui.scan_settings import identity_stable_arbitration_enabled
+        _re = reenrich_known_devices(
+            store, stable=identity_stable_arbitration_enabled()
+        )
+        if _re.ran and (_re.vendors_corrected or _re.types_corrected):
+            import logging as _re_logging
+            _re_logging.getLogger("netsentinel").info(
+                "device re-enrichment: %d rows, %d vendors and %d types corrected",
+                _re.rows_examined, _re.vendors_corrected, _re.types_corrected,
+            )
+    except Exception:
+        pass  # non-fatal — a data-healing pass must never block startup
+
     alerts = AlertEngine(store=store)
     alerts.set_warmup_period(10)     # suppress boot-time alert noise for 10 s
 

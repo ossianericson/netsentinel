@@ -69,16 +69,51 @@ def test_safe_tooltip_call_sites_do_not_regress():
     )
 
 
+def _relative_luminance(hex_colour: str) -> float:
+    """WCAG relative luminance of a #RRGGBB string."""
+    h = hex_colour.lstrip("#")
+    channels = []
+    for i in (0, 2, 4):
+        c = int(h[i:i + 2], 16) / 255.0
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    r, g, b = channels
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast_ratio(fg: str, bg: str) -> float:
+    l1, l2 = sorted((_relative_luminance(fg), _relative_luminance(bg)), reverse=True)
+    return (l1 + 0.05) / (l2 + 0.05)
+
+
 def test_safe_tooltip_helper_produces_readable_markup():
+    import re
     import sys
 
     sys.path.insert(0, str(ROOT))
-    from ui.styles import WHITE, safe_tooltip
+    from ui.styles import safe_tooltip
 
     result = safe_tooltip("192.168.68.1 is at 3C:64:CF:E0:27:02")
     assert result.startswith("<span")
-    assert f"color:{WHITE}" in result
     assert "192.168.68.1 is at 3C:64:CF:E0:27:02" in result
+
+    # The span must pin BOTH ground and ink, not just the ink. Forcing only a
+    # foreground is correct only while the background behind it happens to be
+    # what you assumed -- the original fix pinned color:WHITE against an
+    # assumed-black tooltip background, and rendered white-on-near-white on a
+    # Devices-page row in Arctic Clean, where Qt paints the themed TOOLTIP_BG.
+    bg_match = re.search(r"background-color:\s*(#[0-9A-Fa-f]{6})", result)
+    fg_match = re.search(r"(?<!-)\bcolor:\s*(#[0-9A-Fa-f]{6})", result)
+    assert bg_match, f"safe_tooltip() must set its own background: {result!r}"
+    assert fg_match, f"safe_tooltip() must set its own foreground: {result!r}"
+
+    # And the pair must actually be legible against itself, in whichever theme
+    # is active -- asserting a specific colour would just re-pin the next
+    # remedy the same way the last one was pinned.
+    ratio = _contrast_ratio(fg_match.group(1), bg_match.group(1))
+    assert ratio >= 4.5, (
+        f"safe_tooltip() ink pair {fg_match.group(1)} on {bg_match.group(1)} has "
+        f"contrast {ratio:.2f}:1, below the WCAG AA floor of 4.5:1"
+    )
 
     # Newlines must become <br> -- plain \n has no effect once Qt treats the
     # tooltip string as rich text (it would otherwise collapse to one line).

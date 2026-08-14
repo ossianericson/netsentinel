@@ -21,6 +21,7 @@ from modules.device_classification import (
     claim_from_passive,
     claim_from_registry,
     claim_from_scan,
+    claims_from_scan,
 )
 
 
@@ -245,6 +246,164 @@ class TestClaimFromScan:
         claim = claim_from_scan("", vendor="Lexmark", open_ports={9100})
         assert claim.device_type == "Print Server"
         assert claim.source == "heuristic"
+
+
+# ── claims_from_scan(): A4 -- both claims reach the arbiter ──────────────────
+
+class TestClaimsFromScan:
+    """A4. claim_from_scan() short-circuits on a registry hit and never emits
+    the heuristic claim, so arbitrate() -- the one mechanism built to catch
+    "sources disagree" -- is bypassed for exactly the source most likely to be
+    wrong. claims_from_scan() emits both, so a conflict becomes visible in the
+    verdict's confidence and evidence instead of the registry winning in
+    silence. Measured on the reference network: 10 of 34 rows carry a registry
+    hit, 1 of those genuinely conflicts (docs/spikes/device-identity-baseline.md).
+    """
+
+    def test_emits_both_the_registry_and_the_heuristic_claim(self, monkeypatch):
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Streaming Stick"},
+        )
+        claims = claims_from_scan("aa:bb:cc:00:00:01", vendor="Lexmark", open_ports={9100})
+        assert [c.source for c in claims] == ["registry", "heuristic"]
+        assert [c.device_type for c in claims] == ["Streaming Stick", "Print Server"]
+
+    def test_registry_claim_is_first_so_ties_resolve_to_it(self, monkeypatch):
+        """arbitrate() sorts stably, so an exact score tie goes to whichever
+        group was inserted first. Registry-first keeps a tie behaving exactly
+        as the pre-A4 short-circuit did."""
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Streaming Stick"},
+        )
+        claims = claims_from_scan("aa:bb:cc:00:00:01", vendor="Lexmark")
+        assert claims[0].source == "registry"
+
+    def test_no_registry_hit_yields_the_heuristic_claim_alone(self, monkeypatch):
+        monkeypatch.setattr("modules.mac_registry.lookup", lambda mac: {})
+        claims = claims_from_scan("aa:bb:cc:00:00:01", vendor="Lexmark", open_ports={9100})
+        assert len(claims) == 1
+        assert claims[0].source == "heuristic"
+
+    def test_empty_mac_yields_the_heuristic_claim_alone(self):
+        claims = claims_from_scan("", vendor="Lexmark", open_ports={9100})
+        assert len(claims) == 1
+        assert claims[0].source == "heuristic"
+
+    def test_heuristic_claim_is_emitted_even_when_it_abstains(self, monkeypatch):
+        """arbitrate() filters uninformative claims; claims_from_scan() must
+        not pre-filter, or a caller loses the record that the source ran."""
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Streaming Stick"},
+        )
+        claims = claims_from_scan("aa:bb:cc:00:00:01")
+        assert len(claims) == 2
+        assert claims[1].device_type == "Unknown Device"
+
+    def test_conflict_lowers_confidence_and_names_the_loser(self, monkeypatch):
+        """A Raspberry Pi named for the job it does: the registry says Single
+        Board Computer at 0.90, the hostname heuristic says File / NAS Server at
+        0.30. Pre-A4 the user saw "Single Board Computer, 90%" with no sign the
+        sources disagreed.
+
+        Originally written against the reference network's own row,
+        d8:3a:dd:de:11:a7 / hostname "PINAS". That spelling no longer reaches
+        the NAS rule: the hostname alternatives were anchored so "nas" stops
+        matching inside "Jonas" and "Nasrin", and "PINAS" is structurally
+        identical to those. The conflict this test exists to demonstrate is
+        unchanged -- only the hostname that triggers it.
+        """
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Single Board Computer"},
+        )
+        verdict = arbitrate(claims_from_scan("d8:3a:dd:de:11:a7", hostname="nas-01"))
+        assert verdict.device_type == "Single Board Computer"
+        assert verdict.confidence < 0.9
+        assert any("conflicts with" in e for e in verdict.evidence)
+        assert any("File / NAS Server" in e for e in verdict.evidence)
+
+    def test_agreement_raises_confidence_above_a_lone_registry_hit(self, monkeypatch):
+        """78:c8:81:d7:9f:fe (PS5-D79FFE, Sony) -- registry and the vendor
+        heuristic independently agree on Games Console, which should read as
+        MORE certain than the registry alone, not identical to it."""
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Games Console"},
+        )
+        verdict = arbitrate(claims_from_scan(
+            "78:c8:81:d7:9f:fe", vendor="Sony Interactive Entertainment",
+        ))
+        assert verdict.device_type == "Games Console"
+        assert verdict.confidence > 0.9
+        assert verdict.sources == frozenset({"registry", "heuristic"})
+
+    def test_gateway_claim_is_withheld_when_the_registry_knows_the_product(self, monkeypatch):
+        """Decision D1 (revised after measurement). classify_with_evidence()
+        answers is_gateway at confidence 1.0, which would outrank any registry
+        entry -- but its answer is about the device's ROLE, and the registry's
+        is about the PRODUCT, which already implies that role. They are not
+        competing claims, and arbitrate() has no notion of specificity, so it
+        would score the specialisation as a conflict and penalise it.
+
+        Measured on the reference network: the Deco gateway
+        3c:64:cf:e0:27:02 stores no hostname, so the mesh regex can never fire
+        for it and the gateway shortcut always answers the generic
+        'Router / Gateway'. Emitting it would demote a correct
+        'Mesh Network Node' (registry, 0.90) to a generic label at 0.69 -- on
+        the ONLY device the gateway path affects here.
+        """
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Mesh Network Node"},
+        )
+        claims = claims_from_scan(
+            "3c:64:cf:e0:27:02", vendor="TP-Link", hostname="", is_gateway=True,
+        )
+        assert [c.source for c in claims] == ["registry"]
+        verdict = arbitrate(claims)
+        assert verdict.device_type == "Mesh Network Node"
+        assert verdict.confidence == pytest.approx(0.9)
+
+    def test_gateway_with_no_registry_entry_still_gets_its_claim(self, monkeypatch):
+        """The withholding above is narrow: a gateway the registry has never
+        heard of must still classify as a router, at the heuristic's own
+        confidence."""
+        monkeypatch.setattr("modules.mac_registry.lookup", lambda mac: {})
+        claims = claims_from_scan(
+            "aa:bb:cc:00:00:09", vendor="NoName", hostname="", is_gateway=True,
+        )
+        assert [c.source for c in claims] == ["heuristic"]
+        verdict = arbitrate(claims)
+        assert verdict.device_type == "Router / Gateway"
+        assert verdict.confidence == 1.0
+
+    def test_a_non_gateway_registry_hit_still_emits_both_claims(self, monkeypatch):
+        """The gateway carve-out must not leak into the ordinary path -- that
+        path is the entire point of A4."""
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Mesh Network Node"},
+        )
+        claims = claims_from_scan(
+            "3c:64:cf:e0:27:02", vendor="TP-Link", hostname="", is_gateway=False,
+        )
+        assert [c.source for c in claims] == ["registry", "heuristic"]
+
+    def test_singular_claim_from_scan_is_unchanged(self, monkeypatch):
+        """claim_from_scan() must keep short-circuiting on the registry hit --
+        modules/device_tracker.py::_scan_confidence() depends on it reproducing
+        classify_registry_first() exactly, and returns None on any mismatch."""
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Streaming Stick"},
+        )
+        claim = claim_from_scan("aa:bb:cc:00:00:01", vendor="Lexmark", open_ports={9100})
+        assert claim.source == "registry"
+        assert claim.device_type == "Streaming Stick"
+        assert claim.confidence == 0.9
 
 
 # ── ClaimTracker ────────────────────────────────────────────────────────────

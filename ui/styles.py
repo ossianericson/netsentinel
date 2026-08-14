@@ -108,6 +108,11 @@ _ARCTIC_CLEAN = {
     "TOOLTIP_BG":         "#EEF4FF",
     "TOOLTIP_BORDER":     "#2C6CB0",
     "TOOLTIP_FG":         "#1A1A2E",
+    # Item-view tooltip ink — see safe_tooltip(). Deliberately IDENTICAL in both
+    # themes: the span paints its own background, so the pair only has to be
+    # legible against itself, never against whatever Qt puts behind it.
+    "TOOLTIP_INK_BG":     "#1F2937",
+    "TOOLTIP_INK_FG":     "#F3F4F6",
     # Notification bars
     "UPDATE_BAR_BG":      "#E8F4FF",
     "UPDATE_BAR_BORDER":  "#B0C4D8",
@@ -238,6 +243,9 @@ _DARK_PRO = {
     "TOOLTIP_BG":         "#0D1117",
     "TOOLTIP_BORDER":     "#30363D",
     "TOOLTIP_FG":         "#E6EDF3",
+    # Same pair as Arctic Clean — see the note in _ARCTIC_CLEAN above.
+    "TOOLTIP_INK_BG":     "#1F2937",
+    "TOOLTIP_INK_FG":     "#F3F4F6",
     # Notification bars
     "UPDATE_BAR_BG":      "#102030",
     "UPDATE_BAR_BORDER":  "#204050",
@@ -452,14 +460,20 @@ def safe_tooltip(text: str) -> str:
 
     Item-view tooltips (set via ``QListWidgetItem.setToolTip()`` /
     ``QTableWidgetItem.setToolTip()``) render against a background that does
-    not follow the app's ``QToolTip`` QSS rule (``TOOLTIP_BG``) — verified
-    live: it renders solid black regardless of theme. Midnight Pro's
-    ``TOOLTIP_FG`` is already light, so it reads fine by coincidence; Arctic
-    Clean's ``TOOLTIP_FG`` is dark navy, which is illegible on that black
-    background. Forcing a fixed light foreground via inline HTML (which
-    Qt's rich-text tooltip renderer honours regardless of the QSS/palette
-    issue) fixes both themes. Plain ``QWidget.setToolTip()`` calls are
-    unaffected and must not use this — only item-view tooltips.
+    **not reliably** follow the app's ``QToolTip`` QSS rule (``TOOLTIP_BG``).
+    Which background Qt actually paints varies by site: some render solid
+    black regardless of theme (the case RULE-UX7 was written against), others
+    honour the themed ``TOOLTIP_BG``.
+
+    That is why this pins the **pair** rather than the foreground. The original
+    fix forced ``color:WHITE`` alone, which is correct only while the
+    background really is black — on a Devices-page row in Arctic Clean, where
+    Qt paints the themed near-white ``#EEF4FF``, it rendered white-on-white.
+    Forcing background *and* colour together makes the span carry its own
+    ground, so it is legible whatever Qt puts behind it, in either theme.
+
+    Plain ``QWidget.setToolTip()`` calls are unaffected and must not use this
+    — only item-view tooltips.
 
     Newlines in *text* are converted to ``<br>`` — plain ``\n`` has no effect
     once the string is rich text, so multi-line tooltips would otherwise
@@ -467,7 +481,10 @@ def safe_tooltip(text: str) -> str:
     """
     import html as _html
     safe = _html.escape(text).replace("\n", "<br>")
-    return f"<span style='color:{WHITE};'>{safe}</span>"
+    return (
+        f"<span style='background-color:{TOOLTIP_INK_BG}; color:{TOOLTIP_INK_FG};'>"
+        f"{safe}</span>"
+    )
 
 
 def qss_frame(

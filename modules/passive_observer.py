@@ -24,6 +24,37 @@ from modules.device_types import TYPE_MATTER_DEVICE, TYPE_SMART_BULB, TYPE_SMART
 _log = logging.getLogger(__name__)
 
 # ── Classification tables ──────────────────────────────────────────────────────
+#
+# An entry answers ONE question: "what does hearing this announcement prove
+# about the device that sent it?"
+#
+# For most of these the answer is a product class -- only a printer advertises
+# an IPP print queue, only a camera advertises DigitalSecurityCamera -- and
+# those carry "high".
+#
+# For the media protocols the honest answer is *nothing about the product*.
+# Chromecast-built-in ships in TVs, powered speakers and smart displays; AirPlay
+# video in Apple TVs, TVs, Macs and every iPhone; RAOP (AirPlay audio) in
+# HomePods, AV receivers and speakers; Spotify Connect in all of those plus the
+# desktop app; UPnP MediaRenderer in anything that can play a stream, and its
+# mirror image MediaServer in anything that can serve one -- NAS boxes, PCs,
+# TVs, phones, and (measured live on 192.168.68.56) a Frontier Silicon
+# internet-radio module that MediaServer had labelled "File / NAS Server" at
+# 0.40, exactly tying the vendor-identity tier and flip-flopping against it
+# scan after scan. Real NAS evidence is untouched: _smb._tcp, _afpovertcp._tcp,
+# _nfs._tcp, the synology|qnap|... vendor rule and the {445,548} ports rule all
+# still fire. Those
+# entries therefore carry an empty device_hint and contribute no classification
+# claim at all -- what they genuinely prove is recorded as a *capability*
+# instead (_CAPABILITY_LABELS below), which is real information and reaches the
+# user through known_device.services.
+#
+# They used to carry a product label at "high" (0.85), which outranks the
+# vendor+hostname heuristic's 0.70 ceiling, so the announcement decided the
+# label outright and a device advertising two of them alternated forever.
+# Measured on the reference network: 16 of 34 devices labelled Smart TV or
+# Streaming Stick, every recent class_changed row source='passive', and an
+# iPhone relabelled "Smart TV" twice in one day.
 
 # SSDP NT/ST field → (device_hint, confidence)
 _SSDP_HINTS: dict[str, tuple[str, str]] = {
@@ -32,8 +63,8 @@ _SSDP_HINTS: dict[str, tuple[str, str]] = {
     "urn:schemas-upnp-org:device:wanconnectiondevice":    ("Router / Gateway",         "high"),
     "urn:schemas-upnp-org:device:wlanconnectionmanager":  ("Wireless Access Point",    "high"),
     "urn:schemas-upnp-org:device:wlanaccesspoint":        ("Wireless Access Point",    "high"),
-    "urn:schemas-upnp-org:device:mediarenderer":          ("Smart TV",                 "high"),
-    "urn:schemas-upnp-org:device:mediaserver":            ("File / NAS Server",        "low"),
+    "urn:schemas-upnp-org:device:mediarenderer":          ("",                         "low"),
+    "urn:schemas-upnp-org:device:mediaserver":            ("",                         "low"),
     "urn:schemas-upnp-org:device:printer":                ("Print Server",             "high"),
     "urn:schemas-upnp-org:device:printbasic":             ("Print Server",             "high"),
     "urn:schemas-upnp-org:device:scanner":                ("Print Server",             "low"),
@@ -54,9 +85,9 @@ _MDNS_HINTS: dict[str, tuple[str, str]] = {
     "_ipp._tcp":            ("Print Server",             "high"),
     "_ipps._tcp":           ("Print Server",             "high"),
     "_pdl-datastream._tcp": ("Print Server",             "high"),
-    "_googlecast._tcp":     ("Streaming Stick",          "high"),
-    "_airplay._tcp":        ("Smart TV",                 "high"),
-    "_raop._tcp":           ("Smart TV",                 "high"),
+    "_googlecast._tcp":     ("",                         "low"),
+    "_airplay._tcp":        ("",                         "low"),
+    "_raop._tcp":           ("",                         "low"),
     "_homekit._tcp":        ("IoT Device",               "high"),
     "_hap._tcp":            ("IoT Device",               "high"),
     "_matter._tcp":         (TYPE_MATTER_DEVICE,         "high"),
@@ -74,7 +105,7 @@ _MDNS_HINTS: dict[str, tuple[str, str]] = {
     "_rfb._tcp":            ("Linux / Unix Host",        "low"),
     "_http._tcp":           ("",                         "low"),
     "_https._tcp":          ("",                         "low"),
-    "_spotify-connect._tcp":("Smart Speaker / Audio",   "high"),
+    "_spotify-connect._tcp":("",                        "low"),
     "_sonos._tcp":          ("Smart Speaker / Audio",   "high"),
     "_sleep-proxy._udp":    ("macOS Device",             "high"),
     "_apple-mobdev2._tcp":  ("iPhone / iPad",            "high"),
@@ -90,6 +121,23 @@ _MDNS_HINTS: dict[str, tuple[str, str]] = {
 }
 
 
+# Service type → short human capability label, for known_device.services.
+#
+# This is what an announcement genuinely proves: not what the device IS, but
+# what it can DO. A device with no product-level evidence is better shown as
+# "Unknown Device — casts, AirPlay audio" than confidently mislabelled, and a
+# device the vendor rules already identified gains a true detail rather than
+# having its identity overwritten.
+_CAPABILITY_LABELS: dict[str, str] = {
+    "_googlecast._tcp":                          "Cast target",
+    "_airplay._tcp":                             "AirPlay video",
+    "_raop._tcp":                                "AirPlay audio",
+    "_spotify-connect._tcp":                     "Spotify Connect",
+    "urn:schemas-upnp-org:device:mediarenderer": "Media renderer (DLNA)",
+    "urn:schemas-upnp-org:device:mediaserver":   "Media server (DLNA)",
+}
+
+
 # ── Dataclass ──────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -99,8 +147,9 @@ class PassiveObservation:
     mac: str = ""               # filled by ARP cache lookup after observation
     protocol: str = ""          # "ssdp" | "mdns"
     service_type: str = ""      # "_printer._tcp" | "MediaRenderer" | etc.
-    device_hint: str = ""       # classification label this implies
+    device_hint: str = ""       # classification label this implies ("" = proves no product)
     confidence: str = ""        # "high" | "low"
+    capability: str = ""        # what the device can DO, when that is all this proves
     raw_summary: str = ""       # human-readable description
     observed_at: float = field(default_factory=time.time)
 
@@ -165,21 +214,27 @@ def _parse_ssdp(data: bytes, src_ip: str, callback: Callable[[PassiveObservation
     if not service_type:
         return
 
-    # Match against our table
-    hint, confidence = "", ""
+    # Match against our table. The capability is resolved from the matched KEY,
+    # not from service_type -- the wire value carries a version suffix
+    # ("...:mediarenderer:1") that an exact-key lookup would miss.
+    hint, confidence, capability = "", "", ""
     for key, (h, c) in _SSDP_HINTS.items():
         if key in service_type:
             hint, confidence = h, c
+            capability = _CAPABILITY_LABELS.get(key, "")
             break
 
-    if not hint:
+    # Drop only announcements that prove nothing at all. An entry with no
+    # product hint but a capability still carries real information.
+    if not hint and not capability:
         return
 
     # Extract a readable type fragment for the summary
     pretty = service_type.split(":")[-1].replace("-", " ").title()
     raw_summary = f"UPnP/SSDP {pretty}"
 
-    _record(src_ip, "ssdp", service_type, hint, confidence, raw_summary, callback)
+    _record(src_ip, "ssdp", service_type, hint, confidence, raw_summary, callback,
+            capability=capability)
 
 
 def _ssdp_listener(callback: Callable[[PassiveObservation], None]) -> None:
@@ -282,10 +337,13 @@ def _parse_mdns(data: bytes, src_ip: str, callback: Callable[[PassiveObservation
                     candidate = f"{p}.{parts[i + 1]}"
                     if candidate in _MDNS_HINTS:
                         hint, confidence = _MDNS_HINTS[candidate]
-                        if hint:
+                        capability = _CAPABILITY_LABELS.get(candidate, "")
+                        # Record when the announcement proves anything at all --
+                        # a product type, or just what the device can do.
+                        if hint or capability:
                             raw_summary = f"mDNS {candidate}"
                             _record(src_ip, "mdns", candidate, hint, confidence,
-                                    raw_summary, callback)
+                                    raw_summary, callback, capability=capability)
                         break
 
     except Exception:
@@ -381,8 +439,14 @@ def _record(
     confidence: str,
     raw_summary: str,
     callback: Callable[[PassiveObservation], None],
+    capability: str = "",
 ) -> None:
-    """Store or update an observation and call *callback* for new/upgraded entries."""
+    """Store or update an observation and call *callback* for new/upgraded entries.
+
+    *capability* is resolved by the caller from the matched hint-table key, so
+    a substring-matched SSDP type resolves it from the key rather than from the
+    version-suffixed value seen on the wire.
+    """
     key = f"{ip}|{service_type}"
     obs = PassiveObservation(
         ip=ip,
@@ -390,6 +454,7 @@ def _record(
         service_type=service_type,
         device_hint=device_hint,
         confidence=confidence,
+        capability=capability,
         raw_summary=raw_summary,
         observed_at=time.time(),
     )

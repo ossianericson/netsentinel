@@ -756,3 +756,67 @@ class TestClassificationConfidencePersisted:
         tracker.process_scan([dev])
         kd = store.get_known_devices()["aa:bb:cc:00:07:03"]
         assert kd.confidence > 0.0
+
+
+# ── _scan_confidence()'s reproduction contract (Identity A4) ─────────────────
+
+class TestScanConfidenceUsesTheSingularClaim:
+    """_scan_confidence() trusts its computed confidence only when the
+    recomputed type equals the type this scan is about to persist:
+
+        if claim.device_type != expected_type:
+            return None
+
+    That comparison is only meaningful while claim_from_scan() reproduces
+    classify_registry_first() *exactly*. A4 added claims_from_scan(), whose
+    arbitrated verdict can differ from classify_registry_first() by design
+    (that is the whole point of it) -- swapping it in here would silently
+    return None for every device the arbiter improved, resetting confidence
+    coverage to zero with no error and no failing assertion.
+    """
+
+    def test_module_calls_the_singular_claim_from_scan(self):
+        import ast
+        from pathlib import Path
+
+        src = Path("modules/device_tracker.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+
+        called = {
+            n.func.id for n in ast.walk(tree)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        }
+        imported = {
+            a.name for n in ast.walk(tree)
+            if isinstance(n, ast.ImportFrom) and n.module == "modules.device_classification"
+            for a in n.names
+        }
+
+        assert "claim_from_scan" in called, (
+            "device_tracker.py no longer calls claim_from_scan(). _scan_confidence() "
+            "must reproduce classify_registry_first() exactly -- see this class's docstring."
+        )
+        assert "claims_from_scan" not in called and "claims_from_scan" not in imported, (
+            "device_tracker.py imports or calls claims_from_scan() (plural). Its arbitrated "
+            "verdict can legitimately differ from classify_registry_first(), so "
+            "_scan_confidence()'s `claim.device_type != expected_type` guard would reject it "
+            "and return None -- silently zeroing confidence coverage. Keep the singular call."
+        )
+
+    def test_registry_confidence_is_unaffected_by_the_a4_flag(self, tracker, store, monkeypatch):
+        """The A4 flag is a UI-layer decision; modules/ never reads QSettings
+        (ARCH RULE 1), so this write path is identical either way. Pinned
+        because a future 'just make it consistent' edit is the likely
+        regression."""
+        monkeypatch.setattr(
+            "modules.mac_registry.lookup",
+            lambda mac: {"device_type": "Single Board Computer"},
+        )
+        dev = {
+            "mac": "d8:3a:dd:de:11:a7", "ip": "192.168.1.73",
+            "hostname": "PINAS", "vendor": "Raspberry Pi",
+            "device_type": "Single Board Computer",
+        }
+        tracker.process_scan([dev])
+        kd = store.get_known_devices()["d8:3a:dd:de:11:a7"]
+        assert kd.confidence == pytest.approx(0.9)

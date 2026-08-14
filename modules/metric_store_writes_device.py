@@ -13,6 +13,7 @@ Requires self._execute_write(sql, params) to be provided by the host class.
 from __future__ import annotations
 
 import datetime
+import json
 import time
 from typing import List, Optional
 
@@ -250,6 +251,74 @@ class _DeviceWritesMixin:
              services, rand_val, confidence, hostname_resolved_at,
              auth_val, auth_val),
         )
+
+    def get_meta(self, key: str) -> Optional[str]:
+        """Read a value from the `meta` key/value table, or None if unset.
+
+        Public because the module layer needs run-once markers (a data-healing
+        pass that must not re-run on every startup) and raw SQL stays inside
+        the MetricStore family.
+        """
+        if not key:
+            return None
+        rows = self._execute_read("SELECT value FROM meta WHERE key = ?", (key,))
+        return rows[0][0] if rows else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        """Write a value to the `meta` key/value table, replacing any existing."""
+        if not key:
+            return
+        self._execute_write(
+            "INSERT INTO meta(key, value) VALUES(?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
+        )
+
+    def record_device_capability(self, mac: str, capability: str) -> None:
+        """Add *capability* to a device's observed capability set (schema v23).
+
+        Capabilities are what a passive mDNS/SSDP announcement genuinely proves
+        — that the device can cast, or receive AirPlay audio — as opposed to
+        what it IS. They accumulate as a union and never conflict, which is the
+        property device_type lacked when these announcements were written there:
+        a device speaking two media protocols rewrote its own identity on every
+        announcement.
+
+        Separate from `services` (service_mapper's expected internet services);
+        the two are rendered as different rows and must not be merged.
+
+        A blank *mac* or *capability* is a no-op, and an unknown MAC is left
+        alone rather than conjuring a row — the device inventory has a single
+        writer (DeviceTracker.process_scan), and this is an enrichment.
+        """
+        if not mac or not capability:
+            return
+        current = self.get_device_capabilities(mac)
+        if capability in current:
+            return
+        merged = sorted(current + [capability])
+        self._execute_write(
+            "UPDATE known_device SET capabilities = ? WHERE mac = ?",
+            (json.dumps(merged), mac),
+        )
+
+    def get_device_capabilities(self, mac: str) -> List[str]:
+        """Return a device's observed capabilities, or [] when it has none."""
+        if not mac:
+            return []
+        rows = self._execute_read(
+            "SELECT capabilities FROM known_device WHERE mac = ?", (mac,)
+        )
+        if not rows:
+            return []
+        raw = rows[0][0]
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, TypeError):
+            return []  # hand-edited or pre-v23 content — treat as no capabilities
+        return [str(x) for x in parsed] if isinstance(parsed, list) else []
 
     def set_device_authorized(self, mac: str, authorized: bool) -> None:
         self._execute_write(

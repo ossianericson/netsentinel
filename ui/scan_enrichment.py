@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QColor
@@ -57,7 +57,48 @@ def _dev_field(dev, name: str, default: str = "") -> str:
     return value or default
 
 
-def _oui_identity(mac: str) -> tuple:
+def _dev_conf(dev, store=None, mac: str = "") -> Optional[float]:
+    """How well evidenced the device's CURRENT label is, or None if unknown.
+
+    Feeds arbitrate_stable()'s hysteresis, which defends a stored label at its
+    own strength: a registry-grade 0.90 label resists an ordinary guess, while a
+    0.0 one -- the residue of a score tie broken by claim arrival order -- does
+    not block a correction.
+
+    `DeviceInfo.confidence` is NOT that number on its own. It is a scan-time
+    field defaulting to 0.0, filled only once this scan's enrichment arbitrates
+    that device, so for anything not yet arbitrated it reads 0.0 -- which
+    arbitrate_stable() would take as "evidenced at zero" and defend at almost
+    nothing. Live consequence: the reference network's Deco gateway, stored as
+    "Mesh Network Node" from the MAC registry at 0.90, was demoted to the generic
+    "Router / Gateway" by a passive SSDP InternetGatewayDevice claim at 0.85 --
+    the exact regression Identity A4's gateway carve-out exists to prevent.
+
+    So: a non-zero scan confidence wins (this scan arbitrated it, so it is
+    fresher), otherwise fall back to what the row is actually stored with.
+    None means "unknown", which the arbiter reads as a nominal vendor-tier
+    defence rather than as zero.
+    """
+    raw = dev.get("confidence") if isinstance(dev, dict) else getattr(dev, "confidence", None)
+    try:
+        scan_conf = float(raw) if raw is not None else 0.0
+    except (TypeError, ValueError):
+        scan_conf = 0.0
+    if scan_conf > 0.0:
+        return scan_conf
+
+    if store is None or not mac:
+        return None
+    try:
+        known = store.get_known_devices() or {}
+        stored = getattr(known.get(mac), "confidence", None)
+        stored_f = float(stored) if stored is not None else 0.0
+    except Exception:
+        return None  # non-fatal — enrichment must never break a scan
+    return stored_f if stored_f > 0.0 else None
+
+
+def _oui_identity(mac: str, name: str = "") -> tuple:
     """Return (vendor, device_type) for a synthesized row's MAC.
 
     Devices answered for by proxy ARP are deliberately skipped by
@@ -66,6 +107,14 @@ def _oui_identity(mac: str) -> tuple:
     module's OUI classification pass. The mesh/plugin router API is the only
     source of their real MAC, so the lookup scan() would have done has to happen
     here instead — otherwise every such row shows a blank Vendor.
+
+    ``name`` is the mesh/plugin client name, used only when the MAC yields no
+    vendor. A locally-administered (privacy) MAC carries no OUI at all, so the
+    registry can never answer for one — and these rows are exactly where that
+    bites, because such a device's `known_device.hostname` is often empty too:
+    the router's client list is the only thing that knows what it is called, and
+    it arrives here, long after rogue_device's own hostname-vendor fallback has
+    run. Weaker evidence than an OUI, so it only fills a genuine blank.
 
     Uses the same offline registry rogue_device.py uses: a pure in-memory dict
     lookup with no file or network I/O, so it is safe to call on the GUI thread.
@@ -76,7 +125,14 @@ def _oui_identity(mac: str) -> tuple:
         reg = _mac_registry_lookup(mac) or {}
     except Exception:
         reg = {}  # non-fatal — an unresolvable MAC just keeps the generic fallback
-    return reg.get("vendor", "") or "", reg.get("device_type", "") or "Wireless Client"
+    vendor = reg.get("vendor", "") or ""
+    if not vendor and name:
+        try:
+            from modules.vendor_hints import vendor_from_hostname
+            vendor = vendor_from_hostname(name)
+        except Exception:
+            vendor = ""  # non-fatal — a failed inference just leaves the cell blank
+    return vendor, reg.get("device_type", "") or "Wireless Client"
 
 
 class ScanEnrichmentMixin:
@@ -1058,7 +1114,7 @@ class ScanEnrichmentMixin:
         # writers' own arbitration rather than re-litigated on every hostname
         # sync pass.
         try:
-            from modules.device_classification import claim_from_scan
+            from modules.device_classification import claims_from_scan
             from PyQt6.QtGui import QColor as _QC
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
             _mac_to_row: dict = {}
@@ -1075,14 +1131,24 @@ class ScanEnrichmentMixin:
                 _mac = (_d.get("mac", "") if _is_dict else getattr(_d, "mac", "")) or ""
                 if not _mac or _tracker is None:
                     continue
-                _claim = claim_from_scan(
+                _ckw = dict(
                     mac=_mac,
                     vendor=_d.get("vendor", "") if _is_dict else getattr(_d, "vendor", ""),
                     hostname=_d.get("hostname", "") if _is_dict else getattr(_d, "hostname", ""),
                     open_ports=set(_d.get("open_ports", []) if _is_dict else (getattr(_d, "open_ports", []) or [])),
                     os_family=_d.get("os_family", "") if _is_dict else getattr(_d, "os_family", ""),
                 )
-                _arbitrated = _tracker.add(_mac, _claim)
+                # Identity A4: seed both claims so a registry hit that
+                # contradicts the freshly-resolved hostname is arbitrated
+                # rather than silently preferred.
+                _arbitrated = None
+                for _c in claims_from_scan(**_ckw):
+                    _arbitrated = _tracker.add(
+                        _mac, _c, incumbent=_cur_type,
+                        incumbent_confidence=_dev_conf(
+                            _d, getattr(self, "_store", None), _mac,
+                        ),
+                    )
                 if _arbitrated is None:
                     continue
                 _new_type = _arbitrated.device_type
@@ -1262,7 +1328,7 @@ class ScanEnrichmentMixin:
             # Also skip if the device's IP is already in the table (ARP found it without MAC)
             if _mc.ip and _mc.ip in _existing_ips:
                 continue
-            _mesh_vendor, _mesh_dtype = _oui_identity(_mc.mac)
+            _mesh_vendor, _mesh_dtype = _oui_identity(_mc.mac, _mc.name or "")
             _add_row(
                 self._m1_table,
                 [_mc.ip or "—", _mc.name or "—", _mc.mac, _mesh_vendor, "CLEAN",
@@ -1293,7 +1359,7 @@ class ScanEnrichmentMixin:
             # Skip if the device's IP is already in the table (ARP found it without MAC)
             if _pip != "—" and _pip in _existing_ips:
                 continue
-            _plugin_vendor, _plugin_dtype = _oui_identity(_pmac)
+            _plugin_vendor, _plugin_dtype = _oui_identity(_pmac, _pc.get("hostname", "") or "")
             _add_row(
                 self._m1_table,
                 [_pip, _phn, _pmac, _plugin_vendor, "CLEAN",
@@ -1644,14 +1710,22 @@ class ScanEnrichmentMixin:
                 if claim is None:
                     continue
 
-                arbitrated = tracker.add(_mac, claim)
-                if arbitrated is None:
-                    continue
-
+                # Read the incumbent BEFORE arbitrating: it is what
+                # arbitrate_stable()'s hysteresis defends.
                 _cur_type = (
                     _d.device_type if not isinstance(_d, dict)
                     else _d.get("device_type", "")
                 ) or ""
+
+                arbitrated = tracker.add(
+                    _mac, claim, incumbent=_cur_type,
+                    incumbent_confidence=_dev_conf(
+                        _d, getattr(self, "_store", None), _mac,
+                    ),
+                )
+                if arbitrated is None:
+                    continue
+
                 new_type = arbitrated.device_type
                 if new_type == (_cur_type or "Unknown Device"):
                     continue  # the arbiter's verdict didn't change
@@ -1772,7 +1846,11 @@ class ScanEnrichmentMixin:
                 return
 
             claim = claim_from_passive(obs)
-            if claim is None:
+            # A media-capability announcement (Chromecast, AirPlay, DLNA) proves
+            # what the device can DO, not what it is, so it makes no claim --
+            # but it is still real information and must not be dropped here.
+            capability = getattr(obs, "capability", "") or ""
+            if claim is None and not capability:
                 return
 
             tracker = getattr(self, "_classification_claims", None)
@@ -1802,6 +1880,23 @@ class ScanEnrichmentMixin:
                 elif _d is not _ip_owner:
                     continue
 
+                # Record the capability first, and unconditionally: it is an
+                # observed fact about the device, not a classification, so it
+                # survives both a user override and the absence of any claim.
+                if capability and _dmac:
+                    _store_cap = getattr(self, "_store", None)
+                    if _store_cap is not None:
+                        try:
+                            from modules.device_admin import (
+                                record_device_capability as _rdc,
+                            )
+                            _rdc(_store_cap, _dmac, capability)
+                        except Exception:
+                            pass  # non-fatal — enrichment must never break a scan
+
+                if claim is None:
+                    break  # capability recorded; there is nothing to arbitrate
+
                 # Override guard — never touch user-overridden devices
                 _mac_ov = (
                     _d.get("mac", "") if isinstance(_d, dict)
@@ -1818,12 +1913,23 @@ class ScanEnrichmentMixin:
                 if tracker is None or not _dmac:
                     break  # no claim history to arbitrate against — skip
 
-                arbitrated = tracker.add(_dmac, claim)
+                # Read the incumbent BEFORE arbitrating: it is what
+                # arbitrate_stable()'s hysteresis defends. This is the passive
+                # mDNS/SSDP path -- the one that produced the measured
+                # oscillation, where a 0.40 service announcement tied with a
+                # 0.40 vendor identity and won on arrival order alone.
+                _cur = (_d.device_type if not isinstance(_d, dict)
+                        else _d.get("device_type", "")) or ""
+
+                arbitrated = tracker.add(
+                    _dmac, claim, incumbent=_cur,
+                    incumbent_confidence=_dev_conf(
+                        _d, getattr(self, "_store", None), _dmac,
+                    ),
+                )
                 if arbitrated is None:
                     break
 
-                _cur = (_d.device_type if not isinstance(_d, dict)
-                        else _d.get("device_type", "")) or ""
                 new_type = arbitrated.device_type
                 if new_type == (_cur or "Unknown Device"):
                     break  # the arbiter's verdict didn't change — nothing to apply

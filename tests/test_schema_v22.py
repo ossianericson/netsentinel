@@ -35,9 +35,16 @@ def _columns(store: MetricStore, table: str) -> set:
 # ── Schema shape ─────────────────────────────────────────────────────────────
 
 class TestSchemaShape:
-    def test_schema_version_is_22(self):
+    def test_schema_is_at_least_v22(self):
+        """This file asserts v22's SHAPE survives, not that v22 is current.
+
+        Pinned to `== 22` originally, which turns every later schema bump into
+        an unrelated failure in a file that has nothing to say about it -- the
+        column assertions below are the real subject. tests/
+        test_metric_store_schema.py owns the current-version pin.
+        """
         from modules.metric_store_schema import _SCHEMA_VERSION
-        assert _SCHEMA_VERSION == 22
+        assert _SCHEMA_VERSION >= 22
 
     def test_alert_fired_carries_the_six_dropped_fields(self, store):
         cols = _columns(store, "alert_fired")

@@ -764,3 +764,106 @@ def test_scan_timing_log_writes_one_line_per_scan(tmp_path, monkeypatch):
     assert "phase1_skeleton=" in content
     assert "phase2_resolve=" in content
     logger.handlers.clear()
+
+
+# ── Vendor from hostname on a privacy MAC ─────────────────────────────────────
+
+def test_privacy_mac_device_gets_vendor_from_its_hostname(tmp_path, monkeypatch):
+    """A locally-administered MAC has no OUI, so vendor lookup can never answer
+    for it -- but the hostname can.
+
+    Live case: 6a:94:29:ec:8f:4d / "Chromecast-Audio-Vardagsrum" showed vendor
+    "Unknown" next to an identical Chromecast that happened to carry a real OUI
+    and so showed "Google".
+
+    Note nothing here hands the test the value under test: the vendor is left
+    genuinely empty by every upstream source (the registry really has no entry
+    for 6a:94:29, and resolve_batch returns "" as it does live), so the
+    assertion can only pass if scan() derived it (RULE-DBG5).
+    """
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    dev_ip = "192.168.68.51"
+    dev_mac = "6a:94:29:ec:8f:4d"     # U/L bit set -> privacy MAC, no OUI
+
+    from unittest.mock import MagicMock
+    fake_name_info = MagicMock()
+    fake_name_info.hostname = "Chromecast-Audio-Vardagsrum"
+    fake_name_info.vendor = ""        # no OUI to resolve -- as it really is
+    fake_name_info.device_type = ""
+    fake_name_info.model = ""
+
+    monkeypatch.setattr("modules.rogue_device._get_arp_table", lambda: [(dev_ip, dev_mac)])
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: "192.168.68.1")
+    monkeypatch.setattr("modules.rogue_device.measure_gateway_rtt", lambda gw, **kw: 1.0)
+    monkeypatch.setattr(
+        "modules.name_resolver.resolve_batch",
+        lambda entries, **kw: {dev_ip: fake_name_info},
+    )
+
+    # Select by IP: scan() also synthesises a row for the gateway, which is
+    # not in this fake ARP table.
+    devices = {d.ip: d for d in scan(offenders_path=offenders)["devices"]}
+    assert devices[dev_ip].vendor == "Google"
+
+
+def test_hostname_vendor_never_overwrites_an_oui_derived_vendor(tmp_path, monkeypatch):
+    """Hostname inference is weaker evidence than an OUI and must only fill a
+    genuine blank. A Pi running LibreELEC and named "chromecast-box" keeps the
+    vendor its real OUI supplied."""
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    dev_ip = "192.168.68.67"
+    dev_mac = "d8:3a:dd:de:11:a7"     # a real Raspberry Pi OUI
+
+    from unittest.mock import MagicMock
+    fake_name_info = MagicMock()
+    fake_name_info.hostname = "chromecast-box"
+    fake_name_info.vendor = ""
+    fake_name_info.device_type = ""
+    fake_name_info.model = ""
+
+    monkeypatch.setattr("modules.rogue_device._get_arp_table", lambda: [(dev_ip, dev_mac)])
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: "192.168.68.1")
+    monkeypatch.setattr("modules.rogue_device.measure_gateway_rtt", lambda gw, **kw: 1.0)
+    monkeypatch.setattr(
+        "modules.name_resolver.resolve_batch",
+        lambda entries, **kw: {dev_ip: fake_name_info},
+    )
+
+    devices = {d.ip: d for d in scan(offenders_path=offenders)["devices"]}
+    assert devices[dev_ip].vendor == "Raspberry Pi"
+
+
+def test_raspberry_pi_oui_is_not_reported_as_microsoft(tmp_path, monkeypatch):
+    """Regression: d8:3a:dd is Raspberry Pi Trading Ltd, but mac_registry
+    carried it inside its _XBOX block as Microsoft / Xbox Series X / S. A Pi
+    named "pinas" rendered as vendor Microsoft, type Games Console -- and the
+    heuristic classifier, which gets it right from the hostname alone, was
+    never consulted because a registry device_type is sticky."""
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    dev_ip = "192.168.68.67"
+    dev_mac = "d8:3a:dd:de:11:a7"
+
+    from unittest.mock import MagicMock
+    fake_name_info = MagicMock()
+    fake_name_info.hostname = "pinas"
+    fake_name_info.vendor = ""
+    fake_name_info.device_type = ""
+    fake_name_info.model = ""
+
+    monkeypatch.setattr("modules.rogue_device._get_arp_table", lambda: [(dev_ip, dev_mac)])
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: "192.168.68.1")
+    monkeypatch.setattr("modules.rogue_device.measure_gateway_rtt", lambda gw, **kw: 1.0)
+    monkeypatch.setattr(
+        "modules.name_resolver.resolve_batch",
+        lambda entries, **kw: {dev_ip: fake_name_info},
+    )
+
+    devices = {d.ip: d for d in scan(offenders_path=offenders)["devices"]}
+    assert devices[dev_ip].vendor == "Raspberry Pi"
+    assert devices[dev_ip].device_type == "Single Board Computer"

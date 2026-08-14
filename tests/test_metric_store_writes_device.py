@@ -206,3 +206,65 @@ class TestClassificationOverrides:
         assert store.get_classification_override(mac) == "Router"
         store.clear_classification_override(mac)
         assert store.get_classification_override(mac) is None
+
+
+class TestDeviceCapabilities:
+    """known_device.capabilities — what a device can DO (schema v23).
+
+    Deliberately separate from `services`, which service_mapper owns and fills
+    with expected internet services ("Netflix", "Spotify"). Overloading that
+    column would put protocol capabilities in the Inventory drawer's Services
+    row, mixing two unrelated meanings.
+    """
+
+    def test_capability_is_recorded_and_read_back(self, store):
+        mac = "aa:bb:cc:00:0c:01"
+        store.upsert_known_device(mac, ip="10.0.0.11")
+        store.record_device_capability(mac, "Cast target")
+        assert store.get_device_capabilities(mac) == ["Cast target"]
+
+    def test_capabilities_accumulate_across_observations(self, store):
+        """The whole point: a device that casts AND does AirPlay keeps both.
+
+        This is the union that replaces the old behaviour, where each new
+        announcement overwrote the device's identity with a different guess.
+        """
+        mac = "aa:bb:cc:00:0c:02"
+        store.upsert_known_device(mac, ip="10.0.0.12")
+        store.record_device_capability(mac, "Cast target")
+        store.record_device_capability(mac, "AirPlay audio")
+        assert store.get_device_capabilities(mac) == ["AirPlay audio", "Cast target"]
+
+    def test_repeat_capability_does_not_duplicate(self, store):
+        mac = "aa:bb:cc:00:0c:03"
+        store.upsert_known_device(mac, ip="10.0.0.13")
+        for _ in range(4):
+            store.record_device_capability(mac, "Spotify Connect")
+        assert store.get_device_capabilities(mac) == ["Spotify Connect"]
+
+    def test_empty_mac_or_capability_is_noop(self, store):
+        mac = "aa:bb:cc:00:0c:04"
+        store.upsert_known_device(mac, ip="10.0.0.14")
+        store.record_device_capability(mac, "")
+        store.record_device_capability("", "Cast target")
+        assert store.get_device_capabilities(mac) == []
+
+    def test_unknown_mac_reads_back_empty(self, store):
+        assert store.get_device_capabilities("aa:bb:cc:00:0c:99") == []
+
+    def test_capabilities_do_not_touch_the_services_column(self, store):
+        """Regression: the two columns carry different meanings.
+
+        service_mapper writes `services`; the Inventory drawer renders it as
+        "Services: Netflix, YouTube". A capability write must leave it alone.
+        """
+        import json
+        mac = "aa:bb:cc:00:0c:05"
+        store.upsert_known_device(
+            mac, ip="10.0.0.15", services=json.dumps(["Netflix", "Spotify"])
+        )
+        store.record_device_capability(mac, "Cast target")
+
+        dev = store.get_known_devices()[mac]
+        assert json.loads(dev.services) == ["Netflix", "Spotify"]
+        assert store.get_device_capabilities(mac) == ["Cast target"]

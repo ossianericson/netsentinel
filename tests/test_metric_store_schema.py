@@ -85,8 +85,22 @@ def test_migrations_list_is_nonempty():
     assert all(isinstance(m, str) for m in _MIGRATIONS)
 
 
-def test_schema_version_is_22():
-    assert _SCHEMA_VERSION == 22
+def test_schema_version_is_23():
+    assert _SCHEMA_VERSION == 23
+
+
+def test_known_device_has_capabilities_column():
+    """Schema v23: what a device can DO, split out of device_type.
+
+    Must be its own column — `services` already carries service_mapper's
+    expected internet services and is rendered as a different row.
+    """
+    conn = _make_conn()
+    lock = threading.Lock()
+    apply_sqlite_schema(conn, lock)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(known_device)").fetchall()}
+    assert "capabilities" in cols
+    assert "services" in cols
 
 
 def test_known_device_has_hostname_resolved_at_column():

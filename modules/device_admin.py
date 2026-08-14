@@ -49,3 +49,8 @@ def upsert_known_device(store: Any, mac: str, **kwargs: Any) -> None:
 def record_ha_detected(store: Any, **kwargs: Any) -> None:
     """Record a Home-Automation signature detection (wraps record_ha_detected)."""
     store.record_ha_detected(**kwargs)
+
+
+def record_device_capability(store: Any, mac: str, capability: str) -> None:
+    """Add an observed capability to a device (wraps record_device_capability)."""
+    store.record_device_capability(mac, capability)

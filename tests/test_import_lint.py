@@ -7,12 +7,15 @@ debt.
 """
 from __future__ import annotations
 
+import pytest
+
 from tools.check_import_lint import (
     REPO_ROOT,
     BASELINE_IMPORT_AND_IMPORT_FROM,
     BASELINE_UNUSED_GLOBALS,
     find_cyclic_import_violations,
     find_import_and_import_from_violations,
+    find_shadowed_import_violations,
     find_unused_global_violations,
 )
 
@@ -106,4 +109,132 @@ def test_baseline_unused_globals_entries_are_current():
 
     assert not stale, "Stale BASELINE_UNUSED_GLOBALS entries:\n" + "\n".join(
         f"  {rel_path}: {name} -- {reason}" for rel_path, name, reason in stale
+    )
+
+
+def test_no_conditionally_shadowed_imports():
+    """A name imported inside a branch must not be used outside that branch.
+
+    `import X` anywhere in a function makes X a LOCAL for the whole function,
+    so a bare `import logging` inside an `if`/`try` shadows the module-level
+    name at every other use site in that function -- which raises
+    UnboundLocalError whenever the branch is not taken (CodeQL
+    py/uninitialized-local-variable, RULE-LINT7). It shipped silently in
+    app.py::main(): the shadowed use sat inside `except Exception: pass`, so
+    the log line simply never appeared. Alias the conditional import
+    (`import logging as _x_logging`) rather than widening its scope.
+    """
+    violations = find_shadowed_import_violations()
+    assert not violations, "Conditionally shadowed import(s):\n" + "\n".join(
+        f"  {v}" for v in violations
+    )
+
+
+# The tree-wide check above passes with zero violations, so on its own it would
+# still pass if the detector stopped detecting. These two pin the behaviour.
+
+_SHADOW_CASES = {
+    "conditional_import_used_later": (
+        "def main():\n"
+        "    if not ok():\n"
+        "        import logging\n"
+        "        logging.getLogger('x').warning('a')\n"
+        "    try:\n"
+        "        logging.getLogger('x').info('b')\n"
+        "    except Exception:\n"
+        "        pass\n"
+    ),
+    "loop_import_used_after": (
+        "def main():\n"
+        "    for item in items():\n"
+        "        import json\n"
+        "    return json.dumps({})\n"
+    ),
+}
+
+_SAFE_CASES = {
+    # The optional-dependency guard: the handler closes the fall-through, so
+    # code after the try is unreachable unless the import ran (RULE-AH4).
+    "guard_returns": (
+        "def scan():\n"
+        "    try:\n"
+        "        from scapy.all import IP\n"
+        "    except ImportError:\n"
+        "        return None\n"
+        "    return IP()\n"
+    ),
+    "guard_raises": (
+        "def engine(url):\n"
+        "    try:\n"
+        "        from sqlalchemy import create_engine\n"
+        "    except ImportError as exc:\n"
+        "        raise ImportError('install sqlalchemy') from exc\n"
+        "    return create_engine(url)\n"
+    ),
+    "guard_exits": (
+        "def cli():\n"
+        "    try:\n"
+        "        import click\n"
+        "    except ImportError:\n"
+        "        sys.exit(1)\n"
+        "    return click.echo('hi')\n"
+    ),
+    # The handler re-binds the name, by import or by fallback definition.
+    "handler_reimports": (
+        "def toolbar(canvas):\n"
+        "    try:\n"
+        "        from mpl.qtagg import NavigationToolbar2QT\n"
+        "    except ImportError:\n"
+        "        from mpl.qt import NavigationToolbar2QT\n"
+        "    return NavigationToolbar2QT(canvas)\n"
+    ),
+    "handler_defines_fallback": (
+        "def render(units):\n"
+        "    try:\n"
+        "        from modules.deco_client import _norm_mac\n"
+        "    except ImportError:\n"
+        "        def _norm_mac(m):\n"
+        "            return m.lower()\n"
+        "    return {_norm_mac(u) for u in units}\n"
+    ),
+    # Unconditional import, and a use confined to the branch that imported it.
+    "unconditional": (
+        "def main():\n"
+        "    import logging\n"
+        "    if not ok():\n"
+        "        logging.getLogger('x').warning('a')\n"
+        "    return logging.getLogger('x')\n"
+    ),
+    "use_stays_inside_branch": (
+        "def main():\n"
+        "    if not ok():\n"
+        "        import logging\n"
+        "        logging.getLogger('x').warning('a')\n"
+        "    return 1\n"
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_SHADOW_CASES))
+def test_shadowed_import_detector_fires(tmp_path, name):
+    """Each shape leaves the name unbound on at least one reachable path."""
+    src = tmp_path / f"{name}.py"
+    src.write_text(_SHADOW_CASES[name], encoding="utf-8")
+    assert find_shadowed_import_violations(paths=[src]), (
+        f"detector missed a real shadow ({name}):\n{_SHADOW_CASES[name]}"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(_SAFE_CASES))
+def test_shadowed_import_detector_stays_quiet(tmp_path, name):
+    """Guard idioms bind the name on every path that can observe it.
+
+    Without these the detector reports 44 sites across this repo — noise that
+    would get the whole gate switched off rather than the one real bug fixed.
+    """
+    src = tmp_path / f"{name}.py"
+    src.write_text(_SAFE_CASES[name], encoding="utf-8")
+    violations = find_shadowed_import_violations(paths=[src])
+    assert not violations, f"false positive on {name}:\n" + "\n".join(
+        f"  {v}" for v in violations
     )

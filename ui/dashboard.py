@@ -232,7 +232,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         # _m1_update_scan_registries() whenever a new scan result replaces the
         # device list.
         from modules.device_classification import ClaimTracker
-        self._classification_claims = ClaimTracker()
+        from ui.scan_settings import identity_stable_arbitration_enabled
+        self._classification_claims = ClaimTracker(
+            stable=identity_stable_arbitration_enabled()
+        )
 
         # Security audit coordinator state
         self._pending_security_tools: list = []

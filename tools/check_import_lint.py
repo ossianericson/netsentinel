@@ -70,7 +70,30 @@ class UnusedGlobalViolation:
         return f"{self.path}:{self.lineno}: global '{self.name}' is never read anywhere"
 
 
+class ShadowedImportViolation:
+    def __init__(self, path: str, name: str, import_line: int, use_line: int):
+        self.path = path
+        self.name = name
+        self.import_line = import_line
+        self.use_line = use_line
+
+    def __str__(self) -> str:
+        return (
+            f"{self.path}:{self.use_line}: '{self.name}' is used here but only "
+            f"bound by a conditional import on line {self.import_line} -- alias "
+            f"that import so it stops shadowing the outer name"
+        )
+
+
 def _iter_tracked_python_files() -> list[Path]:
+    """Every tracked .py file that still exists on disk.
+
+    `git ls-files` lists a file that has been deleted in the working tree but
+    whose deletion is not staged yet — the ordinary state between `rm` and
+    `git add`. Reading one raises FileNotFoundError, which crashed this checker
+    (and so the whole gate) rather than reporting a lint result. Existence is
+    filtered here, once, instead of in each of the three call sites.
+    """
     out = subprocess.run(
         ["git", "ls-files", "*.py"],
         cwd=REPO_ROOT,
@@ -78,7 +101,10 @@ def _iter_tracked_python_files() -> list[Path]:
         text=True,
         check=True,
     ).stdout
-    return [REPO_ROOT / line for line in out.splitlines() if line]
+    return [
+        p for p in (REPO_ROOT / line for line in out.splitlines() if line)
+        if p.is_file()
+    ]
 
 
 # Pre-existing violations from before this gate existed are grandfathered
@@ -528,15 +554,220 @@ def find_unused_global_violations(
     return violations
 
 
+# Statements whose body may not run (or may not run before a later use).
+# `with` is deliberately absent: its body always executes once entered, so a
+# `with`-nested import does not create the may-be-unbound state this checks.
+_MAY_NOT_RUN = (ast.If, ast.Try, ast.For, ast.AsyncFor, ast.While)
+
+# Scopes that establish their own namespace -- a walk of one function must not
+# descend into them, or an inner function's names get attributed to the outer.
+_NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+
+# Calls that end the current flow as surely as `return` does. Without these,
+# the `except ImportError: sys.exit(1)` spelling of the guard idiom below
+# reads as a fall-through and reports a false positive.
+_NO_RETURN_CALLS = {
+    "exit", "quit", "sys.exit", "os._exit", "os.abort",
+    "pytest.skip", "pytest.fail", "pytest.exit", "self.fail", "self.skipTest",
+}
+
+
+def _call_name(node: ast.AST) -> str:
+    """Dotted name of a call target, e.g. `sys.exit` -- "" if not a plain call."""
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+        return ".".join(reversed(parts))
+    return ""
+
+
+def _can_fall_through(body: list) -> bool:
+    """Whether control can reach the statement AFTER this block.
+
+    Only the last statement is inspected: that covers every guard spelling in
+    this codebase (`return`, `raise`, `continue`, `sys.exit(...)`) without the
+    cost and false-precision of a real CFG.
+    """
+    if not body:
+        return True
+    last = body[-1]
+    if isinstance(last, (ast.Return, ast.Raise, ast.Continue, ast.Break)):
+        return False
+    if isinstance(last, ast.Expr) and isinstance(last.value, ast.Call):
+        if _call_name(last.value.func) in _NO_RETURN_CALLS:
+            return False
+    if isinstance(last, ast.If) and last.orelse:
+        return _can_fall_through(last.body) or _can_fall_through(last.orelse)
+    return True
+
+
+def _binds_name(body: list, name: str) -> bool:
+    """Whether any import, assignment, or `def`/`class` in `body` binds `name`.
+
+    The `def` case is not academic: the fallback-implementation spelling of the
+    guard idiom -- `except ImportError: def _norm_mac(m): ...` -- binds the name
+    just as firmly as a re-import, and both topology map builders rely on it.
+    """
+    for node in ast.walk(ast.Module(body=body, type_ignores=[])):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                if (alias.asname or alias.name.split(".")[0]) == name:
+                    return True
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.name == name:
+                return True
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store) and node.id == name:
+            return True
+    return False
+
+
+def _container_shadows(container: ast.stmt, name: str) -> bool:
+    """Whether skipping `container`'s body can leave `name` unbound afterwards.
+
+    The dominant safe idiom in this codebase is an optional-dependency guard:
+
+        try:
+            from scapy.all import IP        # bound only here...
+        except ImportError:
+            return                          # ...but the fall-through is closed
+
+    Code after that `try` is unreachable unless the import succeeded, so the
+    name is bound on every path that can observe it. The same holds when the
+    handler re-binds the name itself (`except ImportError: from x import IP`).
+    Neither is a shadow; only a genuinely skippable binding is.
+    """
+    if isinstance(container, ast.Try):
+        return any(
+            _can_fall_through(h.body) and not _binds_name(h.body, name)
+            for h in container.handlers
+        )
+    if isinstance(container, ast.If):
+        in_body = _binds_name(container.body, name)
+        in_else = _binds_name(container.orelse, name)
+        if in_body and in_else:
+            return False                          # bound whichever branch runs
+        # Otherwise it shadows unless the branch NOT containing the import is a
+        # dead end -- `if missing: <import>` / `else: raise` binds on every live
+        # path, the same reasoning as the try/except guard above.
+        return _can_fall_through(container.orelse if in_body else container.body)
+    return True                                   # for / while: may run zero times
+
+
+class _FunctionScope:
+    """Bindings and loads of one function body, nested scopes excluded."""
+
+    def __init__(self) -> None:
+        self.import_binds: dict[str, list[tuple[int, tuple]]] = {}
+        self.other_binds: set[str] = set()
+        self.declared: set[str] = set()          # global / nonlocal
+        self.loads: dict[str, list[int]] = {}
+
+    def walk(self, body: list) -> None:
+        for node in body:
+            self._visit(node, ())
+
+    def _visit(self, node, chain: tuple) -> None:
+        if isinstance(node, _NESTED_SCOPES):
+            # Its BODY is a separate namespace, but its NAME is bound in ours.
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                self.other_binds.add(node.name)
+            return
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                bound = alias.asname or alias.name.split(".")[0]
+                self.import_binds.setdefault(bound, []).append((node.lineno, chain))
+            return
+        if isinstance(node, (ast.Global, ast.Nonlocal)):
+            self.declared.update(node.names)
+            return
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            self.loads.setdefault(node.id, []).append(node.lineno)
+        elif isinstance(node, ast.Name):          # Store / Del
+            self.other_binds.add(node.id)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            self.other_binds.add(node.name)
+
+        inner = chain + (node,) if isinstance(node, _MAY_NOT_RUN) else chain
+        for child in ast.iter_child_nodes(node):
+            self._visit(child, inner)
+
+
+def find_shadowed_import_violations(
+    paths: list[Path] | None = None,
+) -> list[ShadowedImportViolation]:
+    """Names imported only inside a skippable block but used outside it.
+
+    `import X` anywhere in a function makes X local to the WHOLE function, so a
+    conditional import shadows the module-level name at every other use site --
+    raising UnboundLocalError on the paths that skip the import (CodeQL
+    py/uninitialized-local-variable, RULE-LINT7). A name that is also bound on
+    the paths that skip the import is safe and is not reported, which keeps the
+    optional-dependency guard idiom (RULE-AH4) clean -- see _container_shadows.
+    """
+    if paths is None:
+        paths = _iter_tracked_python_files()
+
+    violations: list[ShadowedImportViolation] = []
+    for path in paths:
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), filename=str(path))
+        except SyntaxError:
+            continue
+        try:
+            rel_path = path.relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            rel_path = path.as_posix()            # off-tree file (unit tests)
+
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            scope = _FunctionScope()
+            scope.walk(fn.body)
+
+            for name, binds in scope.import_binds.items():
+                if name in scope.other_binds or name in scope.declared:
+                    continue                      # bound on some other path too
+
+                # A use is safe if it sits inside a block that guarantees the
+                # binding ran. The OUTERMOST shadowing container is that block:
+                # anything outside it can be reached with the import skipped.
+                safe_ranges = []
+                unconditional = False
+                for _, chain in binds:
+                    shadowing = [c for c in chain if _container_shadows(c, name)]
+                    if not shadowing:
+                        unconditional = True
+                        break
+                    outer = shadowing[0]
+                    safe_ranges.append((outer.lineno, outer.end_lineno or outer.lineno))
+                if unconditional:
+                    continue
+
+                for use_line in scope.loads.get(name, []):
+                    if any(lo <= use_line <= hi for lo, hi in safe_ranges):
+                        continue
+                    violations.append(
+                        ShadowedImportViolation(rel_path, name, binds[0][0], use_line)
+                    )
+                    break                         # one report per shadowed name
+    return violations
+
+
 def main() -> int:
     hygiene = find_import_and_import_from_violations()
     cycles = find_cyclic_import_violations()
     unused_globals = find_unused_global_violations()
+    shadowed = find_shadowed_import_violations()
 
-    if not hygiene and not cycles and not unused_globals:
+    if not hygiene and not cycles and not unused_globals and not shadowed:
         print(
             "[check_import_lint] OK -- no import-and-import-from, cyclic-import, "
-            "or unused-global-variable violations."
+            "unused-global-variable, or shadowed-import violations."
         )
         return 0
 
@@ -559,6 +790,14 @@ def main() -> int:
             "(CodeQL py/unused-global-variable, RULE-LINT6):"
         )
         for v in unused_globals:
+            print(f"  {v}")
+
+    if shadowed:
+        print(
+            f"\n{len(shadowed)} shadowed-import violation(s) "
+            "(CodeQL py/uninitialized-local-variable, RULE-LINT7):"
+        )
+        for v in shadowed:
             print(f"  {v}")
 
     return 1

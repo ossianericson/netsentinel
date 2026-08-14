@@ -54,6 +54,23 @@ from ui.widgets.device_detail_pane import _wire_close_icon
 from ui import styles as _s
 from ui.dialog_utils import run_dialog
 
+
+def _conf_label(conf: float) -> str:
+    """Render a 0.0-1.0 classification confidence as "72% (high)".
+
+    Shared by the drawer's legacy (stored-confidence) and Identity A4
+    (arbitrated) branches so the high/medium/low thresholds cannot drift
+    apart between them.
+    """
+    if conf >= 0.7:
+        return f"{conf:.0%} (high)"
+    if conf >= 0.3:
+        return f"{conf:.0%} (medium)"
+    if conf > 0.0:
+        return f"{conf:.0%} (low)"
+    return "unknown"
+
+
 # ── Device history drawer (DEVICE-2) ─────────────────────────────────────────
 
 class _DeviceDrawer(QFrame):
@@ -203,6 +220,8 @@ class _DeviceDrawer(QFrame):
         self._notes_val.setWordWrap(True)
         self._services_val    = QLabel("—")
         self._services_val.setWordWrap(True)
+        self._capabilities_val = QLabel("—")
+        self._capabilities_val.setWordWrap(True)
 
         _info_row("First seen",  self._first_seen_val)
         _info_row("Last seen",   self._last_seen_val)
@@ -212,6 +231,9 @@ class _DeviceDrawer(QFrame):
         _info_row("Tags",        self._tags_val)
         _info_row("Notes",       self._notes_val)
         _info_row("Services",    self._services_val)
+        # What the device can DO, observed passively (schema v23). Distinct from
+        # Services above, which lists the internet services it is expected to use.
+        _info_row("Can do",      self._capabilities_val)
 
         # ── Notes & Labels section ─────────────────────────────────────────────
         _sep()
@@ -314,32 +336,65 @@ class _DeviceDrawer(QFrame):
             else:
                 self._class_override_badge.setVisible(False)
                 _conf = float(kd.confidence or 0.0)
-                if _conf >= 0.7:
-                    _label = f"{_conf:.0%} (high)"
-                elif _conf >= 0.3:
-                    _label = f"{_conf:.0%} (medium)"
-                elif _conf > 0.0:
-                    _label = f"{_conf:.0%} (low)"
-                else:
-                    _label = "unknown"
-                self._class_conf_val.setText(f"Confidence: {_label}")
+                self._class_conf_val.setText(f"Confidence: {_conf_label(_conf)}")
                 self._class_clear_btn.setVisible(False)
             try:
-                from modules.device_classifier import classify_with_evidence as _cwe
-                _cr = _cwe(
-                    vendor=kd.vendor or "",
-                    hostname=kd.hostname or "",
-                    open_ports=set(),
-                    os_family="",
-                    mac=mac,
-                    is_gateway=False,
-                )
-                if _cr.evidence:
+                if not _override:
+                    # Identity A4. The override branch below shows the stored
+                    # confidence (which comes from the MAC registry whenever
+                    # one hit) beside classify_with_evidence()'s heuristic
+                    # evidence — so on a device where those two disagree, the
+                    # evidence line describes the claim that LOST while the
+                    # percentage describes the one that won, with nothing
+                    # saying so. Measured live on d8:3a:dd:de:11:a7 (PINAS):
+                    # "Single Board Computer / 90% (high) / Evidence:
+                    # hostname:PINAS". Arbitrating both claims makes the
+                    # disagreement the thing the panel reports.
+                    from modules.device_classification import arbitrate, claims_from_scan
+                    from ui.scan_settings import (
+                        identity_stable_arbitration_enabled as _stable_on,
+                    )
+                    _stable = _stable_on()
+                    _claims = claims_from_scan(
+                        mac=mac,
+                        vendor=kd.vendor or "",
+                        hostname=kd.hostname or "",
+                        open_ports=set(),
+                        os_family="",
+                        is_gateway=False,
+                        best_rule=_stable,
+                    )
+                    if _stable:
+                        from modules.device_classification import arbitrate_stable
+                        _verdict = arbitrate_stable(
+                            _claims, incumbent=kd.device_type or "",
+                            incumbent_confidence=getattr(kd, "confidence", None),
+                        )
+                    else:
+                        _verdict = arbitrate(_claims)
+                    self._class_conf_val.setText(
+                        f"Confidence: {_conf_label(_verdict.confidence)}"
+                    )
                     self._class_evidence_val.setText(
-                        "Evidence: " + ", ".join(_cr.evidence[:4])
+                        "Evidence: " + "; ".join(_verdict.evidence[:4])
+                        if _verdict.evidence else "Evidence: OUI lookup only"
                     )
                 else:
-                    self._class_evidence_val.setText("Evidence: OUI lookup only")
+                    from modules.device_classifier import classify_with_evidence as _cwe
+                    _cr = _cwe(
+                        vendor=kd.vendor or "",
+                        hostname=kd.hostname or "",
+                        open_ports=set(),
+                        os_family="",
+                        mac=mac,
+                        is_gateway=False,
+                    )
+                    if _cr.evidence:
+                        self._class_evidence_val.setText(
+                            "Evidence: " + ", ".join(_cr.evidence[:4])
+                        )
+                    else:
+                        self._class_evidence_val.setText("Evidence: OUI lookup only")
             except Exception:
                 self._class_evidence_val.setText("")  # non-fatal
 
@@ -364,6 +419,11 @@ class _DeviceDrawer(QFrame):
                 self._services_val.setText(", ".join(names) if names else "—")
             except Exception:
                 self._services_val.setText("—")  # non-fatal — services field may be absent
+        try:
+            caps = store.get_device_capabilities(mac)
+            self._capabilities_val.setText(", ".join(caps) if caps else "—")
+        except Exception:
+            self._capabilities_val.setText("—")  # non-fatal — pre-v23 database
         try:
             events = store.query_device_events(hours=720, event_types=None)
             count = sum(1 for e in events if (e.mac or "").lower() == mac.lower())

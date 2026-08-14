@@ -31,6 +31,11 @@ except Exception:
     _resolve_name = None  # type: ignore
     ResolvedName = None  # type: ignore
 
+# Vendor strings that mean "we don't know" — reused from device_identity rather
+# than re-listed here, which is where the same convention is already defined and
+# where a new placeholder would be added.
+from modules.device_identity import _PLACEHOLDER_VALUES as _NO_VENDOR  # noqa: E402
+
 # Part 2/L8: re-resolve a device's name at most once per week. A caller-supplied
 # known_devices snapshot lets scan() skip the network probe for a MAC resolved
 # more recently than this — see scan()'s known_devices param.
@@ -487,6 +492,21 @@ def scan(
         # get a clean slate.
         if info.is_gateway and info.hostname and _CONSUMER_HOSTNAME_RE.search(info.hostname):
             info.hostname = ""
+
+        # --- Vendor from hostname, when the OUI could not supply one ---
+        # A locally-administered (privacy) MAC has no OUI at all, so vendor
+        # lookup returns nothing for it no matter how large the OUI database
+        # grows -- but its hostname is often a perfectly good handle. Weaker
+        # evidence than an OUI, so it only fills a genuine blank and never
+        # overwrites a vendor an OUI already supplied.
+        if info.hostname and (info.vendor or "").strip().lower() in _NO_VENDOR:
+            try:
+                from modules.vendor_hints import vendor_from_hostname
+                _hv = vendor_from_hostname(info.hostname)
+            except Exception:
+                _hv = ""  # non-fatal -- a failed inference must not abort the scan
+            if _hv:
+                info.vendor = _hv
 
         # --- Device-type classification ---
         # Only run classifier when mac_registry didn't already provide a type.

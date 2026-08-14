@@ -526,7 +526,11 @@ class TestSynthesizedRowEnrichment:
 
     # Real registry OUIs — see modules/mac_registry.py
     PI_MAC = "b8:27:eb:11:22:33"      # -> Raspberry Pi / Single Board Computer
-    XBOX_MAC = "d8:3a:dd:00:00:01"    # -> Microsoft / Games Console
+    # 98:5f:d3 is Microsoft's real Xbox Series X/S OUI. This fixture used to say
+    # d8:3a:dd, which IEEE assigns to Raspberry Pi Trading Ltd — the registry
+    # carried it inside its _XBOX block, so the test asserted the bug rather
+    # than the behaviour, and passed green while a Pi rendered as an Xbox.
+    XBOX_MAC = "98:5f:d3:00:00:01"    # -> Microsoft / Games Console
     UNKNOWN_MAC = "ac:63:be:00:00:01"  # -> not in the registry
 
     def _stub_with_kpi(self, table, m1_result, plugin_enrichments=None):
@@ -1533,3 +1537,159 @@ def test_passive_observation_rejects_multicast_mac():
 
     assert dev.device_type == "Unknown Device"
     _cleanup(table)
+
+
+class TestSynthesizedRowVendorFromName(TestSynthesizedRowEnrichment):
+    """A privacy-MAC mesh client has no OUI, but its mesh name identifies it.
+
+    Live case: 6a:94:29:ec:8f:4d / "Chromecast-Audio-Vardagsrum" rendered with a
+    blank Vendor cell. Its known_device.hostname is empty -- the name arrives
+    from the Deco client list during mesh enrichment, long AFTER
+    rogue_device._apply_resolution() has run -- so the vendor hint has to be
+    applied here too, not only on the scan path.
+    """
+
+    CHROMECAST_MAC = "6a:94:29:ec:8f:4d"   # U/L bit set -> privacy MAC, no OUI
+
+    def test_privacy_mac_mesh_row_gets_vendor_from_its_mesh_name(self):
+        from modules.deco_client import MeshClient, _norm_mac
+
+        table = _make_table([])
+        stub = self._stub_with_kpi(table, {"devices": [], "total_count": 0})
+        stub._mesh_enrichment = {
+            _norm_mac(self.CHROMECAST_MAC): MeshClient(
+                name="Chromecast-Audio-Vardagsrum", mac=self.CHROMECAST_MAC,
+                ip="192.168.68.51", unit_mac="aa:bb:cc:dd:ee:01",
+                unit_name="Vardagsrum", band="5G",
+            ),
+        }
+        stub._apply_mesh_enrichment()
+
+        row = self._row_for_mac(table, self.CHROMECAST_MAC)
+        assert row is not None, "mesh-only client was not synthesized into the table"
+        vendor = table.item(row, 3)
+        assert vendor is not None and vendor.text() == "Google", (
+            "Vendor must fall back to the mesh name when the MAC carries no OUI; got "
+            f"{vendor.text() if vendor else None!r}"
+        )
+
+    def test_oui_vendor_still_wins_over_the_mesh_name(self):
+        """The name is weaker evidence and must only fill a genuine blank."""
+        from modules.deco_client import MeshClient, _norm_mac
+
+        table = _make_table([])
+        stub = self._stub_with_kpi(table, {"devices": [], "total_count": 0})
+        stub._mesh_enrichment = {
+            _norm_mac(self.PI_MAC): MeshClient(
+                name="chromecast-box", mac=self.PI_MAC, ip="192.168.68.67",
+                unit_mac="aa:bb:cc:dd:ee:01", unit_name="Vardagsrum", band="Wired",
+            ),
+        }
+        stub._apply_mesh_enrichment()
+
+        row = self._row_for_mac(table, self.PI_MAC)
+        vendor = table.item(row, 3)
+        assert vendor is not None and vendor.text() == "Raspberry Pi"
+
+
+# ---------------------------------------------------------------------------
+# Capability announcements — recorded as capability, never as identity
+# ---------------------------------------------------------------------------
+
+def _make_capability_obs(ip, mac, service_type, capability, protocol="mdns"):
+    """An observation shaped exactly as the parsers now produce for a
+    media-capability service: a capability, and NO device_hint."""
+    from modules.passive_observer import PassiveObservation
+    return PassiveObservation(
+        ip=ip, mac=mac, protocol=protocol, service_type=service_type,
+        device_hint="", confidence="low", capability=capability,
+    )
+
+
+def test_capability_observation_is_persisted_and_leaves_identity_alone(tmp_path):
+    """The Phase 1 wiring, end to end through the real handler.
+
+    Before: this announcement rewrote device_type to "Streaming Stick" at a
+    confidence no vendor/hostname evidence could outrank. After: the device
+    keeps the identity it had and gains a true, additive capability.
+    """
+    from modules.metric_store import MetricStore
+
+    ip, mac = "192.168.1.70", "aa:bb:cc:dd:ee:70"
+    store = MetricStore(db_path=tmp_path / "cap.db")
+    store.upsert_known_device(mac, ip=ip, device_type="Smart Speaker / Audio")
+
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Smart Speaker / Audio")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+    stub._store = store
+
+    stub._on_passive_observation(
+        _make_capability_obs(ip, mac, "_googlecast._tcp", "Cast target")
+    )
+
+    assert store.get_device_capabilities(mac) == ["Cast target"]
+    assert dev.device_type == "Smart Speaker / Audio", (
+        "a capability announcement must not restate what the device is"
+    )
+
+    _cleanup(table)
+    store.close()
+
+
+def test_capabilities_from_several_announcements_accumulate(tmp_path):
+    """A device that casts AND does AirPlay keeps both, instead of alternating
+    between two identities the way device_type did."""
+    from modules.metric_store import MetricStore
+
+    ip, mac = "192.168.1.71", "aa:bb:cc:dd:ee:71"
+    store = MetricStore(db_path=tmp_path / "cap2.db")
+    store.upsert_known_device(mac, ip=ip, device_type="Smart TV")
+
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Smart TV")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+    stub._store = store
+
+    for service_type, capability in (
+        ("_googlecast._tcp", "Cast target"),
+        ("_airplay._tcp", "AirPlay video"),
+        ("_raop._tcp", "AirPlay audio"),
+    ):
+        stub._on_passive_observation(
+            _make_capability_obs(ip, mac, service_type, capability)
+        )
+
+    assert store.get_device_capabilities(mac) == [
+        "AirPlay audio", "AirPlay video", "Cast target",
+    ]
+    assert dev.device_type == "Smart TV"
+
+    _cleanup(table)
+    store.close()
+
+
+def test_capability_is_recorded_even_for_a_user_overridden_device(tmp_path):
+    """An override pins what the device IS. What it can DO is still observable
+    fact, and recording it cannot contradict the user's choice."""
+    from modules.metric_store import MetricStore
+
+    ip, mac = "192.168.1.72", "aa:bb:cc:dd:ee:72"
+    store = MetricStore(db_path=tmp_path / "cap3.db")
+    store.upsert_known_device(mac, ip=ip, device_type="Smart Speaker / Audio")
+    store.set_classification_override(mac, "Smart Speaker / Audio")
+
+    table = _make_table([(ip, "", mac)])
+    dev = _DevObj(ip, mac, device_type="Smart Speaker / Audio")
+    stub = _make_stub(table, {"devices": [dev]}, net_info=None)
+    stub._store = store
+
+    stub._on_passive_observation(
+        _make_capability_obs(ip, mac, "_airplay._tcp", "AirPlay video")
+    )
+
+    assert store.get_device_capabilities(mac) == ["AirPlay video"]
+    assert dev.device_type == "Smart Speaker / Audio"
+
+    _cleanup(table)
+    store.close()
