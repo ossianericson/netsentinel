@@ -16,7 +16,7 @@ flask~=3.1             # Local REST API server (disabled by default, binds 127.0
 waitress~=3.0          # Production WSGI server for the REST API (replaces Flask dev server)
 cryptography~=50.0     # Required by scapy (krack module); >=50.0.0 fixes CVE-2026-69247/69248/69249
 maxminddb~=3.1         # Pure-Python MaxMind .mmdb reader for GeoLite2 IP geolocation (geo_locator)
-tplinkrouterc6u~=5.27  # TP-Link Deco mesh API client (DecoMeshClient in modules/deco_client.py)
+tplinkrouterc6u~=5.29  # TP-Link Deco mesh API client (DecoMeshClient in modules/deco_client.py)
 pycryptodome~=3.23     # Required by tplinkrouterc6u for AES/RSA crypto
 
 # Optional — Windows service only (svc.py).
