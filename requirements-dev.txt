@@ -3,7 +3,7 @@
 
 # Linting (RULE-LINT1) — also enforced in CI (.github/workflows/ci.yml lint job)
 # run: ruff check . --select=F401,F811,F841
-ruff>=0.16.4
+ruff>=0.16.5
 
 # Import hygiene (RULE-LINT5) — CodeQL py/import-and-import-from + py/cyclic-import,
 # neither of which ruff has a rule for. Stdlib-only, no extra package needed.
