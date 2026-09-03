@@ -19,6 +19,7 @@ Stop: call stop() then wait().
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 from datetime import datetime
@@ -107,7 +108,14 @@ class PluginPollingWorker(QThread):
             self._trigger.clear()
             self._poll_in_progress = True
             self._last_run_ok = False
-            self._run_once()
+            try:
+                self._run_once()
+            except Exception:
+                # _run_once()'s own guard starts partway in, so the path checks and
+                # sys.path manipulation above it are unguarded. An escape here would
+                # kill the polling loop permanently; treat it as a failed poll so the
+                # existing backoff handles it instead.
+                logging.getLogger(__name__).exception("Plugin poll failed")
             self._poll_in_progress = False
             # Update backoff counter based on run outcome (P6-1)
             if self._last_run_ok:

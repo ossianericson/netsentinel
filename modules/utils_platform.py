@@ -103,7 +103,11 @@ def ping_sweep_ipv6(progress_cb=None) -> List[dict]:
             )
             current_iface = None
             for line in raw.splitlines():
-                m_iface = re.search(r"Interface\s+\d+:\s+(.+)", line)
+                # "Interface 12: Ethernet" is "Interfaz"/"Gränssnitt" elsewhere, so
+                # match the untranslated shape (<word> <index>: <name>) rather than
+                # the word. Without this, no link-local interface was ever found and
+                # the IPv6 active sweep was skipped entirely on localized Windows.
+                m_iface = re.search(r"^\s*\S+\s+\d+:\s+(.+)$", line)
                 if m_iface:
                     current_iface = m_iface.group(1).strip()
                 m_addr = re.search(r"(fe80::[0-9a-f:%]+)", line, re.IGNORECASE)

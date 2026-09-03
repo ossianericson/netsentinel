@@ -195,7 +195,8 @@ class DecoMeshClient:
             try:
                 _client.authorize()
             except (requests.exceptions.Timeout,
-                    requests.exceptions.ConnectionError) as exc:
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.ChunkedEncodingError) as exc:
                 # A refused/blocked/unroutable connection is the same class of
                 # evidence as a timeout — the device did not answer — so it must
                 # also fall through to the next protocol rather than being

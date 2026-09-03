@@ -72,10 +72,16 @@ def _netsh(*args: str, timeout: int = 10) -> tuple[int, str]:
 
 def _rule_exists(name: str) -> bool:
     """Return True if a firewall rule with this exact name already exists."""
-    rc, out = _netsh(
+    # netsh exits non-zero ("No rules match the specified criteria") when the named
+    # rule does not exist, so the return code alone answers this — and unlike the
+    # previous "Rule Name:" text match it is the same on every Windows locale.
+    # That match always failed on localized Windows ("Regelnamn:"/"Nombre de regla:"),
+    # so _rule_exists() was permanently False and every process start redundantly
+    # deleted and re-added the rules.
+    rc, _out = _netsh(
         "advfirewall", "firewall", "show", "rule", f"name={name}"
     )
-    return rc == 0 and "Rule Name:" in out
+    return rc == 0
 
 
 def _add_outbound_rules(

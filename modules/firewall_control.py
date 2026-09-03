@@ -75,7 +75,12 @@ def get_blocked_rules() -> list[str]:
         rules = []
         for line in result.stdout.splitlines():
             line = line.strip()
-            if line.startswith("Rule Name:") and "NS-Block-" in line:
+            # "Rule Name:" is translated on non-English Windows, which left the
+            # blocked-rule list permanently empty — the user could block an app but
+            # never see or unblock it. "NS-Block-" is a value we choose ourselves,
+            # so it is the locale-independent half of this match; it only ever
+            # appears on the rule-name line.
+            if "NS-Block-" in line:
                 name = line.split("NS-Block-", 1)[1].strip()
                 rules.append(name)
         return rules

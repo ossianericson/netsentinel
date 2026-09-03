@@ -12,6 +12,7 @@ A "Today at a glance" pinned summary header shows counts for the current day.
 """
 from __future__ import annotations
 
+import calendar
 import datetime
 from typing import TYPE_CHECKING
 
@@ -511,7 +512,17 @@ class TimelinePage(QWidget):
                 for ev in _get_dev_ev(self._store, limit=500, hours=168):
                     _ts_str = ev.get("ts", "")
                     try:
-                        _ts = datetime.datetime.strptime(str(_ts_str), "%Y-%m-%d %H:%M:%S").timestamp()
+                        # device_events.ts is written in UTC
+                        # (metric_store_writes_device.py uses datetime.utcnow()), so a
+                        # naive .timestamp() would re-read it as LOCAL time and shift
+                        # every row by the full offset — -5:30 in India, -9:30 in
+                        # Adelaide — dropping events out of "Today at a glance".
+                        # timegm() reads the struct as UTC, matching inventory_page.py.
+                        _ts = calendar.timegm(
+                            datetime.datetime.strptime(
+                                str(_ts_str), "%Y-%m-%d %H:%M:%S"
+                            ).timetuple()
+                        )
                     except Exception:
                         continue
                     _etype = ev.get("event_type", "")
@@ -541,11 +552,22 @@ class TimelinePage(QWidget):
                     try:
                         _summary = load_log_file(_lf)
                         for _o in _summary.outages:
-                            try:
-                                _ts = datetime.datetime.strptime(
-                                    str(_o.start), "%Y-%m-%d %H:%M:%S"
-                                ).timestamp()
-                            except Exception:
+                            # network_logger writes this T-separated
+                            # ("%Y-%m-%dT%H:%M:%S"), so the space-separated format
+                            # never matched, the ValueError was swallowed, and the
+                            # "Network Logger outages" source yielded zero events on
+                            # every run, everywhere. network_log_writer.py already
+                            # tries both forms; mirror it.
+                            _ts = None
+                            for _fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+                                try:
+                                    _ts = datetime.datetime.strptime(
+                                        str(_o.start), _fmt
+                                    ).timestamp()
+                                    break
+                                except ValueError:
+                                    continue
+                            if _ts is None:
                                 continue
                             if _ts < _cutoff:
                                 continue

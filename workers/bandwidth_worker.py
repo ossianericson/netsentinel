@@ -67,4 +67,10 @@ class BandwidthOverlayWorker(QThread):
             on_error=self.error.emit,
             stop_event=self._stop_event,
         )
-        monitor.run()   # blocks until _stop_event is set
+        try:
+            monitor.run()   # blocks until _stop_event is set
+        except Exception as exc:  # noqa: BLE001 — reported via the error signal
+            # Scapy-backed and therefore the likeliest worker to raise something
+            # unexpected. An escape from run() is routed through sys.excepthook on
+            # THIS thread, where the crash handler would try to build a widget.
+            self.error.emit(str(exc))

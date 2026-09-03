@@ -305,7 +305,14 @@ class SyslogReceiver:
             if self._on_message:
                 self._on_message(msg)
             return msg
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
+            # RULE-WIN25: a Windows UDP recvfrom raises ConnectionResetError
+            # (WSAECONNRESET) when a *previously sent* datagram drew an ICMP
+            # port-unreachable back. The socket is untouched and still usable, so this
+            # is noise about earlier traffic — routine on networks with aggressive ISP
+            # CPE. It must be treated exactly like a timeout: the worker wraps this
+            # loop in a single try/except with `finally: receiver.close()`, so letting
+            # it escape ends the listener thread for the rest of the session.
             return None
 
     def close(self) -> None:

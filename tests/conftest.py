@@ -235,3 +235,43 @@ def _flush_qt_events(qt_app):
         pass  # non-fatal — best-effort cleanup
     for _ in range(3):
         qt_app.processEvents()
+
+
+@pytest.fixture
+def fake_windows(monkeypatch):
+    """Make a POSIX host take the Windows branch of a platform-switched module.
+
+    Many ``modules/`` functions branch on ``platform.system()`` and, inside the Windows
+    branch, reference Windows-only ``subprocess`` constants. Those constants **do not
+    exist** on Linux or macOS, so a test that fakes ``platform.system() == "Windows"``
+    without supplying them makes the branch raise ``AttributeError: module 'subprocess'
+    has no attribute 'CREATE_NO_WINDOW'`` — a failure in the *test's* fiction, not in the
+    shipped code, which never reaches that line on a real POSIX box.
+
+    This broke the v2.2.8 release CI: ``test_locale_independent_parsing.py`` passed on the
+    Windows runner and failed on both POSIX runners, so no macOS or Linux artifact was
+    produced. Worth having as a shared fixture rather than a per-test stub, because the
+    locale-parsing tests are precisely the ones that must fake Windows to be meaningful,
+    and there are ~15 modules carrying the same constant.
+    """
+    import platform as _platform
+    import subprocess as _subprocess
+
+    monkeypatch.setattr(_platform, "system", lambda: "Windows")
+
+    for _name, _value in (
+        ("CREATE_NO_WINDOW", 0x08000000),
+        ("STARTF_USESHOWWINDOW", 0x00000001),
+        ("SW_HIDE", 0),
+        ("DETACHED_PROCESS", 0x00000008),
+        ("CREATE_NEW_PROCESS_GROUP", 0x00000200),
+    ):
+        if not hasattr(_subprocess, _name):
+            monkeypatch.setattr(_subprocess, _name, _value, raising=False)
+
+    if not hasattr(_subprocess, "STARTUPINFO"):
+        class _StartupInfo:
+            dwFlags = 0
+            wShowWindow = 0
+
+        monkeypatch.setattr(_subprocess, "STARTUPINFO", _StartupInfo, raising=False)

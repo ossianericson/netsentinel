@@ -1159,12 +1159,16 @@ class _ReconTabsMixin:
         from modules.plugin_system import plugins_dir
         import subprocess, sys
         d = str(plugins_dir())
-        if sys.platform == "win32":
-            subprocess.Popen(["explorer", d])
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", d])
-        else:
-            subprocess.Popen(["xdg-open", d])
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", d])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", d])
+            else:
+                subprocess.Popen(["xdg-open", d])
+        except Exception:
+            pass  # non-fatal — runs in a Qt slot; a failed file-manager launch
+            # must not reach the global exception hook as a fatal dialog
 
     def _new_scan_plugin_wizard(self) -> None:
         """Open a wizard to create a new scan plugin template (PB-1)."""

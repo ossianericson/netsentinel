@@ -46,6 +46,52 @@ class DhcpLease:
 
 # ── dnsmasq lease file parser ─────────────────────────────────────────────────
 
+
+def _read_dhcp_lease_from_registry() -> tuple:
+    """Return (dhcp_server, lease_terminates_epoch) from the Windows registry.
+
+    Locale-independent by construction: these are typed registry values, not text
+    to be parsed. ``LeaseTerminatesTime`` is a REG_DWORD holding a Unix epoch, so
+    there is no date format to get wrong. Returns ("", 0) on any failure or on a
+    non-Windows platform (RULE-WIN1: prefer winreg over subprocess for this data).
+    """
+    if platform.system() != "Windows":
+        return "", 0
+    try:
+        import winreg as _wr
+    except ImportError:
+        return "", 0
+
+    ifaces = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
+    best_server, best_expiry = "", 0
+    try:
+        with _wr.OpenKey(_wr.HKEY_LOCAL_MACHINE, ifaces) as root:
+            for i in range(_wr.QueryInfoKey(root)[0]):
+                try:
+                    guid = _wr.EnumKey(root, i)
+                    with _wr.OpenKey(root, guid) as k:
+                        def _v(name):
+                            try:
+                                return _wr.QueryValueEx(k, name)[0]
+                            except OSError:
+                                return None
+                        # Only adapters holding a real lease are of interest.
+                        if not _v("DhcpIPAddress"):
+                            continue
+                        expiry = _v("LeaseTerminatesTime") or 0
+                        server = _v("DhcpServer") or ""
+                        # Prefer the adapter whose lease runs longest — on a box
+                        # with several adapters this is the active one.
+                        if int(expiry) > best_expiry:
+                            best_expiry = int(expiry)
+                            best_server = str(server)
+                except (OSError, ValueError, TypeError):
+                    continue  # skip an adapter subkey we cannot read
+    except OSError:
+        return "", 0
+    return best_server, best_expiry
+
+
 def _parse_dnsmasq(path: Path) -> List[DhcpLease]:
     """
     dnsmasq format (one lease per line):
@@ -134,25 +180,28 @@ def _windows_arp_leases() -> List[DhcpLease]:
             cfg = subprocess.check_output(
                 ["ipconfig", "/all"], text=True, timeout=10, **extra
             )
-            s_m = re.search(r"DHCP Server\s*[.:]+\s*([\d.]+)", cfg)
+            # "DHCP Server" is localized ("Servidor DHCP", "DHCP-server"), but the
+            # DHCP acronym itself survives translation in every locale Windows
+            # ships, so anchor on it plus an IPv4-shaped value.
+            s_m = re.search(
+                r"DHCP[^\n]*?[.:\s]\s*(\d{1,3}(?:\.\d{1,3}){3})", cfg
+            )
             if s_m:
                 server = s_m.group(1)
-            e_m = re.search(r"Lease Expires\s*[.:]+\s*(.+)", cfg)
-            if e_m:
-                import datetime
-                for fmt in (
-                    "%A, %B %d, %Y %I:%M:%S %p",
-                    "%d/%m/%Y %H:%M:%S",
-                    "%m/%d/%Y %H:%M:%S",
-                ):
-                    try:
-                        dt = datetime.datetime.strptime(e_m.group(1).strip(), fmt)
-                        expires = int(dt.timestamp())
-                        break
-                    except ValueError:
-                        pass  # non-fatal
         except Exception:
             pass  # non-fatal
+
+        # Lease expiry comes from the registry, never from ipconfig text. The
+        # "Lease Expires" label is localized AND its value carries localized month
+        # names, which strptime (C locale) cannot parse in any format — so the old
+        # format list produced expires=0 on every non-English install, and its
+        # entries also omitted en-AU's "%A, %d %B %Y", breaking Australia even in
+        # English. LeaseTerminatesTime is a REG_DWORD epoch: no parsing, no locale.
+        reg_server, reg_expires = _read_dhcp_lease_from_registry()
+        if reg_expires:
+            expires = reg_expires
+        if reg_server and not server:
+            server = reg_server
 
         # Parse ARP table
         for ip, mac in get_arp_snapshot().items():

@@ -152,17 +152,18 @@ def _get_ipv6_routers() -> set:
 
 def _get_default_gateway() -> Optional[str]:
     system = platform.system()
-    extra = {}
-    if system == "Windows":
-        extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
     try:
         if system == "Windows":
-            raw = subprocess.check_output(["ipconfig"], text=True, timeout=5, **extra)
-            for line in raw.splitlines():
-                if "Default Gateway" in line:
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", line)
-                    if m:
-                        return m.group(1)
+            # "Default Gateway" is "Standardgateway" / "Puerta de enlace
+            # predeterminada" on a localized Windows, so scanning ipconfig text for
+            # the English label found nothing and the gateway was never identified —
+            # which also let the gateway itself be scored as a rogue device.
+            # get_network_info() reads it from winreg instead (RULE-WIN1), which is
+            # locale-independent and avoids a startup subprocess PIPE entirely.
+            from modules.utils_net import get_network_info
+            gw = get_network_info().get("gateway") or ""   # RULE-NET1: may be None
+            if gw:
+                return gw
         else:
             raw = subprocess.check_output(
                 ["ip", "route", "show", "default"], text=True, timeout=5

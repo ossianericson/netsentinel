@@ -247,13 +247,29 @@ class AutomationEngine:
 
         # Stream stdout/stderr concurrently
         def _drain(pipe, stream: str) -> None:
-            for line in pipe:
-                _log(stream, line.rstrip("\n"))
+            # A user script may emit anything at all; a decode or read error here
+            # must not kill the drain thread silently and leave the pipe unread.
+            try:
+                for line in pipe:
+                    _log(stream, line.rstrip("\n"))
+            except Exception as exc:  # noqa: BLE001 — reported to the rule's log
+                _log("system", f"[Rule '{rule.name}'] {stream} read error: {exc}")
 
         t_out = threading.Thread(target=_drain, args=(proc.stdout, "stdout"), daemon=True)
         t_err = threading.Thread(target=_drain, args=(proc.stderr, "stderr"), daemon=True)
         t_out.start(); t_err.start()
-        proc.wait(timeout=120)
+        # _run_rule executes on a bare daemon thread with no top-level handler, so
+        # a TimeoutExpired here would escape unlogged and abandon the child process.
+        try:
+            proc.wait(timeout=120)
+        except subprocess.TimeoutExpired:
+            _log("system", f"[Rule '{rule.name}'] Timed out after 120 s — terminating")
+            try:
+                proc.kill()
+            except Exception:
+                pass  # non-fatal — process may have exited between wait() and kill()
+        except Exception as exc:  # noqa: BLE001 — bare thread has no other reporter
+            _log("system", f"[Rule '{rule.name}'] Wait error: {exc}")
         t_out.join(timeout=5); t_err.join(timeout=5)
         _log("system", f"[Rule '{rule.name}'] Exit code: {proc.returncode}")
 

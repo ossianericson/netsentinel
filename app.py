@@ -13,30 +13,70 @@ import sys
 import os
 import time
 
+def _apply_console_decoding(kwargs: dict) -> dict:
+    """Give text-mode subprocess captures a codec that matches console output.
+
+    ``text=True`` decodes with ``locale.getpreferredencoding(False)`` — the Windows
+    ANSI codepage — under ``errors='strict'``. Console tools (``netsh``, ``ipconfig``,
+    ``arp``, ``ping``, ``net``) emit in the **OEM** codepage instead, and the two
+    differ on every Windows install. cp1252 leaves 0x81/0x8D/0x8F/0x90/0x9D undefined
+    while cp437/cp850 use them, so any accented adapter name, SSID or share name
+    raises ``UnicodeDecodeError``. ``"oem"`` is a Windows-specific Python codec that
+    resolves to the live ``GetOEMCP()``, so it is correct on cp437, cp850 and cp65001
+    alike.
+
+    Strictly opt-in on text mode: adding ``encoding`` to a bytes-mode call would
+    silently flip it to text and break the callers that capture bytes and read only
+    ``returncode``. A caller that names its own ``encoding``/``errors`` always wins —
+    Ookla (``--format=jsonl``) and winget emit UTF-8, not OEM, and say so.
+    """
+    if not (kwargs.get("text") or kwargs.get("universal_newlines")):
+        return kwargs
+    if "encoding" in kwargs or "errors" in kwargs:
+        return kwargs
+    kwargs["encoding"] = "oem" if sys.platform == "win32" else "utf-8"
+    kwargs["errors"] = "replace"
+    return kwargs
+
+
 # ── Suppress CMD flashes in windowed exe ─────────────────────────────────────
 # On Windows, scapy calls subprocess.Popen (for `route print`, `arp -a`, etc.)
 # at import time WITHOUT CREATE_NO_WINDOW, causing brief CMD flashes.
 # Patch Popen before any network library loads so all child processes are
 # spawned hidden.  This only activates in a frozen (PyInstaller) windowed build
 # where there is no console to attach to anyway.
+import subprocess as _subprocess
+
+_OrigPopen = _subprocess.Popen
+
+
+class _SilentPopen(_OrigPopen):  # type: ignore[misc]
+    """Hide the console window and give text-mode captures the console codec.
+
+    Defined unconditionally, **installed** only in a frozen win32 build (below). The
+    split is deliberate: while the class itself lived inside the platform guard, no
+    source run and no CI run could construct it, so the only reachable coverage was
+    ``_apply_console_decoding()`` in isolation — which proves the helper is correct
+    while proving nothing about whether the shipped path reaches it (RULE-DBG5, and
+    the same structural blindness RULE-WIN11 describes). Hoisting the definition
+    changes no shipped behaviour and makes the wrapper testable on every platform.
+    """
+
+    def __init__(self, *args, **kwargs):
+        # Only suppress the console window when the caller hasn't explicitly
+        # set creationflags (e.g. Ookla CLI or other tools that manage their
+        # own flags must not be overridden).
+        if sys.platform == "win32" and "creationflags" not in kwargs:
+            kwargs["creationflags"] = _subprocess.CREATE_NO_WINDOW
+            si = kwargs.get("startupinfo") or _subprocess.STARTUPINFO()
+            si.dwFlags |= _subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0  # SW_HIDE
+            kwargs["startupinfo"] = si
+        _apply_console_decoding(kwargs)
+        super().__init__(*args, **kwargs)
+
+
 if sys.platform == "win32" and getattr(sys, "frozen", False):
-    import subprocess as _subprocess
-    _OrigPopen = _subprocess.Popen
-    _CNW = _subprocess.CREATE_NO_WINDOW
-
-    class _SilentPopen(_OrigPopen):  # type: ignore[misc]
-        def __init__(self, *args, **kwargs):
-            # Only suppress the console window when the caller hasn't explicitly
-            # set creationflags (e.g. Ookla CLI or other tools that manage their
-            # own flags must not be overridden).
-            if "creationflags" not in kwargs:
-                kwargs["creationflags"] = _CNW
-                si = kwargs.get("startupinfo") or _subprocess.STARTUPINFO()
-                si.dwFlags |= _subprocess.STARTF_USESHOWWINDOW
-                si.wShowWindow = 0  # SW_HIDE
-                kwargs["startupinfo"] = si
-            super().__init__(*args, **kwargs)
-
     _subprocess.Popen = _SilentPopen  # type: ignore[misc]
 
 
@@ -386,17 +426,74 @@ def _headless() -> None:
         sys.exit(1)
 
 
+def _ensure_std_streams() -> None:
+    """Guarantee ``sys.stderr``/``sys.stdout`` are writable before anything uses them.
+
+    In a frozen **windowed** build PyInstaller gives the process no console, so both are
+    ``None`` and the first ``print()`` or ``traceback.print_exc()`` would raise
+    ``AttributeError``. The stderr replacement is redirected to a real file under
+    ``get_app_data_dir()`` (RULE-23) so crash output survives; stdout is discarded, since
+    nothing downstream reads it back.
+
+    Extracted from ``main()`` so the encoding contract below is reachable by a test — the
+    inline version could only be exercised by running the whole application.
+    """
+    if sys.stderr is None:
+        try:
+            from modules.utils import get_app_data_dir as _get_app_dir
+            # RULE-WIN24: this handle is process-lifetime stderr — every
+            # traceback.print_exc() and every _qt_message_handler write goes through it.
+            # It must name a codec that can represent its own paths (a Devanagari
+            # username makes the ANSI codepage fail deterministically) and must never
+            # raise, so errors="replace" is as load-bearing as the codec itself.
+            sys.stderr = open(  # noqa: SIM115
+                str(_get_app_dir() / "netsentinel_stderr.log"), "a",
+                encoding="utf-8", errors="replace",
+            )
+        except Exception:
+            import io as _io
+            sys.stderr = _io.StringIO()
+    if sys.stdout is None:
+        import io as _io
+        sys.stdout = _io.StringIO()
+
+
 def _fatal(title: str, message: str) -> None:
-    """Show an error in a way that is visible even when --windowed hides the console."""
+    """Show an error in a way that is visible even when --windowed hides the console.
+
+    Only the GUI thread may construct widgets. PyQt6 routes an exception escaping
+    ``QThread.run()`` through ``sys.excepthook``, so this function is legitimately
+    entered on a worker thread — and building a ``QMessageBox`` there is undefined
+    behaviour, which would turn a containable worker failure into a native fault or
+    a Not-Responding hang. Off the GUI thread we therefore log and return, leaving
+    the app running; ``_excepthook`` has already written the full traceback to
+    ``netsentinel_exceptions.log`` before calling us.
+    """
+    on_gui_thread = True
     try:
-        from PyQt6.QtWidgets import QApplication, QMessageBox
-        QApplication.instance() or QApplication(sys.argv)
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Icon.Critical)
-        msg.setWindowTitle(title)
-        msg.setText(message)
-        msg.exec()
+        from PyQt6.QtCore import QThread as _QThread
+        from PyQt6.QtWidgets import QApplication as _QApplication
+        _inst = _QApplication.instance()
+        if _inst is not None:
+            on_gui_thread = _QThread.currentThread() == _inst.thread()
     except Exception:
+        pass  # Qt unavailable this early — assume GUI thread and try the dialog
+
+    dialog_shown = False
+    if on_gui_thread:
+        try:
+            from PyQt6.QtWidgets import QApplication, QMessageBox
+            QApplication.instance() or QApplication(sys.argv)
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setWindowTitle(title)
+            msg.setText(message)
+            msg.exec()
+            dialog_shown = True
+        except Exception:
+            pass  # dialog unavailable — fall through to the last-resort writer
+
+    if not dialog_shown:
         # Last resort: write to a log file next to the exe
         import traceback
         log_path = os.path.join(os.path.dirname(sys.executable), "netsentinel_error.log")
@@ -406,12 +503,23 @@ def _fatal(title: str, message: str) -> None:
         except Exception:
             pass  # fall back to exe-dir path if AppData is unavailable
         try:
-            with open(log_path, "w") as f:
+            # encoding is explicit and errors are replaced because this is the
+            # handler of last resort: the traceback routinely carries characters
+            # outside the machine's ANSI codepage (non-Latin usernames in paths,
+            # this repo's own "→"/"✅" source lines quoted into the frame list),
+            # and UnicodeEncodeError is a ValueError, so an OSError-only guard
+            # would let it escape and skip the sys.exit(1) below.
+            with open(log_path, "w", encoding="utf-8", errors="replace") as f:
                 f.write(f"{title}\n{message}\n\n")
                 traceback.print_exc(file=f)
-        except OSError:
-            pass  # non-fatal — error already shown in the dialog
-    sys.exit(1)
+        except Exception:
+            pass  # non-fatal — a last-resort handler must never raise
+
+    # Only the GUI thread terminates the process. sys.exit() on a worker thread
+    # would merely end that thread, and killing the app over a containable worker
+    # error is the regression this guard exists to prevent.
+    if on_gui_thread:
+        sys.exit(1)
 
 
 def _check_python_version():
@@ -988,16 +1096,7 @@ def _wire_scan_ctas(window):
 
 def main():
     # Guard sys.stderr/stdout being None in windowed PyInstaller builds
-    if sys.stderr is None:
-        try:
-            from modules.utils import get_app_data_dir as _get_app_dir
-            sys.stderr = open(str(_get_app_dir() / "netsentinel_stderr.log"), "a")  # noqa: SIM115
-        except Exception:
-            import io as _io
-            sys.stderr = _io.StringIO()
-    if sys.stdout is None:
-        import io as _io
-        sys.stdout = _io.StringIO()
+    _ensure_std_streams()
 
     _check_python_version()
     _check_pyqt()
@@ -1118,7 +1217,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.2.7")
+    app.setApplicationVersion("2.2.8")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1269,7 +1368,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.2.7")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.2.8")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)

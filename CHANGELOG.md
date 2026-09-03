@@ -4,6 +4,35 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.2.8
+
+**Fixed**
+- `app.py`'s crash handler wrote its last-resort log with no encoding, so a traceback containing non-ASCII device or path names raised `UnicodeEncodeError` instead of being caught, skipping the exit path and leaving no crash report at all
+- The crash handler could construct a `QMessageBox` from whatever thread raised, which is undefined behaviour in PyQt6 when a worker thread's exception reaches it; it now logs and returns off the GUI thread, and the same unguarded-`run()` gap is fixed in the bandwidth, app traffic, plugin polling, diagnosis, and REST API probe workers
+- Subprocess calls to `netsh`/`ipconfig`/`arp`/`ping`/`net` decoded output with the ANSI codepage while Windows emits the OEM codepage, so any accented adapter or SSID name raised `UnicodeDecodeError`; text-mode subprocess output is now decoded as `oem` with `errors="replace"`
+- ICMP ping parsing matched only English "Reply from" output, so a non-English Windows locale reported every reachable host as 100% packet loss; parsing is now driven by the untranslated `TTL=`/`ms`/`(N%` tokens shared by both ping call sites
+- Gateway IP, DHCP lease expiry, and firewall-rule checks depended on English month names or command wording and silently failed on non-English locales; they now read `winreg` values and `netsh` return codes directly
+- WiFi, SMB, and IPv6 interface parsing matched on English column headers instead of value shape, producing no results outside en-US
+- A scheduled scan's "next run" time could spin the GUI thread forever on a non-positive interval, or stay stuck in the past when only one of two call sites accounted for elapsed intervals; both now share `modules/scheduler.next_scheduled_run()`
+- Device Changes and outage timestamps were written in UTC/ISO form but parsed as local/naive, shifting every timeline row by the local UTC offset and dropping all Network Logger outage events
+- The replacement `sys.stderr` opened in windowed builds named no encoding, so it inherited the ANSI codepage for the **whole process** — every `traceback.print_exc()` and Qt message write went through it. This is the same defect as the crash-handler fix above, one step earlier in the chain, and on hi-IN it is deterministic rather than probabilistic: that locale's ANSI codepage is cp1252, which cannot represent Devanagari at all, so a Devanagari username in `%LOCALAPPDATA%` made the error-reporting stream fail on the very paths it exists to record
+- A single `ConnectionResetError` permanently killed the syslog and SNMP trap listeners. Windows raises WSAECONNRESET from a UDP `recvfrom` after an ICMP port-unreachable for an *earlier* datagram — routine noise on networks with aggressive ISP CPE — but the receivers caught only `socket.timeout`, and both workers wrap their receive loop in a single `try`/`finally: receiver.close()`. One stray packet ended the thread for the rest of the session with no restart path and no error shown
+- The same stray packet silently ended the SSDP and mDNS discovery threads, whose `except OSError: break` catches `ConnectionResetError` because it *is* an `OSError`, quietly degrading device classification
+- `tcp_probe()` caught only `OSError`, missing the `UnicodeError` a bad IDNA label raises and the `OverflowError` an out-of-range port raises — both reachable from user-typed targets in Service Monitor, Private Endpoint and Availability, and neither guarded by the callers
+- A mid-body connection reset during Deco login was reported to the user as "check that the password is correct". `ChunkedEncodingError` is a bare `RequestException`, so it fell past the `(Timeout, ConnectionError)` guard and classified as `AUTH:` — which the hardware page treats as *reachable*, so an unreachable router over a lossy link raised no INFRA_UNREACHABLE at all
+- The connected-client list was empty on every non-English Windows: the station rows were gated behind the English strings "Number of clients"/"Stations". Rows are now matched by shape — a station row begins with a MAC, while the hosted network's own BSSID sits after a `label :` separator, so the AP is not miscounted as its own client
+
+**Internal**
+- Added `tests/test_deco_library_contract.py`, the first tests to exercise the real `tplinkrouterc6u` library instead of a hand-reimplemented or monkeypatched stand-in, guarding three undocumented behaviours `modules/deco_client.py` depends on
+- Fixed the macOS and Linux CI failure that blocked this release's POSIX artifacts. Seven locale-parsing tests faked `platform.system() == "Windows"` without supplying the Windows-only `subprocess` constants the Windows branch then dereferences, so they passed on the Windows runner and raised `AttributeError: module 'subprocess' has no attribute 'CREATE_NO_WINDOW'` on both POSIX runners. A shared `fake_windows` fixture now completes the fiction it starts
+- Fixed the Windows CI failure that blocked this release's Windows artifacts. `test_speed_test_lifecycle` runs a *real* Ookla speed test against the network, but carried only the `slow` marker — which the default `addopts` does not deselect — so it ran on the GitHub runner and failed the entire release build when a shared, throttled runner took longer than its 120 s wait. That is a verdict on network conditions, not on the code under test. It now also carries the `live` marker its sibling `test_fetch_servers_lifecycle` was already given for exactly this reason; the mocked-backend variants continue to cover the worker's lifecycle on every run
+- Closed the last open CodeQL alert (`py/uninitialized-local-variable`). A Deco error-classification test bound `verdict` only inside its `except` branch, so if `_ensure_client()` ever stopped raising, the test would have died with a `NameError` instead of reporting the assertion it exists to make — failing for a reason that hides what it was checking
+- Added `tests/test_regional_robustness.py` — the locale/encoding harness. It reproduces a non-Latin username by redirecting the app-data directory to a Devanagari path (the failing ingredient is the path characters, not the OS locale, so this needs no localized VM), pins the OEM/ANSI codepage mismatch against the byte range cp1252 leaves undefined, drives non-ASCII SSIDs and station rows through the parsers, and adds an AST guard so no future text write can omit its encoding
+- `_SilentPopen` is now defined unconditionally and only *installed* in a frozen win32 build. While the class lived inside the platform guard nothing could construct it off Windows, so the only reachable coverage was the decoding helper in isolation — which proves the helper correct while proving nothing about whether the shipped path reaches it
+- The `sys.stderr`/`sys.stdout` guard is extracted from `main()` as `_ensure_std_streams()`, so its encoding contract is reachable by a test rather than only by running the whole application
+
+---
+
 ### v2.2.7
 
 **Added**

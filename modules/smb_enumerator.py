@@ -131,6 +131,35 @@ class SMBEnumResult:
 
 # ── Tier 1 — NetBIOS UDP name query (stdlib, no deps) ─────────────────────────
 
+
+# "Disk"/"Print"/"Other" are translated on every non-English Windows
+# ("Disco"/"Impresion", "Platte"), so requiring the English token made `net view`
+# share enumeration return nothing outside en-US. The table's STRUCTURE is
+# locale-independent: a run of dashes opens the rows, and every row is
+# column-aligned, i.e. its fields are separated by runs of 2+ spaces. The
+# trailing status sentence ("The command completed successfully.") is single-
+# spaced prose, so the same test excludes it without matching any English word.
+def _parse_net_view(raw: str) -> list:
+    """Return (name, share_type, comment) tuples from `net view` output."""
+    rows: list = []
+    in_table = False
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not in_table:
+            # The separator row is at least three dashes and nothing else.
+            if len(stripped) >= 3 and set(stripped) == {"-"}:
+                in_table = True
+            continue
+        if not stripped:
+            break  # blank line closes the table
+        fields = re.split(r"\s{2,}", stripped)
+        if len(fields) < 2:
+            continue  # single-spaced prose — the trailing status message
+        name, share_type = fields[0], fields[1]
+        comment = fields[2].strip() if len(fields) > 2 else ""
+        rows.append((name, share_type.upper(), comment))
+    return rows
+
 def _netbios_name_query(host: str, timeout: float = 3.0) -> NetBIOSInfo:
     """
     Send a NetBIOS Name Service status query (UDP 137) and parse the reply.
@@ -274,15 +303,13 @@ def _net_view_shares(host: str) -> List[SMBShare]:
             ["net", "view", f"\\\\{host}", "/all"],
             text=True, timeout=15, stderr=subprocess.DEVNULL, **extra
         )
-        for line in raw.splitlines():
-            m = re.match(r"^(\S+)\s+(Disk|Print|Other)\s*(.*)", line, re.I)
-            if m:
-                shares.append(SMBShare(
-                    name=m.group(1),
-                    share_type=m.group(2).upper(),
-                    comment=m.group(3).strip(),
-                    visible_anonymous=True,
-                ))
+        for name, share_type, comment in _parse_net_view(raw):
+            shares.append(SMBShare(
+                name=name,
+                share_type=share_type,
+                comment=comment,
+                visible_anonymous=True,
+            ))
     except Exception:
         pass  # non-fatal
     return shares
@@ -368,12 +395,10 @@ def _net_exe_enum(host: str, username: str, password: str, domain: str,
     if progress:
         progress("net view…")
     raw = _run(["net", "view", f"\\\\{host}", "/all"])
-    for line in raw.splitlines():
-        m = re.match(r"^(\S+)\s+(Disk|Print|Other)\s*(.*)", line, re.I)
-        if m:
-            result.shares.append(SMBShare(
-                name=m.group(1), share_type=m.group(2).upper(), comment=m.group(3).strip()
-            ))
+    for name, share_type, comment in _parse_net_view(raw):
+        result.shares.append(SMBShare(
+            name=name, share_type=share_type, comment=comment
+        ))
 
     # Users
     if progress:

@@ -19,6 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from modules.utils_net import reply_rtts as _reply_rtts
 from modules.utils_net import tcp_probe as _shared_tcp_probe
 
 
@@ -192,7 +193,20 @@ def _parse_ping_output(output: str, result: IcmpProbeResult, system: str) -> Non
             result.max_ms = float(m.group(2))
             result.avg_ms = float(m.group(3))
             result.jitter_ms = result.max_ms - result.min_ms
-        loss_m = re.search(r"(\d+)%\s+loss", output)
+        else:
+            # The summary labels above are translated on every non-English Windows
+            # ("Kortast/Langst/Medel", "Minimo/Maximo/Media"). Derive the same
+            # figures from the reply lines instead: "TTL=", "ms" and the "="/"<"
+            # separator are untranslated, so this works on every locale.
+            rtts = _reply_rtts(output)
+            if rtts:
+                result.min_ms = min(rtts)
+                result.max_ms = max(rtts)
+                result.avg_ms = sum(rtts) / len(rtts)
+                result.jitter_ms = result.max_ms - result.min_ms
+        # "(N% loss)" is "(N% forlust)" / "(N% perdidos)" elsewhere, but the
+        # parenthesised percentage itself is untranslated and occurs exactly once.
+        loss_m = re.search(r"\((\d+(?:\.\d+)?)\s*%", output)
         if loss_m:
             result.loss_pct = float(loss_m.group(1))
         elif result.avg_ms >= 0:

@@ -2189,6 +2189,219 @@ while the table is visible), which covers all four call sites at once — the RU
 
 ---
 
+### RULE-WIN19 (blocking): A last-resort error handler must name its encoding and catch `Exception` — `UnicodeEncodeError` is a `ValueError`, so an `OSError`-only guard lets it escape
+
+**Mechanism.** `open()` with no `encoding=` uses `locale.getpreferredencoding(False)` — the
+Windows **ANSI** codepage (cp1252 on hi-IN, sv-SE, es-BO and en-AU alike). A formatted traceback
+carries the *source line of every frame*, exception `str()` values, and file paths, so it
+routinely holds characters cp1252 cannot represent: this repo's own `→`/`✅`/`ℹ` string literals,
+and `%LOCALAPPDATA%` paths containing a non-Latin Windows username.
+
+`app.py::_fatal()` guarded that write with `except OSError`. `UnicodeEncodeError` derives from
+`ValueError`, so it escaped, `sys.exit(1)` on the next line never ran, and control returned to Qt
+in an undefined state with **no crash report written at all** — the forensic trail vanished on
+exactly the machines that could not be reached to debug them.
+
+```python
+# WRONG — inherits the ANSI codepage; UnicodeEncodeError is not an OSError
+with open(log_path, "w") as f:
+    f.write(message)
+except OSError:
+
+# CORRECT — a handler of last resort must never raise, for any reason
+with open(log_path, "w", encoding="utf-8", errors="replace") as f:
+    f.write(message)
+except Exception:
+```
+
+Enforced by `tests/test_crash_handler_encoding.py`.
+
+### RULE-WIN20 (blocking): Never construct a QWidget from `sys.excepthook` — PyQt routes worker-thread exceptions through it, and building a dialog there is undefined behaviour
+
+**Mechanism.** PyQt6 routes an exception escaping `QThread.run()` through `sys.excepthook`. When
+the app installs a custom hook, PyQt does *not* take its default `qFatal` path — the hook runs
+**on the worker thread**. `app.py::_fatal()` then constructed and `exec()`-ed a `QMessageBox`
+there. Qt requires all `QWidget` construction on the GUI thread; PyQt6 wheels are release builds,
+so the `Q_ASSERT_X` that would catch this is compiled out and the behaviour is simply undefined.
+Observed outcomes: a native access violation, a deadlocked nested event loop, or a Windows
+Not-Responding hang.
+
+The result is inverted responsibility — the crash *handler* is what turns a containable worker
+error into a hard kill. Off the GUI thread, log and return instead; the app stays alive and
+`netsentinel_exceptions.log` still has the full traceback.
+
+```python
+# CORRECT — decide by thread affinity before touching any widget
+from PyQt6.QtCore import QThread
+inst = QApplication.instance()
+on_gui_thread = inst is None or QThread.currentThread() == inst.thread()
+```
+
+Corollary: this rule is why every `QThread.run()` body needs its own `except Exception` (the
+`BaseWorker` pattern). A `finally` with no `except` does **not** count — the exception still
+escapes. Enforced by `tests/test_crash_handler_encoding.py`.
+
+### RULE-WIN21 (blocking): `subprocess(text=True)` decodes with the ANSI codepage while console tools emit the OEM codepage — always name `encoding=`
+
+**Mechanism.** `text=True` decodes using `locale.getpreferredencoding(False)` (the **ANSI**
+codepage) with `errors='strict'`. But `netsh`, `ipconfig`, `arp`, `ping`, `net` and friends write
+in the **OEM console** codepage. The two differ on every Windows install — cp1252/cp437 on en-US
+and hi-IN, cp1252/cp850 on sv-SE and es-BO. cp1252 leaves `0x81 0x8D 0x8F 0x90 0x9D` *undefined*
+while cp437/cp850 use them as real characters, so a strict decode raises `UnicodeDecodeError` the
+moment output carries an accented adapter name, SSID, or share name.
+
+Zero of ~85 call sites in this repo passed `encoding=` or `errors=`. The failure is
+locale-*probabilistic*, not locale-specific: it fires wherever the environment supplies non-ASCII
+text, which is why it reads as a regional crash cluster.
+
+```python
+# CORRECT — "oem" resolves to the live GetOEMCP(), so it is right on 437/850/65001
+subprocess.run(cmd, text=True, encoding="oem", errors="replace")
+```
+
+`app.py::_apply_console_decoding()` injects this centrally for frozen builds. Two constraints it
+encodes, both load-bearing: inject **only** when the caller already asked for text mode (adding
+`encoding` to a bytes-mode call silently flips it to text and breaks callers that read only
+`returncode`), and **never** override a caller's own choice — Ookla (`--format=jsonl`) and winget
+emit UTF-8, not OEM. Enforced by `tests/test_subprocess_decoding.py`.
+
+### RULE-WIN22 (blocking): A loop increment read from QSettings must be clamped positive before it is used — on the GUI thread an unclamped one is a hang, not a slow function
+
+**Mechanism.** `while nxt <= now: nxt += timedelta(hours=hours)` cannot terminate when `hours <= 0`,
+because the increment never carries the candidate past `now`. On the GUI thread that is an
+unrecoverable "Not Responding" hang. QSettings round-trips through untyped INI text on Windows, so
+`int(qs.value(...))` can also receive `""`, `None`, or garbage from an unrelated writer and raise
+`ValueError` inside a `QTimer` slot.
+
+A second defect travelled with it: the *writer* (`settings_cards`) advanced once with `if` while
+the *consumer* (`dashboard`) looped with `while`, so a schedule several intervals in the past was
+saved still in the past and fired on the next 60 s tick. Two copies of one computation that
+disagree is the defect — collapse them onto a single tested helper
+(`modules/scheduler.py::next_scheduled_run`) rather than fixing one copy.
+
+Enforced by `tests/test_scheduled_scan_next_run.py`.
+
+### RULE-WIN23 (blocking): Parse Windows console output by untranslated STRUCTURE, never by English labels — and a default that means "bad" must not be reachable by a parse miss
+
+**Mechanism.** Windows translates the *labels* in `ping`, `ipconfig`, `netsh` and `net` output but
+not their structure. `ms`, `%`, `=`, `<`, `TTL=`, `SSID N :`, the dashed table separator and
+column alignment are identical on every locale; `Default Gateway`, `Signal`, `Channel`,
+`Authentication`, `Rule Name:`, `Disk|Print|Other`, `Lease Expires` and `time=` are not.
+
+Every one of these misses was swallowed by an `except Exception` fallback, so the features
+**failed silently and produced no telemetry** — which is why they survived undetected for the
+life of the product on every non-English install.
+
+The sharpest form is a parse miss that lands on a pessimistic default. `IcmpProbeResult` defaults
+to `loss_pct=100.0`, and the reset guard was `elif result.avg_ms >= 0`; when the English-only
+summary regex missed, `avg_ms` stayed `-1.0`, the guard never fired, and **every reachable host on
+a Swedish or Spanish machine was reported as 100% packet loss with no error message** —
+indistinguishable from a total outage.
+
+```python
+# WRONG — the label is translated; the miss then reads as "totally broken"
+m = re.search(r"Minimum\s*=\s*(\d+)ms.*Average\s*=\s*(\d+)ms", output)
+loss = re.search(r"(\d+)%\s+loss", output)
+
+# CORRECT — "TTL=", "ms", "=" / "<" and "(N%" are untranslated
+rtts = reply_rtts(output)            # modules/utils_net.py, shared
+loss = re.search(r"\((\d+(?:\.\d+)?)\s*%", output)
+```
+
+Prefer a typed, locale-free source over text whenever one exists — this is RULE-WIN1's reasoning
+applied to correctness rather than crash-safety. Gateway and DHCP lease data both have one:
+`winreg` (`DhcpServer`; `LeaseTerminatesTime` is a REG_DWORD **epoch**, so there is no date format
+to get wrong — and localized month names defeat `strptime` in *any* format string, so text parsing
+could never have worked there). Firewall rule existence has one too: netsh's **return code**.
+
+**Corollary — check the English case still passes.** A structural matcher is easy to make so loose
+it matches the header row or a trailing status sentence. `net view`'s status line is single-spaced
+prose while its rows are column-aligned, so splitting on runs of 2+ spaces separates them without
+matching any English word.
+
+Enforced by `tests/test_locale_independent_parsing.py` (sv-SE / es-BO / en-US fixtures for ping,
+netsh wlan, net view, and the IPv6 interface header).
+
+### RULE-WIN24 (blocking): A replacement for `sys.stderr`/`sys.stdout` must name `encoding=` and `errors=` — it is process-lifetime, and the ANSI codepage cannot represent the characters that appear in its own paths
+
+**Mechanism.** In a frozen *windowed* build `sys.stderr` and `sys.stdout` are `None`, so `app.py`
+opens a real file and binds it for the life of the process. `open()` with no `encoding=` uses
+`locale.getpreferredencoding(False)` — the Windows **ANSI** codepage — with `errors='strict'`.
+Every `traceback.print_exc()`, every `_qt_message_handler` write, and every stray library `print()`
+then routes through that one strict stream.
+
+This is RULE-WIN19's defect one step **earlier in the same chain**, and it is worse in two ways.
+RULE-WIN19 covered a single write inside `_fatal()`; this is *every* write for the whole session.
+And where RULE-WIN19's failure is probabilistic, this one can be **deterministic**: `hi-IN` Windows
+uses **cp1252** as its ANSI codepage, which cannot represent Devanagari at all. On a machine whose
+user account name is in Devanagari, `%LOCALAPPDATA%` expands to a path containing unrepresentable
+characters — and that path appears in almost every traceback the app would ever write. So the
+error-reporting stream raises `UnicodeEncodeError` on precisely the input it exists to record, and
+the diagnostic vanishes on exactly the machines that cannot be reached to debug them.
+
+```python
+# WRONG — inherits the ANSI codepage under errors='strict', for the whole process
+sys.stderr = open(str(get_app_data_dir() / "netsentinel_stderr.log"), "a")
+
+# CORRECT — a stream of last resort must never raise, whatever it is handed
+sys.stderr = open(str(get_app_data_dir() / "netsentinel_stderr.log"), "a",
+                  encoding="utf-8", errors="replace")
+```
+
+`errors="replace"` is load-bearing, not belt-and-braces: `encoding="utf-8"` alone still raises on
+an unpaired surrogate, which is exactly what a Windows path read through `os.fsdecode` can contain.
+
+Does **not** apply to a handle passed to `faulthandler.enable(file=...)` — that writes bytes to the
+raw fd and never touches the text codec. Enforced by `tests/test_crash_handler_encoding.py`.
+
+### RULE-WIN25 (blocking): A long-lived UDP receive loop must treat `ConnectionResetError` as a per-iteration event — an `except` outside the `while` turns one stray ICMP into a permanent silent outage
+
+**Mechanism.** On Windows a UDP `recvfrom()` raises `ConnectionResetError` (WSAECONNRESET) when a
+*previously sent* datagram drew an ICMP port-unreachable back. It is not a socket-level failure and
+the socket remains perfectly usable — it is routine traffic noise, and it is far more common on
+networks with aggressive ISP CPE than on a quiet developer LAN.
+
+Two shapes turn that routine event into a dead listener, and both were live in this codebase:
+
+1. **A narrow `except socket.timeout` in the receive helper.** The reset is not a timeout, so it
+   propagates to the caller.
+2. **A `try` wrapped around the `while` instead of inside it.** `workers/syslog_worker.py` and
+   `workers/snmp_trap_worker.py` both had `try: while self._running: receive_one() … except
+   Exception: … finally: receiver.close()`. One reset exits the loop, `finally` closes the socket,
+   the thread ends — and nothing restarts it. The page simply stops updating, with no error, for
+   the rest of the session.
+
+The same reasoning covers a daemon thread that ends its loop on the exception:
+`except OSError: break` is a violation, because `ConnectionResetError` **is** an `OSError`.
+
+```python
+# WRONG — a reset is not a timeout, so it escapes and kills the caller's loop
+try:
+    data, addr = self._sock.recvfrom(MAX_PACKET)
+except socket.timeout:
+    return None
+
+# WRONG — ConnectionResetError is an OSError; the daemon thread exits silently
+except OSError:
+    break
+
+# CORRECT — the reset is noise about a PRIOR datagram; the socket is still usable
+except (socket.timeout, ConnectionResetError):
+    return None
+```
+
+Keep a genuine `except OSError: break` as the socket-closed exit where `stop()` relies on it to
+unblock the thread — the fix is to handle the reset *before* that branch, not to remove it.
+
+**Corollary — put the `try` inside the loop.** A per-cycle `while: try: … except Exception:` (the
+pattern `workers/health_worker.py` and `workers/service_worker.py` already use correctly) survives
+any unexpected exception type, not just the one you predicted. A loop-level handler is a
+single-point-of-failure for the whole listener.
+
+Enforced by `tests/test_receiver_reset_resilience.py`.
+
+---
+
 ## QSettings State Hygiene
 
 ### RULE-QS1 (blocking): Never gate data access on QSettings-persisted mode — use always-populated sources
@@ -2875,6 +3088,13 @@ Currently tool-enforced (high reliability):
 - RULE-WIN16 → `test_single_instance.py` (real CreateMutexW round-trip) + `test_single_instance_race.py` (RED/GREEN regression)
 - RULE-WIN17 → `test_protocol_canvas.py` (hide/show timer lifecycle, step + live mode, nested QStackedWidget propagation)
 - RULE-WIN18 → `test_page_timer_lifecycle.py` (never-shown page has zero active timers; start-on-show/stop-on-hide via real QStackedWidget transitions; plus an AST coverage guard so a new page with a repeating timer cannot slip past the hand-maintained factory list)
+- RULE-WIN19 → `test_crash_handler_encoding.py` (non-ASCII traceback must write, not raise)
+- RULE-WIN20 → `test_crash_handler_encoding.py` (_fatal off the GUI thread constructs no widget)
+- RULE-WIN21 → `test_subprocess_decoding.py` (text-mode gets a codec; bytes-mode untouched; caller wins)
+- RULE-WIN22 → `test_scheduled_scan_next_run.py` (0/negative/non-numeric interval cannot hang or raise)
+- RULE-WIN23 → `test_locale_independent_parsing.py` (sv-SE/es-BO/en-US ping, wlan, net view fixtures)
+- RULE-WIN24 → `test_crash_handler_encoding.py` (the stderr replacement must carry a codec and never raise on an unrepresentable path)
+- RULE-WIN25 → `test_receiver_reset_resilience.py` (a WSAECONNRESET must not end a syslog/SNMP/SSDP/mDNS listen loop)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 - RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
 - RULE-R1b → `test_version_consistency.py::test_whats_new_version` + `bump_version.py::_preflight_whats_new()` (aborts the bump before any file is written)

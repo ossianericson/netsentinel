@@ -137,16 +137,30 @@ def _run_ookla_cli(
         popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
     try:
-        proc = subprocess.Popen(cmd, text=True, **popen_kwargs)
+        # Explicit UTF-8: the CLI emits JSON-Lines in UTF-8, not the OEM console
+        # codepage the app-wide default assumes, and server names carry accents
+        # ("Bogotá", "Malmö"). errors="replace" keeps a mangled server name from
+        # taking down the whole run.
+        proc = subprocess.Popen(
+            cmd, text=True, encoding="utf-8", errors="replace", **popen_kwargs
+        )
     except FileNotFoundError:
         raise RuntimeError(f"Ookla CLI binary not found: {binary}")
 
     line_q: _queue.Queue = _queue.Queue()
 
     def _reader(pipe: object, q: _queue.Queue) -> None:
-        for ln in pipe:  # type: ignore[union-attr]
-            q.put(ln)
-        q.put(None)
+        # The sentinel must be delivered on every exit path. If this thread dies
+        # mid-iteration (a decode error used to do exactly that), the consumer
+        # below would never see None and would spin to its 130 s deadline, then
+        # report a bogus "Ookla CLI timed out" instead of the real failure.
+        try:
+            for ln in pipe:  # type: ignore[union-attr]
+                q.put(ln)
+        except Exception as exc:  # noqa: BLE001 — surfaced via the sentinel below
+            _log.debug("Ookla CLI reader thread stopped early: %s", exc)
+        finally:
+            q.put(None)
 
     reader = threading.Thread(target=_reader, args=(proc.stdout, line_q), daemon=True)
     reader.start()

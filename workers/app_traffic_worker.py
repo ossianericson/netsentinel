@@ -75,5 +75,8 @@ class AppTrafficWorker(QThread):
         self._monitor = monitor
         try:
             monitor.run()   # blocks until _stop_event is set
+        except Exception as exc:  # noqa: BLE001 — reported via the error signal
+            # A `finally` with no `except` still lets the exception escape run().
+            self.error.emit(str(exc))
         finally:
             self._monitor = None

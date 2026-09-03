@@ -33,7 +33,10 @@ class _ProbeWorker(QThread):
         try:
             with socket.create_connection((self._host, self._port), timeout=1.5):
                 self.result.emit(True)
-        except OSError:
+        except Exception:
+            # Not just OSError: a user-typed host can raise UnicodeError (over-long
+            # or non-encodable IDNA label) and an out-of-range port raises
+            # OverflowError — neither is an OSError, so both would escape run().
             self.result.emit(False)
 
 

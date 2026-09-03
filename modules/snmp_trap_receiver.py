@@ -349,7 +349,10 @@ class SnmpTrapReceiver:
             if self._on_trap:
                 self._on_trap(trap)
             return trap
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
+            # RULE-WIN25 — see syslog_receiver.receive_one() for the full mechanism.
+            # A WSAECONNRESET here reports an ICMP port-unreachable for an earlier
+            # datagram, not a fault on this socket; escaping it would kill the listener.
             return None
 
     def close(self) -> None:

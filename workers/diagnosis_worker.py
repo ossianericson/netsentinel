@@ -54,6 +54,17 @@ class DiagnosisWorker(QThread):
         self._stop.set()
 
     def run(self) -> None:
+        # Thin wrapper: the body guards each diagnostic step individually, but the
+        # progress/finished emits between steps are unguarded, and an escape from
+        # run() is routed through sys.excepthook on this worker thread. finished
+        # already carries None for "cancelled or error", so consumers need no change.
+        try:
+            self._run_body()
+        except Exception:
+            log.exception("Diagnosis worker failed")
+            self.finished.emit(None)
+
+    def _run_body(self) -> None:
         from modules.root_cause_correlator import correlate
 
         # Focused mode: only run steps relevant to the named finding category.

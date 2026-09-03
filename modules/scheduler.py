@@ -212,3 +212,66 @@ class ScanScheduler:
 
     def stop(self):
         self.stop_event.set()
+
+
+# ── Scheduled-scan next-run arithmetic ───────────────────────────────────────
+# Shared by ui/dashboard.py (the 60 s tick that fires the scan) and
+# ui/pages/settings_cards.py (which saves the next run when the user edits the
+# schedule). These used to carry separate copies that disagreed — the consumer
+# looped with `while`, the writer advanced once with `if` — so a schedule several
+# intervals in the past was saved still in the past and fired on the next tick.
+
+_VALID_INTERVAL_HOURS = (1, 6, 12, 24)
+_DEFAULT_INTERVAL_HOURS = 24
+
+
+def _coerce_int(value: object, default: int, lo: int, hi: int) -> int:
+    """Clamp an untyped QSettings value into ``[lo, hi]``, falling back to ``default``.
+
+    QSettings on Windows round-trips through untyped INI text, so any of these can
+    arrive here: an int, a numeric string, an empty string, ``None``, or garbage
+    left by an unrelated writer. A scheduling slot must never raise on any of them.
+    """
+    try:
+        out = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, out))
+
+
+def next_scheduled_run(
+    *,
+    now: float,
+    hour: object,
+    minute: object,
+    interval_hours: object,
+) -> float:
+    """Return the next run strictly after ``now``, as an epoch timestamp.
+
+    ``interval_hours`` is clamped to a positive value before it is used as a loop
+    increment. A zero or negative increment can never carry the candidate past
+    ``now``, so the advance loop would not terminate — and its callers run it on
+    the GUI thread, where that is an unrecoverable "Not Responding" hang rather
+    than a slow function.
+
+    Local wall-clock arithmetic is deliberate: a schedule of "02:00" means 02:00
+    where the user is, so a DST shift should move it by the same hour the clock
+    moved. Half-hour zones (India +5:30, Adelaide +9:30) need no special handling —
+    naive ``.timestamp()`` resolves against the platform's real local zone.
+    """
+    import datetime as _dt
+
+    hh = _coerce_int(hour, 2, 0, 23)
+    mm = _coerce_int(minute, 0, 0, 59)
+    step = _coerce_int(interval_hours, _DEFAULT_INTERVAL_HOURS, 1, 24 * 7)
+    if step not in _VALID_INTERVAL_HOURS and step <= 0:
+        step = _DEFAULT_INTERVAL_HOURS
+
+    nxt = _dt.datetime.fromtimestamp(now).replace(
+        hour=hh, minute=mm, second=0, microsecond=0
+    )
+    # Bounded: `step` is >= 1 hour, so this terminates in at most 24*7 iterations
+    # even if `now` sat a full week past the anchor.
+    while nxt.timestamp() <= now:
+        nxt += _dt.timedelta(hours=step)
+    return nxt.timestamp()

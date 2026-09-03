@@ -578,16 +578,18 @@ class _SettingsCardsMixin:
         qs.setValue("sched_scan/interval_hours", hours)
         qs.setValue("sched_scan/hour",   self._sched_hour_spin.value())
         qs.setValue("sched_scan/minute", self._sched_min_spin.value())
-        import datetime as _dt
-        now = _dt.datetime.now()
-        next_run = now.replace(
+        # Shared with dashboard's scheduled-scan tick. The previous local copy
+        # advanced once with `if`, so a time already several intervals in the past
+        # was saved still in the past and fired on the next 60 s tick.
+        import time as _time
+
+        from modules.scheduler import next_scheduled_run
+        qs.setValue("sched_scan/next_ts", next_scheduled_run(
+            now=_time.time(),
             hour=self._sched_hour_spin.value(),
             minute=self._sched_min_spin.value(),
-            second=0, microsecond=0
-        )
-        if next_run <= now:
-            next_run += _dt.timedelta(hours=hours)
-        qs.setValue("sched_scan/next_ts", next_run.timestamp())
+            interval_hours=hours,
+        ))
         self._refresh_sched_scan_label()
         self._flash_saved()
 
@@ -977,13 +979,18 @@ class _SettingsCardsMixin:
         import subprocess
         from modules.plugin_system import plugins_dir
         path = plugins_dir()
-        path.mkdir(parents=True, exist_ok=True)
-        if sys.platform == "win32":
-            subprocess.Popen(["explorer", str(path)])
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path)])
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", str(path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception:
+            # Runs in a Qt slot — an escape here reaches the global exception hook
+            # and shows a fatal dialog for a failed file-manager launch.
+            log.debug("Could not open plugins folder: %s", path, exc_info=True)
 
     # ── Keyboard shortcuts ────────────────────────────────────────────────────
 

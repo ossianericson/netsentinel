@@ -137,8 +137,13 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
         bssids = re.findall(
             r"BSSID \d+\s+:\s+([\da-fA-F:]{17})", block
         )
-        signals = re.findall(r"Signal\s+:\s+(\d+)%", block)
-        channels = re.findall(r"Channel\s+:\s+(\d+)", block)
+        # "Signal"/"Channel"/"Authentication" are translated on non-English Windows
+        # ("Señal"/"Canal"/"Autenticación"), which left every AP at channel=0 and
+        # the fallback 50% signal, silently disabling co-channel detection. Match
+        # the untranslated value SHAPE instead: signal is the only "N%" field, and
+        # channel is the only field whose value is a bare integer.
+        signals = re.findall(r":\s*(\d+)\s*%", block)
+        channels = re.findall(r"^[^:\n]+:\s*(\d+)\s*$", block, re.MULTILINE)
 
         for i, bssid in enumerate(bssids):
             ch = int(channels[i]) if i < len(channels) else 0
@@ -150,6 +155,12 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
             # netsh shows "Authentication" and sometimes "WPS" in the BSSID block
             wps = bool(re.search(r"WPS\s*:\s*Supported|WPS.*Yes", block, re.I))
             auth_m = re.search(r"Authentication\s*:\s*(.+)", block)
+            if auth_m is None:
+                # Localized label — fall back to the value, which netsh leaves in
+                # English for the crypto suites. An open network's value IS
+                # translated ("Abierta"/"Öppen"), so that case still yields "" —
+                # same as today, no regression.
+                auth_m = re.search(r":\s*((?:WPA|WEP|RSNA)[^\n]*)", block)
             auth = auth_m.group(1).strip() if auth_m else ""
 
             net = NetworkInfo(
@@ -366,17 +377,24 @@ def _get_connected_clients() -> List[ConnectedClient]:
             text=True, timeout=5,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
-        # Parse associated stations block
-        in_stations = False
+        # Parse associated stations (RULE-WIN23). The old gate was
+        # `"Number of clients" in line or "Stations" in line` — both English, so the
+        # client list came back EMPTY on every localized Windows.
+        #
+        # The structure is untranslated. A station row's FIRST token is the MAC:
+        #     aa:bb:cc:dd:ee:01     Authenticated
+        # while the hosted network's own BSSID always sits after a `label :` separator:
+        #     BSSID                  : 02:1a:2b:3c:4d:5e
+        # so anchoring the match to start-of-line both finds every station and excludes
+        # the AP's own address — which a naive "grab every MAC-shaped token" fix would
+        # wrongly report as a connected client.
         for line in raw.splitlines():
-            if "Number of clients" in line or "Stations" in line:
-                in_stations = True
-                continue
-            if in_stations:
-                m = re.search(r"([\da-fA-F]{2}(?:[:\-][\da-fA-F]{2}){5})", line)
-                if m:
-                    mac = m.group(1).replace("-", ":").lower()
-                    clients.append(ConnectedClient(mac=mac))
+            m = re.match(
+                r"([0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5})", line.strip()
+            )
+            if m:
+                mac = m.group(1).replace("-", ":").lower()
+                clients.append(ConnectedClient(mac=mac))
     except Exception:
         pass  # non-fatal
 

@@ -47,6 +47,11 @@ class _OoklaInstallWorker(QThread):
                 ],
                 capture_output=True,
                 text=True,
+                # winget writes UTF-8 (progress bars, box-drawing glyphs, localized
+                # strings) rather than the OEM console codepage, so name the codec
+                # explicitly and never let a glyph abort the install.
+                encoding="utf-8",
+                errors="replace",
                 timeout=120,
                 creationflags=flags,
             )

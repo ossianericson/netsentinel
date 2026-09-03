@@ -261,6 +261,12 @@ def _ssdp_listener(callback: Callable[[PassiveObservation], None]) -> None:
             _parse_ssdp(data, src_ip, callback)
         except socket.timeout:
             pass  # expected — check stop_event
+        except ConnectionResetError:
+            # RULE-WIN25: WSAECONNRESET reports an ICMP port-unreachable for an
+            # EARLIER datagram; this socket is fine. It is an OSError, so without this
+            # branch it hits `break` below and silently ends the daemon thread for the
+            # rest of the session, quietly degrading device classification.
+            continue
         except OSError:
             break  # socket closed
 
@@ -419,6 +425,8 @@ def _mdns_listener(callback: Callable[[PassiveObservation], None]) -> None:
             _parse_mdns(data, src_ip, callback)
         except socket.timeout:
             pass  # expected
+        except ConnectionResetError:
+            continue  # RULE-WIN25 — see the SSDP listener above for the mechanism
         except OSError:
             break  # socket closed
 

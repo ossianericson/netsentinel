@@ -460,11 +460,20 @@ def icmp_ping(host: str, timeout: float = 2.0) -> float:
                 ["ping", "-n", "1", "-w", str(int(timeout * 1000)), host],
                 capture_output=True, text=True, timeout=timeout + 2, **extra,
             )
-            m = re.search(r"time[=<](\d+)ms", r.stdout)
+            # "time=" is "tid=" on sv-SE and "tiempo=" on es-BO, so matching the
+            # label returned -1.0 (i.e. "unreachable") for every reachable host on
+            # a non-English Windows, killing RTT across network_logger and
+            # combined_discovery. Match the untranslated reply structure instead.
+            rtts = reply_rtts(r.stdout)
+            if rtts:
+                return rtts[0]
+            # Fall back to a bare RTT match for output that carries no "TTL="
+            # reply lines. Note "time<1ms" yields 1.0, not 0.5 — the original
+            # code's 0.5 branch sat after a regex that already matched "<", so it
+            # was unreachable; tests/test_utils_net.py pins that 1.0 contract.
+            m = _REPLY_RTT_RE.search(r.stdout)
             if m:
                 return float(m.group(1))
-            if "time<1ms" in r.stdout:
-                return 0.5
         else:
             r = subprocess.run(
                 ["ping", "-c", "1", "-W", str(int(timeout)), host],
@@ -490,7 +499,13 @@ def tcp_probe(host: str, port: int, timeout: float = 3.0) -> Tuple[bool, float, 
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True, (time.monotonic() - t0) * 1000, ""
-    except OSError as exc:
+    except (OSError, UnicodeError, OverflowError) as exc:
+        # UnicodeError: socket.create_connection IDNA-encodes the host, and a label
+        # over 63 bytes raises it — ordinary wherever hostnames are not Latin script.
+        # OverflowError: a port outside 0-65535, reachable from any user-typed target.
+        # Neither is an OSError, and the callers (cloud_metadata._tcp_connect,
+        # ha_detector._tcp_open) have no local guard, so an escape reaches a worker
+        # instead of being reported as an unreachable host.
         return False, -1.0, str(exc)
 
 
@@ -574,3 +589,23 @@ def get_local_mac_label_map() -> dict:
     except Exception:
         pass  # non-fatal — local adapter enumeration is best-effort
     return label_map
+
+
+# ── Locale-independent ping parsing ──────────────────────────────────────────
+# Windows translates every ping label ("time=" -> "tid=" / "tiempo="), but never
+# "TTL=", "ms", or the "="/"<" separator. Matching those instead of the words
+# keeps RTT correct on sv-SE, es-BO and hi-IN. Shared with
+# modules/service_diagnostics_probes.py so both report identical semantics.
+_REPLY_RTT_RE = re.compile(r"[=<]\s*(\d+(?:\.\d+)?)\s*ms", re.IGNORECASE)
+
+
+def reply_rtts(output: str) -> list:
+    """Return the RTT of every successful ping reply line, locale-independently."""
+    rtts = []
+    for line in output.splitlines():
+        if "TTL=" not in line.upper():
+            continue
+        m = _REPLY_RTT_RE.search(line)
+        if m:
+            rtts.append(float(m.group(1)))
+    return rtts

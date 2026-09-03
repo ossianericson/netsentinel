@@ -82,9 +82,14 @@ def test_speed_test_signals_exist():
     _cleanup(w)
 
 
+@pytest.mark.live
 @pytest.mark.slow
 def test_speed_test_lifecycle():
-    """One-shot worker; runs a full speed test — can take up to 2 min."""
+    """One-shot worker running a REAL full speed test against Ookla's network.
+    A shared/throttled CI runner can push a genuine test past the 120 s wait,
+    so it is excluded from default CI runs (see tests.instructions.md —
+    network-dependent tests use the `live` marker). The mocked-backend variants
+    below cover the same lifecycle without real network I/O."""
     from workers.speed_test_worker import SpeedTestWorker
     errors = []
     w = SpeedTestWorker()

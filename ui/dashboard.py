@@ -1643,21 +1643,26 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     def _check_scheduled_scan(self) -> None:
         """SCHED-1: fire a full scan if enabled and next_ts has passed."""
-        import time as _t, datetime as _dt
+        import time as _t
         qs = QSettings("NetSentinel", "NetSentinel")
         if not qs.value("sched_scan/enabled", False, bool):
             return
-        next_ts = float(qs.value("sched_scan/next_ts", 0))
+        try:
+            next_ts = float(qs.value("sched_scan/next_ts", 0))
+        except (TypeError, ValueError):
+            next_ts = 0.0  # unparseable INI value — treat as "not scheduled"
         if next_ts <= 0 or _t.time() < next_ts:
             return
-        # Compute next run
-        hours = int(qs.value("sched_scan/interval_hours", 24))
-        hour  = int(qs.value("sched_scan/hour",   2))
-        minute = int(qs.value("sched_scan/minute", 0))
-        nxt = _dt.datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
-        while nxt.timestamp() <= _t.time():
-            nxt += _dt.timedelta(hours=hours)
-        qs.setValue("sched_scan/next_ts", nxt.timestamp())
+        # Compute next run. Shared with settings_cards._save_sched_scan() so the
+        # writer and this consumer can never disagree, and so a zero/negative
+        # interval cannot spin forever on the GUI thread.
+        from modules.scheduler import next_scheduled_run
+        qs.setValue("sched_scan/next_ts", next_scheduled_run(
+            now=_t.time(),
+            hour=qs.value("sched_scan/hour", 2),
+            minute=qs.value("sched_scan/minute", 0),
+            interval_hours=qs.value("sched_scan/interval_hours", 24),
+        ))
         # Refresh the settings label if page is visible
         if hasattr(self, "_settings_page"):
             try:
