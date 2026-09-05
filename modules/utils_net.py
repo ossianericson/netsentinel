@@ -473,7 +473,7 @@ def icmp_ping(host: str, timeout: float = 2.0) -> float:
             # was unreachable; tests/test_utils_net.py pins that 1.0 contract.
             m = _REPLY_RTT_RE.search(r.stdout)
             if m:
-                return float(m.group(1))
+                return _rtt_float(m.group(1))
         else:
             r = subprocess.run(
                 ["ping", "-c", "1", "-W", str(int(timeout)), host],
@@ -592,11 +592,35 @@ def get_local_mac_label_map() -> dict:
 
 
 # ── Locale-independent ping parsing ──────────────────────────────────────────
-# Windows translates every ping label ("time=" -> "tid=" / "tiempo="), but never
-# "TTL=", "ms", or the "="/"<" separator. Matching those instead of the words
-# keeps RTT correct on sv-SE, es-BO and hi-IN. Shared with
-# modules/service_diagnostics_probes.py so both report identical semantics.
-_REPLY_RTT_RE = re.compile(r"[=<]\s*(\d+(?:\.\d+)?)\s*ms", re.IGNORECASE)
+# Windows translates every ping label ("time=" -> "tid=" / "tiempo=" / "время="),
+# and on Cyrillic locales it translates the *unit* too: ru/uk/bg emit "44мс", not
+# "44ms". "TTL=" and the "="/"<" separator do stay English everywhere, so those
+# remain the anchors.
+#
+# RTT_UNIT is an enumerated set, deliberately NOT generalised to "a short letter
+# run after the number". Measured against real output, a generic run reads
+# `bytes=32 time<1ms TTL=64` — plain en-US, the shape every LAN ping produces —
+# as 32, because "time" is followed by "<" rather than "=". Add a spelling here
+# when a real sample turns one up; never widen the shape.
+#
+# Shared with modules/service_diagnostics_probes.py and the three tracert parsers
+# so every consumer reports identical semantics.
+#
+# The decimal separator has no observed trigger — every sampled Windows ping
+# emits a whole number of milliseconds. The comma alternative is bounded to a
+# 1-2 digit fraction on purpose: `1,234` is a decimal in de/fr/ru and a
+# THOUSANDS grouping in en-US, and reading a grouped `1,234ms` as 1.234 would
+# report a badly-latent link as excellent. No grouping produces a 1-2 digit
+# tail, so an ambiguous `1,234` falls through to no match — a visible -1.0
+# rather than a silent 1000x under-report.
+RTT_UNIT = r"(?:ms|мс)"
+_RTT_NUMBER = r"(\d+(?:\.\d+)?|\d+,\d{1,2})"
+_REPLY_RTT_RE = re.compile(r"[=<]\s*" + _RTT_NUMBER + r"\s*" + RTT_UNIT, re.IGNORECASE)
+
+
+def _rtt_float(raw: str) -> float:
+    """Parse an RTT digit run that may carry a comma decimal separator."""
+    return float(raw.replace(",", "."))
 
 
 def reply_rtts(output: str) -> list:
@@ -607,5 +631,5 @@ def reply_rtts(output: str) -> list:
             continue
         m = _REPLY_RTT_RE.search(line)
         if m:
-            rtts.append(float(m.group(1)))
+            rtts.append(_rtt_float(m.group(1)))
     return rtts

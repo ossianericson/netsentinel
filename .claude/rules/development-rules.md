@@ -2284,9 +2284,15 @@ Enforced by `tests/test_scheduled_scan_next_run.py`.
 ### RULE-WIN23 (blocking): Parse Windows console output by untranslated STRUCTURE, never by English labels — and a default that means "bad" must not be reachable by a parse miss
 
 **Mechanism.** Windows translates the *labels* in `ping`, `ipconfig`, `netsh` and `net` output but
-not their structure. `ms`, `%`, `=`, `<`, `TTL=`, `SSID N :`, the dashed table separator and
+not their structure. `%`, `=`, `<`, `TTL=`, `SSID N :`, the dashed table separator and
 column alignment are identical on every locale; `Default Gateway`, `Signal`, `Channel`,
 `Authentication`, `Rule Name:`, `Disk|Print|Other`, `Lease Expires` and `time=` are not.
+
+**`ms` is NOT in the untranslated set — this rule used to claim it was.** Cyrillic locales
+translate the *unit*: ru/uk/bg `ping` emits `время=44мс`, and `tracert` emits `<1 мс`. Four
+parsers hard-required the ASCII literal, so `reply_rtts()` returned `[]` — reaching the user as
+`icmp_ping() == -1.0`, "unreachable", for every host that answered — and all three tracert
+parsers produced no hops at all. Use `modules/utils_net.RTT_UNIT`, the one shared definition.
 
 Every one of these misses was swallowed by an `except Exception` fallback, so the features
 **failed silently and produced no telemetry** — which is why they survived undetected for the
@@ -2303,7 +2309,7 @@ indistinguishable from a total outage.
 m = re.search(r"Minimum\s*=\s*(\d+)ms.*Average\s*=\s*(\d+)ms", output)
 loss = re.search(r"(\d+)%\s+loss", output)
 
-# CORRECT — "TTL=", "ms", "=" / "<" and "(N%" are untranslated
+# CORRECT — "TTL=", "=" / "<" and "(N%" are untranslated; the UNIT is enumerated
 rtts = reply_rtts(output)            # modules/utils_net.py, shared
 loss = re.search(r"\((\d+(?:\.\d+)?)\s*%", output)
 ```
@@ -2319,8 +2325,29 @@ it matches the header row or a trailing status sentence. `net view`'s status lin
 prose while its rows are column-aligned, so splitting on runs of 2+ spaces separates them without
 matching any English word.
 
-Enforced by `tests/test_locale_independent_parsing.py` (sv-SE / es-BO / en-US fixtures for ping,
-netsh wlan, net view, and the IPv6 interface header).
+**Corollary — when the translated token is a *value* and not a label, enumerate it; do not
+generalise its shape.** The instinct on finding `мс` is to match "a short letter run after the
+number". Measured against real output, that reads `bytes=32 time<1ms TTL=64` — plain en-US, the
+shape every LAN ping produces — as **32**, because `time` is followed by `<` rather than `=`. A
+generalisation that breaks the case you already had a sample for is not a widening. `RTT_UNIT`
+is `(?:ms|мс)`: add a spelling when a real sample turns one up.
+
+**Corollary — an ambiguous separator must fail visibly, not resolve to a plausible wrong number.**
+`1,234` is a decimal in de/fr/ru and a thousands grouping in en-US. Reading a grouped `1,234ms`
+as 1.234 would report a badly-latent link as excellent — strictly worse than the miss it
+replaced, because -1.0 is visibly wrong and 1.234 is not. The comma is accepted only with a 1-2
+digit fraction, which no grouping produces; the ambiguous form falls through to no match.
+
+**Corollary — a matcher's field ORDER is as locale-independent as its tokens, and just as easy to
+get wrong.** `service_diagnostics_probes._parse_traceroute` carried its Windows field order
+(`rtt … ms … ip`) into the POSIX branch, where real `traceroute` prints `ip` first — so the
+optional RTT group never matched and index arithmetic over `m.lastindex` handed back `None` as
+the address, on a stock Linux box in the C locale. Name the groups; index arithmetic across two
+patterns with different shapes is a coin flip on which one matched.
+
+Enforced by `tests/test_locale_independent_parsing.py` (sv-SE / es-BO / ru-RU / zh-CN / en-US
+fixtures for ping, tracert, netsh wlan, net view, and the IPv6 interface header — the tracert
+and POSIX-traceroute fixtures are verbatim captured output, not hand-written).
 
 ### RULE-WIN24 (blocking): A replacement for `sys.stderr`/`sys.stdout` must name `encoding=` and `errors=` — it is process-lifetime, and the ANSI codepage cannot represent the characters that appear in its own paths
 
@@ -2399,6 +2426,66 @@ any unexpected exception type, not just the one you predicted. A loop-level hand
 single-point-of-failure for the whole listener.
 
 Enforced by `tests/test_receiver_reset_resilience.py`.
+
+---
+
+### RULE-WIN26 (blocking): Every entry point must install the console codec AND harden its own stdio — a fix defined at one entry point's module scope protects only that binary
+
+**Mechanism, two directions of one defect.**
+
+*Input.* `subprocess(text=True)` decodes with the **ANSI** codepage under
+`errors='strict'` while console tools emit the **OEM** codepage (RULE-WIN21).
+*Output.* A console app's own `sys.stdout`/`sys.stderr` encode with the console
+codepage, also under `errors='strict'`, and cp1252 cannot represent `U+2192` — a
+character this repo's own `cli.py` `--help` text contains.
+
+**Why this needs its own rule: placement, not logic.** The input fix was correct and
+tested, and lived at `app.py` module scope — so only `NetSentinel.exe` ever ran it.
+`NetSentinelCLI.spec` and `NetSentinelSvc.spec` have `cli.py` / `svc.py` as their entry
+points and neither imports `app`, while both reach `netsh` / `tracert` / `icmp_ping`
+through `modules.*` with `text=True`. Two shipped binaries carried the exact defect
+RULE-WIN21 exists to prevent, one of them running **unattended as a Windows service**,
+where an unhandled `UnicodeDecodeError` has no user present to see it — the service
+simply stops logging.
+
+The output half was found the same way and reproduces on **stock en-US Windows**, not
+only a localized one: `python cli.py --help | tail` raised `UnicodeEncodeError` before
+the fix. Every non-ASCII hostname, SSID or vendor name the CLI prints is the same crash
+waiting for a different machine.
+
+```python
+# CORRECT — at module scope in app.py, cli.py and svc.py alike
+from modules.console_codec import harden_stdio as _harden_stdio
+from modules.console_codec import install as _install_console_codec
+
+_install_console_codec()
+_harden_stdio()
+```
+
+`harden_stdio()` replaces only the **error handler**, never the encoding: forcing UTF-8
+onto a genuinely cp1252 console trades a crash for mojibake in the terminal, whereas
+replacing just the unrepresentable characters keeps every other byte correct.
+
+**Corollary — a shared fix belongs in `modules/`, not in whichever entry point needed it
+first.** `install()` is idempotent precisely because all three call it; a wrapper whose
+base class is itself a wrapper applies the console-hiding and the codec twice per spawn.
+
+**The same rule covers the crash net**, which had the identical shape: `faulthandler`,
+`sys.excepthook` and `threading.excepthook` were all installed inside `app.py::main()`,
+so `cli.py` and `svc.py` recorded *nothing* — no traceback, no native fault, no record
+at all. It now lives in `modules/crash_net.py` and every entry point calls
+`crash_net.install()`. Two constraints there are load-bearing:
+
+- `modules/` cannot import PyQt (ARCH RULE 1), so the user-facing dialog is a
+  caller-supplied `on_unhandled` callback, invoked **after** the record is written and
+  wrapped in its own `except` — a notifier that raises must not destroy the evidence.
+- `threading.excepthook` must ignore `SystemExit`: that is how a thread is asked to
+  stop, and logging it buries real tracebacks in routine shutdown noise.
+
+Enforced by `tests/test_subprocess_decoding.py` (AST guard: every entry point in
+`_ENTRY_POINTS` calls both functions at module scope), `tests/test_console_codec.py`
+(behavioural, including a child process whose stdout is a real redirected cp1252 pipe),
+and `tests/test_crash_net.py` (behavioural + its own per-entry-point wiring guard).
 
 ---
 
@@ -3092,9 +3179,10 @@ Currently tool-enforced (high reliability):
 - RULE-WIN20 → `test_crash_handler_encoding.py` (_fatal off the GUI thread constructs no widget)
 - RULE-WIN21 → `test_subprocess_decoding.py` (text-mode gets a codec; bytes-mode untouched; caller wins)
 - RULE-WIN22 → `test_scheduled_scan_next_run.py` (0/negative/non-numeric interval cannot hang or raise)
-- RULE-WIN23 → `test_locale_independent_parsing.py` (sv-SE/es-BO/en-US ping, wlan, net view fixtures)
+- RULE-WIN23 → `test_locale_independent_parsing.py` (sv-SE/es-BO/ru-RU/zh-CN/en-US ping, tracert, wlan, net view fixtures)
 - RULE-WIN24 → `test_crash_handler_encoding.py` (the stderr replacement must carry a codec and never raise on an unrepresentable path)
 - RULE-WIN25 → `test_receiver_reset_resilience.py` (a WSAECONNRESET must not end a syslog/SNMP/SSDP/mDNS listen loop)
+- RULE-WIN26 → `test_subprocess_decoding.py` (AST guard: every entry point installs the codec and hardens stdio) + `test_console_codec.py` (behavioural, incl. a real redirected cp1252 child pipe) + `test_crash_net.py` (behavioural + per-entry-point crash-net wiring guard)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 - RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
 - RULE-R1b → `test_version_consistency.py::test_whats_new_version` + `bump_version.py::_preflight_whats_new()` (aborts the bump before any file is written)

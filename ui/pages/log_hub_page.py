@@ -230,23 +230,33 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._hist_from_date = QDateEdit()
         self._hist_from_date.setCalendarPopup(True)
         self._hist_from_date.setDate(QDate(_yesterday.year, _yesterday.month, _yesterday.day))
-        self._hist_from_date.setFixedWidth(100)
         self._hist_from_time = QTimeEdit()
         self._hist_from_time.setTime(QTime(0, 0))
-        self._hist_from_time.setFixedWidth(72)
         _hb_to_lbl = QLabel("To:")
         _s.themed_ss(_hb_to_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
         self._hist_to_date = QDateEdit()
         self._hist_to_date.setCalendarPopup(True)
         self._hist_to_date.setDate(QDate(_today.year, _today.month, _today.day))
-        self._hist_to_date.setFixedWidth(100)
         self._hist_to_time = QTimeEdit()
         self._hist_to_time.setTime(QTime(23, 59))
-        self._hist_to_time.setFixedWidth(72)
-        for _w in (self._hist_from_date, self._hist_from_time,
-                   self._hist_to_date, self._hist_to_time):
-            _s.themed_ss(_w, "background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px;"
-                " padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY};")
+        # These are QAbstractSpinBox subclasses, so only background-color/color/
+        # font-size are safe to set here — border/border-radius/padding shift the text
+        # area into the button subcontrol rect (see style_spinbox() in ui/styles.py).
+        #
+        # Width arrives as `min-width` in this same inline sheet, NOT via
+        # setMinimumWidth(): QStyleSheetStyle recomputes the widget minimum from the
+        # global rule's own min-width during polish and overwrites the property, so a
+        # setMinimumWidth(130) call reads back as 82 and nothing widens. An inline
+        # sheet merges over the global rule, which is the one channel that wins.
+        # A floor, never a fixed width — a cap is what rendered "2026-09-04" as
+        # "2026-09-0", and a floor still survives a longer locale date format.
+        # See DATEEDIT_MIN_WIDTH in ui/styles.py for the measurement.
+        for _w in (self._hist_from_date, self._hist_to_date):
+            _s.themed_ss(_w, "background-color:{BG_CARD}; color:{TEXT_PRIMARY};"
+                f" font-size:11px; min-width:{_s.DATEEDIT_MIN_WIDTH}px;")
+        for _w in (self._hist_from_time, self._hist_to_time):
+            _s.themed_ss(_w, "background-color:{BG_CARD}; color:{TEXT_PRIMARY};"
+                f" font-size:11px; min-width:{_s.TIMEEDIT_MIN_WIDTH}px;")
         _hb_load = QPushButton("Load")
         _hb_load.setFixedHeight(24)
         _hb_load.setCursor(Qt.CursorShape.PointingHandCursor)

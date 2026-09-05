@@ -23,6 +23,10 @@ datas = [("offenders.json", ".")]
 # cli.py imports all modules inside function bodies (lazy), so PyInstaller's
 # static tracer may not follow every path.  List them explicitly here.
 hiddenimports: list = [
+    # RULE-WIN21 console codec — imported at cli.py module scope
+    "modules.console_codec",
+    "modules.crash_net",
+    "modules.log_rotation",
     "modules.rogue_device",
     "modules.port_scanner",
     "modules.network_diagnostics",

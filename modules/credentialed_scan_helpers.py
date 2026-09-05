@@ -243,8 +243,16 @@ def _run_ssh_subprocess(
         try:
             full = prefix + base_args + [f"{username}@{host}", cmd]
             run_env = {**__import__("os").environ, **env_extra} if env_extra else None
+            # encoding is named deliberately (RULE-WIN21): the frozen build injects
+            # the OEM console codepage into every unnamed text-mode child, which is
+            # right for netsh/ipconfig and wrong here. ssh forwards the *remote's*
+            # bytes verbatim and a modern Linux host is UTF-8 — nothing about the
+            # local user's locale is involved, so decoding a GECOS field or an
+            # os-release name as cp437/cp850 corrupts it on en-US too.
+            # _run_ssh_paramiko, this function's other backend, already decodes utf-8.
             proc = subprocess.run(
                 full, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
                 timeout=timeout + 5, env=run_env,
             )
             results[cmd] = proc.stdout if proc.stdout else proc.stderr
@@ -390,7 +398,10 @@ _WINDOWS_CMDS: List[str] = [
     "powershell -NoProfile -Command \"$b=Get-CimInstance Win32_BIOS; Write-Output ('SerialNumber='+$b.SerialNumber)\"",
     "query session",
     "powershell -NoProfile -Command \"Get-CimInstance Win32_Product | ForEach-Object { Write-Output ('Name='+$_.Name); Write-Output ('Version='+$_.Version) }\"",
-    "sc query type= service state= running",
+    # state= takes active|inactive|all. "running" is not one of them: sc.exe
+    # exits 87 with "ERROR: Invalid state= field" and prints nothing, so the
+    # service list has been empty on every Windows, every locale. Measured.
+    "sc query type= service state= active",
     "powershell -NoProfile -Command \"Get-CimInstance Win32_UserAccount | ForEach-Object { Write-Output ('Name='+$_.Name); Write-Output ('SID='+$_.SID); Write-Output ('Disabled='+$_.Disabled) }\"",
     "netstat -ano | findstr LISTENING",
     'powershell -NoProfile -Command "(New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher().Search(\'IsInstalled=0\').Updates | Select-Object -ExpandProperty Title | Measure-Object -Line | Select-Object -ExpandProperty Lines"',
@@ -435,7 +446,11 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
                 m = re.match(r'SERVICE_NAME: (.+)', line)
                 if m:
                     svc_name = m.group(1).strip()
-                if svc_name and "RUNNING" in line:
+                # `STATE : 4  RUNNING` — read the code, not the word beside it.
+                # 4 is SERVICE_RUNNING and is untranslated; it also excludes the
+                # START_PENDING (2) and PAUSED (7) services that state= active
+                # returns, which "running" should not claim.
+                if svc_name and re.search(r"STATE\s*:\s*4\b", line):
                     result.services.append(ServiceEntry(name=svc_name, status="running"))
                     svc_name = ""
             break

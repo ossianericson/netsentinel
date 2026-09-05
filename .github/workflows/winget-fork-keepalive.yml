@@ -1,0 +1,131 @@
+name: WinGet Fork Keep-Warm
+
+# Insurance against a long gap between releases.
+#
+# Two things rot silently while no release is happening, and both only ever
+# surface on release day, in the middle of the release chain:
+#
+#   1. The winget-pkgs fork drifts from upstream. wingetcreate asks GitHub to
+#      MERGE upstream into the fork's master before submitting, and that merge
+#      is permanently unresolvable once the fork's master carries commits
+#      upstream never took (here: May-2026 deletions of eleven
+#      manifests/n/NetSentinel/NetSentinel/<ver> directories that still exist
+#      upstream). Merging never drops those commits - only a hard reset does.
+#      Left alone, the fork's ahead_by only grows (104 at v2.2.8, 251 a day
+#      later), so the longer the gap the more certain the release-day failure.
+#
+#   2. WINGET_PAT expires. A dead token fails the release chain with no warning
+#      whatsoever beforehand.
+#
+# Running monthly means the fork is never more than ~30 days of drift from
+# upstream and a nearing PAT expiry arrives as a failure email weeks ahead of
+# the next release, rather than as a red release run.
+
+on:
+  schedule:
+    - cron: "0 6 1 * *" # 06:00 UTC on the 1st of each month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.WINGET_PAT }}
+
+    steps:
+      # ── Token health ─────────────────────────────────────────────────────────
+      # GitHub returns a github-authentication-token-expiration response header
+      # for any PAT that has an expiry set. Fail the job while there is still
+      # time to rotate, so the failure email is the reminder.
+      - name: Validate WINGET_PAT
+        id: pat
+        run: |
+          set -uo pipefail
+
+          # No 2>&1 here: gh's own diagnostics belong in the log, not in $owner
+          # (which becomes the fork name below).
+          if ! owner=$(gh api user --jq '.login'); then
+            echo "::error::WINGET_PAT was rejected by GitHub (expired or revoked) - rotate the secret"
+            exit 1
+          fi
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"
+          echo "PAT owner: $owner"
+
+          resp=$(gh api -i user)
+          expiry=$(printf '%s\n' "$resp" | grep -i '^github-authentication-token-expiration:' | head -1 | cut -d' ' -f2- | tr -d '\r')
+          scopes=$(printf '%s\n' "$resp" | grep -i '^x-oauth-scopes:' | head -1 | cut -d' ' -f2- | tr -d '\r')
+          echo "scopes=${scopes:-<none reported>}" >> "$GITHUB_OUTPUT"
+          echo "Scopes: ${scopes:-<none reported>}"
+
+          if [ -z "$expiry" ]; then
+            echo "expiry=non-expiring" >> "$GITHUB_OUTPUT"
+            echo "Token reports no expiry."
+            exit 0
+          fi
+
+          days=$(( ( $(date -d "$expiry" +%s) - $(date +%s) ) / 86400 ))
+          echo "expiry=$expiry ($days days left)" >> "$GITHUB_OUTPUT"
+          echo "Token expires $expiry - $days days left."
+
+          if [ "$days" -lt 45 ]; then
+            echo "::error::WINGET_PAT expires in $days days ($expiry) - rotate it before the next release"
+            exit 1
+          fi
+
+      # ── Reset the winget-pkgs fork to upstream ──────────────────────────────
+      # Duplicated verbatim (in pwsh) in release.yml and winget-submit.yml -
+      # keep the three copies in step.
+      - name: Reset winget-pkgs fork to upstream
+        id: fork
+        run: |
+          set -euo pipefail
+
+          owner="${{ steps.pat.outputs.owner }}"
+          fork="$owner/winget-pkgs"
+          echo "fork=$fork" >> "$GITHUB_OUTPUT"
+
+          if ! gh api "repos/$fork" --silent 2>/dev/null; then
+            echo "No $fork fork yet - creating it"
+            gh repo fork microsoft/winget-pkgs --clone=false
+            for _ in $(seq 1 30); do
+              sleep 5
+              if gh api "repos/$fork" --silent 2>/dev/null; then break; fi
+            done
+            gh api "repos/$fork" --silent
+          fi
+
+          # Log only, never block: PR head branches are independent refs and are
+          # unaffected by a master reset.
+          echo "Open winget-pkgs PRs from $owner:"
+          gh pr list --repo microsoft/winget-pkgs --author "$owner" --state open
+
+          sha=$(gh api repos/microsoft/winget-pkgs/git/ref/heads/master --jq '.object.sha')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          gh api -X PATCH "repos/$fork/git/refs/heads/master" -f "sha=$sha" -F force=true --silent
+
+          # Only ahead_by is meaningful. Upstream merges constantly, so
+          # behind_by is nonzero again within seconds of a successful reset.
+          ahead=$(gh api "repos/$fork/compare/master...microsoft:winget-pkgs:master" --jq '.ahead_by')
+          if [ "$ahead" -ne 0 ]; then
+            echo "::error::$fork still $ahead commits ahead of upstream after reset"
+            exit 1
+          fi
+          echo "$fork master hard-reset to upstream $sha (ahead_by=0)"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### winget fork keep-warm"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| PAT owner | ${{ steps.pat.outputs.owner || 'unresolved' }} |"
+            echo "| PAT expiry | ${{ steps.pat.outputs.expiry || 'unresolved' }} |"
+            echo "| PAT scopes | ${{ steps.pat.outputs.scopes || 'unresolved' }} |"
+            echo "| Fork | ${{ steps.fork.outputs.fork || 'unresolved' }} |"
+            echo "| Reset to upstream | ${{ steps.fork.outputs.sha || 'not reset' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

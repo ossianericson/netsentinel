@@ -111,10 +111,25 @@ def _get_arp_table() -> List[tuple]:
     return pairs
 
 
+# The router flag in `netsh interface ipv6 show neighbors` is the only PARENTHESISED
+# annotation in that table, and it always follows a MAC in the physical-address column.
+# The word inside is translated ("(Routeur)" / "(Маршрутизатор)" / "（路由器）"), the
+# parentheses are not — matching the English word instead returned an EMPTY set on every
+# localized Windows, so the rogue-IPv6-router check reported CLEAN unconditionally
+# (RULE-WIN23; the sibling _get_default_gateway() below already carried this reasoning).
+# Both ASCII and full-width brackets are accepted because a CJK translator may localize
+# the punctuation too; no other neighbour state is parenthesised, so this cannot widen
+# the match on an English table — verified against a real 163 KB en-US dump, which gave
+# the identical five MACs the English substring found.
+_IPV6_NEIGHBOUR_ROUTER_RE = re.compile(
+    r"^\s*\S+\s+([\da-fA-F]{2}(?:-[\da-fA-F]{2}){5})\s+.*[(（][^)）]*[)）]"
+)
+
+
 def _get_ipv6_routers() -> set:
     """
     Parse the IPv6 neighbour table and return the set of MAC addresses
-    that are advertising themselves as routers ("Router" state).
+    that are advertising themselves as routers (the parenthesised router flag).
     These are devices the OS has received an IPv6 Router Advertisement from.
     A non-gateway device with this flag is a rogue router.
     """
@@ -131,10 +146,9 @@ def _get_ipv6_routers() -> set:
             )
             # Lines like: fe80::f272:eaff:fe51:d3b8   f0-72-ea-51-d3-b8  Stale (Router)
             for line in raw.splitlines():
-                if "Router" in line:
-                    m = re.search(r"([\da-fA-F]{2}(?:-[\da-fA-F]{2}){5})", line)
-                    if m:
-                        routers.add(m.group(1).replace("-", ":").lower())
+                m = _IPV6_NEIGHBOUR_ROUTER_RE.match(line)
+                if m:
+                    routers.add(m.group(1).replace("-", ":").lower())
         else:
             raw = subprocess.check_output(
                 ["ip", "-6", "neigh", "show"], text=True, timeout=8

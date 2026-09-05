@@ -93,7 +93,15 @@ def save_pdf_report(
                         "--disable-gpu",
                         "--no-sandbox",
                         f"--print-to-pdf={pdf_out}",
-                        f"file:///{tmp_html}",
+                        # as_uri(), not f"file:///{tmp_html}": %TEMP% sits under the
+                        # user profile, and `#` is legal in a Windows account name,
+                        # so `C:\Users\C#dev\...\tmpX.html` interpolated raw becomes
+                        # `file:///C:\Users\C` plus a fragment. Measured on real
+                        # headless Edge, that exits 0 and prints an 83,902-byte PDF
+                        # of the browser's own "file not found" page — so the caller
+                        # sees success and the user opens a report containing a
+                        # browser error, rather than reaching the RuntimeError below.
+                        Path(tmp_html).as_uri(),
                     ],
                     capture_output=True,
                     timeout=30,

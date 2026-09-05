@@ -43,6 +43,10 @@ hiddenimports: list = [
     "servicemanager",
     "pywintypes",
     "win32api",
+    # RULE-WIN21 console codec — imported at svc.py module scope
+    "modules.console_codec",
+    "modules.crash_net",
+    "modules.log_rotation",
     # NetworkLogger and its dependencies
     "modules.network_logger",
     "modules.utils",

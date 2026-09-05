@@ -78,6 +78,29 @@ class WifiScanResult:
 # Platform-specific WiFi scan
 # ---------------------------------------------------------------------------
 
+# "Channel" is translated on every localized Windows ("Kanal"/"Canal"/"Канал"/"通道"),
+# so the channel has to be found by the untranslated shape of its VALUE: a field whose
+# whole value is a bare integer. That shape is not unique, though — `show interfaces`
+# also carries "Receive rate (Mbps) : 1201" and a "QoS ... : 0" pair, and Windows 11
+# repeats the QoS pair inside every BSSID section of `show networks mode=bssid`. Bound
+# the value to a real channel number and take the first survivor: netsh's field ORDER
+# comes from its own code rather than the resource strings, so Channel always precedes
+# the rate and QoS fields on every locale (RULE-WIN23).
+_BARE_INT_FIELD_RE = re.compile(r"^[^:\n]+:\s*(\d+)\s*$", re.MULTILINE)
+_MAX_WIFI_CHANNEL = 233     # 6 GHz tops out here; 2.4 GHz at 14, 5 GHz at 177
+_BSSID_FIELD_RE = re.compile(r"BSSID \d+\s+:\s+([\da-fA-F:]{17})")
+_SIGNAL_PCT_RE = re.compile(r":\s*(\d+)\s*%")
+
+
+def _first_channel(text: str) -> int:
+    """Return the first plausible Wi-Fi channel in a netsh field block, else 0."""
+    for value in _BARE_INT_FIELD_RE.findall(text):
+        channel = int(value)
+        if 1 <= channel <= _MAX_WIFI_CHANNEL:
+            return channel
+    return 0
+
+
 def _channel_from_freq(freq_mhz: int) -> int:
     if 2412 <= freq_mhz <= 2484:
         if freq_mhz == 2484:
@@ -120,9 +143,7 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
         m = re.search(r"SSID\s+:\s+(.+)", connected_raw)
         if m:
             my_ssid = m.group(1).strip()
-        m = re.search(r"Channel\s+:\s+(\d+)", connected_raw)
-        if m:
-            my_channel = int(m.group(1))
+        my_channel = _first_channel(connected_raw)
     except Exception:
         pass  # non-fatal
 
@@ -134,34 +155,48 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
         # capture the next field (e.g. "Network type : Infrastructure") as SSID.
         ssid = block.split("\n")[0].strip("\r").strip()
 
-        bssids = re.findall(
-            r"BSSID \d+\s+:\s+([\da-fA-F:]{17})", block
-        )
         # "Signal"/"Channel"/"Authentication" are translated on non-English Windows
         # ("Señal"/"Canal"/"Autenticación"), which left every AP at channel=0 and
         # the fallback 50% signal, silently disabling co-channel detection. Match
         # the untranslated value SHAPE instead: signal is the only "N%" field, and
         # channel is the only field whose value is a bare integer.
-        signals = re.findall(r":\s*(\d+)\s*%", block)
-        channels = re.findall(r"^[^:\n]+:\s*(\d+)\s*$", block, re.MULTILINE)
+        #
+        # Read each radio's fields from its OWN section rather than collecting them
+        # with two whole-block findall()s paired to BSSIDs by list index. Index
+        # pairing assumes exactly one match per BSSID, and Windows 11 emits a
+        # "QoS ... : 0" pair inside every section — which has the bare-integer
+        # channel shape — so from the second radio onward the channel came from a
+        # QoS line. Measured on a real en-US machine: 7 of 10 BSSIDs read channel 0.
+        # ``parts`` is [preamble, bssid1, section1, bssid2, section2, ...].
+        parts = _BSSID_FIELD_RE.split(block)
 
-        for i, bssid in enumerate(bssids):
-            ch = int(channels[i]) if i < len(channels) else 0
-            sig_pct = int(signals[i]) if i < len(signals) else 50
+        # WPS detection. UNCONFIRMED, and deliberately left as-is: no `netsh wlan show
+        # networks mode=bssid` output we have ever captured contains a WPS field at all
+        # (checked against real Windows 11 output), so this branch has no observed
+        # trigger on any locale — including en-US. "Supported"/"Yes" are translated,
+        # but replacing them with a structural matcher would mean inventing a field
+        # format with no sample to check it against, and a false positive here puts a
+        # fabricated WPS finding in a security report. Fix it when a real sample of the
+        # field turns up, not before.
+        wps = bool(re.search(r"WPS\s*:\s*Supported|WPS.*Yes", block, re.I))
+        auth_m = re.search(r"Authentication\s*:\s*(.+)", block)
+        if auth_m is None:
+            # Localized label — fall back to the value, which netsh leaves in
+            # English for the crypto suites. An open network's value IS
+            # translated ("Abierta"/"Öppen"), so that case still yields "" —
+            # same as today, no regression.
+            auth_m = re.search(r":\s*((?:WPA|WEP|RSNA)[^\n]*)", block)
+        auth = auth_m.group(1).strip() if auth_m else ""
+
+        for i in range(1, len(parts) - 1, 2):
+            bssid = parts[i]
+            section = parts[i + 1]
+
+            ch = _first_channel(section)
+            sig_m = _SIGNAL_PCT_RE.search(section)
+            sig_pct = int(sig_m.group(1)) if sig_m else 50
             # Convert Windows signal % to approximate dBm
             sig_dbm = int(sig_pct / 2) - 100
-
-            # WPS detection — look for "WPS" keyword in the block segment
-            # netsh shows "Authentication" and sometimes "WPS" in the BSSID block
-            wps = bool(re.search(r"WPS\s*:\s*Supported|WPS.*Yes", block, re.I))
-            auth_m = re.search(r"Authentication\s*:\s*(.+)", block)
-            if auth_m is None:
-                # Localized label — fall back to the value, which netsh leaves in
-                # English for the crypto suites. An open network's value IS
-                # translated ("Abierta"/"Öppen"), so that case still yields "" —
-                # same as today, no regression.
-                auth_m = re.search(r":\s*((?:WPA|WEP|RSNA)[^\n]*)", block)
-            auth = auth_m.group(1).strip() if auth_m else ""
 
             net = NetworkInfo(
                 ssid=ssid,
@@ -169,6 +204,10 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
                 channel=ch,
                 signal_dbm=sig_dbm,
                 band=_band_from_channel(ch),
+                # `ssid == ""` is the real signal — netsh emits an EMPTY value for a
+                # suppressed SSID, not the words "Hidden Network". The English literal
+                # is a belt-and-braces second test with no observed trigger on any
+                # locale; left in place for the same reason as the WPS matcher above.
                 is_hidden=(ssid == "" or ssid.lower() == "hidden network"),
                 wps_enabled=wps,
                 authentication=auth,

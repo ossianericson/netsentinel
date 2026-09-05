@@ -194,6 +194,12 @@ def hard_exit(code: int = 0) -> None:
     faults or deadlocks that teardown. That is the ACCESS_VIOLATION the Store
     build reports to Windows Error Reporting on close.
 
+    This is also the only honest place to mark the session record clean (A1). It
+    cannot go in ``atexit``: the call below never returns, so no ``atexit`` handler
+    ever runs. Everything that reaches here is a deliberate shutdown, and anything
+    that does not reach here — an OOM kill, a native FailFast, a hang the OS ends —
+    correctly leaves the record unclean for the next launch to find.
+
     ``TerminateProcess`` skips the detach sequence and CRT teardown entirely:
     there is no teardown left to corrupt, so no fault and no WER report. This
     does NOT replace draining the workers — the drain is the real fix; this
@@ -206,6 +212,11 @@ def hard_exit(code: int = 0) -> None:
     ``ctypes.windll.kernel32.*`` is forbidden — those function objects are cached
     process-globals shared with every other caller.
     """
+    try:
+        from modules.session_record import end_session_clean
+        end_session_clean()
+    except Exception as exc:
+        shutdown_log("session record: end_session_clean() failed: %s", exc)
     _flush_shutdown_log()
     if sys.platform == "win32":
         try:

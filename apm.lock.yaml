@@ -10,7 +10,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:d8b06925fd850d1c321e28357455c8d24d1159841983f014b69e2d299a948a40
+  content_hash: sha256:49d16e602a35d6eeb4897ebf43bf88be51e79188908386eddf50420912f41ed9
 - kind: project-relative
   target: claude
   value: .claude/rules/changelog.md
@@ -28,7 +28,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:d5c36d6b87c47844922dfe9631fb01f4a2830857c3ee660f9727f822ac156be6
+  content_hash: sha256:35b9ac54e88d48ca7d4782e6036127e9a9a18389b642525a9423d19ea6322fa4
 - kind: project-relative
   target: claude
   value: .claude/rules/project-vision.md
@@ -37,7 +37,7 @@ deployments:
   owners:
   - .
   active_owner: .
-  content_hash: sha256:1dc00e582453c40ac8d032a47404cfb6bf9e85a7fbf56713851cecd10b164656
+  content_hash: sha256:fe53f7a3e8b8ed8a1f555e8c9a0609da87fc7c28e3ff5499c31bc55be8622ed6
 - kind: project-relative
   target: claude
   value: .claude/rules/session-workflow.md
@@ -64,9 +64,9 @@ local_deployed_files:
 - .claude/rules/session-workflow.md
 - .claude/rules/tests.md
 local_deployed_file_hashes:
-  .claude/rules/architecture.md: sha256:d8b06925fd850d1c321e28357455c8d24d1159841983f014b69e2d299a948a40
+  .claude/rules/architecture.md: sha256:49d16e602a35d6eeb4897ebf43bf88be51e79188908386eddf50420912f41ed9
   .claude/rules/changelog.md: sha256:a3223ba6da72d0faa0a43b7cd898362b985776f534fac0a83ba96e30dc71c496
-  .claude/rules/development-rules.md: sha256:d5c36d6b87c47844922dfe9631fb01f4a2830857c3ee660f9727f822ac156be6
-  .claude/rules/project-vision.md: sha256:1dc00e582453c40ac8d032a47404cfb6bf9e85a7fbf56713851cecd10b164656
+  .claude/rules/development-rules.md: sha256:35b9ac54e88d48ca7d4782e6036127e9a9a18389b642525a9423d19ea6322fa4
+  .claude/rules/project-vision.md: sha256:fe53f7a3e8b8ed8a1f555e8c9a0609da87fc7c28e3ff5499c31bc55be8622ed6
   .claude/rules/session-workflow.md: sha256:b767fc662ac6ae516f8e0aae3b9a021fb1c2c8cf67531ca3256eabe7c76e1922
   .claude/rules/tests.md: sha256:4efa31a980c768744c461b782d56c970dc1d43226897e531f7b9cd5bfe75f430

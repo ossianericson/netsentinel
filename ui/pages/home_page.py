@@ -39,6 +39,7 @@ from ui.widgets.weekly_report_card import WeeklyReportCard
 from ui.widgets.scan_radar_widget import ScanRadarWidget
 from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.widgets.environment_banner import EnvironmentBanner
+from ui.widgets.unclean_exit_strip import UncleanExitStrip
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -281,6 +282,19 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         mark_banner_seen("protoviz_home_nudge")
         self._protoviz_nudge_card.setVisible(False)
 
+    def _load_unclean_sessions(self) -> None:
+        """Ask A1 whether the previous run ever reported a clean shutdown.
+
+        Best-effort by design. This runs during Home's construction, on the
+        startup path, and a session store that cannot be read is not a reason to
+        fail a launch — it is one strip the user does not see.
+        """
+        try:
+            from modules.session_record import find_unclean_sessions
+            self._unclean_exit_strip.set_sessions(find_unclean_sessions())
+        except Exception:
+            pass  # non-fatal — the strip stays hidden rather than blocking startup
+
     def _build_protoviz_nudge_card(self) -> "QWidget":
         """Dismissible education nudge pointing to the Protocol Visualizer
         (Lab Mode Upgrade Phase L3). Reuses context_banners.py's banner/*_seen
@@ -342,6 +356,16 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         # ── Network environment banner (VPN / corporate / large subnet) ───────
         self._env_banner = EnvironmentBanner()
         outer.addWidget(self._env_banner)
+        # ─────────────────────────────────────────────────────────────────────
+
+        # ── "Closed unexpectedly last time" strip (B1) ────────────────────────
+        # Populated here rather than by a caller: the records are on disk before
+        # the window exists, and every other consumer of them would have to
+        # repeat the read. Added before it is populated so the widget is already
+        # parented when set_sessions() toggles visibility (RULE-WIN7).
+        self._unclean_exit_strip = UncleanExitStrip()
+        outer.addWidget(self._unclean_exit_strip)
+        self._load_unclean_sessions()
         # ─────────────────────────────────────────────────────────────────────
 
         # ── Freshness strip — always visible above scroll area ────────────────

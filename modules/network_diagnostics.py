@@ -23,7 +23,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from modules.utils_net import icmp_ping
+from modules.utils_net import RTT_UNIT, icmp_ping
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -244,7 +244,8 @@ def _traceroute(target: str = "8.8.8.8", max_hops: int = 15) -> List[TraceHop]:
                 # "  1    <1 ms    <1 ms    <1 ms  192.168.68.1"
                 m = re.match(
                     r"\s*(\d+)\s+"
-                    r"(?:<\s*1|(\d+))\s+ms.*?(\d+\.\d+\.\d+\.\d+|\*)",
+                    r"(?:<\s*1|(\d+))\s+" + RTT_UNIT +
+                    r".*?(\d+\.\d+\.\d+\.\d+|\*)",
                     line,
                 )
                 if m:

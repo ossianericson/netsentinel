@@ -146,7 +146,25 @@ def _parse_nbstat_response(data: bytes) -> str:
         offset += 18
         group = bool(flags & 0x8000)
         if suffix == 0x00 and not group:
-            name = raw_name.decode("ascii", errors="ignore").strip()
+            # A NetBIOS name is registered in the OEM character set, not ASCII.
+            # `ascii`/`ignore` does not fail on a Cyrillic or CJK name — it deletes
+            # it byte by byte and hands back whatever ASCII survived, so
+            # "PC-Петров" arrives as "PC-": a plausible wrong hostname rather than
+            # a visible miss.
+            #
+            # On Windows, "oem" resolves to the live GetOEMCP() — correct whenever
+            # scanner and host share a region, which on a LAN is the ordinary case.
+            # Off Windows there is no such codec, and console_codec's utf-8 fallback
+            # does NOT transfer here: that one decodes *local console* output, which
+            # on Linux really is utf-8, whereas these bytes come from a remote
+            # Windows/Samba host. cp850 is Samba's own `dos charset` default and,
+            # unlike utf-8, is a total single-byte codec — so a wrong guess yields
+            # mojibake of the right length rather than U+FFFD plus a spurious
+            # character invented out of two adjacent bytes. Visibly wrong beats
+            # plausibly wrong, and neither codec can ever delete.
+            name = raw_name.decode(
+                "oem" if platform.system() == "Windows" else "cp850", errors="replace"
+            ).strip()
             if name:
                 return name
     return ""

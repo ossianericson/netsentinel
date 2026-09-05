@@ -1,177 +1,112 @@
-"""Regression tests for console-output decoding (RULE-WIN21).
+"""Every shipped entry point must install the console codec (RULE-WIN21, D1).
 
 Mechanism: ``subprocess(text=True)`` decodes with ``locale.getpreferredencoding(False)``
 — the Windows **ANSI** codepage — using ``errors='strict'``. But ``netsh``, ``ipconfig``,
 ``arp``, ``ping``, ``net`` and friends emit in the **OEM console** codepage. Those are
 different on every Windows install: cp1252/cp437 on en-US and hi-IN, cp1252/cp850 on
-sv-SE and es-BO.
+sv-SE and es-BO. cp1252 leaves ``0x81 0x8D 0x8F 0x90 0x9D`` undefined, and those byte
+values are real characters in cp437/cp850, so a strict decode raises
+``UnicodeDecodeError`` the moment output carries an accented adapter name, SSID, or
+share name.
 
-cp1252 leaves ``0x81 0x8D 0x8F 0x90 0x9D`` undefined, and those byte values are real
-characters in cp437/cp850, so a strict decode raises ``UnicodeDecodeError`` the moment
-output carries an accented adapter name, SSID, or share name. Zero of ~85 subprocess
-call sites passed ``encoding=`` or ``errors=``.
+The fix itself lives in ``modules/console_codec.py`` and is covered behaviourally by
+``tests/test_console_codec.py``. **This file guards the wiring instead**, because that
+is what actually rotted: the patch used to be defined at ``app.py`` module scope, so
+only ``NetSentinel.exe`` ever got it. ``NetSentinelCLI.spec`` and ``NetSentinelSvc.spec``
+have ``cli.py`` / ``svc.py`` as their entry points and neither imports ``app`` — while
+both reach ``netsh`` / ``tracert`` / ``icmp_ping`` through ``modules.*`` with
+``text=True``. Two shipped binaries carried the exact defect RULE-WIN21 was written to
+eliminate, and one of them runs unattended as a Windows service.
+
+Asserted structurally rather than by importing under a faked ``sys.frozen``: the install
+runs at *import* time and these modules are already imported by the time any test runs,
+so re-triggering it would need a subprocess for no extra signal. What can rot is the
+wiring, and that is what this checks.
 """
 from __future__ import annotations
 
-import sys
+import ast
+import pathlib
 
 import pytest
 
-import app as _app
+_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-# Bytes that are valid cp437/cp850 characters but UNDEFINED in cp1252.
-# This is the exact payload that makes a strict ANSI decode raise.
-_OEM_ONLY_BYTES = bytes([0x90, 0x8D, 0x81])
-
-
-def test_ansi_strict_decode_of_oem_bytes_really_does_raise():
-    """Pin the premise: without this fix, the decode genuinely fails.
-
-    If this ever stops raising, the rest of the file is guarding nothing.
-    """
-    with pytest.raises(UnicodeDecodeError):
-        _OEM_ONLY_BYTES.decode("cp1252")
+#: Every PyInstaller entry point. Keep in step with NetSentinel*.spec.
+_ENTRY_POINTS = ("app.py", "cli.py", "svc.py")
 
 
-def test_text_mode_gets_an_explicit_codec_and_replacement():
-    kwargs = _app._apply_console_decoding({"text": True})
-    assert kwargs["errors"] == "replace"
-    assert kwargs["encoding"] == ("oem" if sys.platform == "win32" else "utf-8")
+def _installs_console_codec(source: str, func: str = "install") -> bool:
+    """True if this module imports ``func`` from console_codec and calls it at module scope."""
+    tree = ast.parse(source)
 
-
-def test_universal_newlines_is_treated_as_text_mode():
-    """The legacy spelling decodes exactly the same way and needs the same guard."""
-    kwargs = _app._apply_console_decoding({"universal_newlines": True})
-    assert kwargs["encoding"] is not None
-    assert kwargs["errors"] == "replace"
-
-
-def test_bytes_mode_is_left_completely_alone():
-    """Injecting ``encoding`` into a bytes-mode call would silently flip it to text.
-
-    Roughly ten call sites capture bytes and read only ``returncode``
-    (``utils.py`` flush/ping sweeps, ``report_pdf.py``'s headless Chrome,
-    ``scheduler.py``'s toast). Handing them ``str`` instead of ``bytes`` would
-    break them, so the guard must be strictly opt-in on text mode.
-    """
-    kwargs = _app._apply_console_decoding({"capture_output": True, "timeout": 5})
-    assert "encoding" not in kwargs
-    assert "errors" not in kwargs
-    assert kwargs == {"capture_output": True, "timeout": 5}
-
-
-def test_caller_supplied_encoding_wins():
-    """Ookla (``--format=jsonl``) and winget emit UTF-8, not OEM — they say so explicitly."""
-    kwargs = _app._apply_console_decoding({"text": True, "encoding": "utf-8"})
-    assert kwargs["encoding"] == "utf-8"
-
-
-def test_caller_supplied_errors_is_not_overridden():
-    kwargs = _app._apply_console_decoding({"text": True, "errors": "strict"})
-    assert kwargs["errors"] == "strict"
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="the 'oem' codec is Windows-only")
-def test_oem_codec_decodes_the_bytes_that_break_cp1252():
-    """End-to-end: the chosen codec must actually survive the payload."""
-    decoded = _OEM_ONLY_BYTES.decode("oem", errors="replace")
-    assert isinstance(decoded, str)
-    assert len(decoded) == 3
-
-
-# ── Injection enforcement (RULE-DBG5 shape) ──────────────────────────────────
-# Every test above exercises _app._apply_console_decoding() directly. That proves the helper
-# is CORRECT; it proves nothing about whether the shipped path ever REACHES it — and the
-# injection is guarded by `sys.platform == "win32" and getattr(sys, "frozen", False)`,
-# so no source run and no test run ever exercises it. A refactor could sever the wiring
-# and leave every assertion above passing while the whole class regressed silently.
-
-
-def test_the_frozen_build_actually_installs_the_decoding_patch():
-    """app.py must still wrap Popen, and the wrapper must still call the helper.
-
-    Asserted structurally rather than by importing under a faked ``sys.frozen``: the
-    patch is applied at app.py *import* time, and app.py is already imported by the
-    time any test runs, so re-triggering it would require a subprocess for no extra
-    signal. What can rot is the wiring, and that is what this checks.
-    """
-    import ast
-    import pathlib as _pl
-
-    src = _pl.Path(__file__).resolve().parents[1] / "app.py"
-    tree = ast.parse(src.read_text(encoding="utf-8"))
-
-    popen_cls = next(
-        (n for n in ast.walk(tree)
-         if isinstance(n, ast.ClassDef) and n.name == "_SilentPopen"),
-        None,
-    )
-    assert popen_cls is not None, (
-        "_SilentPopen is gone — text-mode subprocess captures fall back to the ANSI "
-        "codepage under errors='strict', which is RULE-WIN21's crash class"
-    )
-
-    called = {
-        n.func.id for n in ast.walk(popen_cls)
-        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    aliases = {
+        (a.asname or a.name)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "modules.console_codec"
+        for a in node.names
+        if a.name == func
     }
-    assert "_apply_console_decoding" in called, (
-        "_SilentPopen no longer calls _app._apply_console_decoding() — the helper is still "
-        "correct and still tested, but nothing reaches it on the shipped path"
+    if not aliases:
+        return False
+
+    for node in tree.body:  # module scope only — a call inside a function may never run
+        if (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id in aliases
+        ):
+            return True
+    return False
+
+
+@pytest.mark.parametrize("entry_point", _ENTRY_POINTS)
+def test_entry_point_installs_the_console_codec(entry_point: str):
+    src = (_ROOT / entry_point).read_text(encoding="utf-8")
+    assert _installs_console_codec(src), (
+        f"{entry_point} does not call modules.console_codec.install() at module scope. "
+        f"Text-mode subprocess captures in this binary fall back to the ANSI codepage "
+        f"under errors='strict', which is RULE-WIN21's crash class — an unhandled "
+        f"UnicodeDecodeError on any non-English Windows."
     )
 
-    assigns = [
-        n for n in ast.walk(tree)
-        if isinstance(n, ast.Assign)
-        and any(isinstance(t, ast.Attribute) and t.attr == "Popen" for t in n.targets)
-    ]
-    assert assigns, "app.py no longer rebinds subprocess.Popen to the wrapper"
 
+@pytest.mark.parametrize("entry_point", _ENTRY_POINTS)
+def test_entry_point_hardens_its_own_stdio(entry_point: str):
+    """The output direction of the same defect.
 
-def test_the_wrapper_applies_the_codec_to_a_real_text_mode_call(monkeypatch):
-    """Drive the real wrapper class end-to-end rather than the helper alone.
-
-    Constructs the actual ``_SilentPopen`` the frozen build installs and asserts the
-    kwargs that reach the base ``Popen.__init__`` carry the codec — the step the
-    helper-level tests above take on faith. Spying on the base ``__init__`` (rather
-    than building a stand-in subclass) keeps the real ``super()`` chain intact and
-    stops any process from actually being spawned.
+    ``python cli.py --help | tail`` raised UnicodeEncodeError on stock en-US Windows
+    before this was wired: the help text contains U+2192 and cp1252 cannot represent
+    it. Every non-ASCII hostname, SSID or vendor name the CLI prints is the same
+    crash waiting for a different machine.
     """
-    import sys as _sys
-
-
-    seen: dict = {}
-
-    def _spy(self, *a, **kw):
-        seen.update(kw)
-
-    monkeypatch.setattr(_app._OrigPopen, "__init__", _spy)
-
-    _app._SilentPopen([_sys.executable, "-c", "pass"], text=True)
-
-    assert seen.get("encoding") == ("oem" if _sys.platform == "win32" else "utf-8"), (
-        f"text-mode call reached Popen without the console codec: {seen!r}"
+    src = (_ROOT / entry_point).read_text(encoding="utf-8")
+    assert _installs_console_codec(src, "harden_stdio"), (
+        f"{entry_point} does not call modules.console_codec.harden_stdio() at module "
+        f"scope, so writing an unrepresentable character to its own stdout/stderr "
+        f"raises UnicodeEncodeError under the console codepage."
     )
-    assert seen.get("errors") == "replace"
 
 
-def test_the_wrapper_leaves_a_bytes_mode_call_untouched(monkeypatch):
-    """The end-to-end path must preserve the bytes-mode contract too.
-
-    Adding ``encoding`` to a bytes-mode call silently flips it to text and breaks every
-    caller that captures bytes or reads only ``returncode``.
-    """
-    import sys as _sys
+def test_the_guard_rejects_a_module_that_only_imports_it():
+    """An import with no call is the exact half-done state this must catch."""
+    assert not _installs_console_codec(
+        "from modules.console_codec import install\n"
+    )
 
 
-    seen: dict = {}
+def test_the_guard_rejects_a_call_hidden_inside_a_function():
+    """Module scope is load-bearing: the patch must land before any library spawns."""
+    assert not _installs_console_codec(
+        "from modules.console_codec import install\n"
+        "def main():\n"
+        "    install()\n"
+    )
 
-    def _spy(self, *a, **kw):
-        seen.update(kw)
 
-    monkeypatch.setattr(_app._OrigPopen, "__init__", _spy)
-
-    _app._SilentPopen([_sys.executable, "-c", "pass"])
-
-    assert "encoding" not in seen
-    assert "errors" not in seen
+def test_the_guard_accepts_an_aliased_import():
+    assert _installs_console_codec(
+        "from modules.console_codec import install as _go\n"
+        "_go()\n"
+    )

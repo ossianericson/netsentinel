@@ -36,7 +36,72 @@ jobs:
           echo "URL=$url" >> $env:GITHUB_OUTPUT
           echo "Installer URL: $url"
 
+      # ── Reset the winget-pkgs fork to upstream ──────────────────────────────
+      # wingetcreate submits from the PAT owner's winget-pkgs fork and asks
+      # GitHub to MERGE upstream into that fork's master first. That merge can
+      # never succeed here: the fork's master carries May-2026
+      # "Delete manifests/n/NetSentinel/NetSentinel/<ver> directory" commits for
+      # eleven versions that still exist upstream, so the fork is structurally
+      # diverged and wingetcreate fails with "The forked repository could not be
+      # synced with the upstream commits." A merge preserves those commits
+      # forever - only a hard reset drops them.
+      #
+      # This block is duplicated verbatim in release.yml and
+      # winget-fork-keepalive.yml - keep the three copies in step.
+      - name: Reset winget-pkgs fork to upstream
+        id: fork
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_PAT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # gh exit codes are checked explicitly below. PowerShell 7.4+ turns a
+          # nonzero native exit into a thrown error under ErrorActionPreference
+          # 'Stop', which would abort the 404 probe that decides whether the
+          # fork needs creating - opt that behaviour out.
+          if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+            $PSNativeCommandUseErrorActionPreference = $false
+          }
+
+          $owner = gh api user --jq '.login'
+          if ($LASTEXITCODE -ne 0) { throw "WINGET_PAT was rejected by GitHub (expired or revoked) - rotate the secret" }
+          $fork = "$owner/winget-pkgs"
+          echo "FORK=$fork" >> $env:GITHUB_OUTPUT
+
+          gh api "repos/$fork" --silent 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "No $fork fork yet - creating it"
+            gh repo fork microsoft/winget-pkgs --clone=false
+            if ($LASTEXITCODE -ne 0) { throw "could not fork microsoft/winget-pkgs as $owner" }
+            foreach ($i in 1..30) {
+              Start-Sleep -Seconds 5
+              gh api "repos/$fork" --silent 2>$null
+              if ($LASTEXITCODE -eq 0) { break }
+            }
+            if ($LASTEXITCODE -ne 0) { throw "$fork did not become available after forking" }
+          }
+
+          # Log only, never block: PR head branches are independent refs and
+          # are unaffected by a master reset.
+          Write-Host "Open winget-pkgs PRs from ${owner}:"
+          gh pr list --repo microsoft/winget-pkgs --author $owner --state open
+
+          $sha = gh api repos/microsoft/winget-pkgs/git/ref/heads/master --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0) { throw "could not read upstream master ref" }
+
+          gh api -X PATCH "repos/$fork/git/refs/heads/master" -f "sha=$sha" -F force=true --silent
+          if ($LASTEXITCODE -ne 0) { throw "could not hard-reset $fork master to $sha" }
+
+          # Only ahead_by is meaningful. Upstream merges constantly, so
+          # behind_by is nonzero again within seconds of a successful reset.
+          $ahead = gh api "repos/$fork/compare/master...microsoft:winget-pkgs:master" --jq '.ahead_by'
+          if ($LASTEXITCODE -ne 0) { throw "could not compare $fork against upstream" }
+          if ([int]$ahead -ne 0) { throw "$fork still $ahead commits ahead of upstream after reset" }
+          Write-Host "$fork master hard-reset to upstream $sha (ahead_by=0)"
+
       # ── Update and submit to winget-pkgs via wingetcreate ────────────────────
+      # Single-shot by design: this workflow is the manual override, so a retry
+      # is one more dispatch. The retry/classify loop lives in release.yml.
       - name: Update and submit winget manifest
         shell: pwsh
         env:

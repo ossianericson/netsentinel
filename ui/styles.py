@@ -1470,6 +1470,27 @@ SPINBOX_WIDTH_WITH_SUFFIX = 100   # worst case text e.g. "3600 s", "60 min", "50
 SPINBOX_WIDTH_PLAIN = 72          # up to ~3 digits, no suffix, e.g. "120"
 SPINBOX_WIDTH_WIDE_PLAIN = 92     # 4-5 digits, no suffix, e.g. port "65535", "8760"
 
+# QDateEdit / QTimeEdit / QDateTimeEdit cannot be left to size themselves. The global
+# QSS rule above reserves `padding: 3px 22px 3px 6px` (28px horizontal) for the
+# drop-down arrow, and QAbstractSpinBox.sizeHint() does NOT add that padding back, so
+# each one reports a hint ~28px narrower than its own value needs and Qt clips the last
+# characters. Measured live in Arctic Clean at the app's real Segoe UI: a yyyy-MM-dd
+# QDateEdit reported a 109px hint while its line edit needed 83px of the 63px it got,
+# rendering "2026-09-04" as "2026-09-0".
+#
+# **This must be applied as `min-width` inside the widget's OWN stylesheet.**
+# `setMinimumWidth()` does not survive: QStyleSheetStyle recomputes the widget's
+# minimum from the global rule's `min-width: 52px` during polish and overwrites the
+# property, so a `setMinimumWidth(130)` call reads back as 82 and nothing widens.
+# An inline sheet merges *over* the global rule, which is the one channel that wins.
+#
+# It is a floor, never `max-width`/`setFixedWidth()`: a cap is what clipped these
+# fields in the first place, and a floor still lets a larger system font or a longer
+# locale date format grow the widget. The value is the QSS **content** box, so the
+# rendered widget is this plus the 28px padding and 2px border.
+DATEEDIT_MIN_WIDTH = 90           # yyyy-MM-dd; renders clean from 80px, +10 headroom
+TIMEEDIT_MIN_WIDTH = 60           # HH:mm
+
 _SPINBOX_PALETTE_REGISTRY: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
 
 

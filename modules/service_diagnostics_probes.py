@@ -19,6 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from modules.utils_net import RTT_UNIT as _RTT_UNIT
 from modules.utils_net import reply_rtts as _reply_rtts
 from modules.utils_net import tcp_probe as _shared_tcp_probe
 
@@ -276,24 +277,34 @@ def traceroute_probe(host: str, max_hops: int = 15) -> TracerouteResult:
 def _parse_traceroute(output: str, result: TracerouteResult, system: str) -> None:
     if system == "Windows":
         # tracert: "  1    <1 ms    <1 ms    <1 ms  192.168.1.1"
+        # The first RTT column is captured; the other two are consumed but
+        # discarded. It used to be non-capturing, and the consumer below only
+        # read a latency on the non-Windows branch, so every Windows hop
+        # reported the -1.0 default and the page rendered a column of "*".
         pattern = re.compile(
-            r"^\s*(\d+)\s+"
-            r"(?:(?:<?\d+\s+ms\s+){1,3})?"
-            r"([\d.]+|\*)\s*$",
+            r"^\s*(?P<hop>\d+)\s+"
+            r"(?:(?P<rtt><?\d+)\s+" + _RTT_UNIT + r"\s+"
+            r"(?:<?\d+\s+" + _RTT_UNIT + r"\s+){0,2})?"
+            r"(?P<ip>[\d.]+|\*)\s*$",
             re.MULTILINE,
         )
     else:
+        # traceroute: " 1  192.168.1.1  4.201 ms  4.105 ms  4.052 ms"
+        # Address FIRST, latencies after it — the opposite order to tracert.
         pattern = re.compile(
-            r"^\s*(\d+)\s+(?:([\d.]+)\s+ms\s+)?([\d.]+|\*)",
+            r"^\s*(?P<hop>\d+)\s+(?P<ip>[\d.]+|\*)"
+            r"(?:\s+(?P<rtt>[\d.]+)\s+" + _RTT_UNIT + r")?",
             re.MULTILINE,
         )
 
     prev_ip = ""
     timeout_run = 0
     for m in pattern.finditer(output):
-        hop_n = int(m.group(1))
-        ip = m.group(2) if system != "Windows" and m.lastindex >= 3 else m.group(m.lastindex)
-        rtt_raw = m.group(2) if system != "Windows" and m.lastindex >= 2 else None
+        # Named groups: the two branches have different field ORDERS, so any
+        # index arithmetic here is a coin flip on which pattern matched.
+        hop_n = int(m.group("hop"))
+        ip = m.group("ip") or "*"
+        rtt_raw = m.group("rtt")
         rtt = float(rtt_raw.lstrip("<")) if rtt_raw and rtt_raw not in ("*", "") else -1.0
         result.hops.append(TraceHop(hop=hop_n, ip=ip, rtt_ms=rtt))
 

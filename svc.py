@@ -44,6 +44,35 @@ from pathlib import Path
 # Allow running from the project root without installation.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Console-output decoding (RULE-WIN21). NetSentinelSvc.exe is its own PyInstaller
+# entry point and never imports app.py. This one runs UNATTENDED as a Windows service,
+# so an unhandled UnicodeDecodeError out of NetworkLogger's ping/netsh captures has no
+# user present to see it -- the service simply stops logging.
+from modules.console_codec import harden_stdio as _harden_stdio  # noqa: E402
+from modules.console_codec import install as _install_console_codec  # noqa: E402
+
+_install_console_codec()
+_harden_stdio()
+
+# Crash net (A3): faulthandler for native faults, sys.excepthook for the main
+# thread, threading.excepthook for plain threads. The service runs UNATTENDED,
+# so without a written record a failure is completely invisible.
+from modules.crash_net import install as _install_crash_net  # noqa: E402
+
+_install_crash_net()
+
+# ── Bound the logs before anything opens one (A4) ─────────────────────────────
+# Nothing rotated anything before this: a real install carried a 4.08 MB
+# theme-switch log and ~1 MB each of stderr, shutdown and scan-timing history.
+# Only fires above a size threshold, and never touches netsentinel_crash.log --
+# monkey_test.py baselines that file's byte size to detect native SEH faults, so
+# shrinking it would silently disarm the project's primary stability gate.
+# Runs BEFORE any log handle is opened: Windows cannot rename an open file.
+from modules.log_rotation import rotate_logs as _rotate_logs  # noqa: E402
+
+_rotate_logs()
+
+
 # ── Service identity ──────────────────────────────────────────────────────────
 
 _SVC_NAME        = "NetSentinelLogger"

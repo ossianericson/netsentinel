@@ -13,71 +13,19 @@ import sys
 import os
 import time
 
-def _apply_console_decoding(kwargs: dict) -> dict:
-    """Give text-mode subprocess captures a codec that matches console output.
-
-    ``text=True`` decodes with ``locale.getpreferredencoding(False)`` — the Windows
-    ANSI codepage — under ``errors='strict'``. Console tools (``netsh``, ``ipconfig``,
-    ``arp``, ``ping``, ``net``) emit in the **OEM** codepage instead, and the two
-    differ on every Windows install. cp1252 leaves 0x81/0x8D/0x8F/0x90/0x9D undefined
-    while cp437/cp850 use them, so any accented adapter name, SSID or share name
-    raises ``UnicodeDecodeError``. ``"oem"`` is a Windows-specific Python codec that
-    resolves to the live ``GetOEMCP()``, so it is correct on cp437, cp850 and cp65001
-    alike.
-
-    Strictly opt-in on text mode: adding ``encoding`` to a bytes-mode call would
-    silently flip it to text and break the callers that capture bytes and read only
-    ``returncode``. A caller that names its own ``encoding``/``errors`` always wins —
-    Ookla (``--format=jsonl``) and winget emit UTF-8, not OEM, and say so.
-    """
-    if not (kwargs.get("text") or kwargs.get("universal_newlines")):
-        return kwargs
-    if "encoding" in kwargs or "errors" in kwargs:
-        return kwargs
-    kwargs["encoding"] = "oem" if sys.platform == "win32" else "utf-8"
-    kwargs["errors"] = "replace"
-    return kwargs
-
-
-# ── Suppress CMD flashes in windowed exe ─────────────────────────────────────
+# ── Suppress CMD flashes + fix console decoding in the frozen exe ────────────
 # On Windows, scapy calls subprocess.Popen (for `route print`, `arp -a`, etc.)
-# at import time WITHOUT CREATE_NO_WINDOW, causing brief CMD flashes.
-# Patch Popen before any network library loads so all child processes are
-# spawned hidden.  This only activates in a frozen (PyInstaller) windowed build
-# where there is no console to attach to anyway.
-import subprocess as _subprocess
+# at import time WITHOUT CREATE_NO_WINDOW, causing brief CMD flashes; and
+# text-mode captures decode with the ANSI codepage while console tools emit OEM
+# (RULE-WIN21). Both are handled by modules/console_codec.py, which lives in
+# modules/ rather than here so that cli.py and svc.py -- separate PyInstaller
+# entry points that never import app.py -- get the same fix. Installed before
+# any network library loads.
+from modules.console_codec import harden_stdio as _harden_stdio
+from modules.console_codec import install as _install_console_codec
 
-_OrigPopen = _subprocess.Popen
-
-
-class _SilentPopen(_OrigPopen):  # type: ignore[misc]
-    """Hide the console window and give text-mode captures the console codec.
-
-    Defined unconditionally, **installed** only in a frozen win32 build (below). The
-    split is deliberate: while the class itself lived inside the platform guard, no
-    source run and no CI run could construct it, so the only reachable coverage was
-    ``_apply_console_decoding()`` in isolation — which proves the helper is correct
-    while proving nothing about whether the shipped path reaches it (RULE-DBG5, and
-    the same structural blindness RULE-WIN11 describes). Hoisting the definition
-    changes no shipped behaviour and makes the wrapper testable on every platform.
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Only suppress the console window when the caller hasn't explicitly
-        # set creationflags (e.g. Ookla CLI or other tools that manage their
-        # own flags must not be overridden).
-        if sys.platform == "win32" and "creationflags" not in kwargs:
-            kwargs["creationflags"] = _subprocess.CREATE_NO_WINDOW
-            si = kwargs.get("startupinfo") or _subprocess.STARTUPINFO()
-            si.dwFlags |= _subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = 0  # SW_HIDE
-            kwargs["startupinfo"] = si
-        _apply_console_decoding(kwargs)
-        super().__init__(*args, **kwargs)
-
-
-if sys.platform == "win32" and getattr(sys, "frozen", False):
-    _subprocess.Popen = _SilentPopen  # type: ignore[misc]
+_install_console_codec()
+_harden_stdio()
 
 
 def _smoke_test() -> None:
@@ -169,6 +117,12 @@ def _smoke_test() -> None:
         "modules.dns_zone_scanner",
         "modules.dhcp_lease_scanner",
         "modules.colours",
+        "modules.console_codec",
+        "modules.crash_net",
+        "modules.diagnostic_report",
+        "modules.environment_fingerprint",
+        "modules.log_rotation",
+        "modules.session_record",
         "ui.command_palette",
         "ui.empty_state",
         "ui.expanding_table",
@@ -458,8 +412,61 @@ def _ensure_std_streams() -> None:
         sys.stdout = _io.StringIO()
 
 
-def _fatal(title: str, message: str) -> None:
+#: The plain-English body for a crash. `_fatal`'s other callers — the Python-version
+#: and missing-PyQt checks — already pass actionable prose, so this belongs at the
+#: traceback call sites rather than inside `_fatal` (RULE-A2 without regressing the
+#: two messages that were already right).
+_CRASH_BODY = (
+    "NetSentinel hit an unexpected error and has to close.\n\n"
+    "You can save a diagnostic report describing this PC's locale settings, the "
+    "sessions that ended unexpectedly, and the tail of the app's own error logs."
+)
+
+
+def _save_crash_report() -> "str | None":
+    """Write a diagnostic report from the fatal dialog. Returns its path, or None.
+
+    Reaches `modules.diagnostic_report` directly rather than through
+    `ui.widgets.feedback_dialog.write_diagnostic_report()`, which does the same
+    job for the two calm surfaces. This one runs on the crash path, where the UI
+    layer is exactly the thing that may have just failed, so it imports no part
+    of it.
+
+    The report is worth more than the traceback beside it: `crash_net`'s
+    `_excepthook` writes that traceback to `netsentinel_exceptions.log` *before*
+    invoking this notifier, so `build_report()` tails it back in with the
+    environment fingerprint and session history wrapped around it.
+    """
+    try:
+        from PyQt6.QtWidgets import QApplication
+
+        from modules.diagnostic_report import write_report
+
+        _inst = QApplication.instance()
+        return write_report(app_version=_inst.applicationVersion() if _inst else "")
+    except Exception:
+        return None  # the crash handler must not raise; the caller says so plainly
+
+
+def _crash_notifier(title: str, text: str) -> None:
+    """The `on_unhandled` callback handed to `crash_net.install()`.
+
+    `crash_net` calls `on_unhandled(title, traceback_text)` and knows nothing
+    about how it is presented — passing `_fatal` straight through would put the
+    raw traceback back into the dialog's main text and silently restore the
+    RULE-A2 violation this exists to fix.
+    """
+    _fatal(title, _CRASH_BODY, details=text)
+
+
+def _fatal(title: str, message: str, details: "str | None" = None) -> None:
     """Show an error in a way that is visible even when --windowed hides the console.
+
+    *message* is what the user reads and must already be plain English; *details*
+    is the raw traceback, which goes behind Qt's collapsible "Show Details..."
+    pane and into the fallback log, never into the dialog's main text (RULE-A2,
+    RULE-A1). Callers with no traceback — the startup precondition checks — pass
+    no *details* and get the dialog exactly as it was.
 
     Only the GUI thread may construct widgets. PyQt6 routes an exception escaping
     ``QThread.run()`` through ``sys.excepthook``, so this function is legitimately
@@ -488,8 +495,41 @@ def _fatal(title: str, message: str) -> None:
             msg.setIcon(QMessageBox.Icon.Critical)
             msg.setWindowTitle(title)
             msg.setText(message)
+            save_btn = copy_btn = None
+            if details:
+                # Qt's own collapsible pane: one click away for whoever wants it,
+                # invisible to everyone who does not.
+                msg.setDetailedText(details)
+                # Offered only alongside a traceback. The detail-less callers are
+                # startup precondition failures whose message already tells the
+                # user exactly what to do, and a report button there adds a step
+                # to an already-solved problem.
+                save_btn = msg.addButton("Save report", QMessageBox.ButtonRole.ActionRole)
+                copy_btn = msg.addButton("Copy details", QMessageBox.ButtonRole.ActionRole)
+            msg.addButton(QMessageBox.StandardButton.Close)
             msg.exec()
             dialog_shown = True
+
+            clicked = msg.clickedButton()
+            if save_btn is not None and clicked is save_btn:
+                saved = _save_crash_report()
+                _report_result = QMessageBox()
+                if saved:
+                    from modules.diagnostic_report import REDACTION_NOTE
+                    _report_result.setWindowTitle("Diagnostic report saved")
+                    _report_result.setText(f"Saved to:\n\n{saved}\n\n{REDACTION_NOTE}")
+                else:
+                    _report_result.setIcon(QMessageBox.Icon.Warning)
+                    _report_result.setWindowTitle("Diagnostic report not saved")
+                    _report_result.setText(
+                        "The report could not be written — the NetSentinel data "
+                        "folder may be full or read-only."
+                    )
+                _report_result.exec()
+            elif copy_btn is not None and clicked is copy_btn:
+                _clip = QApplication.clipboard()
+                if _clip is not None:
+                    _clip.setText(details or "")
         except Exception:
             pass  # dialog unavailable — fall through to the last-resort writer
 
@@ -510,7 +550,13 @@ def _fatal(title: str, message: str) -> None:
             # and UnicodeEncodeError is a ValueError, so an OSError-only guard
             # would let it escape and skip the sys.exit(1) below.
             with open(log_path, "w", encoding="utf-8", errors="replace") as f:
+                # `details` is written too: this branch runs when no dialog could
+                # be built at all, so the file is the only artefact that will ever
+                # exist — a summary without the traceback would be a strictly
+                # worse record than the one this replaced.
                 f.write(f"{title}\n{message}\n\n")
+                if details:
+                    f.write(f"{details}\n\n")
                 traceback.print_exc(file=f)
         except Exception:
             pass  # non-fatal — a last-resort handler must never raise
@@ -1095,6 +1141,13 @@ def _wire_scan_ctas(window):
 
 
 def main():
+    # Bound the oversized logs FIRST (A4): _ensure_std_streams() below binds
+    # netsentinel_stderr.log for the life of the process, and Windows cannot rename
+    # a file that is open — rotating after it would skip that log every time.
+    # netsentinel_crash.log is deliberately exempt; see modules/log_rotation.py.
+    from modules.log_rotation import rotate_logs as _rotate_logs
+    _rotate_logs()
+
     # Guard sys.stderr/stdout being None in windowed PyInstaller builds
     _ensure_std_streams()
 
@@ -1110,41 +1163,22 @@ def main():
     )
 
     # ── Crash hardening ───────────────────────────────────────────────────────
-    # Enable C-level fault handler so segfaults / access violations write a
-    # traceback to a log file instead of silently closing the app.
-    import faulthandler
-    # Write crash log to per-user AppData to avoid PermissionError in Program Files
-    try:
-        from modules.utils import get_app_data_dir as _get_app_dir
-        _crash_log_path = str(_get_app_dir() / "netsentinel_crash.log")
-    except Exception:
-        import tempfile
-        _crash_log_path = os.path.join(tempfile.gettempdir(), "netsentinel_crash.log")
-    try:
-        _crash_log_fd = open(_crash_log_path, "a")  # noqa: SIM115
-        faulthandler.enable(file=_crash_log_fd)
-    except Exception:
-        faulthandler.enable()  # fallback: write to stderr
+    # faulthandler (native SEH faults), sys.excepthook (main thread + PyQt worker
+    # escapes) and threading.excepthook (plain threads, which nothing covered before).
+    # Lives in modules/crash_net.py so cli.py and svc.py -- separate PyInstaller entry
+    # points that never import app.py -- install the same net; both were previously
+    # silent in the field, svc.py unattended as a Windows service.
+    #
+    # A notifier is passed rather than crash_net calling the dialog directly:
+    # modules/ must not import PyQt (ARCH RULE 1), and _fatal owns the RULE-WIN20
+    # thread-affinity check that stops a worker-thread exception building a QWidget.
+    # _crash_notifier, not _fatal: crash_net's contract is
+    # on_unhandled(title, traceback_text), and _fatal's second argument is the
+    # plain-English body the user reads, so the traceback has to be routed into
+    # `details` or it lands back in the dialog's main text (RULE-A2).
+    from modules.crash_net import install as _install_crash_net
 
-    # Catch unhandled Python exceptions (including PyQt6 slot exceptions) and
-    # write them to the crash log so they are never silently swallowed when
-    # the user runs the app without a console (shortcut / frozen exe).
-    def _excepthook(exc_type, exc_value, exc_tb):
-        import traceback as _tb
-        msg = "".join(_tb.format_exception(exc_type, exc_value, exc_tb))
-        # Always write to the crash log first so we have a record even if the
-        # dialog itself raises another exception.
-        try:
-            from modules.utils import get_app_data_dir as _gad
-            _elog = _gad() / "netsentinel_exceptions.log"
-            import datetime as _dt
-            with open(str(_elog), "a", encoding="utf-8") as _f:
-                _f.write(f"\n--- {_dt.datetime.now().isoformat()} ---\n{msg}")
-        except Exception:
-            pass  # non-fatal — log write failure must not mask the original error
-        _fatal("Unhandled Error", msg)
-
-    sys.excepthook = _excepthook
+    _install_crash_net(on_unhandled=_crash_notifier)
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Single instance guard (RULE-WIN16) ──────────────────────────────────
@@ -1217,7 +1251,24 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.2.8")
+    app.setApplicationVersion("2.3.0")
+
+    # ── Session sentinel (A1) ─────────────────────────────────────────────────
+    # Opens a record marked clean_exit=False; only ui/shutdown.py's hard_exit()
+    # ever flips it. An OOM kill, a native FailFast or a hang-then-kill leaves it
+    # untouched, which is the entire signal — none of those produce a traceback or
+    # a faulthandler entry, and they were the Store's 8 memory failures + 5 hangs.
+    #
+    # Placed AFTER the single-instance mutex gate above (RULE-WIN16), never before:
+    # a losing duplicate launch exits without building a GUI, and a record written
+    # ahead of that gate would leave a phantom "unclean exit" behind on every
+    # impatient double-click — turning the case the mutex exists to handle into a
+    # false crash report. Reading the version off the QApplication rather than a
+    # literal keeps this off bump_version.py's list of things that can rot.
+    from modules.session_record import begin_session as _begin_session
+
+    _begin_session(app_version=app.applicationVersion())
+    # ─────────────────────────────────────────────────────────────────────────
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1368,7 +1419,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.2.8")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.3.0")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -2432,6 +2483,6 @@ if __name__ == "__main__":
         main()
     except Exception:  # noqa: BLE001
         import traceback
-        _fatal("Unexpected error", traceback.format_exc())
+        _fatal("Unexpected error", _CRASH_BODY, details=traceback.format_exc())
 
 

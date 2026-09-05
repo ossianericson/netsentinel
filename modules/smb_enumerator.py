@@ -160,6 +160,48 @@ def _parse_net_view(raw: str) -> list:
         rows.append((name, share_type.upper(), comment))
     return rows
 
+def _parse_net_user_names(raw: str) -> List[str]:
+    """Return the account names from `net user` output, and nothing else.
+
+    A wrong row here is a **fabricated user account in a security report**, so the
+    only tokens accepted are ones the untranslated table structure vouches for.
+    Three properties carry that, none of them a word:
+
+    * the dashed separator opens the table (`_parse_net_view` already relies on it);
+    * the account rows sit on a 25-column grid, so fields split on runs of 2+ spaces;
+    * the status message is the last non-blank line of the block, always.
+
+    Dropping it by *position* rather than by content is deliberate. "The prose has
+    spaces in it" looks like a structural test and is not one: Japanese writes
+    without inter-word spaces, so `コマンドは正常に終了しました。` is a single
+    whitespace-free token, exactly the shape of a one-account row. And an account
+    name is not an ASCII structure — the previous `[A-Za-z]`-anchored regex silently
+    dropped every Cyrillic and CJK account it saw.
+    """
+    lines = raw.splitlines()
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if len(stripped) >= 3 and set(stripped) == {"-"}:
+            break
+    else:
+        return []  # no table — a usage banner, an error, or empty output
+
+    rows = [ln.rstrip() for ln in lines[idx + 1:]]
+    while rows and not rows[-1].strip():
+        rows.pop()
+    if rows:
+        rows.pop()  # the status message
+
+    names: List[str] = []
+    for row in rows:
+        for field in re.split(r"\s{2,}", row.strip()):
+            # 20 is the Windows account-name limit; anything longer, or carrying
+            # internal whitespace, is prose that happened to land in the block.
+            if field and len(field) <= 20 and not re.search(r"\s", field):
+                names.append(field)
+    return names
+
+
 def _netbios_name_query(host: str, timeout: float = 3.0) -> NetBIOSInfo:
     """
     Send a NetBIOS Name Service status query (UDP 137) and parse the reply.
@@ -400,14 +442,24 @@ def _net_exe_enum(host: str, username: str, password: str, domain: str,
             name=name, share_type=share_type, comment=comment
         ))
 
-    # Users
-    if progress:
-        progress("net user…")
-    raw = _run(["net", "user", f"/domain" if domain else ""])
-    for line in raw.splitlines():
-        for username_match in re.findall(r"\b([A-Za-z][A-Za-z0-9_$-]{1,19})\b", line):
-            if username_match.lower() not in ("user", "accounts", "command", "the"):
-                result.users.append(SMBUser(username=username_match))
+    # Users — only when a domain is given.
+    #
+    # `net user` has no remote-target syntax. Its own usage banner is the proof:
+    # NET USER [username [password | *] [options]] [/DOMAIN] — there is no
+    # \\computer form, so after `net use \\host\IPC$` it still enumerates the
+    # machine it runs on. Without a domain it can say nothing about `host`, and
+    # reporting the scanner's own accounts as the target's would be a worse answer
+    # than none. `/domain` asks a domain controller, which is a real question.
+    #
+    # The previous call passed `""` as a positional argument whenever no domain was
+    # given (`f"/domain" if domain else ""`). Windows reads that as a username and
+    # exits 1 with the usage banner, so `_run` returned "" — the Users table has in
+    # fact been empty on that path on every locale, en-US included.
+    if domain:
+        if progress:
+            progress("net user /domain…")
+        for name in _parse_net_user_names(_run(["net", "user", "/domain"])):
+            result.users.append(SMBUser(username=name))
 
     # Local groups
     raw = _run(["net", "localgroup"])

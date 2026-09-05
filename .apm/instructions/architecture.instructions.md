@@ -297,7 +297,7 @@ These are distinct systems that coexist. Do not mix them — never display inter
 ## Colour Palette (ui/styles.py constants)
 
 Two themes exist, switchable instantly at runtime (`ui/styles.py::apply_theme()`); neither is
-hardcoded UI truth. **`DEFAULT_THEME = "Midnight Pro"`** ([styles.py:283](ui/styles.py#L283)) —
+hardcoded UI truth. **`DEFAULT_THEME = "Midnight Pro"`** ([styles.py:324](ui/styles.py#L324)) —
 the app is dark by default on a fresh install. Arctic Clean is the alternate light theme, opted
 into via the Settings page theme swatch.
 

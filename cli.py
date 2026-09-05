@@ -35,7 +35,37 @@ from pathlib import Path
 # Allow running from the project root without installation.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-_VERSION = "2.2.8"
+# Console-output decoding + hidden child windows (RULE-WIN21). NetSentinelCLI.exe is
+# its own PyInstaller entry point and never imports app.py, so without this call the
+# frozen CLI decodes netsh/tracert/ping output with the ANSI codepage under
+# errors='strict' while those tools emit OEM -- an unhandled UnicodeDecodeError on any
+# machine whose console output carries a non-ASCII adapter name or SSID.
+from modules.console_codec import harden_stdio as _harden_stdio  # noqa: E402
+from modules.console_codec import install as _install_console_codec  # noqa: E402
+
+_install_console_codec()
+_harden_stdio()
+
+# Crash net (A3): faulthandler for native faults, sys.excepthook for the main
+# thread, threading.excepthook for plain threads. NetSentinelCLI.exe installed
+# none of this before -- an unhandled exception left no record anywhere.
+from modules.crash_net import install as _install_crash_net  # noqa: E402
+
+_install_crash_net()
+
+# ── Bound the logs before anything opens one (A4) ─────────────────────────────
+# Nothing rotated anything before this: a real install carried a 4.08 MB
+# theme-switch log and ~1 MB each of stderr, shutdown and scan-timing history.
+# Only fires above a size threshold, and never touches netsentinel_crash.log --
+# monkey_test.py baselines that file's byte size to detect native SEH faults, so
+# shrinking it would silently disarm the project's primary stability gate.
+# Runs BEFORE any log handle is opened: Windows cannot rename an open file.
+from modules.log_rotation import rotate_logs as _rotate_logs  # noqa: E402
+
+_rotate_logs()
+
+
+_VERSION = "2.3.0"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

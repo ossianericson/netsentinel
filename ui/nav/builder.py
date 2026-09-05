@@ -763,6 +763,14 @@ class _NavBuilderMixin:
             if label not in _visited2:
                 self._tip_bar.setChecked(True)
         self._track_page_visit(label)
+        # Session sentinel (A1): the last page reached is the only thing that will
+        # ever say WHERE the user was when a memory kill or a hang ended the process
+        # — those leave no traceback and no faulthandler entry to read.
+        try:
+            from modules.session_record import heartbeat
+            heartbeat(label)
+        except Exception:
+            pass  # instrumentation must never be able to break navigation
         warn_if_nav_slow(label, (time.perf_counter() - _nav_go_to_t0) * 1000)
 
     def _nav_deep_link_go_to(self, label: str) -> None:

@@ -1,25 +1,58 @@
-"""In-app feedback dialog (UX Sprint 10, S10-7).
+"""In-app feedback dialog (UX Sprint 10, S10-7) and the B2 diagnostic-report host.
 
 Opens a simple modal where the user can type a note about the app.
 Feedback is written to a local log file only — no network calls, no telemetry.
 
 File location: get_app_data_dir() / "feedback.log"
 Format: timestamped plain-text entries, one per submission.
+
+The "attach a diagnostic report" checkbox lives here rather than in a dialog of
+its own because this dialog is already the right host: already local-only,
+already reachable from Ctrl+K, and already the place a user goes to say something
+is wrong. A second dialog would be a second thing to find. The report itself is
+built by `modules/diagnostic_report.py`, which redacts before it writes; nothing
+here decides what is safe to include.
 """
 from __future__ import annotations
 
 import datetime
 
 from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QLabel, QPlainTextEdit, QVBoxLayout,
+    QCheckBox, QDialog, QDialogButtonBox, QLabel, QMessageBox, QPlainTextEdit,
+    QVBoxLayout,
 )
 
+from modules.diagnostic_report import REDACTION_NOTE
 from modules.utils import get_app_data_dir
 from ui import styles as _s
 from ui.dialog_utils import run_dialog
 
 _LOG_FILE = "feedback.log"
 _MAX_CHARS = 2000
+
+
+def write_diagnostic_report() -> str | None:
+    """Build and save a diagnostic report. Returns its path, or None on failure.
+
+    Runs on the GUI thread deliberately: it reads a bounded tail of four logs
+    (~64 KB total) plus a handful of cached locale probes, so it sits far below
+    RULE-UX2's 500 ms threshold, and a worker would add a thread to a modal the
+    user is about to close.
+
+    Shared by both surfaces that offer a report so the two cannot drift — the
+    checkbox in this dialog and the "Create diagnostic report" button on the
+    unclean-exit strip produce the identical file.
+    """
+    from PyQt6.QtWidgets import QApplication
+
+    from modules.diagnostic_report import write_report
+
+    app = QApplication.instance()
+    version = app.applicationVersion() if app is not None else ""
+    try:
+        return write_report(app_version=version)
+    except Exception:
+        return None  # RULE-A2: callers report this in plain English, never as a traceback
 
 
 class FeedbackDialog(QDialog):
@@ -68,6 +101,25 @@ class FeedbackDialog(QDialog):
         _s.themed_ss(self._char_lbl, "font-size:10px; color:{TEXT_SECONDARY};")
         vlay.addWidget(self._char_lbl)
 
+        self._attach_chk = QCheckBox("Attach a diagnostic report")
+        self._attach_chk.setToolTip(_s.safe_tooltip(
+            "Saves a separate file next to your reports containing this PC's "
+            "locale and encoding settings, any sessions that ended unexpectedly, "
+            "and the tail of the app's own error logs.\n\n"
+            "IP addresses, MAC addresses, Wi-Fi names, your device names and your "
+            "Windows username are removed before the file is written. Nothing is "
+            "sent anywhere."
+        ))
+        vlay.addWidget(self._attach_chk)
+
+        attach_hint = QLabel(
+            "Saved locally and redacted. Attach this if the app crashed, froze, "
+            "or closed on its own."
+        )
+        attach_hint.setWordWrap(True)
+        _s.themed_ss(attach_hint, "font-size:10px; color:{TEXT_SECONDARY};")
+        vlay.addWidget(attach_hint)
+
         btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -104,14 +156,38 @@ class FeedbackDialog(QDialog):
         text = self._edit.toPlainText().strip()
         if not text:
             return
+
+        report_path = write_diagnostic_report() if self._attach_chk.isChecked() else None
+
         try:
             log_path = get_app_data_dir() / _LOG_FILE
             ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            entry = f"[{ts}]\n{text}\n\n"
+            entry = f"[{ts}]\n{text}\n"
+            if report_path:
+                # Named in the feedback entry so the note and the report can still
+                # be matched up later; the two files are read weeks apart.
+                entry += f"Diagnostic report: {report_path}\n"
             with open(log_path, "a", encoding="utf-8") as fh:
-                fh.write(entry)
+                fh.write(entry + "\n")
         except Exception:
             pass  # non-fatal — feedback is best-effort
+
+        if self._attach_chk.isChecked():
+            if report_path:
+                QMessageBox.information(
+                    self,
+                    "Diagnostic report saved",
+                    "Your feedback was saved, along with a diagnostic report at:\n\n"
+                    f"{report_path}\n\n" + REDACTION_NOTE,
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Diagnostic report not saved",
+                    "Your feedback was saved, but the diagnostic report could not "
+                    "be written — the NetSentinel data folder may be full or "
+                    "read-only. Your feedback itself is unaffected.",
+                )
         self.accept()
 
 

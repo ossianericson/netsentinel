@@ -21,6 +21,7 @@ so scripts never need to implement this protocol manually.  Existing
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from typing import Optional
@@ -49,10 +50,21 @@ class PluginWorker(BaseWorker):
 
     def work(self) -> None:
         try:
+            # Pin BOTH ends of the JSON contract to UTF-8 (RULE-WIN21). The frozen
+            # build injects the OEM console codepage into every unnamed text-mode
+            # child — right for netsh, wrong for a Python child, which encodes a
+            # piped stdout with the local *ANSI* codepage instead. The two differ on
+            # every Windows install, and errors="replace" means the mismatch reaches
+            # json.loads() as corrupt data rather than as an error. Naming the
+            # parent's codec alone does not fix it: the child has to be told too.
+            env = {**os.environ, "PYTHONIOENCODING": "utf-8:replace"}
             proc = subprocess.run(
                 [sys.executable, self._path, "--netsentinel"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env,
                 timeout=self._timeout,
             )
         except subprocess.TimeoutExpired:

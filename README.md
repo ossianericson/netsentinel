@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-7566-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-7806-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -20,7 +20,7 @@ Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning 
 
 **62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**7,566 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**7,806 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -174,7 +174,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**7,566 automated tests** across 546 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**7,806 automated tests** across 559 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -218,7 +218,15 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.2.8 (current)
+### v2.3.0 (current)
+
+- When NetSentinel closes unexpectedly, it now says so the next time you open it, and can package a redacted diagnostic report you can attach to a bug report — the app previously kept no record at all of a crash that produced no traceback
+- Fixed the command-line and Windows-service builds crashing on accented text and keeping no crash record whatsoever; both carried defects the desktop app had already had fixed for it
+- Fixed several checks that returned silently wrong results on non-English Windows — rogue IPv6 router detection always reported "clean", connectivity tests reported unreachable for hosts that answered, and WiFi channel readings were wrong for most access points
+- Fixed the Windows service list in a credentialed scan always coming back empty, the shared-folder scan inventing user accounts that do not exist, and non-Latin device names being silently truncated
+- Fixed PDF export producing a file containing a browser error page, and reporting it as a success
+
+### v2.2.8
 
 - Fixed the app failing to write a crash report at all when the crash message contained non-English characters, such as an accented device name or path
 - Fixed several background workers (bandwidth, app traffic, plugin polling, diagnosis, REST API) that could turn a contained error into a native crash or freeze

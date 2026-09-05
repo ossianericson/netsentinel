@@ -601,6 +601,8 @@ class MTRWorker(QThread):
         import platform
         import re
         import subprocess
+
+        from modules.utils_net import RTT_UNIT as _RTT_UNIT
         system = platform.system()
         if system == "Windows":
             _si = subprocess.STARTUPINFO()
@@ -621,7 +623,8 @@ class MTRWorker(QThread):
                     )
                     for line in r.stdout.splitlines():
                         m = re.match(
-                            r"\s*(\d+)\s+(?:<\s*1|(\d+))\s+ms.*?(\d+\.\d+\.\d+\.\d+|\*)",
+                            r"\s*(\d+)\s+(?:<\s*1|(\d+))\s+" + _RTT_UNIT +
+                            r".*?(\d+\.\d+\.\d+\.\d+|\*)",
                             line,
                         )
                         if m:
