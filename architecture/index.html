@@ -1,0 +1,1732 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Network Security Scanner — Rogue Device Detector, STP Monitor & ISP Accountability Tool">
+      
+      
+      
+        <link rel="canonical" href="https://ossianericson.github.io/netsentinel/architecture/">
+      
+      
+        <link rel="prev" href="../plugin-authoring/">
+      
+      
+        <link rel="next" href="../chaos-testing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Architecture - NetSentinel</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="NetSentinel" class="md-header__button md-logo" aria-label="NetSentinel" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetSentinel
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ossianericson/netsentinel" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ossianericson/netsentinel
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../feature-reference/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../hardware-plugins/" class="md-tabs__link">
+          
+  
+  
+  Extend
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Develop
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../privacy-policy/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Privacy Policy
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="NetSentinel" class="md-nav__button md-logo" aria-label="NetSentinel" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetSentinel
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ossianericson/netsentinel" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ossianericson/netsentinel
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../feature-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../networking-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../incident-patterns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validated Incident Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jargon-dictionary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jargon Dictionary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware-plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Integrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing Scan Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Develop
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Develop
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-pyqt6-instead-of-electron" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why PyQt6 instead of Electron
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-qthread-workers-instead-of-asyncio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why QThread workers instead of asyncio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-sqlite-wal-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why SQLite WAL mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-os-keychain-for-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why OS keychain for secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-the-three-tier-speed-test-cascade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the three-tier speed test cascade
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-a-module-loc-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a module LOC budget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-the-dashboard-was-decomposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the dashboard was decomposed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-write-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File write locations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-scan-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new scan module
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#navigation-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Navigation model
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chaos-testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chaos / Monkey Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-pyqt6-instead-of-electron" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why PyQt6 instead of Electron
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-qthread-workers-instead-of-asyncio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why QThread workers instead of asyncio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-sqlite-wal-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why SQLite WAL mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-os-keychain-for-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why OS keychain for secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-the-three-tier-speed-test-cascade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the three-tier speed test cascade
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-a-module-loc-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a module LOC budget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-the-dashboard-was-decomposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the dashboard was decomposed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-write-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File write locations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-scan-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new scan module
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#navigation-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Navigation model
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
+<p>NetSentinel follows a strict three-layer separation. Network logic is testable without a display. The UI never writes to the database directly.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>UI LAYER       ui/dashboard.py (shell/router), ui/pages/*.py (page widgets)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>               Reads from MetricStore for display. Never writes directly.
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>               Never imports from modules/alert_engine.py.
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>DATA LAYER     modules/metric_store.py  ←→  NetSentinel.db (AppData)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>               Single source of truth for all persisted metrics.
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>               WAL mode; safe for concurrent reads from background workers.
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>MODULE LAYER   modules/*.py
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>               Pure business logic — no PyQt imports, no direct DB writes.
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>               Every module is importable and testable with no display.
+</code></pre></div>
+<hr />
+<h2 id="key-design-decisions">Key design decisions<a class="headerlink" href="#key-design-decisions" title="Permanent link">&para;</a></h2>
+<h3 id="why-pyqt6-instead-of-electron">Why PyQt6 instead of Electron<a class="headerlink" href="#why-pyqt6-instead-of-electron" title="Permanent link">&para;</a></h3>
+<p>NetSentinel's core is scapy/nmap/ctypes-level network access (ARP, SYN scanning, Win32 gateway-MAC lookups) with no JS equivalent — Electron would still need that logic in a separate Python process behind IPC, so it buys nothing there while adding a bundled Chromium + Node runtime on top of the Python one. PyQt6 keeps it a single native process: one PyInstaller <code>.exe</code>, no bundled browser engine, and genuinely native Win32 window chrome (Aero Snap, Snap Layouts, Win+arrow via real <code>WM_NCCALCSIZE</code>, not a faked frameless popup) plus instant whole-app theme switching through Qt's own stylesheet engine instead of a page reload. This was evaluated once and closed — see the <code>STATUS: SETTLED</code> block in <code>ui/native_chrome.py</code>; RULE-SPIKE1/2 require a new spike document before reopening it.</p>
+<h3 id="why-qthread-workers-instead-of-asyncio">Why QThread workers instead of asyncio<a class="headerlink" href="#why-qthread-workers-instead-of-asyncio" title="Permanent link">&para;</a></h3>
+<p>PyQt6's event loop owns the main thread. Python's <code>asyncio</code> event loop does not integrate cleanly with Qt — you would need <code>qasync</code> or similar glue and lose access to Qt signals/slots across thread boundaries. Every background operation uses a <code>QThread</code> subclass in <code>workers/</code> that emits <code>result_ready</code> and <code>error</code> signals. The UI thread connects slots to those signals. No shared mutable state, no locks.</p>
+<h3 id="why-sqlite-wal-mode">Why SQLite WAL mode<a class="headerlink" href="#why-sqlite-wal-mode" title="Permanent link">&para;</a></h3>
+<p>Multiple background worker threads read from <code>MetricStore</code> concurrently while the UI thread also reads for display. WAL (Write-Ahead Logging) allows concurrent readers during a write, unlike journal mode which blocks all readers. The singleton pattern in <code>MetricStore</code> ensures a single connection object; WAL handles the rest.</p>
+<h3 id="why-os-keychain-for-secrets">Why OS keychain for secrets<a class="headerlink" href="#why-os-keychain-for-secrets" title="Permanent link">&para;</a></h3>
+<p><code>QSettings</code> is plaintext in the Windows Registry or an INI file. A <code>NetSentinel.ini</code> in AppData is readable by any process running as the same user. <code>keyring</code> delegates to the Windows Credential Manager, macOS Keychain, or libsecret on Linux — all of which enforce OS-level access control. SMTP credentials, SNMP community strings, API keys, and plugin credentials all go through <code>keyring</code>.</p>
+<h3 id="why-the-three-tier-speed-test-cascade">Why the three-tier speed test cascade<a class="headerlink" href="#why-the-three-tier-speed-test-cascade" title="Permanent link">&para;</a></h3>
+<p>Ookla CLI produces the most accurate results (server-side precision, 1 Gbps+ support) but cannot be bundled due to EULA. <code>speedtest-cli</code> is Python-native with 8 download / 4 upload threads and no EULA restriction. The pure-Python fallback uses 16 <code>ThreadPoolExecutor</code> TCP streams and works with zero additional dependencies — so the speed test always runs regardless of what is installed. The <code>SpeedTestResult</code> datatype is identical across all three; the frontend never knows which backend ran.</p>
+<h3 id="why-a-module-loc-budget">Why a module LOC budget<a class="headerlink" href="#why-a-module-loc-budget" title="Permanent link">&para;</a></h3>
+<p>Large files are a maintenance hazard: they attract more code, become harder to test in isolation, and cause merge conflicts. Every file in <code>modules/</code> is capped at 780 lines (raised from 600 by owner decision, 2026-07-18 — the intent is unchanged, the threshold was simply forcing splits earlier than the codebase's real cohesion boundaries). The budget is enforced by <code>tests/test_module_loc.py</code>, which fails CI if any module exceeds it. 19 modules were split during development when they hit the original limit. The test also documents which files have known higher budgets and why.</p>
+<h3 id="why-the-dashboard-was-decomposed">Why the dashboard was decomposed<a class="headerlink" href="#why-the-dashboard-was-decomposed" title="Permanent link">&para;</a></h3>
+<p><code>ui/dashboard.py</code> began as a 13,483-line monolith. Decomposition over four sprints produced six inherited mixins and nine page-factory mixins:</p>
+<table>
+<thead>
+<tr>
+<th>Mixin</th>
+<th>File</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ScanResultMixin</code></td>
+<td><code>ui/scan_wiring.py</code></td>
+<td>Scan result handlers; persistent device map merge</td>
+</tr>
+<tr>
+<td><code>AppHeaderMixin</code></td>
+<td><code>ui/header.py</code></td>
+<td>Header construction; frameless-window behaviour</td>
+</tr>
+<tr>
+<td><code>TabBuilderMixin</code></td>
+<td><code>ui/tabs.py</code></td>
+<td>Page factory; sidebar assembly (inherits all <code>_*TabsMixin</code>)</td>
+</tr>
+<tr>
+<td><code>_NavBuilderMixin</code></td>
+<td><code>ui/nav/builder.py</code></td>
+<td>Rail/flyout build; runtime palette; pin methods</td>
+</tr>
+<tr>
+<td><code>_MonitorStateMixin</code></td>
+<td><code>ui/monitor_state.py</code></td>
+<td>Verdict/badge/pill display; KPI tiles</td>
+</tr>
+<tr>
+<td><code>_PluginPageMixin</code></td>
+<td><code>ui/plugin_page_mixin.py</code></td>
+<td>Plugin page lifecycle; HW auto-detect</td>
+</tr>
+</tbody>
+</table>
+<p><code>dashboard.py</code> now stands at 1,967 lines. Each mixin has a single responsibility and its own test file.</p>
+<hr />
+<h2 id="module-inventory">Module inventory<a class="headerlink" href="#module-inventory" title="Permanent link">&para;</a></h2>
+<p>Key modules and their roles:</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>modules/combined_discovery.py</code></td>
+<td>Main scan orchestrator — coordinates ARP, ICMP, SYN, mDNS sweeps</td>
+</tr>
+<tr>
+<td><code>modules/metric_store.py</code></td>
+<td>SQLite time-series DB (singleton, WAL mode, schema v21)</td>
+</tr>
+<tr>
+<td><code>modules/metric_store_schema.py</code></td>
+<td>DDL, schema version, column migrations, dataclasses</td>
+</tr>
+<tr>
+<td><code>modules/metric_store_queries.py</code></td>
+<td>cert/service/device/HA/snapshot/grade query methods</td>
+</tr>
+<tr>
+<td><code>modules/metric_store_queries_uptime.py</code></td>
+<td>uptime/device-state query methods</td>
+</tr>
+<tr>
+<td><code>modules/metric_store_queries_metrics.py</code></td>
+<td>RTT/speed/CVE/alert/modem/mesh query methods</td>
+</tr>
+<tr>
+<td><code>modules/alert_engine.py</code></td>
+<td>Alert evaluation — fires rules, routes to NotificationRouter</td>
+</tr>
+<tr>
+<td><code>modules/alert_suppressor.py</code></td>
+<td>EscalationPolicy + default suppression rules</td>
+</tr>
+<tr>
+<td><code>modules/notification_router.py</code></td>
+<td>Routes alerts to configured channels</td>
+</tr>
+<tr>
+<td><code>modules/notification_channels.py</code></td>
+<td>Per-channel delivery (email, webhook, toast, Pushover, Ntfy, Telegram)</td>
+</tr>
+<tr>
+<td><code>modules/speed_tester.py</code></td>
+<td>3-tier cascade public API</td>
+</tr>
+<tr>
+<td><code>modules/speed_tester_backends.py</code></td>
+<td>Ookla CLI + speedtest-cli + pure-Python backends</td>
+</tr>
+<tr>
+<td><code>modules/speed_tester_servers.py</code></td>
+<td>Server discovery via GeoLite2 + parallel ping</td>
+</tr>
+<tr>
+<td><code>modules/device_classifier.py</code></td>
+<td>OUI → device type + risk score</td>
+</tr>
+<tr>
+<td><code>modules/device_stability.py</code></td>
+<td>IP stability scoring + role inference (persistent device map)</td>
+</tr>
+<tr>
+<td><code>modules/network_segments.py</code></td>
+<td>Auto-detect /24 subnet groups; user-editable segment names</td>
+</tr>
+<tr>
+<td><code>modules/root_cause_correlator.py</code></td>
+<td>Prioritised plain-English findings from scan data</td>
+</tr>
+<tr>
+<td><code>modules/service_diagnostics.py</code></td>
+<td>DiagnosticEngine — DNS/TCP/HTTPS/ICMP/traceroute probes</td>
+</tr>
+<tr>
+<td><code>modules/service_diagnostics_probes.py</code></td>
+<td>Low-level probe implementations</td>
+</tr>
+<tr>
+<td><code>modules/service_mapper.py</code></td>
+<td>Maps device_type/vendor → expected services</td>
+</tr>
+<tr>
+<td><code>modules/topology_cytoscape.py</code></td>
+<td>Cytoscape.js element builder + stylesheet (pure Python)</td>
+</tr>
+<tr>
+<td><code>modules/topology_cytoscape_html.py</code></td>
+<td>HTML/JS page template for the Cytoscape map</td>
+</tr>
+<tr>
+<td><code>modules/topology_snapshot.py</code></td>
+<td>TopologySnapshot + TopologyDiff — change detection</td>
+</tr>
+<tr>
+<td><code>modules/network_environment.py</code></td>
+<td>home/vpn/corporate/large_subnet detection; scan scope + authorization fingerprinting</td>
+</tr>
+<tr>
+<td><code>modules/adaptive_timing.py</code></td>
+<td>Gateway-RTT-derived probe timeout profile for large/high-latency networks</td>
+</tr>
+<tr>
+<td><code>modules/health_score.py</code></td>
+<td>HealthScoreCalculator — ambient score from always-on monitor data</td>
+</tr>
+<tr>
+<td><code>modules/plugin_system.py</code></td>
+<td>Plugin loader + sandbox execution engine</td>
+</tr>
+<tr>
+<td><code>modules/plugin_registry.py</code></td>
+<td>Plugin discovery, metadata, enable/disable state</td>
+</tr>
+<tr>
+<td><code>modules/plugin_tools.py</code></td>
+<td>Validator CLI + signature check</td>
+</tr>
+<tr>
+<td><code>modules/app_traffic_classifier.py</code></td>
+<td>Port→category heuristics; per-host protocol breakdown</td>
+</tr>
+<tr>
+<td><code>modules/cdn_ranges.py</code></td>
+<td>Static CDN/streaming-provider IP range classifier</td>
+</tr>
+<tr>
+<td><code>modules/traffic_insights.py</code></td>
+<td>Usage narrative builders; plan utilization; QoS recommendation</td>
+</tr>
+<tr>
+<td><code>modules/utils.py</code></td>
+<td><code>get_app_data_dir()</code>, <code>is_admin()</code>, ping sweep, Wake-on-LAN</td>
+</tr>
+<tr>
+<td><code>modules/utils_net.py</code></td>
+<td><code>get_network_info()</code>, <code>get_dhcp_info()</code>, <code>get_interface_details()</code></td>
+</tr>
+<tr>
+<td><code>modules/colours.py</code></td>
+<td>Colour constants for charts and HTML reports</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="workers">Workers<a class="headerlink" href="#workers" title="Permanent link">&para;</a></h2>
+<p>All network I/O runs in <code>workers/</code> (<code>QThread</code> subclasses). They emit <code>result_ready</code> and <code>error</code> signals back to the UI thread. Blocking I/O on the main thread is forbidden — <code>RULE-WIN1</code> prevents <code>subprocess.PIPE</code> on startup paths where it causes <code>STATUS_ACCESS_VIOLATION</code> on Windows.</p>
+<p>Key workers:</p>
+<table>
+<thead>
+<tr>
+<th>Worker</th>
+<th>Fires every</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scan_worker.py</code></td>
+<td>On demand</td>
+<td>Orchestrates combined discovery</td>
+</tr>
+<tr>
+<td><code>health_worker.py</code></td>
+<td>60 s</td>
+<td>Ambient health score from always-on data</td>
+</tr>
+<tr>
+<td><code>availability_worker.py</code></td>
+<td>Configurable</td>
+<td>RTT ping per tracked device</td>
+</tr>
+<tr>
+<td><code>app_traffic_worker.py</code></td>
+<td>10 s</td>
+<td>Per-host protocol sniffer</td>
+</tr>
+<tr>
+<td><code>bandwidth_worker.py</code></td>
+<td>Continuous</td>
+<td>Per-MAC rx/tx capture</td>
+</tr>
+<tr>
+<td><code>lldp_worker.py</code></td>
+<td>15 s</td>
+<td>LLDP neighbor sniff</td>
+</tr>
+<tr>
+<td><code>speed_test_worker.py</code></td>
+<td>On demand</td>
+<td>3-tier cascade speed test</td>
+</tr>
+<tr>
+<td><code>service_diagnostics_worker.py</code></td>
+<td>On demand</td>
+<td>DiagnosticEngine.run()</td>
+</tr>
+<tr>
+<td><code>passive_observer_worker.py</code></td>
+<td>Continuous</td>
+<td>SSDP + mDNS passive listener</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="file-write-locations">File write locations<a class="headerlink" href="#file-write-locations" title="Permanent link">&para;</a></h2>
+<p>All file writes go through <code>get_app_data_dir()</code> from <code>modules/utils.py</code>:</p>
+<ul>
+<li><strong>Windows:</strong> <code>%LOCALAPPDATA%\NetSentinel\</code></li>
+<li><strong>macOS:</strong> <code>~/Library/Application Support/NetSentinel/</code></li>
+<li><strong>Linux:</strong> <code>$XDG_CONFIG_HOME/NetSentinel/</code> (default <code>~/.config/NetSentinel/</code>)</li>
+</ul>
+<p>The installed binary lives in <code>C:\Program Files\NetSentinel\</code> — a read-only directory for standard users. Writing to the exe directory at runtime would silently fail or raise <code>PermissionError</code>. The only exception is <code>network_logger.py</code>, which writes CSVs to <code>~/Documents/NetSentinel/logs/</code> by design (user-accessible log files).</p>
+<hr />
+<h2 id="test-architecture">Test architecture<a class="headerlink" href="#test-architecture" title="Permanent link">&para;</a></h2>
+<p>The test suite has 7,806 tests across 559 files. Key categories:</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Files</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Encoding hygiene</td>
+<td><code>test_source_encoding.py</code></td>
+<td>Mojibake (UTF-8 decoded as cp1252) in string literals</td>
+</tr>
+<tr>
+<td>Interactive state</td>
+<td><code>test_interactive_states.py</code></td>
+<td>QPushButton with <code>color:</code> but no <code>:pressed</code> rule (white-on-white on light themes)</td>
+</tr>
+<tr>
+<td>Module LOC budget</td>
+<td><code>test_module_loc.py</code></td>
+<td>Any module exceeding 780 lines</td>
+</tr>
+<tr>
+<td>Duplicate methods</td>
+<td><code>test_no_duplicate_methods.py</code></td>
+<td>Same method defined twice in a class (silent Python discard)</td>
+</tr>
+<tr>
+<td>Bare pass in except</td>
+<td><code>test_no_bare_pass.py</code></td>
+<td>Silent exception swallowing without an explanatory comment</td>
+</tr>
+<tr>
+<td>Version consistency</td>
+<td><code>test_version_consistency.py</code></td>
+<td>Version string mismatch across all 12 tracked files</td>
+</tr>
+<tr>
+<td>Signal integration</td>
+<td>Various <code>test_*_wiring.py</code></td>
+<td>Signal→slot chains that cross animation delays (160ms nav crossfade)</td>
+</tr>
+<tr>
+<td>UI wiring</td>
+<td>Various</td>
+<td>Page-to-scan result connections wired in <code>app.py</code></td>
+</tr>
+<tr>
+<td>Style token imports</td>
+<td><code>test_style_token_imports.py</code></td>
+<td>Colour tokens used in UI files without a matching import from <code>ui/styles.py</code></td>
+</tr>
+<tr>
+<td>Nav completeness</td>
+<td><code>test_nav_completeness.py</code></td>
+<td>Every registered page reachable from <code>_build_pro_nav()</code></td>
+</tr>
+</tbody>
+</table>
+<p>Run the full suite:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w"> </span>-v<span class="w"> </span>--tb<span class="o">=</span>short
+</code></pre></div>
+<p>All tests are offline — no real network traffic or live devices required.</p>
+<hr />
+<h2 id="adding-a-new-scan-module">Adding a new scan module<a class="headerlink" href="#adding-a-new-scan-module" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>modules/&lt;name&gt;.py</code> — pure Python, no PyQt imports; cap at 780 lines</li>
+<li><code>workers/&lt;name&gt;_worker.py</code> — QThread, emits <code>result_ready(object)</code> and <code>error(str)</code></li>
+<li><code>ui/pages/&lt;name&gt;_page.py</code> — receives <code>store: MetricStore</code> as constructor parameter</li>
+<li>Register in <code>dashboard._build_pro_nav()</code> under the correct nav section</li>
+<li>Add <code>tests/test_&lt;name&gt;.py</code> with at least one import test and one behavioural test</li>
+<li>Add the module to <code>hiddenimports</code> in <code>NetSentinel.spec</code> (omitting it causes <code>ModuleNotFoundError</code> in the installed binary only)</li>
+</ol>
+<p>The new page is automatically discovered by <code>tools/systematic_test.py</code> via <code>_discover_pages()</code> — no manual list to update.</p>
+<hr />
+<h2 id="navigation-model">Navigation model<a class="headerlink" href="#navigation-model" title="Permanent link">&para;</a></h2>
+<p>Main window: permanent 48 px activity rail + 280 px animated flyout + <code>QStackedWidget</code>.</p>
+<ul>
+<li>Sections declared with <code>_nav_begin_section(name, lucide_icon_name)</code> inside <code>_build_pro_nav()</code></li>
+<li>Pages registered with <code>_nav_add_rail_item(label, widget, admin_required, audit_item)</code></li>
+<li><code>_nav_rail_go_to(label)</code> switches the stack and updates the breadcrumb strip</li>
+<li>Ctrl+K opens the command palette (fuzzy-match any page); Ctrl+F focuses sidebar search; Esc closes the flyout</li>
+<li>Right-click any flyout item to pin it; pinned items appear in a "Pinned" rail section at index 0</li>
+</ul>
+<p>Full coding conventions and all development rules: <a href="https://github.com/ossianericson/netsentinel/tree/main/.claude/rules"><code>.claude/rules/</code></a> (APM source: <code>.apm/instructions/</code>)</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/ossianericson/netsentinel" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
