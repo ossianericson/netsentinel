@@ -32,6 +32,8 @@ from ui.widgets.empty_state_card import EmptyStateCard
 from ui.tabs_helpers import _table
 from ui import styles as _s
 from ui.dialog_utils import run_dialog
+from ui.error_display import show_worker_error
+from modules.app_health_catalogue import SYSLOG_RECEIVER
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -182,6 +184,8 @@ class SyslogPage(QWidget):
         # Status bar
         self._status_lbl = QLabel("Not listening.")
         _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        # S5: the receiver's error shows the Home strip's condition text, longer than one line.
+        self._status_lbl.setWordWrap(True)
         root.addWidget(self._status_lbl)
 
         # KPI row
@@ -332,10 +336,9 @@ class SyslogPage(QWidget):
 
     @pyqtSlot(str)
     def on_error(self, text: str) -> None:
-        self._status_lbl.setText(
-            f"Syslog receiver error — {text}. "
-            "Check that UDP port 514 is not blocked by another application or firewall."
-        )
+        # The Home strip's wording (S5): a taken 514 never errors — the receiver falls back —
+        # so the old "check that UDP port 514 is not blocked" pointed at the wrong cause.
+        show_worker_error(self._status_lbl, text, SYSLOG_RECEIVER)
         _s.themed_ss(self._status_lbl, "font-size:11px; color:{AMBER}; background:transparent;")
 
     # ── Filter / table rebuild ────────────────────────────────────────────────

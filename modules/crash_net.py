@@ -21,8 +21,8 @@ import threading
 import traceback
 from typing import Callable, Optional
 
-#: Kept alive for the process lifetime — faulthandler writes to the raw fd.
-_crash_log_fd = None
+#: Raw fd faulthandler writes to for the life of the process. Deliberately never closed.
+_crash_log_fd: Optional[int] = None
 
 __all__ = [
     "crash_log_path",
@@ -82,17 +82,39 @@ def _enable_faulthandler() -> None:
     import faulthandler
 
     try:
-        # No encoding= on purpose: faulthandler writes bytes to the raw fd and never
-        # touches the text codec, so naming one would be wrong, not merely redundant.
-        # Append mode is load-bearing — see crash_log_path().
-        # Deliberately never closed, and held in a module global so it cannot be
-        # garbage-collected: faulthandler writes to this fd for the life of the
-        # process, and a native fault arrives with no chance to reopen anything.
-        # Closing it would disable the only detector for the SEH class the chaos
-        # harness gates on. CodeQL py/file-not-closed flags the shape, not the
-        # intent (alert 1637, dismissed as won't-fix).
-        _crash_log_fd = open(crash_log_path(), "a")  # noqa: SIM115  # lgtm[py/file-not-closed]
-        faulthandler.enable(file=_crash_log_fd)
+        # os.open, not open(): faulthandler writes bytes straight to the raw fd and
+        # never consults the text codec, so a buffered Python file object here buys
+        # nothing and costs something — were it ever garbage-collected the fd would
+        # close underneath faulthandler and the crash log would go silently dead. A
+        # bare int cannot be collected, so that hazard stops existing rather than
+        # being defended against by keeping the object alive in a module global.
+        # O_BINARY is what io.FileIO already applied on Windows, so the log keeps its
+        # existing LF line endings. Append mode is load-bearing — see crash_log_path().
+        # An ARMED fd is deliberately never closed: faulthandler writes to it until the
+        # process dies, and a native fault gives no chance to reopen anything.
+        previous = _crash_log_fd
+        fd = os.open(
+            crash_log_path(),
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0),
+        )
+        _crash_log_fd = fd
+        try:
+            faulthandler.enable(file=_crash_log_fd)
+        except Exception:
+            # Never armed, so nothing will ever write to it: close it rather than leak
+            # it into the stderr fallback below, and put the global back to the fd that
+            # IS armed — it must never name a closed or unarmed descriptor.
+            os.close(fd)
+            _crash_log_fd = previous
+            raise
+        if previous is not None:
+            # Only reachable from a repeat install(), which is documented as safe.
+            # Closed strictly after the new fd is armed — faulthandler must never be
+            # left pointing at a closed descriptor, not even for one instruction.
+            try:
+                os.close(previous)
+            except OSError:
+                pass  # previous fd already closed; the new one is armed, nothing to recover
     except Exception:
         faulthandler.enable()  # fallback: write to stderr
 

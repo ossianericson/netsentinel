@@ -247,6 +247,70 @@ class TestRateSpikeDetection:
         assert any(a.alert_type == "RATE_SPIKE" for a in alerts)
 
 
+# ── NEW_PORT: one alert per connection the device opens (RULE-WIN28) ─────────
+
+class TestNewPortAlerts:
+    """Live 2026-09-18: NEW_PORT fired for every TCP packet to a port absent from the
+    baseline. A device answering clients sends to each client's ephemeral port, so the
+    monitor raised ~10,000 alerts in minutes and the GUI drain hung. A new port means the
+    device OPENED a connection (SYN without ACK), and it is news once per device and port.
+    """
+
+    CLIENT = "192.168.1.77"   # in known_ips, so NEW_DEST stays out of these counts
+
+    def _monitor(self):
+        baseline = DeviceBaseline(
+            mac="aa:bb:cc:00:00:40", ip="192.168.1.40", device_type="Smart TV",
+            vendor="Acme", model="TV", known_ips=[self.CLIENT], known_ports=[443],
+        )
+        alerts = []
+        return baseline, alerts, IoTMonitor({baseline.mac: baseline}, on_alert=alerts.append)
+
+    @staticmethod
+    def _new_port(alerts):
+        return [a for a in alerts if a.alert_type == "NEW_PORT"]
+
+    def test_replies_to_client_ephemeral_ports_raise_no_new_port(self):
+        from scapy.all import IP, TCP
+
+        baseline, alerts, monitor = self._monitor()
+        for i in range(20):   # the device serving 8008 answers 20 client connections
+            for flags in ("SA", "A", "PA"):
+                monitor._handle(IP(src=baseline.ip, dst=self.CLIENT)
+                                / TCP(sport=8008, dport=50000 + i, flags=flags))
+
+        assert self._new_port(alerts) == []
+
+    def test_repeated_syns_to_one_new_port_raise_one_alert(self):
+        from scapy.all import IP, TCP
+
+        baseline, alerts, monitor = self._monitor()
+        for sport in range(40000, 40005):
+            monitor._handle(IP(src=baseline.ip, dst=self.CLIENT) / TCP(sport=sport, dport=8443, flags="S"))
+
+        (alert,) = self._new_port(alerts)
+        assert alert.severity == "MEDIUM" and "8443" in alert.detail
+
+    def test_an_always_alert_port_is_raised_once_per_device(self):
+        from scapy.all import IP, TCP
+
+        baseline, alerts, monitor = self._monitor()
+        for sport in (40000, 40001, 40002):
+            monitor._handle(IP(src=baseline.ip, dst=self.CLIENT) / TCP(sport=sport, dport=23, flags="S"))
+        monitor._handle(IP(src=baseline.ip, dst=self.CLIENT) / TCP(sport=40000, dport=23, flags="PA"))
+
+        (alert,) = self._new_port(alerts)
+        assert alert.severity == "CRITICAL" and "23" in alert.detail
+
+    def test_a_syn_to_a_baselined_port_raises_nothing(self):
+        from scapy.all import IP, TCP
+
+        baseline, alerts, monitor = self._monitor()
+        monitor._handle(IP(src=baseline.ip, dst=self.CLIENT) / TCP(sport=40000, dport=443, flags="S"))
+
+        assert self._new_port(alerts) == []
+
+
 # ── inject_into_assessment ────────────────────────────────────────────────────
 
 class TestInjectIntoAssessment:

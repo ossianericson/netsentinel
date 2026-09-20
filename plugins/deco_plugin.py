@@ -148,6 +148,18 @@ def _fmt_err(exc: Exception) -> str:
         return 'AUTH: ' + msg
     return 'ERR: ' + msg
 
+def _partial_marker(clients) -> dict:
+    """``{"failed_nodes": [...]}`` when some nodes' clients are missing, else ``{}``.
+
+    RULE-SURF1 / error-surfacing S4.4d: a node whose client query failed drops out of
+    ``get_all_clients()``, so the count would otherwise read as the whole mesh. getattr,
+    not ``.failed_nodes``: an older ``modules.deco_client`` returns a plain list — and an
+    absent key keeps meaning "complete" for every consumer that never heard of it.
+    """
+    failed = list(getattr(clients, "failed_nodes", None) or [])
+    return {"failed_nodes": failed} if failed else {}
+
+
 def get_info() -> dict:
     host, _ = _load_credentials()
     return {
@@ -184,6 +196,7 @@ def get_status() -> dict:
                 "nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip,
                            "role": u.role, "online": getattr(u, "online", True)}
                           for u in units],
+                **_partial_marker(clients),
             },
         }
     except (MeshAuthError, MeshApiError) as exc:
@@ -236,6 +249,7 @@ if "--netsentinel" in _sys.argv:
         _client = DecoMeshClient(_host, _pw)
         _client.login()
         _units  = _client.get_mesh_units()
+        _all_clients = _client.get_all_clients(units=_units)
         _client_list = [
             {
                 "ip":            c.ip,
@@ -246,7 +260,7 @@ if "--netsentinel" in _sys.argv:
                 "upload_kbps":   c.upload_kbps,
                 "download_kbps": c.download_kbps,
             }
-            for c in _client.get_all_clients(units=_units)
+            for c in _all_clients
         ]
 
         _status = {
@@ -256,7 +270,8 @@ if "--netsentinel" in _sys.argv:
             "extra": {"nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip,
                                  "role": u.role,
                                  "online": getattr(u, "online", True)}
-                                 for u in _units]},
+                                 for u in _units],
+                      **_partial_marker(_all_clients)},
         }
         _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": _host,
                  "manufacturer": "TP-Link", "model": "Deco XE75", "firmware": None}

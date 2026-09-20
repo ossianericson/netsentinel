@@ -42,6 +42,8 @@ from ui.widgets.empty_state_card import EmptyStateCard
 from PyQt6.QtGui import QColor
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, worker_error_text
 from ui.styles import (
     CHART_AXIS, CHART_DOWN, CHART_UP,
 )
@@ -255,9 +257,7 @@ class LiveBandwidthPage(QWidget):
             from workers.iface_bw_worker import IfaceBwPoller
             self._worker = IfaceBwPoller(interval_s=1.0, parent=self)
             self._worker.stats_ready.connect(self._on_stats)
-            self._worker.error.connect(
-                lambda e: self._ax.set_title(f"⚠  {e}", color=_s.RED, fontsize=9)
-            )
+            self._worker.error.connect(self._on_poller_error)
             self._worker.start()
 
     def _stop_worker(self) -> None:
@@ -290,6 +290,17 @@ class LiveBandwidthPage(QWidget):
     # ── Data handling ─────────────────────────────────────────────────────────
 
     @pyqtSlot(dict)
+    @pyqtSlot(str)
+    def _on_poller_error(self, msg: str) -> None:
+        """The chart title is this page's only status surface; it wraps, and the raw text is logged.
+
+        The poller retries every second, so this can repeat — the app log's repeat limiter (S2.3)
+        keeps that from flooding it.
+        """
+        self._ax.set_title(worker_error_text(WE.LIVE_BANDWIDTH), color=_s.RED, fontsize=9, wrap=True)
+        self._canvas.draw_idle()
+        record_worker_error(WE.LIVE_BANDWIDTH, msg)
+
     def _on_stats(self, stats: dict) -> None:
         """Called every second with per-interface Mbps data."""
         self._content_stack.setCurrentIndex(1)

@@ -103,8 +103,9 @@ class TestAbuseNotTestableHandler:
             page._on_abuse_not_testable("timed out")
 
             text = page._lookup_result.text()
-            assert "Could not test" in text
-            assert "timed out" in text
+            assert "could not test" in text.lower()
+            # S6b (RULE-A2): the raw reason goes to the app log, not the verdict line.
+            assert "timed out" not in text
             assert "private" not in text.lower()
             assert page._lookup_btn.isEnabled() is True
         finally:

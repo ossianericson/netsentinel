@@ -17,7 +17,7 @@ description: "NetSentinel architecture reference — tech stack, repository layo
 | Config persistence | QSettings / INI file (NetSentinel.ini) |
 | Data persistence | SQLite via MetricStore (WAL mode, schema v21) |
 | Secrets | OS keychain via `keyring` (RULE 22-A) |
-| Logging | Python `logging` module + custom CSV logger |
+| Logging | `modules/app_logging.py` — root config at every entry point (timestamp/level/logger) to `netsentinel_app.log`; custom CSV logger for network logs |
 
 ## Repository Layout
 
@@ -37,7 +37,7 @@ netsentinel/
 ├── installer.iss           # Inno Setup — optional Ookla CLI winget task
 ├── .github/                # winget manifests + workflows/release.yml (CI: build → release → winget)
 │
-├── modules/                # Backend logic — pure Python, NO PyQt imports, NO direct DB writes (~125 files)
+├── modules/                # Backend logic — pure Python, NO PyQt imports, NO direct DB writes (~192 files)
 │   #  Each file is a self-contained scanner/monitor/helper named for its job.
 │   #  Notable anchors (split families & single-purpose hubs):
 │   ├── metric_store*.py        # SQLite time-series DB singleton + schema/query mixins (the DATA layer)
@@ -53,7 +53,7 @@ netsentinel/
 │
 ├── ui/                     # PyQt6 UI — reads MetricStore for display, never writes it (the UI layer)
 │   ├── styles.py               # SINGLE SOURCE OF TRUTH for all colours and QSS (RULE 1 / RULE-AH3)
-│   ├── dashboard.py            # Main window shell (~1,754 lines) — inherits the mixins below
+│   ├── dashboard.py            # Main window shell (~2,238 lines) — inherits the mixins below
 │   ├── scan_wiring.py / scan_enrichment.py / header.py / monitor_state.py / plugin_page_mixin.py / export_mixin.py  # Dashboard mixins
 │   ├── scan_settings.py        # Env-aware scan defaults — flush-caches, scan scope, authorization, rate caps (ARCH RULE 26)
 │   ├── native_chrome.py / uia_warmup.py  # Win32 window/startup plumbing — ctypes only, zero Qt objects in the

@@ -36,6 +36,7 @@ Config example (all keys optional — defaults shown):
 
 import configparser
 import datetime
+import logging
 import os
 import sys
 import threading
@@ -71,6 +72,30 @@ _install_crash_net()
 from modules.log_rotation import rotate_logs as _rotate_logs  # noqa: E402
 
 _rotate_logs()
+
+# ── The formatted application log (D4) ────────────────────────────────────────
+# Configured by each entry path below, NOT at import time: `import svc` would
+# otherwise create and hold netsentinel_app.log as a side effect of the import alone.
+# This binary has the most to gain from the log itself -- the service runs UNATTENDED,
+# so a log.warning out of NetworkLogger reached stderr as a bare undated message that
+# nobody was present to read, and log.info was dropped outright. The version comes from
+# modules/version.py because svc.py carries no version string of its own, and "which
+# build wrote this?" is the first question asked of a service log.
+from modules.app_logging import configure as _configure_app_log  # noqa: E402
+from modules.error_text import explain as _explain  # noqa: E402
+from modules.version import APP_VERSION as _APP_VERSION  # noqa: E402
+
+
+def _headless_error(what: str, exc: BaseException) -> str:
+    """S10.1 — what failed, why, and what to do next, for a surface with no tooltip.
+
+    RULE-A2's sinks are Qt widgets, so the census cannot see the Windows Event Log or a
+    ``print`` to stderr; both were handed the exception's own text, which Windows localizes
+    and which says nothing about what to do. The raw text and its traceback belong in
+    ``netsentinel_app.log``, where a reader who wants them can find them.
+    """
+    explanation = _explain(exc)
+    return f"{what}. {explanation.why} {explanation.next_step}"
 
 
 # ── Service identity ──────────────────────────────────────────────────────────
@@ -216,6 +241,9 @@ try:
         SvcOtherEx = SvcStop  # pre-shutdown also routes here
 
         def SvcDoRun(self):
+            # The unattended path: nobody is watching stderr, so the timestamped
+            # record is the only account of what this service did (D4).
+            _configure_app_log(_APP_VERSION)
             servicemanager.LogMsg(
                 servicemanager.EVENTLOG_INFORMATION_TYPE,
                 servicemanager.PYS_SERVICE_STARTED,
@@ -234,8 +262,11 @@ try:
             try:
                 _run_logger(stop_event=self._thread_stop)
             except Exception as exc:
+                logging.getLogger("netsentinel.svc").error(
+                    "%s stopped on an error", _SVC_DISPLAY, exc_info=exc)
                 servicemanager.LogErrorMsg(
-                    f"{_SVC_DISPLAY} encountered an error: {exc}"
+                    _headless_error(f"{_SVC_DISPLAY} stopped and is no longer logging", exc)
+                    + " The full error is in netsentinel_app.log."
                 )
             finally:
                 servicemanager.LogMsg(
@@ -272,7 +303,15 @@ def _cmd_status() -> None:
         code = win32serviceutil.QueryServiceStatus(_SVC_NAME)[1]
         print(f"{_SVC_DISPLAY}: {_labels.get(code, f'UNKNOWN ({code})')}")
     except Exception as exc:
-        print(f"Could not query service: {exc}", file=sys.stderr)
+        # S10.1 — the likeliest cause by far is "not installed yet", and the generic
+        # explain() next step ("try again") cannot help with that. The service control
+        # manager's own text is localized, so it goes to the log, not to the operator.
+        logging.getLogger("netsentinel.svc").warning(
+            "could not query %s", _SVC_NAME, exc_info=exc)
+        print(f"Could not query {_SVC_DISPLAY}. It may not be installed, or this "
+              f"prompt may not have permission to ask.\n"
+              f"Install it with: netsentinel-svc install   (as Administrator)",
+              file=sys.stderr)
         sys.exit(1)
 
 
@@ -312,6 +351,8 @@ def _cmd_debug() -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
+    _configure_app_log(_APP_VERSION)
+
     _USAGE = (
         f"Usage: python svc.py [install|start|stop|remove|restart|status|debug]\n"
         f"       Run as Administrator for install / start / stop / remove.\n\n"

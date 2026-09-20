@@ -27,6 +27,8 @@ from PyQt6.QtWidgets import (
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _make_card, _table
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_worker_error, worker_error_text
 
 
 class _LoggerTabMixin:
@@ -404,8 +406,11 @@ class _LoggerTabMixin:
             self._logger_worker.status.connect(self._log_status_lbl.setText)
             self._logger_worker.rotated.connect(self._on_log_rotate)
             self._logger_worker.error.connect(
-                lambda e: self._log_status_lbl.setText(
-                    f"Logger stopped — {e}. Check network connectivity and try again."
+                lambda e: (
+                    show_worker_error(self._log_status_lbl, e, WE.NETWORK_LOGGER),
+                    # RULE-SURF1: without this the registry stays "running" for a
+                    # logger that has already died, and the dot stays lit.
+                    self._nav_set_scan_state(L.NETWORK_LOGGER, "error", error=e),
                 ),
                 Qt.ConnectionType.QueuedConnection,
             )
@@ -891,4 +896,6 @@ class _LoggerTabMixin:
                 )
             self._log_analysis_box.setHtml("".join(html_parts))
         except Exception as _exc:
-            self._log_analysis_box.setPlainText(f"Analysis failed: {_exc}")
+            # A text pane has no per-message tooltip: the raw text goes to the app log.
+            self._log_analysis_box.setPlainText(worker_error_text(WE.LOG_ANALYSIS, _exc))
+            record_worker_error(WE.LOG_ANALYSIS, _exc)

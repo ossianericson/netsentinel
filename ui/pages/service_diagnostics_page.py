@@ -37,6 +37,8 @@ from modules.metric_store import MetricStore
 from modules.service_bandwidth_overlay import build_overlay_note
 from modules.service_diagnostics import SERVICE_CATALOG, ServiceDiagnosticResult
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error, worker_error_text
 from ui.widgets.context_menu import install_copy_menu
 from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
 
@@ -77,6 +79,9 @@ class ServiceDiagnosticsPage(QWidget):
     scan_requested = pyqtSignal()
     scan_started = pyqtSignal()
     scan_complete = pyqtSignal()
+    # RULE-SURF1: a failed diagnosis must not travel scan_complete — the
+    # dashboard maps that to "fresh" and the flyout dot turns green.
+    scan_failed = pyqtSignal(str)
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -416,10 +421,11 @@ class ServiceDiagnosticsPage(QWidget):
         _t.start(2000)
 
     def _on_error(self, msg: str) -> None:
-        self._set_status(msg, is_error=True)
+        self._set_status(worker_error_text(WE.SERVICE_DIAGNOSTICS), is_error=True)  # colour
+        show_worker_error(self._status_lbl, msg, WE.SERVICE_DIAGNOSTICS)
         self._run_btn.setText("Run Diagnostics")
         self._run_btn.setEnabled(True)
-        self.scan_complete.emit()
+        self.scan_failed.emit(msg)
 
     def set_service(self, service_id: str) -> None:
         """Pre-select a service in the combo box by ID and focus the run button."""

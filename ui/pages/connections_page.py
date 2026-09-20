@@ -49,7 +49,9 @@ from ui.expanding_table import ExpandingTable
 
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
 from ui.dialog_utils import run_dialog
+from ui.error_display import show_worker_error
 
 
 _TABLE_HEADERS = [
@@ -379,7 +381,7 @@ class ConnectionsPage(QWidget):
         )
         self._worker.snapshot_ready.connect(self._on_snapshot)
         self._worker.error.connect(
-            lambda e: self._status_lbl.setText(f"⚠  {e}")
+            lambda e: show_worker_error(self._status_lbl, e, WE.CONNECTIONS)
         )
         self._worker.start()
 

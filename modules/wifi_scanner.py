@@ -13,11 +13,14 @@ macOS:   /System/Library/PrivateFrameworks/Apple80211.framework/.../airport -s
 Linux:   nmcli dev wifi  (fallback: iwlist scanning)
 """
 
+import logging
 import platform
 import re
 import subprocess
 from dataclasses import dataclass, field
 from typing import List, Tuple
+
+_log = logging.getLogger(__name__)
 
 # Suspicious SSID patterns (case-insensitive)
 ROGUE_SSID_PATTERNS = [
@@ -131,6 +134,7 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
     except Exception:
+        _log.debug("netsh wlan show networks failed", exc_info=True)
         return networks, my_ssid, my_channel
 
     # Get current connection
@@ -145,7 +149,7 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
             my_ssid = m.group(1).strip()
         my_channel = _first_channel(connected_raw)
     except Exception:
-        pass  # non-fatal
+        _log.debug("netsh wlan show interfaces failed", exc_info=True)  # non-fatal
 
     # Parse network blocks
     blocks = re.split(r"SSID \d+ :", raw)[1:]
@@ -233,6 +237,7 @@ def _scan_macos() -> Tuple[List[NetworkInfo], str, int]:
                 ["networksetup", "-listallhardwareports"], text=True, timeout=5
             )
         except Exception:
+            _log.debug("networksetup -listallhardwareports failed", exc_info=True)
             return networks, my_ssid, my_channel
 
     # airport -s output: SSID  BSSID  RSSI  CHANNEL  HT  CC  SECURITY
@@ -256,6 +261,7 @@ def _scan_macos() -> Tuple[List[NetworkInfo], str, int]:
             )
             networks.append(net)
         except Exception:
+            _log.debug("airport line could not be parsed: %r", line, exc_info=True)
             continue
 
     return networks, my_ssid, my_channel
@@ -281,6 +287,7 @@ def _scan_linux() -> Tuple[List[NetworkInfo], str, int]:
                 sig = int(parts[-1])
                 sig_dbm = int(sig / 2) - 100
             except Exception:
+                _log.debug("nmcli channel/signal fields could not be parsed", exc_info=True)
                 ch, sig_dbm = 0, -100
             net = NetworkInfo(
                 ssid=ssid,
@@ -292,7 +299,7 @@ def _scan_linux() -> Tuple[List[NetworkInfo], str, int]:
             )
             networks.append(net)
     except Exception:
-        pass  # non-fatal
+        _log.debug("nmcli dev wifi failed", exc_info=True)  # non-fatal
     return networks, my_ssid, my_channel
 
 
@@ -435,7 +442,7 @@ def _get_connected_clients() -> List[ConnectedClient]:
                 mac = m.group(1).replace("-", ":").lower()
                 clients.append(ConnectedClient(mac=mac))
     except Exception:
-        pass  # non-fatal
+        _log.debug("netsh wlan show hostednetwork failed", exc_info=True)  # non-fatal
 
     # Attempt to enrich with IPs from ARP cache
     if clients:
@@ -454,6 +461,6 @@ def _get_connected_clients() -> List[ConnectedClient]:
             for client in clients:
                 client.ip = mac_to_ip.get(client.mac, "")
         except Exception:
-            pass  # non-fatal
+            _log.debug("ARP enrichment of connected clients failed", exc_info=True)  # non-fatal
 
     return clients

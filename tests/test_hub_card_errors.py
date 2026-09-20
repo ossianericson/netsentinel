@@ -188,3 +188,49 @@ def test_plugin_device_page_banner_visible_on_call(device_page):
     assert _hid(device_page._banner_frame)
     device_page._show_banner("Some error", "RED")
     assert _vis(device_page._banner_frame)
+
+
+# ── S4.4d: a mesh client list missing some nodes says so ─────────────────────
+
+
+def _mesh_result(failed_nodes=None):
+    extra = {"nodes": [{"name": "Main"}, {"name": "Kontor"}]}
+    if failed_nodes is not None:
+        extra["failed_nodes"] = failed_nodes
+    return {
+        "info": {"type": "router", "name": "Deco"},
+        "status": {"mesh_nodes": 2, "connected_clients": 1, "extra": extra},
+        "clients": [{"ip": "192.168.68.50", "mac": "11:22"}],
+    }
+
+
+def test_hub_card_marks_a_partial_client_count(make_card):
+    from ui.styles import AMBER, STATUS_ICON_WARN
+
+    card = make_card(_FRESH_HEALTH)
+    card._apply_result(_mesh_result(failed_nodes=["Kontor"]))
+
+    assert STATUS_ICON_WARN in card._metrics_lbl.text()
+    assert AMBER in card._metrics_lbl.styleSheet()
+    assert "Kontor" in card._metrics_lbl.toolTip()
+
+
+def test_hub_card_complete_result_is_unmarked(make_card):
+    from ui.styles import STATUS_ICON_WARN
+
+    card = make_card(_FRESH_HEALTH)
+    card._apply_result(_mesh_result(failed_nodes=["Kontor"]))
+    card._apply_result(_mesh_result())  # an older plugin copy sends no key at all
+
+    assert STATUS_ICON_WARN not in card._metrics_lbl.text()
+    assert card._metrics_lbl.toolTip() == ""
+
+
+def test_plugin_device_page_shows_an_amber_partial_banner(device_page, monkeypatch):
+    monkeypatch.setattr("ui.pages.plugin_device_page.os.path.isfile", lambda _p: True)
+    device_page.update(_mesh_result(failed_nodes=["Kontor"]))
+    assert _vis(device_page._banner)
+    assert "Kontor" in device_page._banner_lbl.text()
+
+    device_page.update(_mesh_result())
+    assert _hid(device_page._banner)

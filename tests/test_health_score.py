@@ -29,7 +29,7 @@ def _make_store(uptime_rows=None, rtt_hosts=None, rtt_points=None, alerts=None,
     """
     Return a mock MetricStore.
 
-    Uptime rows use {"24h": pct} format matching query_uptime_table output.
+    Uptime rows are keyed by str(hours) — exactly what query_uptime_table emits.
     RTT points are objects with .rtt_ms attribute matching query_rtt_history output.
     """
     store = MagicMock()
@@ -105,10 +105,10 @@ def test_compute_all_sources_error_returns_unknown():
 def test_compute_green_high_availability():
     """100% uptime + fast RTT + no alerts → green."""
     calc = HealthScoreCalculator()
-    # Uptime rows use "24h" key (matches query_uptime_table output format)
+    # Keyed by str(24.0), the key query_uptime_table really emits (S8 B8)
     uptime_rows = [
-        {"host": "8.8.8.8", "24h": 100.0},
-        {"host": "1.1.1.1", "24h": 100.0},
+        {"host": "8.8.8.8", "24.0": 100.0},
+        {"host": "1.1.1.1", "24.0": 100.0},
     ]
     rtt_hosts = ["8.8.8.8", "1.1.1.1"]
     rtt_points = [_rtt_point(10.0), _rtt_point(12.0)]
@@ -121,7 +121,7 @@ def test_compute_green_high_availability():
 def test_green_state_headline_is_all_clear():
     """S2-4: green state headline must communicate 'all clear' or stability."""
     calc = HealthScoreCalculator()
-    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    uptime_rows = [{"host": "8.8.8.8", "24.0": 100.0}]
     rtt_points = [_rtt_point(5.0)]
     store = _make_store(uptime_rows=uptime_rows, rtt_hosts=["8.8.8.8"], rtt_points=rtt_points)
     snap = calc.compute(store)
@@ -146,7 +146,7 @@ def test_compute_amber_with_several_alerts():
 def test_alerts_lower_score():
     """Adding alerts must lower the score compared to no alerts."""
     calc = HealthScoreCalculator()
-    uptime_rows = [{"host": "8.8.8.8", "24h": 90.0}]
+    uptime_rows = [{"host": "8.8.8.8", "24.0": 90.0}]
 
     store_alerts = _make_store(uptime_rows=uptime_rows, alerts=[{"id": i} for i in range(3)])
     store_clean = _make_store(uptime_rows=uptime_rows)
@@ -162,7 +162,7 @@ def test_alerts_lower_score():
 def test_compute_red_many_alerts_low_uptime():
     """Very low availability + many alerts → red (score < 45)."""
     calc = HealthScoreCalculator()
-    uptime_rows = [{"host": "8.8.8.8", "24h": 20.0}]
+    uptime_rows = [{"host": "8.8.8.8", "24.0": 20.0}]
     # 7+ alerts → alert_score = 0
     alerts = [{"id": i} for i in range(7)]
     store = _make_store(uptime_rows=uptime_rows, alerts=alerts)
@@ -177,7 +177,7 @@ def test_score_is_bounded_0_to_100():
     calc = HealthScoreCalculator()
 
     # Best case: perfect uptime, fast RTT, no alerts
-    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    uptime_rows = [{"host": "8.8.8.8", "24.0": 100.0}]
     store = _make_store(uptime_rows=uptime_rows,
                         rtt_hosts=["8.8.8.8"],
                         rtt_points=[_rtt_point(1.0)])
@@ -185,7 +185,7 @@ def test_score_is_bounded_0_to_100():
     assert 0 <= snap.score <= 100
 
     # Worst case: zero uptime, many alerts
-    store_bad = _make_store(uptime_rows=[{"host": "8.8.8.8", "24h": 0.0}],
+    store_bad = _make_store(uptime_rows=[{"host": "8.8.8.8", "24.0": 0.0}],
                             alerts=[{"id": i} for i in range(20)])
     snap_bad = calc.compute(store_bad)
     assert 0 <= snap_bad.score <= 100
@@ -218,7 +218,7 @@ def test_snapshot_headline_non_empty():
 def test_green_nothing_to_report_headline():
     """When truly nothing happened, headline is the exact 'no action needed' copy."""
     calc = HealthScoreCalculator()
-    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    uptime_rows = [{"host": "8.8.8.8", "24.0": 100.0}]
     store = _make_store(uptime_rows=uptime_rows, rtt_hosts=["8.8.8.8"],
                         rtt_points=[_rtt_point(5.0)])
     store.query_device_events.return_value = []
@@ -231,7 +231,7 @@ def test_green_nothing_to_report_headline():
 def test_green_with_new_device_join_skips_nothing_to_report():
     """A new device join in the last 24h must not show the all-quiet exact phrase."""
     calc = HealthScoreCalculator()
-    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    uptime_rows = [{"host": "8.8.8.8", "24.0": 100.0}]
     store = _make_store(uptime_rows=uptime_rows, rtt_hosts=["8.8.8.8"],
                         rtt_points=[_rtt_point(5.0)])
     store.query_device_events.return_value = [MagicMock()]
@@ -244,7 +244,7 @@ def test_green_with_new_device_join_skips_nothing_to_report():
 def test_green_with_service_down_skips_nothing_to_report():
     """A down service must not show the all-quiet exact phrase, even if state is green."""
     calc = HealthScoreCalculator()
-    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    uptime_rows = [{"host": "8.8.8.8", "24.0": 100.0}]
     store = _make_store(uptime_rows=uptime_rows, rtt_hosts=["8.8.8.8"],
                         rtt_points=[_rtt_point(5.0)])
     store.query_device_events.return_value = []

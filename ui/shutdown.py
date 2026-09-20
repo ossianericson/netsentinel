@@ -60,6 +60,7 @@ DASHBOARD_WORKER_ATTRS: tuple = (
     "_lldp_worker",          # LldpWorker: passive Npcap sniff
     "_zte_worker",           # modem polling worker
     "_dns_bench_worker",     # DnsBenchmarkWorker: resolver latency probes
+    "_update_check_worker",  # _UpdateCheckThread: Help-tab GitHub release request, 8 s timeout
 )
 
 
@@ -91,9 +92,10 @@ _handler_ready = False
 def _ensure_shutdown_log_handler() -> None:
     """Attach the file handler once. Best-effort — never raises.
 
-    Its own logger + FileHandler under get_app_data_dir(), independent of root
-    logging config: nothing in the app calls logging.basicConfig(), so a bare
-    log.info() would be dropped at the default WARNING root level.
+    Its own logger + FileHandler under get_app_data_dir(), with propagate=False: the
+    shutdown drain gets a dedicated file because `monkey_test.py` and the chaos-run
+    analysis read it on its own, looking for a `closeEvent` entry at a given time.
+    Shared records live in netsentinel_app.log (modules/app_logging.py).
     """
     global _handler_ready
     if _handler_ready:

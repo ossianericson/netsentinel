@@ -61,6 +61,8 @@ from modules.wifi_heatmap import (
 )
 from modules.wifi_scanner import scan as wifi_scan
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error, worker_error_text
 from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.tabs_helpers import _table
 from ui.widgets.context_menu import install_copy_menu
@@ -194,6 +196,7 @@ class WifiHeatmapPage(QWidget):
 
         self._status_label = QLabel("No survey active.  Import a floor plan to begin.")
         _s.themed_ss(self._status_label, "color:{TEXT_SECONDARY}; font-size:10px; padding:2px 0;")
+        self._status_label.setWordWrap(True)  # an explained file error is ~200 characters (S6b)
         content_lay.addWidget(self._status_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -454,7 +457,8 @@ class WifiHeatmapPage(QWidget):
                     img = (img * 255).astype(np.uint8)
             self._floor_plan_img = img
         except Exception as exc:
-            self._set_status(f"Could not load image: {exc}", error=True)
+            self._set_status(worker_error_text(WE.HEATMAP_FLOOR_PLAN), error=True)  # colour
+            show_worker_error(self._status_label, exc, WE.HEATMAP_FLOOR_PLAN)
             return
 
         if self._survey is None:
@@ -514,7 +518,8 @@ class WifiHeatmapPage(QWidget):
         try:
             self._survey = load_survey(chosen)
         except Exception as exc:
-            self._set_status(f"Load failed: {exc}", error=True)
+            self._set_status(worker_error_text(WE.HEATMAP_SURVEY_LOAD), error=True)  # colour
+            show_worker_error(self._status_label, exc, WE.HEATMAP_SURVEY_LOAD)
             return
 
         fp = Path(self._survey.floor_plan_path)
@@ -550,9 +555,11 @@ class WifiHeatmapPage(QWidget):
             return
         try:
             path = save_survey(self._survey)
-            self._set_status(f"Survey saved to {path.name}")
         except Exception as exc:
-            self._set_status(f"Save failed: {exc}", error=True)
+            self._set_status(worker_error_text(WE.HEATMAP_SURVEY_SAVE), error=True)  # colour
+            show_worker_error(self._status_label, exc, WE.HEATMAP_SURVEY_SAVE)
+        else:
+            self._set_status(f"Survey saved to {path.name}")
 
     def _on_add_sample(self) -> None:
         """Activate sampling mode: show instructions, wait for canvas click."""
@@ -586,7 +593,8 @@ class WifiHeatmapPage(QWidget):
         self._sampling_mode = False
         self._btn_add.setText("● Add Sample")
         self._btn_add.setEnabled(True)
-        self._set_status(f"WiFi scan failed: {msg}", error=True)
+        self._set_status(worker_error_text(WE.WIFI_HEATMAP_SCAN), error=True)  # colour
+        show_worker_error(self._status_label, msg, WE.WIFI_HEATMAP_SCAN)
         self._canvas.unsetCursor()
 
     def _on_canvas_click(self, event) -> None:
@@ -670,9 +678,11 @@ class WifiHeatmapPage(QWidget):
             return
         try:
             self._fig.savefig(path, dpi=150, bbox_inches="tight")
-            self._set_status(f"Exported to {Path(path).name}")
         except Exception as exc:
-            self._set_status(f"Export failed: {exc}", error=True)
+            self._set_status(worker_error_text(WE.EXPORT_HEATMAP_IMAGE), error=True)  # colour
+            show_worker_error(self._status_label, exc, WE.EXPORT_HEATMAP_IMAGE)
+        else:
+            self._set_status(f"Exported to {Path(path).name}")
 
     # ── Refresh helpers ───────────────────────────────────────────────────────
 

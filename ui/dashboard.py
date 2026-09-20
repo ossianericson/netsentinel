@@ -38,6 +38,8 @@ from ui.nav.rail import (
     _ClickLabel, _SmoothProgressBar,
 )
 from ui.dialog_utils import run_dialog
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 
 
 # _PAGE_HELP is defined in ui/help.py and imported at the top of this file.
@@ -108,6 +110,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     global_time_range_changed = pyqtSignal(float)  # hours: float
     _wan_ip_ready             = pyqtSignal(str)        # WAN IP fetched → geo map set_home_ip (thread-safe)
     _wan_ip_nav_req           = pyqtSignal(str, str)   # WAN IP + label → set_home_ip + navigate_to_ip
+    # IoT Behaviour's Learn/Monitor threads only emit these (RULE-WIN27); the int is the run id.
+    _iot_progress             = pyqtSignal(int, str)
+    _iot_ready                = pyqtSignal(int, object)  # baselines dict
+    _iot_failed               = pyqtSignal(int, object)  # the exception, or the module's error text
 
     def __init__(self, store=None, alert_engine=None, notif_router=None, maint_manager=None,
                  start_minimised: bool = False):
@@ -1669,11 +1675,26 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 self._settings_page._refresh_sched_scan_label()
             except Exception:
                 pass  # non-fatal
-        # Fire the scan (reuse the existing full-scan trigger)
+        # Fire the scan (reuse the existing full-scan trigger). next_ts was advanced
+        # above whether or not this succeeds, so a scan that cannot start would leave no
+        # trace at all — the schedule would simply roll forward to the next window and
+        # the user would keep believing scans were running (S8 B14).
+        import logging as _logging
+
+        from modules.app_health_catalogue import SCHEDULED_SCAN
+        health = getattr(self, "_app_health", None)
         try:
             self._start_scan()
-        except Exception:
-            pass  # non-fatal
+        except Exception as exc:
+            _logging.getLogger(__name__).warning(
+                "scheduled scan could not be started", exc_info=True
+            )
+            if health is not None:
+                from modules.error_text import explain
+                health.report_failure(SCHEDULED_SCAN, detail=explain(exc).why)
+            return
+        if health is not None:
+            health.report_ok(SCHEDULED_SCAN.key)
 
     def _check_lan_connectivity(self) -> None:
         """HEALTH-2: async socket probe; 3 failures → show amber offline banner."""
@@ -2091,7 +2112,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             return
         self._net_info_worker = NetworkInfoWorker()
         self._net_info_worker.result.connect(self._update_net_info_ui)
-        self._net_info_worker.error.connect(lambda e: self._net_info_label.setText(f"Error: {e}"), Qt.ConnectionType.QueuedConnection)
+        self._net_info_worker.error.connect(lambda e: show_worker_error(self._net_info_label, e, WE.NETWORK_INFO), Qt.ConnectionType.QueuedConnection)
         self._net_info_worker.start()
         self._net_info_label.setText("Refreshing network information…")
 
@@ -2122,7 +2143,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._diag_worker.result.connect(self._on_diag_result)
         self._diag_worker.error.connect(
             lambda e: (
-                self._diag_status_lbl.setText(f"Error: {e}"),
+                show_worker_error(self._diag_status_lbl, e, WE.DIAGNOSTICS),
                 self._btn_diag.setEnabled(True),
             ),
             Qt.ConnectionType.QueuedConnection,
@@ -2200,9 +2221,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         if flyout and hasattr(flyout, "refresh_theme"):
             flyout.refresh_theme()
         _t_stage4 = _time.perf_counter()
-        # Uses ui.styles' dedicated theme_switch instrumentation logger — a
-        # bare log.info() here would be silently dropped (no logging.basicConfig()
-        # anywhere in the app, so root level is the default WARNING).
+        # Uses ui.styles' dedicated theme_switch instrumentation logger, which
+        # writes its own file with propagate=False — these are a timing series read
+        # on their own, not events for the shared netsentinel_app.log.
         _s._ensure_theme_switch_log_handler()
         _s._theme_switch_log.info(
             "_on_theme_changed(%s): stage3 app setStyleSheet (merged)=%.1fms "

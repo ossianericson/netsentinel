@@ -3,10 +3,22 @@
 import os
 import subprocess
 import sys
+import tempfile
 from importlib import import_module
 from pathlib import Path
 
-_UTF8_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+# The children below are real `python cli.py …` runs, so they do everything the CLI
+# normally does — including configuring netsentinel_app.log (D4). conftest.py redirects
+# LOCALAPPDATA with `setdefault`, which never overrides a real Windows value, so without
+# this the suite writes a session header into the developer's own app-data directory on
+# every run. Set explicitly, not via setdefault, for the same reason.
+_SANDBOX_APPDATA = tempfile.mkdtemp(prefix="netsentinel-cli-tests-")
+_UTF8_ENV = {
+    **os.environ,
+    "PYTHONIOENCODING": "utf-8",
+    "LOCALAPPDATA": _SANDBOX_APPDATA,
+    "XDG_CONFIG_HOME": _SANDBOX_APPDATA,
+}
 
 
 def test_cli_imports():

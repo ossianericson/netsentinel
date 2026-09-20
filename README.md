@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-7806-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-8306-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -18,9 +18,9 @@ Rogue bridge and broadcast storm detection, ARP spoof monitoring, port scanning 
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
-**62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
+**68 tools in one app &nbsp;·&nbsp; ~150,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
-**7,806 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+**8,306 tests &nbsp;·&nbsp; 15-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -174,7 +174,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**7,806 automated tests** across 559 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**8,306 automated tests** across 590 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -218,7 +218,15 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.3.0 (current)
+### v2.4.0 (current)
+
+- NetSentinel now tells you when NetSentinel itself is the problem. A strip on the Home page and a dot in the tray show when a monitor, a listener, an alert channel or the password store has stopped working — what broke, why, what to do, and a button that opens the page that fixes it
+- Fixed a large class of failures that used to look like success: a failed diagnosis turned its status dot green, a speed test that failed while you were on another page recorded nothing at all, and a watch that hit an error went back to looking like it had never run
+- Fixed four places where a **successful** export or copy showed a failure dialog, because the code that confirmed the success was broken and its error was caught as though the work had failed
+- Error messages across the app now say what failed, why it likely failed and what to try next, instead of showing a raw Windows error — which on non-English systems arrived in the system language
+- Fixed the window freezing a few minutes after starting IoT anomaly monitoring, and spin boxes and error toasts cutting off their own contents
+
+### v2.3.0
 
 - When NetSentinel closes unexpectedly, it now says so the next time you open it, and can package a redacted diagnostic report you can attach to a bug report — the app previously kept no record at all of a crash that produced no traceback
 - Fixed the command-line and Windows-service builds crashing on accented text and keeping no crash record whatsoever; both carried defects the desktop app had already had fixed for it

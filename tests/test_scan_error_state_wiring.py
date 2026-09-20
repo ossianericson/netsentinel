@@ -20,6 +20,8 @@ import pytest
 
 pytest.importorskip("PyQt6.QtWidgets")
 
+from PyQt6.QtWidgets import QLabel  # noqa: E402
+
 from ui.nav.labels import NavLabel as L  # noqa: E402
 from ui.tabs_helpers import _table  # noqa: E402
 from ui.tabs_recon import _ReconTabsMixin  # noqa: E402
@@ -38,7 +40,11 @@ def _fires_nav_error(mock_worker, nav_mock, label, msg="boom") -> None:
 
 
 class _FakeHost(_ReconTabsMixin):
-    """Minimal stand-in exposing only the attributes each _start_* method touches."""
+    """Minimal stand-in exposing only the attributes each _start_* method touches.
+
+    Status labels that an error path draws on are real QLabels (S5): show_worker_error parents
+    its tooltip/Copy filter to the label, which a MagicMock cannot be.
+    """
 
     def __init__(self) -> None:
         self._nav_set_scan_state = MagicMock()
@@ -49,7 +55,7 @@ class _FakeHost(_ReconTabsMixin):
         self._syn_host = MagicMock(text=lambda: "10.0.0.5")
         self._syn_worker = None
         self._recon_syn_table = _table(["Port", "State", "Protocol", "Service", "Version", "Banner", "CVEs"])
-        self._syn_status = MagicMock()
+        self._syn_status = QLabel()
         self._syn_ports_combo = MagicMock(currentText=lambda: "Top 1000")
         self._syn_rate = MagicMock(value=lambda: 100)
         self._on_syn_result = MagicMock()
@@ -58,14 +64,14 @@ class _FakeHost(_ReconTabsMixin):
         self._udp_host = MagicMock(text=lambda: "10.0.0.5")
         self._udp_worker = None
         self._recon_udp_table = _table(["Port", "State", "Service"])
-        self._udp_status = MagicMock()
+        self._udp_status = QLabel()
         self._on_udp_result = MagicMock()
 
         # OS Detection
         self._os_hosts_input = MagicMock(text=lambda: "10.0.0.5")
         self._os_worker = None
         self._recon_os_table = _table(["IP", "TTL", "OS Family", "Confidence", "TCP Window", "Banner Hint"])
-        self._os_status = MagicMock()
+        self._os_status = QLabel()
         self._on_os_result = MagicMock()
 
         # CVE Lookup
@@ -80,7 +86,7 @@ class _FakeHost(_ReconTabsMixin):
         self._exposure_worker = None
         self._recon_exposure_table = _table(["Port", "Protocol", "Risk"])
         self._exposure_verdict = MagicMock()
-        self._exposure_status = MagicMock()
+        self._exposure_status = QLabel()
         self._on_exposure_result = MagicMock()
 
         # Login Test
@@ -92,7 +98,7 @@ class _FakeHost(_ReconTabsMixin):
         self._recon_cred_sessions_table = _table(["Active Session (logged-in user)"])
         self._recon_cred_info_table = _table(["Field", "Value"])
         self._cred_verdict = MagicMock()
-        self._cred_status = MagicMock()
+        self._cred_status = QLabel()
         self._cred_port = MagicMock(value=lambda: 22)
         self._cred_user = MagicMock(text=lambda: "root")
         self._cred_pass = MagicMock(text=lambda: "")
@@ -103,7 +109,7 @@ class _FakeHost(_ReconTabsMixin):
         # Full Device Discovery
         self._discovery_worker = None
         self._recon_disc_table = _table(["IP", "Method", "Detail"])
-        self._disc_status = MagicMock()
+        self._disc_status = QLabel()
         self._disc_cidr = MagicMock(text=lambda: "")
         self._disc_passive_chk = MagicMock(isChecked=lambda: False)
         self._on_discovery_result = MagicMock()
@@ -117,7 +123,7 @@ class _FakeHost(_ReconTabsMixin):
         self._smb_worker = None
         self._recon_smb_shares_table = _table(["Share", "Type", "Comment", "Risk"])
         self._recon_smb_users_table = _table(["Username", "Flags", "Full Name", "Last Logon"])
-        self._smb_status = MagicMock()
+        self._smb_status = QLabel()
         self._smb_verdict = MagicMock()
         self._on_smb_result = MagicMock()
 
@@ -216,7 +222,7 @@ class TestThreatIntelScanErrorSignal:
         page.scan_error.emit = received.append
         page._refresh_btn = MagicMock()
         page._cache_btn = MagicMock()
-        page._status_lbl = MagicMock()
+        page._status_lbl = QLabel()  # a real label: show_worker_error parents its detail filter to it
 
         page._on_refresh_error("feed unreachable")
 

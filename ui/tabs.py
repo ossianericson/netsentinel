@@ -235,6 +235,10 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             from ui.pages.dns_zone_page import DnsZonePage
             self._dns_zone_page = DnsZonePage(parent=None)
             self._dns_zone_page.scan_complete.connect(self._on_dns_zone_complete)
+            self._dns_zone_page.scan_failed.connect(
+                lambda msg: self._nav_set_scan_state(L.DNS_ZONE_MAP, "error", error=msg)
+            )
+            self._dns_zone_page.scan_not_testable.connect(self._on_dns_zone_not_testable)
             return self._dns_zone_page
         self._lazy_or_build("_dns_zone_page", L.DNS_ZONE_MAP, _mk_dns_zone_page)
 
@@ -265,6 +269,9 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         # read "Never run" forever even with tracked CVEs on screen.
         self._cve_page.data_refreshed.connect(
             lambda n: self._nav_set_scan_state(L.CVE_TRACKER, "fresh", verdict=f"{n} CVE(s) tracked")
+        )
+        self._cve_page.refresh_failed.connect(
+            lambda msg: self._nav_set_scan_state(L.CVE_TRACKER, "error", error=msg)
         )
         self._cve_page.navigate_to_inventory.connect(
             lambda ip: (self._nav_rail_go_to(L.INVENTORY_CHANGES), self._inventory_page.select_device(ip))
@@ -349,7 +356,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
 
         from ui.pages.service_diagnostics_page import ServiceDiagnosticsPage
         self._service_diagnostics_page = ServiceDiagnosticsPage(parent=None)
+        self._service_diagnostics_page.scan_started.connect(
+            lambda: self._nav_set_scan_state(L.SERVICE_DIAGNOSTICS, "running")
+        )
         self._service_diagnostics_page.scan_complete.connect(self._on_service_diag_complete)
+        self._service_diagnostics_page.scan_failed.connect(self._on_service_diag_failed)
 
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
@@ -467,6 +478,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         def _mk_rest_api_page():
             from ui.pages.rest_api_page import RestApiPage
             self._rest_api_page = RestApiPage(store=self._store, parent=None)
+            self._rest_api_page.worker_created.connect(self._watch_rest_api_worker)
+            self._rest_api_page.enabled_changed.connect(self._on_rest_api_enabled_changed)
             return self._rest_api_page
         self._lazy_or_build("_rest_api_page", L.REST_API, _mk_rest_api_page)
 
@@ -553,6 +566,9 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             self._home_page._btn_diagnose.clicked.connect(self._open_diagnosis)
             self._speed_test_page.test_completed.connect(self._home_page.on_speed_result)
             self._speed_test_page.test_completed.connect(self._on_speed_test_modem_forward)
+            self._speed_test_page.test_failed.connect(
+                lambda msg: self._nav_set_scan_state(L.SPEED_TEST, "error", error=msg)
+            )
             self._home_page.navigate_to.connect(self._on_overview_navigate)
             self._home_page.start_monitoring_requested.connect(self._toggle_logger)
             self._home_page.start_arp_requested.connect(self._start_arp_monitor)
@@ -1055,6 +1071,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         import time as _time
         self._nav_set_scan_state(L.DNS_ZONE_MAP, "fresh", ts=_time.time(), verdict=verdict)
 
+    def _on_dns_zone_not_testable(self, verdict: str) -> None:
+        """The AXFR server could not be reached — not a clean "no zone" result (RULE-SURF1)."""
+        import time as _time
+        self._nav_set_scan_state(L.DNS_ZONE_MAP, "not_testable", ts=_time.time(), error=verdict)
+
     def _on_service_diag_complete(self) -> None:
         """Feed Service Diagnostics completion into the scan registry."""
         import time as _time
@@ -1065,6 +1086,37 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             layer = getattr(result, "failure_layer", "none")
             verdict = f"{svc}: {layer}" if layer != "none" else f"{svc}: OK"
         self._nav_set_scan_state(L.SERVICE_DIAGNOSTICS, "fresh", ts=_time.time(), verdict=verdict or "Diagnostics complete")
+
+    def _on_service_diag_failed(self, msg: str) -> None:
+        """Feed a failed Service Diagnostics run into the scan registry.
+
+        RULE-SURF1: this used to arrive on ``scan_complete`` and set the dot to
+        "fresh" — a failed diagnosis rendered green, captioned with the previous
+        run's verdict.
+        """
+        import time as _time
+        self._nav_set_scan_state(L.SERVICE_DIAGNOSTICS, "error", ts=_time.time(), error=msg)
+
+    def _watch_rest_api_worker(self, worker) -> None:
+        """Hand a REST API page hot-start worker the app-health registry (S3.3).
+
+        Read at call time, not captured when the lazy page is built: app.py attaches
+        ``_app_health`` after Dashboard construction, and a worker started later must
+        be able to resolve a condition the launch worker raised.
+        """
+        worker.report_to(getattr(self, "_app_health", None))
+
+    def _on_rest_api_enabled_changed(self, enabled: bool) -> None:
+        """S4.4c — switching the REST API off withdraws its "could not start" condition.
+
+        Nothing else would: the condition resolves only when a server stays up, and a
+        disabled REST API never starts one.
+        """
+        health = getattr(self, "_app_health", None)
+        if enabled or health is None:
+            return
+        from modules.app_health_catalogue import REST_API
+        health.report_ok(REST_API.key)
 
     def _on_service_page_diagnose(self, service_id: str) -> None:
         """Navigate to Service Diagnostics, pre-selecting service_id if provided."""

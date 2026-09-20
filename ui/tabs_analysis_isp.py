@@ -19,7 +19,9 @@ from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
 from ui.dialog_utils import run_dialog
+from ui.error_display import show_error_dialog
 
 
 class _AnalysisIspMixin:
@@ -97,8 +99,7 @@ class _AnalysisIspMixin:
             )
             webbrowser.open(out.as_uri())
         except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Network Health Report Error", str(exc))
+            show_error_dialog(self, exc, WE.EXPORT_ISP_REPORT, retry=self._export_isp_report)
 
     @pyqtSlot()
     def _copy_isp_complaint(self):
@@ -159,11 +160,11 @@ class _AnalysisIspMixin:
             )
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(text)
-            from ui.widgets.toast import ToastManager
-            ToastManager.instance().show_toast("ISP complaint copied to clipboard", "info")
         except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Copy Failed", str(exc))
+            show_error_dialog(self, exc, WE.COPY_ISP_COMPLAINT)
+        else:
+            from ui.widgets.toast import ToastManager
+            ToastManager.show("ISP complaint copied to clipboard", "success")
 
     @pyqtSlot()
     def _copy_isp_reddit_post(self):
@@ -188,5 +189,4 @@ class _AnalysisIspMixin:
             from ui.widgets.toast import ToastManager
             ToastManager.show("Reddit post copied — sanitized and safe to paste", "success")
         except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Copy Failed", str(exc))
+            show_error_dialog(self, exc, WE.COPY_ISP_FORUM_POST)

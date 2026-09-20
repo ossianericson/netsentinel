@@ -29,7 +29,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
-from typing import AbstractSet, Dict, List, Optional
+from typing import AbstractSet, Dict, Iterable, List, Optional
 
 from modules.alert_audit import AuditFinding
 
@@ -43,6 +43,7 @@ __all__ = [
     "audit_guidance_render_paths",
     "audit_grade_gating",
     "audit_identity_churn",
+    "audit_app_health_ctas",
     "run_all",
 ]
 
@@ -583,6 +584,29 @@ def audit_identity_churn(db_path: Optional[Path] = None) -> List[AuditFinding]:
     )]
 
 
+# ── Error-surfacing S4.4: app-health condition CTAs ────────────────────────────
+
+def audit_app_health_ctas(
+    specs: Iterable[object], known_labels: AbstractSet[str],
+) -> List[AuditFinding]:
+    """Every app-health condition's ``cta_label`` must be a real nav target.
+
+    The Home app-health strip draws that label as an "Open …" button routed through
+    ``_nav_rail_go_to``; a dead label is a button that silently does nothing
+    (RULE-NAV3). A condition with no ``cta_label`` draws no button and is not checked.
+    """
+    bad = sorted(
+        f"{getattr(spec, 'key', '?')} -> {getattr(spec, 'cta_label', '')!r}"
+        for spec in specs
+        if getattr(spec, "cta_label", "") and getattr(spec, "cta_label") not in known_labels
+    )
+    return [AuditFinding(
+        "APP_HEALTH_CTA_RESOLVE", not bad,
+        "Every app-health condition CTA is a known nav label" if not bad
+        else f"App-health condition CTAs that resolve to no real page: {', '.join(bad)}",
+    )]
+
+
 # ── CLI entry point ────────────────────────────────────────────────────────────
 
 def run_all(repo_root: Path) -> List[AuditFinding]:
@@ -590,6 +614,7 @@ def run_all(repo_root: Path) -> List[AuditFinding]:
     lookup tables — what ``python app.py --audit`` runs."""
     from modules.alert_engine_routing import RULE_CTA
     from modules.alert_suppressor import _default_rules
+    from modules.app_health_catalogue import ALL_STATIC, CHANNEL_TYPES, notification_channel
     from ui.nav.labels import KNOWN_LABELS
 
     rule_name_cta = _extract_dict_literal(
@@ -608,6 +633,9 @@ def run_all(repo_root: Path) -> List[AuditFinding]:
     findings += audit_guidance_render_paths(repo_root)
     findings += audit_grade_gating(repo_root)
     findings += audit_identity_churn()
+    findings += audit_app_health_ctas(
+        [*ALL_STATIC, *(notification_channel(t, t) for t in CHANNEL_TYPES)], KNOWN_LABELS,
+    )
     return findings
 
 

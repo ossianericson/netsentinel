@@ -20,7 +20,9 @@ from PyQt6.QtWidgets import (
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table, _empty_state_widget, risk_to_label
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
 from ui.dialog_utils import run_dialog
+from ui.error_display import show_error_dialog, show_worker_error
 
 if TYPE_CHECKING:
     pass
@@ -253,7 +255,7 @@ class _ReconTabsMixin:
         self._syn_worker = SYNScanWorker(host=host, ports=ports, rate_pps=rate)
         self._syn_worker.result.connect(self._on_syn_result)
         self._syn_worker.status.connect(self._syn_status.setText)
-        self._syn_worker.error.connect(lambda e: self._syn_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._syn_worker.error.connect(lambda e: show_worker_error(self._syn_status, e, WE.PORT_SCAN_TCP), Qt.ConnectionType.QueuedConnection)
         self._syn_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.PORT_SCAN_TCP, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
@@ -372,7 +374,7 @@ class _ReconTabsMixin:
         self._udp_worker = UDPScanWorker(host=host)
         self._udp_worker.result.connect(self._on_udp_result)
         self._udp_worker.status.connect(self._udp_status.setText)
-        self._udp_worker.error.connect(lambda e: self._udp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._udp_worker.error.connect(lambda e: show_worker_error(self._udp_status, e, WE.PORT_SCAN_UDP), Qt.ConnectionType.QueuedConnection)
         self._udp_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.PORT_SCAN_UDP, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
@@ -446,7 +448,7 @@ class _ReconTabsMixin:
         self._os_worker = OSFingerprintWorker(ips=ips, port_map=port_map)
         self._os_worker.result.connect(self._on_os_result)
         self._os_worker.status.connect(self._os_status.setText)
-        self._os_worker.error.connect(lambda e: self._os_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._os_worker.error.connect(lambda e: show_worker_error(self._os_status, e, WE.OS_DETECTION), Qt.ConnectionType.QueuedConnection)
         self._os_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.OS_DETECTION, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
@@ -533,7 +535,7 @@ class _ReconTabsMixin:
                          f"{len(assessments)} device(s) scored, {critical} HIGH/CRITICAL"),
             )
         except Exception as exc:
-            self._risk_status.setText(f"⚠ Risk scoring failed: {exc}")
+            show_worker_error(self._risk_status, exc, WE.RISK_SCORE)
             self._nav_set_scan_state(L.DEVICE_RISK_SCORE, "error", error=str(exc))
 
     @pyqtSlot(int, int)
@@ -719,7 +721,7 @@ class _ReconTabsMixin:
         self._exposure_worker = InternetExposureWorker()
         self._exposure_worker.result.connect(self._on_exposure_result)
         self._exposure_worker.status.connect(self._exposure_status.setText)
-        self._exposure_worker.error.connect(lambda e: self._exposure_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._exposure_worker.error.connect(lambda e: show_worker_error(self._exposure_status, e, WE.EXPOSED_TO_INTERNET), Qt.ConnectionType.QueuedConnection)
         self._exposure_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.EXPOSED_TO_INTERNET, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
@@ -859,7 +861,7 @@ class _ReconTabsMixin:
         )
         self._cred_worker.result.connect(self._on_cred_result)
         self._cred_worker.status.connect(self._cred_status.setText)
-        self._cred_worker.error.connect(lambda e: self._cred_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._cred_worker.error.connect(lambda e: show_worker_error(self._cred_status, e, WE.LOGIN_TEST), Qt.ConnectionType.QueuedConnection)
         self._cred_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.LOGIN_TEST, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
@@ -929,7 +931,7 @@ class _ReconTabsMixin:
         )
         self._discovery_worker.result.connect(self._on_discovery_result)
         self._discovery_worker.status.connect(self._disc_status.setText)
-        self._discovery_worker.error.connect(lambda e: self._disc_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._discovery_worker.error.connect(lambda e: show_worker_error(self._disc_status, e, WE.FULL_DEVICE_DISCOVERY), Qt.ConnectionType.QueuedConnection)
         self._discovery_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.FULL_DEVICE_DISCOVERY, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
@@ -1013,6 +1015,8 @@ class _ReconTabsMixin:
         self._recon_smb_shares_table.setRowCount(0)
         self._recon_smb_users_table.setRowCount(0)
         self._smb_verdict.hide()
+        # The entry this run replaces, put back if the user presses Stop (_on_smb_stopped).
+        previous = dict(getattr(self, "_scan_registry", {}).get(L.WINDOWS_SHARES_SMB) or {})
         self._nav_set_scan_state(L.WINDOWS_SHARES_SMB, "running")
         self._smb_worker = SMBEnumWorker(
             host=host,
@@ -1022,12 +1026,31 @@ class _ReconTabsMixin:
         )
         self._smb_worker.result.connect(self._on_smb_result)
         self._smb_worker.status.connect(self._smb_status.setText)
-        self._smb_worker.error.connect(lambda e: self._smb_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._smb_worker.error.connect(lambda e: show_worker_error(self._smb_status, e, WE.WINDOWS_SHARES), Qt.ConnectionType.QueuedConnection)
         self._smb_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.WINDOWS_SHARES_SMB, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
         )
+        self._smb_worker.stopped.connect(
+            lambda: self._on_smb_stopped(previous), Qt.ConnectionType.QueuedConnection,
+        )
         self._smb_worker.start()
+
+    def _on_smb_stopped(self, previous: dict) -> None:
+        """The user pressed Stop: not a failure, so no error dot (S5).
+
+        The registry has no "stopped" state, and the last completed run is still the last
+        completed run, so put back the entry this run replaced — or "never" on a first run.
+        """
+        self._smb_status.setText("SMB enumeration stopped.")
+        state = previous.get("state")
+        if state in (None, "running"):
+            self._nav_set_scan_state(L.WINDOWS_SHARES_SMB, "never")
+            return
+        self._nav_set_scan_state(
+            L.WINDOWS_SHARES_SMB, state, ts=previous.get("ts"),
+            error=previous.get("error"), verdict=previous.get("verdict"),
+        )
 
     def _build_recon_plugin_tab(self) -> QWidget:
         w = QWidget()
@@ -1260,12 +1283,7 @@ class _ReconTabsMixin:
         try:
             dest.write_text(template, encoding="utf-8")
         except OSError as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.critical(
-                self._plugin_list_table.window(),
-                "Write Error",
-                f"Could not write plugin file:\n{exc}",
-            )
+            show_error_dialog(self._plugin_list_table.window(), exc, WE.PLUGIN_TEMPLATE)
             return
 
         self._reload_plugins()
@@ -1376,7 +1394,7 @@ class _ReconTabsMixin:
             t = _ScanPluginRegistryFetchThread(REGISTRY_URL, parent=dlg)
             t.done.connect(_rebuild_cards, Qt.ConnectionType.QueuedConnection)
             t.error.connect(
-                lambda msg: reg_status.setText(f"Error: {msg}"),
+                lambda msg: show_worker_error(reg_status, msg, WE.PLUGIN_REGISTRY),
                 Qt.ConnectionType.QueuedConnection,
             )
             _active_threads.append(t)
@@ -1704,7 +1722,7 @@ class _ReconTabsMixin:
         self._pe_worker = PrivateEndpointWorker(specs)
         self._pe_worker.result.connect(self._on_pe_result)
         self._pe_worker.status.connect(self._pe_status.setText)
-        self._pe_worker.error.connect(lambda e: self._pe_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._pe_worker.error.connect(lambda e: show_worker_error(self._pe_status, e, WE.PRIVATE_ENDPOINT), Qt.ConnectionType.QueuedConnection)
         self._pe_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.PRIVATE_ENDPOINT_CHECK, "error", error=e),
             Qt.ConnectionType.QueuedConnection,

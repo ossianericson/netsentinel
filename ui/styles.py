@@ -21,12 +21,11 @@ import weakref
 log = logging.getLogger(__name__)
 
 # Dedicated instrumentation logger for theme-switch stage timing (RULE-T6 /
-# theme-switch responsiveness investigation). A bare log.info() here would be
-# silently dropped: nothing in the app calls logging.basicConfig(), so the
-# root logger's effective level is the default WARNING and there is no
-# handler to receive it. Mirrors the --trace-windows FileHandler pattern in
-# app.py — its own logger + FileHandler under get_app_data_dir() (RULE 23),
-# independent of root logging config.
+# theme-switch responsiveness investigation). Its own logger + FileHandler under
+# get_app_data_dir() (RULE 23) with propagate=False, mirroring the --trace-windows
+# pattern in app.py: per-stage millisecond timings are a measurement series read on
+# their own, not events worth interleaving into the shared netsentinel_app.log that
+# modules/app_logging.py configures.
 _theme_switch_log = logging.getLogger("netsentinel.theme_switch")
 
 
@@ -1464,11 +1463,19 @@ def _reapply_themed() -> None:
 #
 # Width is still real and separate: even with the click-safe QSS above,
 # the fixed +/- button column (2 x 21px under windows11) needs enough total
-# widget width to avoid the value text visually running under it. These
-# constants are the minimum widths confirmed clean by live-rendering.
-SPINBOX_WIDTH_WITH_SUFFIX = 100   # worst case text e.g. "3600 s", "60 min", "5000 pps"
-SPINBOX_WIDTH_PLAIN = 72          # up to ~3 digits, no suffix, e.g. "120"
-SPINBOX_WIDTH_WIDE_PLAIN = 92     # 4-5 digits, no suffix, e.g. port "65535", "8760"
+# widget width to avoid the value text visually running under it. The global
+# `QLineEdit { padding: 4px 8px; }` rule ALSO reaches the spin box's internal
+# line edit, so the text area is far smaller than width minus buttons: the old
+# 100 / 72 / 92 left 33 / 15 / 25 px and cut "5000 pps" to "500 p" (measured
+# natively 2026-09-18; offscreen fonts measure ~2x wider, so never size these
+# from an offscreen probe). The text area is `width - 67` px from 82 px up and
+# stays at 15 px below that (the line edit stops shrinking), so a width under
+# 82 buys nothing. Each value is the measured minimum for its widest in-tree
+# text plus ~7 px margin for DPI/hinting differences.
+# tests/test_spinbox_text_fit.py measures every call site's widest value.
+SPINBOX_WIDTH_WITH_SUFFIX = 122   # "5000 pps", "1440 min" need 115
+SPINBOX_WIDTH_PLAIN = 94          # up to 3 digits, no suffix: "120" needs 87
+SPINBOX_WIDTH_WIDE_PLAIN = 106    # 4-5 digits, no suffix: port "65535", "99999" need 99
 
 # QDateEdit / QTimeEdit / QDateTimeEdit cannot be left to size themselves. The global
 # QSS rule above reserves `padding: 3px 22px 3px 6px` (28px horizontal) for the

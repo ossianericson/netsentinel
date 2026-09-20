@@ -31,6 +31,8 @@ from ui.widgets.hub_card import (
     _validate_script,
 )
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error, worker_error_text
 from ui.dialog_utils import run_dialog
 
 
@@ -105,10 +107,7 @@ class _HardwareBrowseMixin:
 
     @pyqtSlot(str)
     def _on_community_index_error(self, msg: str) -> None:
-        self._browse_status.setText(
-            f"Community index unavailable — {msg}. "
-            "Check your internet connection or try again later."
-        )
+        show_worker_error(self._browse_status, msg, WE.COMMUNITY_INDEX)
 
     def _rebuild_browse_cards(self, entries: list) -> None:
         while self._browse_lay.count() > 1:
@@ -187,7 +186,7 @@ class _HardwareBrowseMixin:
 
     @pyqtSlot(str)
     def _on_community_download_error(self, msg: str) -> None:
-        self._browse_status.setText(f"Download error: {msg}")
+        show_worker_error(self._browse_status, msg, WE.COMMUNITY_DOWNLOAD)
 
     # ── Bundled catalog cards ─────────────────────────────────────────────────
 
@@ -329,7 +328,8 @@ class _HardwareBrowseMixin:
     def on_hardware_detect_error(self, msg: str) -> None:
         """Auto-detection probe raised (G10) — surface a small note instead of
         silently looking identical to 'no hardware matched'."""
-        self._set_status(f"Hardware detection failed: {msg}", error=True)
+        self._set_status(worker_error_text(WE.HARDWARE_DETECT), error=True)  # colour + auto-clear
+        show_worker_error(self._status_lbl, msg, WE.HARDWARE_DETECT)
 
     def _build_detect_row(
         self, plugin: dict, confidence: float, signals: list,
@@ -445,7 +445,8 @@ class _HardwareBrowseMixin:
                 shutil.copy2(src, dest)
             dest_str = str(dest)
         except Exception as exc:
-            self._set_status(f"Copy failed: {exc}", error=True)
+            self._set_status(worker_error_text(WE.PLUGIN_CATALOGUE_INSTALL), error=True)  # colour + auto-clear
+            show_worker_error(self._status_lbl, exc, WE.PLUGIN_CATALOGUE_INSTALL)
             return
 
         ok, msg, _ = _validate_script(dest_str)

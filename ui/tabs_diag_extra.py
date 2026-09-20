@@ -23,6 +23,8 @@ from PyQt6.QtWidgets import (
 from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 
 
 class _DiagExtraTabsMixin:
@@ -303,7 +305,7 @@ class _DiagExtraTabsMixin:
         self._ps_worker = PortScanWorker(host=host, mode=mode)
         self._ps_worker.result.connect(self._on_port_scan_result)
         self._ps_worker.status.connect(lambda m: self._ps_status.setText(m) if hasattr(self, "_ps_status") else None, Qt.ConnectionType.QueuedConnection)
-        self._ps_worker.error.connect(lambda e: self._ps_status.setText(f"Error: {e}") if hasattr(self, "_ps_status") else None, Qt.ConnectionType.QueuedConnection)
+        self._ps_worker.error.connect(lambda e: show_worker_error(self._ps_status, e, WE.PORT_SCANNER) if hasattr(self, "_ps_status") else None, Qt.ConnectionType.QueuedConnection)
         self._ps_worker.start()
 
     # ── WoL handler ───────────────────────────────────────────────────────────

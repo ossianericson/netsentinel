@@ -16,6 +16,13 @@ Build:
 import os
 import sys
 
+# Windows VERSIONINFO resource. An unsigned PE with no version metadata is a
+# reputation penalty (see packaging/version_info.py); the version is read from
+# app.py, the canonical source, so there is no extra bump target to keep in sync.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(SPEC)), "packaging"))
+from version_info import build_version_info  # noqa: E402
+
+
 # ── Data files ────────────────────────────────────────────────────────────────
 datas = [("offenders.json", ".")]
 
@@ -27,6 +34,8 @@ hiddenimports: list = [
     "modules.console_codec",
     "modules.crash_net",
     "modules.log_rotation",
+    # D4 formatted app log -- imported at cli.py module scope
+    "modules.app_logging",
     "modules.rogue_device",
     "modules.port_scanner",
     "modules.network_diagnostics",
@@ -73,7 +82,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,          # UPX packing is a strong AV heuristic trigger
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,   # CLI is always a console application
@@ -82,5 +91,9 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=build_version_info(
+        internal_name="NetSentinel-cli",
+        description="NetSentinel command-line interface",
+    ) if sys.platform == "win32" else None,
     icon="assets/icons/NetSentinel.ico" if sys.platform == "win32" else None,
 )

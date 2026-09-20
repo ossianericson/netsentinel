@@ -8,6 +8,7 @@ Layer-2 network problems.
 
 import concurrent.futures
 import json
+import logging
 import platform
 import re
 import socket
@@ -20,14 +21,18 @@ from typing import Any, Dict, List, Optional
 from modules.adaptive_timing import derive_profile, measure_gateway_rtt
 from modules.utils_net import get_arp_snapshot, parallel_map
 
+_log = logging.getLogger(__name__)
+
 try:
     from modules.mac_registry import lookup as _mac_registry_lookup
 except Exception:
+    _log.debug("mac_registry unavailable; OUI lookups disabled", exc_info=True)
     _mac_registry_lookup = None  # type: ignore
 
 try:
     from modules.name_resolver import resolve as _resolve_name, ResolvedName
 except Exception:
+    _log.debug("name_resolver unavailable; hostname resolution disabled", exc_info=True)
     _resolve_name = None  # type: ignore
     ResolvedName = None  # type: ignore
 
@@ -94,6 +99,7 @@ def _resolve_hostname(ip: str) -> str:
             fut = ex.submit(socket.gethostbyaddr, ip)
             return fut.result(timeout=1.0)[0]
     except Exception:
+        _log.debug("reverse DNS for %s failed", ip, exc_info=True)
         return ""
 
 
@@ -102,6 +108,7 @@ def _load_offenders(path: Path) -> list:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
     except Exception:
+        _log.debug("offenders list %s could not be read", path, exc_info=True)
         return []
 
 
@@ -186,7 +193,7 @@ def _get_default_gateway() -> Optional[str]:
             if m:
                 return m.group(1)
     except Exception:
-        pass  # non-fatal
+        _log.debug("default gateway lookup failed", exc_info=True)  # non-fatal
     return None
 
 
@@ -213,7 +220,7 @@ def _ensure_gateway_in_arp(gateway_ip: str, arp_entries: List[tuple]) -> List[tu
             if ctypes.windll.iphlpapi.SendARP(ip_int, 0, mac_buf, ctypes.byref(mac_len)) == 0:
                 new_mac = ":".join(f"{b:02x}" for b in mac_buf)
         except Exception:
-            pass  # non-fatal — gateway may still appear on retry below
+            _log.debug("SendARP for gateway %s failed", gateway_ip, exc_info=True)  # non-fatal — gateway may still appear on retry below
 
     if not new_mac:
         # Trigger OS ARP resolution with a zero-byte UDP connect — no data sent
@@ -222,7 +229,7 @@ def _ensure_gateway_in_arp(gateway_ip: str, arp_entries: List[tuple]) -> List[tu
                 _s.settimeout(0.5)
                 _s.connect((gateway_ip, 1))
         except Exception:
-            pass  # non-fatal — ARP entry may still have been populated
+            _log.debug("ARP priming connect to gateway %s failed", gateway_ip, exc_info=True)  # non-fatal — ARP entry may still have been populated
         for ip, mac in _get_arp_table():
             if ip == gateway_ip:
                 new_mac = mac
@@ -255,7 +262,7 @@ def _log_scan_timing(setup: float, phase1: float, phase2: float, device_count: i
             device_count, setup, phase1, phase2, setup + phase1 + phase2,
         )
     except Exception:
-        pass  # non-fatal — timing telemetry must never break a scan
+        _log.debug("scan timing log could not be written", exc_info=True)  # non-fatal — timing telemetry must never break a scan
 
 
 def scan(
@@ -385,6 +392,7 @@ def scan(
             try:
                 _reg = _mac_registry_lookup(mac) or {}
             except Exception:
+                _log.debug("MAC registry lookup for %s failed", mac, exc_info=True)
                 _reg = {}
             if _reg.get("vendor"):
                 info.vendor = _reg["vendor"]
@@ -472,7 +480,7 @@ def scan(
             try:
                 device_cb(info)
             except Exception:
-                pass  # non-fatal — a broken UI callback must not abort scanning
+                _log.debug("device callback raised", exc_info=True)  # non-fatal — a broken UI callback must not abort scanning
 
     _t_phase1 = time.monotonic()
 
@@ -519,6 +527,7 @@ def scan(
                 from modules.vendor_hints import vendor_from_hostname
                 _hv = vendor_from_hostname(info.hostname)
             except Exception:
+                _log.debug("vendor inference from hostname failed", exc_info=True)
                 _hv = ""  # non-fatal -- a failed inference must not abort the scan
             if _hv:
                 info.vendor = _hv
@@ -539,13 +548,14 @@ def scan(
                     is_gateway=info.is_gateway,
                 )
             except Exception:
+                _log.debug("device-type classification failed", exc_info=True)
                 info.device_type = "Unknown Device"
 
         if device_cb:
             try:
                 device_cb(info)
             except Exception:
-                pass  # non-fatal — a broken UI callback must not abort scanning
+                _log.debug("device callback raised", exc_info=True)  # non-fatal — a broken UI callback must not abort scanning
 
     # Part 2/L8: apply cached hostnames now that _apply_resolution() exists —
     # fresh=False means device_tracker.process_scan() will NOT re-stamp

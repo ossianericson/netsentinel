@@ -62,6 +62,9 @@ from ui.widgets.hub_card import (
     _ModemDetailPanel, _RouterDetailPanel, _safe_set_text,  # noqa: F401
     _CIRCUIT_BREAK_THRESHOLD, _DEGRADED_HOURS, _load_health, _save_health,  # noqa: F401
 )
+from ui.widgets.hub_helpers import plugin_error_text
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error, worker_error_text
 from ui.pages.plugin_guide import PluginGuide
 from ui.widgets.credential_dialog import show_credential_dialog, show_unsigned_warning
 from ui.pages.plugin_wizard_mixin import _PluginWizardMixin
@@ -336,7 +339,8 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
                     _shutil.copy2(path, _dest)
                 path = str(_dest)
             except Exception as _exc:
-                self._set_status(f"Failed to install plugin: {_exc}", error=True)
+                self._set_status(worker_error_text(WE.PLUGIN_REGISTER), error=True)  # colour + auto-clear
+                show_worker_error(self._status_lbl, _exc, WE.PLUGIN_REGISTER)
                 return
 
             cred_label = meta.get("credential_label", "")
@@ -661,8 +665,11 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         self._emit_reachability(instance_id, not msg.startswith("AUTH:"), msg)
         card = self._cards.get(instance_id)
         if card:
-            classified = _classify_error(msg)
-            card.set_error(classified)
+            text = plugin_error_text(msg)
+            if text is None:
+                card.set_error("", raw=msg)  # unrecognised: fixed text, msg as detail (RULE-A2)
+            else:
+                card.set_error(text)
             card.refresh_health_ui()
             if h.get("disabled"):
                 self._stop_poll_worker(instance_id)
@@ -762,7 +769,9 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
             dest_dir = get_app_data_dir() / "plugins"
             plugin_path, manifest = unpack_nspkg(path, dest_dir)
         except Exception as exc:
-            self._set_status(f"Import failed: {exc}", error=True)
+            # unpack_nspkg's ValueError names the exact rule broken; it goes in the detail.
+            self._set_status(worker_error_text(WE.PLUGIN_BUNDLE_IMPORT), error=True)  # colour + auto-clear
+            show_worker_error(self._status_lbl, exc, WE.PLUGIN_BUNDLE_IMPORT)
             return
 
         if not _is_consented(str(plugin_path)):

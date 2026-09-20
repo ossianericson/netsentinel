@@ -10,10 +10,13 @@ Two discovery modes:
      to get concrete PTR/SRV/A records.
 
 Returns a DnsZoneResult with:
-  records   — list of DnsRecord (name, rtype, value, ttl)
-  services  — list of MdnsService (service_type, instance, host, ip, port)
-  verdict   — plain-English summary
-  level     — "CLEAN" | "LOW" | "HIGH"
+  records    — list of DnsRecord (name, rtype, value, ttl)
+  services   — list of MdnsService (service_type, instance, host, ip, port)
+  verdict    — plain-English summary
+  level      — "CLEAN" | "LOW" | "HIGH" | "UNKNOWN" (the AXFR server could not be reached)
+  axfr_error — "" or a fixed, locale-free reason the transfer did not complete:
+               "timeout" | "refused" | "unreachable" | "failed". With no records it means the
+               server was never reached; with records, the zone is partial.
 
 Not a name_resolver duplicate: this enumerates zone/service *records*
 (AXFR transfer, mDNS service-type discovery) rather than resolving a
@@ -22,11 +25,15 @@ single IP's best-effort display name.
 
 from __future__ import annotations
 
+import errno
+import logging
 import socket
 import struct
 import time
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
+
+_log = logging.getLogger(__name__)
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -56,6 +63,7 @@ class DnsZoneResult:
     verdict:  str               = ""
     level:    str               = "CLEAN"
     axfr_ok:  bool              = False
+    axfr_error: str             = ""
 
 
 # ── Minimal DNS message parser ────────────────────────────────────────────────
@@ -124,7 +132,7 @@ def _parse_rdata(rtype: int, data: bytes, offset: int, rdlen: int) -> str:
             rname, _    = _decode_name(data, pos2)
             return f"{mname} {rname}"
     except Exception:
-        pass  # non-fatal
+        _log.debug("DNS rdata of type %s could not be decoded; keeping the raw bytes", rtype, exc_info=True)  # non-fatal
     return data[offset:end].hex()
 
 
@@ -161,25 +169,82 @@ def _parse_dns_response(data: bytes) -> List[DnsRecord]:
                 ttl=ttl,
             ))
     except Exception:
-        pass  # non-fatal
+        _log.debug("DNS message could not be fully parsed; keeping the records read so far", exc_info=True)  # non-fatal
     return records
 
 
 # ── AXFR zone transfer ────────────────────────────────────────────────────────
+
+# Why a transfer did not complete — fixed, locale-free text chosen by exception type, never
+# str(exc): Windows localizes socket error messages (RULE-A2, RULE-WIN23).
+_AXFR_ERROR_TEXT = {
+    "timeout":     "it did not answer in time",
+    "refused":     "it refused the connection on TCP port 53",
+    "unreachable": "there is no network route to it",
+    "failed":      "the connection failed",
+}
+_UNREACHABLE_ERRNOS = frozenset({errno.EHOSTUNREACH, errno.ENETUNREACH})
+
+
+def _axfr_error_reason(exc: BaseException) -> str:
+    """The ``_AXFR_ERROR_TEXT`` key for *exc*."""
+    if isinstance(exc, (socket.timeout, TimeoutError)):
+        return "timeout"
+    if isinstance(exc, ConnectionRefusedError):
+        return "refused"
+    if isinstance(exc, socket.gaierror) or (isinstance(exc, OSError) and exc.errno in _UNREACHABLE_ERRNOS):
+        return "unreachable"
+    return "failed"
+
+
+def _read_axfr_stream(sock: socket.socket, records: List[DnsRecord]) -> None:
+    """Append each record to *records* as its message arrives, until the closing SOA, a
+    response that carries no zone (REFUSED, NOTAUTH, or no answers), or EOF.
+
+    Never reads to EOF by design: a server may keep the TCP connection open after the
+    transfer (RFC 7766), and waiting for it to close timed out and lost a complete zone.
+    """
+    buf = b""
+    soa_count = 0
+    while True:
+        chunk = sock.recv(4096)
+        if not chunk:
+            return
+        buf += chunk
+        while len(buf) >= 2:
+            msg_len = struct.unpack_from(">H", buf, 0)[0]
+            if len(buf) < 2 + msg_len:
+                break   # the rest of this message is still in flight
+            message, buf = buf[2:2 + msg_len], buf[2 + msg_len:]
+            if len(message) < 12:
+                return
+            flags, ancount = struct.unpack_from(">H", message, 2)[0], struct.unpack_from(">H", message, 6)[0]
+            if flags & 0x000F or ancount == 0:
+                return   # the server answered without a zone: its refusal, not a failure
+            for r in _parse_dns_response(message):
+                if r.rtype == "SOA":
+                    soa_count += 1
+                    if soa_count == 2:
+                        return   # AXFR ends at the second SOA
+                records.append(r)
+
 
 def axfr_transfer(
     server: str,
     domain: str,
     timeout: float = 10.0,
     progress_cb: Optional[Callable[[str], None]] = None,
-) -> List[DnsRecord]:
+) -> Tuple[List[DnsRecord], str]:
     """
-    Attempt a DNS zone transfer (AXFR) for *domain* from *server*.
+    Attempt a DNS zone transfer (AXFR) for *domain* from *server* -> (records, error).
 
-    Uses raw TCP DNS (port 53) so no external library is needed.
-    Returns an empty list if the server refuses or the network is unreachable.
+    Uses raw TCP DNS (port 53) so no external library is needed. *error* is "" or an
+    ``_AXFR_ERROR_TEXT`` key: an empty list with no error means the server answered without a
+    zone (it refused). The records that arrived before an error are kept, so a transfer cut off
+    mid-zone returns a partial zone rather than nothing.
     """
     records: List[DnsRecord] = []
+    error = ""
     if progress_cb:
         progress_cb(f"Attempting AXFR for {domain} from {server}…")
     try:
@@ -207,41 +272,19 @@ def axfr_transfer(
             sock.settimeout(timeout)
             sock.connect((server, 53))
             sock.sendall(msg)
-
-            buf = b""
-            while True:
-                chunk = sock.recv(4096)
-                if not chunk:
-                    break
-                buf += chunk
+            _read_axfr_stream(sock, records)
         finally:
             sock.close()
-
-        # Parse multi-message TCP response (each prefixed with 2-byte length)
-        pos = 0
-        soa_count = 0
-        while pos + 2 <= len(buf):
-            msg_len = struct.unpack_from(">H", buf, pos)[0]
-            pos += 2
-            if pos + msg_len > len(buf):
-                break
-            recs = _parse_dns_response(buf[pos: pos + msg_len])
-            pos += msg_len
-            for r in recs:
-                if r.rtype == "SOA":
-                    soa_count += 1
-                    if soa_count == 2:
-                        break   # AXFR ends at second SOA
-                records.append(r)
-            if soa_count == 2:
-                break
-
-    except Exception:
-        pass  # non-fatal
+    except Exception as exc:
+        _log.debug("AXFR of %s from %s did not complete", domain, server, exc_info=True)
+        error = _axfr_error_reason(exc)
 
     if progress_cb:
-        progress_cb(f"AXFR complete: {len(records)} record(s) received.")
-    return records
+        if error:
+            progress_cb(f"AXFR from {server} stopped: {_AXFR_ERROR_TEXT[error]}.")
+        else:
+            progress_cb(f"AXFR complete: {len(records)} record(s) received.")
+    return records, error
 
 
 # ── mDNS service enumeration ──────────────────────────────────────────────────
@@ -304,6 +347,7 @@ def mdns_enumerate(
                 except socket.timeout:
                     break
                 except Exception:
+                    _log.debug("mDNS service-type receive failed; ending the listen early", exc_info=True)
                     break
 
         if progress_cb:
@@ -329,9 +373,10 @@ def mdns_enumerate(
                         except socket.timeout:
                             break
                         except Exception:
+                            _log.debug("mDNS instance receive failed for %s", stype, exc_info=True)
                             break
             except Exception:
-                pass  # non-fatal
+                _log.debug("mDNS instance query for %s failed", stype, exc_info=True)  # non-fatal
 
         # Step 3: for each instance, gather SRV + A/AAAA
         instance_details: dict[str, dict] = {}
@@ -366,10 +411,11 @@ def mdns_enumerate(
                         except socket.timeout:
                             break
                         except Exception:
+                            _log.debug("mDNS detail receive failed for %s", instance, exc_info=True)
                             break
                 instance_details[instance] = info
             except Exception:
-                pass  # non-fatal
+                _log.debug("mDNS detail query for %s failed", instance, exc_info=True)  # non-fatal
 
         # Build MdnsService list
         for instance, stype in instance_to_type.items():
@@ -405,14 +451,16 @@ def scan(
     Returns a DnsZoneResult.  Never raises.
     """
     result = DnsZoneResult()
+    axfr_requested = bool(axfr_server and axfr_domain)
 
     # AXFR
-    if axfr_server and axfr_domain:
+    if axfr_requested:
         try:
-            result.records = axfr_transfer(axfr_server, axfr_domain, axfr_timeout, progress_cb)
+            result.records, result.axfr_error = axfr_transfer(axfr_server, axfr_domain, axfr_timeout, progress_cb)
             result.axfr_ok = len(result.records) > 0
         except Exception:
-            pass  # non-fatal
+            _log.debug("AXFR of %s from %s raised", axfr_domain, axfr_server, exc_info=True)
+            result.axfr_error = "failed"
 
     # mDNS
     try:
@@ -423,15 +471,24 @@ def scan(
     # Verdict
     n_rec  = len(result.records)
     n_svc  = len(result.services)
-    if n_rec == 0 and n_svc == 0:
+    # The AXFR button runs with mDNS off; only report an mDNS count that was measured.
+    mdns_note = f" {n_svc} mDNS service(s) discovered on the LAN." if mdns_timeout > 0 else ""
+    why = _AXFR_ERROR_TEXT.get(result.axfr_error, "")
+    if axfr_requested and result.axfr_error and not result.records:
+        result.verdict = f"Could not reach {axfr_server} for AXFR — {why}. Check the address, then try again.{mdns_note}"
+        result.level   = "UNKNOWN"
+    elif axfr_requested and not result.axfr_ok:
+        result.verdict = f"AXFR refused by {axfr_server}.{mdns_note}"
+        result.level   = "LOW"
+    elif n_rec == 0 and n_svc == 0:
         result.verdict = "No DNS zone data found. Try providing a DNS server for AXFR."
         result.level   = "LOW"
-    elif not result.axfr_ok and axfr_server:
+    elif result.axfr_error:
         result.verdict = (
-            f"AXFR refused by {axfr_server}. "
-            f"{n_svc} mDNS service(s) discovered on the LAN."
+            f"{n_rec} DNS record(s) via AXFR, but the transfer stopped early — {why} — "
+            f"so the zone is partial.{mdns_note}"
         )
-        result.level = "LOW"
+        result.level = "CLEAN"
     else:
         result.verdict = (
             f"{n_rec} DNS record(s) via AXFR, "

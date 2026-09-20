@@ -31,6 +31,8 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from modules.alert_engine import AlertFired
+from modules.app_health import AppHealth
+from modules.app_health_catalogue import notification_channel
 from modules.utils import get_app_data_dir
 from modules.notification_channels import (
     _deliver_webhook_tracked, _deliver_email_tracked,
@@ -38,6 +40,16 @@ from modules.notification_channels import (
 )
 
 _log = logging.getLogger(__name__)
+
+#: How long one channel's delivery failures collapse into a single warning. A webhook
+#: pointed at a dead host fails on every alert, and the point of the record is the
+#: condition ("Slack has been unreachable since 14:02"), not the repetition.
+_DELIVERY_WARN_WINDOW_S = 300.0
+
+#: Consecutive failed deliveries on one channel before it is an app-health condition.
+#: One failure is not one: a webhook host rebooting is ordinary. Three in a row, with no
+#: success between, means alerts through that channel are not arriving.
+_CONDITION_AFTER_FAILURES = 3
 
 # ── Severity ordering ─────────────────────────────────────────────────────────
 
@@ -189,6 +201,16 @@ class NotificationRouter:
         self._log: List[dict] = []
         self._log_max = 500
 
+        # channel name → [last warned at (monotonic), failures suppressed since].
+        # The delivery log above is in-memory and capped, so before this a channel
+        # that had been failing for days left nothing on disk to read (F2-HOOK).
+        self._warn_state: Dict[str, list] = {}
+
+        # S3.3 — channel name → failed deliveries since its last success, and the
+        # registry that hears about a channel crossing _CONDITION_AFTER_FAILURES.
+        self._fail_streak: Dict[str, int] = {}
+        self._app_health: Optional[AppHealth] = None
+
         # Snooze registry: rule_name → expiry Unix timestamp (float); 0 = forever
         self._snooze: Dict[str, float] = {}
         self._restore_snoozes()
@@ -266,10 +288,23 @@ class NotificationRouter:
     def set_channels(self, channels: List[Channel]) -> None:
         with self._lock:
             self._channels = list(channels)
+            health = self._app_health
+        if health is None:
+            return
+        # A channel the user switched off or removed is not a channel that is failing:
+        # its condition would otherwise stay on Home with nothing left to resolve it.
+        live = {f"notify:{ch.name}" for ch in channels if ch.enabled}
+        for cond in health.active():
+            if cond.key.startswith("notify:") and cond.key not in live:
+                health.report_ok(cond.key)
 
     def get_channels(self) -> List[Channel]:
         with self._lock:
             return list(self._channels)
+
+    def set_app_health(self, health: AppHealth) -> None:
+        """Report channels that keep failing to the app-health registry (D1)."""
+        self._app_health = health
 
     def set_toast_callback(self, cb: Callable[[AlertFired], None]) -> None:
         """Inject the UI toast function (called on the UI's thread via signal)."""
@@ -403,11 +438,62 @@ class NotificationRouter:
     def _mark_delivered(self, entry: dict) -> None:
         with self._lock:
             entry["status"] = "DELIVERED"
+            channel = entry.get("channel_name", "") or entry.get("channel_type", "?")
+            # A channel that works again is allowed to report its next failure at once.
+            # Without this, a five-minute window opened by an outage that has since
+            # ended would mute the start of the *next* one.
+            self._warn_state.pop(channel, None)
+            self._fail_streak.pop(channel, None)
+            health = self._app_health
+        if health is not None:
+            health.report_ok(notification_channel(entry.get("channel_type", "?"), channel).key)
 
     def _mark_failed(self, entry: dict, error: str) -> None:
         with self._lock:
             entry["status"] = "FAILED"
             entry["error"]  = error
+            channel = entry.get("channel_name", "") or entry.get("channel_type", "?")
+            kind = entry.get("channel_type", "?")
+            report, suppressed = self._should_warn(channel)
+            streak = self._fail_streak.get(channel, 0) + 1
+            self._fail_streak[channel] = streak
+            health = self._app_health
+        if health is not None and streak >= _CONDITION_AFTER_FAILURES:
+            # Every failure past the threshold, not only the crossing: the registry
+            # keeps one condition and counts the repeats (modules/app_health.py).
+            health.report_failure(notification_channel(kind, channel), detail=error)
+        if not report:
+            return
+        # Outside the lock: logging acquires its own, and a handler doing file I/O
+        # under this one would hold up every delivery thread behind it.
+        #
+        # This is deliberately NOT left to the shared RepeatLimiter in
+        # modules/app_logging.py. That one is keyed on (logger, message template),
+        # which is identical for every channel here, so a webhook failing every
+        # minute would swallow the first — and only — report from email as well.
+        if suppressed:
+            _log.warning(
+                "%s notification delivery failed via %s: %s (%d more in the last %d minutes)",
+                kind, channel, error, suppressed, int(_DELIVERY_WARN_WINDOW_S // 60),
+            )
+        else:
+            _log.warning(
+                "%s notification delivery failed via %s: %s", kind, channel, error
+            )
+
+    def _should_warn(self, channel: str) -> tuple:
+        """Rate-limit per channel. Caller holds ``self._lock``.
+
+        Returns ``(report_now, suppressed_since_last_report)``.
+        """
+        now = time.monotonic()
+        state = self._warn_state.get(channel)
+        if state is None or (now - state[0]) >= _DELIVERY_WARN_WINDOW_S:
+            suppressed = state[1] if state else 0
+            self._warn_state[channel] = [now, 0]
+            return True, suppressed
+        state[1] += 1
+        return False, 0
 
     def retry_delivery(self, entry: dict) -> None:
         """Re-attempt delivery for a failed log entry."""

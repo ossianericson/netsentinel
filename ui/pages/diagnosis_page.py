@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import export_failed, show_worker_error
 from ui.styles import (
     alpha,
 )
@@ -295,7 +297,7 @@ class DiagnosisPage(QWidget):
         self._isp_btn.setText("Quick test: Is this my ISP or my router?")
         self._isp_btn.setEnabled(True)
         self._isp_verdict_lbl.setText("Test failed")
-        self._isp_detail_lbl.setText(msg or "Could not run the quick test.")
+        show_worker_error(self._isp_detail_lbl, msg, WE.ISP_QUICK_TEST)
         self._isp_result_card.show()
 
     # ── UI construction ───────────────────────────────────────────────────────
@@ -1081,10 +1083,11 @@ class DiagnosisPage(QWidget):
         try:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write("\n".join(lines))
+        except Exception as exc:
+            export_failed(exc, WE.EXPORT_DIAGNOSIS_REPORT, retry=self._export_report)
+        else:
             import os
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
-        except Exception as exc:
-            ToastManager.show(f"Export failed: {exc}", "error")
 
     def _on_progress(self, pct: int, msg: str) -> None:
         self._progress_bar.setValue(pct)

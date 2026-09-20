@@ -12,6 +12,7 @@ Sections:
 from __future__ import annotations
 
 import datetime
+import logging
 from typing import Optional
 
 import keyring
@@ -24,6 +25,8 @@ from PyQt6.QtWidgets import (
 
 from ui import styles as _s
 from modules.mqtt_publisher import MqttPublisher, get_publisher, _PAHO_AVAILABLE
+
+log = logging.getLogger(__name__)
 
 
 _KEYCHAIN_SVC = "NetSentinel"
@@ -41,11 +44,34 @@ def _get_secret() -> str:
         return ""  # no keyring backend — treat the secret as unset
 
 
-def _set_secret(pw: str) -> None:
+def _set_secret(pw: str) -> bool:
+    """Store the MQTT password. Returns False when it could not be persisted.
+
+    RULE-SURF1: this used to swallow the failure. The write was skipped,
+    `_get_secret()` then returned "" — the same answer a never-set password
+    gives — so nothing downstream could tell the two apart and the user saw a
+    clean save for a password that was silently discarded.
+    """
     try:
         keyring.set_password(_KEYCHAIN_SVC, _KEYCHAIN_KEY, pw)
+        return True
+    except Exception as exc:
+        log.warning("MQTT password could not be saved to the OS keychain: %s", exc, exc_info=True)
+        return False
+
+
+def _secret_is_readable() -> bool:
+    """True when the keychain answered at all — distinct from "no password set".
+
+    `_get_secret()` degrades a read failure to "", which is also what an unset
+    password returns; callers that need to explain *why* the field is empty ask
+    here instead.
+    """
+    try:
+        keyring.get_password(_KEYCHAIN_SVC, _KEYCHAIN_KEY)
+        return True
     except Exception:
-        pass  # no keyring backend — silently skip persisting the secret
+        return False
 
 
 # ── Connection worker ─────────────────────────────────────────────────────────
@@ -96,6 +122,10 @@ class MqttPage(QWidget):
     """
     MQTT / Home Assistant integration configuration page.
     """
+
+    #: After each save that included a password: True if the OS keychain stored it.
+    #: app.py turns False into the ``keyring:mqtt`` app-health condition (S3.3).
+    secret_persisted = pyqtSignal(bool)
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -297,9 +327,17 @@ class MqttPage(QWidget):
         self._chk_alerts.setChecked(s.value("pub_alerts", "true").lower() == "true")
         self._chk_uptime.setChecked(s.value("pub_uptime", "true").lower() == "true")
         s.endGroup()
-        # Password from keychain (don't pre-fill — just leave placeholder)
+        # Password from keychain (don't pre-fill — just leave placeholder).
+        # An empty read has two very different causes: nothing was ever saved, or
+        # the keychain would not answer. Saying "Stored in OS keychain" for the
+        # second is the lie RULE-SURF1 is about, so ask which one it is.
         pw = _get_secret()
-        self._password.setPlaceholderText("●●●●●● (stored)" if pw else "Stored in OS keychain")
+        if pw:
+            self._password.setPlaceholderText("●●●●●● (stored)")
+        elif _secret_is_readable():
+            self._password.setPlaceholderText("Stored in OS keychain")
+        else:
+            self._password.setPlaceholderText("OS keychain unavailable — password cannot be saved")
 
     def _save_settings(self) -> None:
         from PyQt6.QtCore import QSettings
@@ -315,8 +353,21 @@ class MqttPage(QWidget):
         s.setValue("pub_uptime",   str(self._chk_uptime.isChecked()).lower())
         s.endGroup()
         pw = self._password.text()
+        saved = _set_secret(pw) if pw else True
         if pw:
-            _set_secret(pw)
+            self.secret_persisted.emit(saved)
+        if not saved:
+            # RULE-A2: what failed, why, what to do next — no raw exception text.
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(
+                "MQTT password could not be saved to the OS keychain. It will work "
+                "for this session, but you will be asked for it again next launch.",
+                "warning",
+            )
+            self._log_line(
+                "Password not persisted — no OS keychain backend is available. "
+                "Everything else on this page was saved."
+            )
 
     # ── Connection actions ────────────────────────────────────────────────────
 

@@ -124,6 +124,11 @@ def bump(ver: str) -> None:
          rf'(NetSentinel v){_VER}',
          rf'\g<1>{ver}')
 
+    # modules/version.py  ── the version modules/ and svc.py can actually import
+    _sub(ROOT / "modules" / "version.py",
+         rf'(APP_VERSION\s*=\s*"){_VER}(")',
+         rf'\g<1>{ver}\g<2>')
+
     # modules/rest_api.py  /health endpoint
     _sub(ROOT / "modules" / "rest_api.py",
          rf'("version":\s+"){_VER}(")',
@@ -241,7 +246,8 @@ def bump(ver: str) -> None:
     # ── auto-commit all version-touched files ─────────────────────────────────
     _VERSION_FILES = [
         "app.py", "cli.py", "apm.yml", "apm.lock.yaml", "installer.iss",
-        "build.bat", "build.sh", "modules/rest_api.py", "tools/debug_launch.py",
+        "build.bat", "build.sh", "modules/version.py", "modules/rest_api.py",
+        "tools/debug_launch.py",
         "packaging/AppxManifest.xml",
         "bump_version.py",
         ".github/winget/NetSentinel.NetSentinel.yaml",

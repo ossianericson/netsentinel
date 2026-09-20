@@ -13,6 +13,7 @@ Architecture rules observed:
 from __future__ import annotations
 
 import datetime
+import logging
 from typing import TYPE_CHECKING, Optional
 
 import time as _time
@@ -52,7 +53,30 @@ from ui.widgets.inventory_dialogs import (
 )
 from ui.widgets.device_detail_pane import _wire_close_icon
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import export_failed
 from ui.dialog_utils import run_dialog
+
+
+log = logging.getLogger(__name__)
+
+
+def _edit_not_saved(what: str, exc: BaseException) -> None:
+    """Tell the user an edit they made was not stored, and log why (S8 B13).
+
+    These writes are the user's own input — a device label, a type override, an alert
+    opt-in, a segment's name. Discarding one silently leaves the page showing the edit
+    while the database still holds the old value, and the difference only appears after
+    the next refresh, by which point the edit looks like it was never made.
+    """
+    from ui.widgets.toast import ToastManager
+
+    log.debug("%s could not be saved", what, exc_info=exc)
+    ToastManager.show(
+        f"Could not save {what} — the database did not accept the change. "
+        "Your edit is still on screen; try again in a moment.",
+        "warning",
+    )
 
 
 def _conf_label(conf: float) -> str:
@@ -455,8 +479,9 @@ class _DeviceDrawer(QFrame):
             return
         try:
             clear_classification_override(self._current_store, self._current_mac)
-        except Exception:
-            pass  # non-fatal
+        except Exception as exc:
+            _edit_not_saved("the cleared device-type override", exc)
+            return
         self.load(self._current_mac, self._current_store)
 
     def _rebuild_ip_history(self, mac: str, store: "Optional[MetricStore]") -> None:
@@ -557,8 +582,8 @@ class _DeviceDrawer(QFrame):
                 asset_tag=self._ann_tag.text().strip(),
                 notes=self._ann_notes.toPlainText().strip(),
             )
-        except Exception:
-            pass  # non-fatal — save failure should not crash the drawer
+        except Exception as exc:
+            _edit_not_saved("these device details", exc)
 
     def open_drawer(self) -> None:
         parent = self.parent()
@@ -1896,14 +1921,15 @@ class InventoryPage(QWidget):
         elif action == act_clear and self._store:
             try:
                 clear_classification_override(self._store, mac)
-            except Exception:
-                pass  # non-fatal
+            except Exception as exc:
+                _edit_not_saved("the cleared device-type override", exc)
+                return
             self.set_scan_devices(self._scan_devices)
         elif action == act_alert_toggle and self._store:
             try:
                 set_device_alert_opt_in(self._store, mac, not alert_opt_in)
-            except Exception:
-                pass  # non-fatal
+            except Exception as exc:
+                _edit_not_saved("that alert setting", exc)
 
     @pyqtSlot(list)
     def set_segments(self, segments: list) -> None:
@@ -2095,8 +2121,8 @@ class InventoryPage(QWidget):
                 seg.description = vals["description"]
                 try:
                     upsert_segment(self._store, seg)
-                except Exception:
-                    pass  # non-fatal — DB write failure should not crash the UI
+                except Exception as exc:
+                    _edit_not_saved("this segment", exc)
                 self._rebuild_segment_pills(self._current_segments)
                 self.set_scan_devices(self._scan_devices)
 
@@ -2291,10 +2317,11 @@ class InventoryPage(QWidget):
                     dt_str = _dt2.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
                     w.writerow([dt_str, evt.event_type, evt.ip or "—",
                                 evt.mac or "—", vendor or "—", evt.detail or ""])
+        except Exception as exc:
+            export_failed(exc, WE.EXPORT_INVENTORY_EVENTS, retry=self._export_csv)
+        else:
             import os
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
-        except Exception as exc:
-            ToastManager.show(f"Export failed: {exc}", "error")
 
     def _export_diff_csv(self) -> None:
         """Export the scan-comparison diff table (_cmp_table) as CSV — the
@@ -2318,10 +2345,11 @@ class InventoryPage(QWidget):
                         (self._cmp_table.item(row, col).text() if self._cmp_table.item(row, col) else "")
                         for col in range(1, 6)
                     ])
+        except Exception as exc:
+            export_failed(exc, WE.EXPORT_INVENTORY_COMPARISON, retry=self._export_diff_csv)
+        else:
             import os
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
-        except Exception as exc:
-            ToastManager.show(f"Export failed: {exc}", "error")
 
     def focus_on_host(self, ip: str, mac: str = "") -> None:
         """Navigate to and highlight the device matching ip or mac (cross-page API)."""
@@ -2386,10 +2414,11 @@ class InventoryPage(QWidget):
                         it = self._table.item(row, col)
                         return it.text() if it else ""
                     w.writerow([_t(1), _t(2), _t(3), _t(4), _t(5), _t(6)])
+        except Exception as exc:
+            export_failed(exc, WE.EXPORT_INVENTORY_SELECTION, retry=self._bulk_export)
+        else:
             import os
             ToastManager.show(f"✓ Exported {len(rows)} rows to {os.path.basename(path)}", "success")
-        except Exception as exc:
-            ToastManager.show(f"Export failed: {exc}", "error")
 
     def _bulk_snooze(self, hours: int) -> None:
         import time as _t

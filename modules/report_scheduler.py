@@ -89,12 +89,15 @@ def generate_status_report(store: MetricStore) -> str:
     healthy = degraded = critical = 0
     uptime_html_rows = ""
     for r in uptime_rows:
-        pct_24  = r.get("24.0",  100.0)
-        pct_7d  = r.get("168.0", 100.0)
-        pct_30d = r.get("720.0", 100.0)
-        worst   = min(pct_24, pct_7d, pct_30d)
-        cls     = "up" if worst >= 99.0 else ("warn" if worst >= 95.0 else "down")
-        if worst >= 99.0:
+        # query_uptime_table() gives a window with no samples as None (the key is present, so
+        # .get(key, default) does not substitute). No samples is "no data", never 100 %.
+        windows = [r.get("24.0"), r.get("168.0"), r.get("720.0")]
+        known   = [p for p in windows if p is not None]
+        worst   = min(known) if known else None
+        cls     = "" if worst is None else ("up" if worst >= 99.0 else ("warn" if worst >= 95.0 else "down"))
+        if worst is None:
+            pass  # no samples in any window: counted in the total, not as healthy/degraded/critical
+        elif worst >= 99.0:
             healthy += 1
         elif worst >= 95.0:
             degraded += 1
@@ -102,12 +105,10 @@ def generate_status_report(store: MetricStore) -> str:
             critical += 1
         hostname = html.escape(r.get("hostname") or "—")
         ip       = html.escape(r["ip"])
-        uptime_html_rows += (
-            f"<tr><td>{ip}</td><td>{hostname}</td>"
-            f'<td class="{cls}">{pct_24:.1f}%</td>'
-            f'<td class="{cls}">{pct_7d:.1f}%</td>'
-            f'<td class="{cls}">{pct_30d:.1f}%</td></tr>'
+        cells    = "".join(
+            f'<td class="{cls}">{p:.1f}%</td>' if p is not None else "<td>—</td>" for p in windows
         )
+        uptime_html_rows += f"<tr><td>{ip}</td><td>{hostname}</td>{cells}</tr>"
     uptime_section = (
         "<table><thead><tr>"
         "<th>IP</th><th>Hostname</th><th>24H</th><th>7D</th><th>30D</th>"
@@ -185,8 +186,10 @@ def generate_status_report(store: MetricStore) -> str:
     )
 
     # ── Fleet average uptime ──────────────────────────────────────────────────
-    if uptime_rows:
-        fleet_avg = sum(r.get("24.0", 100.0) for r in uptime_rows) / len(uptime_rows)
+    # Only devices with 24 h samples: a None window is "no data", not 100 % (see the uptime table).
+    recent = [r["24.0"] for r in uptime_rows if r.get("24.0") is not None]
+    if recent:
+        fleet_avg = sum(recent) / len(recent)
         fleet_str = f"{fleet_avg:.1f}%"
     else:
         fleet_str = "—"

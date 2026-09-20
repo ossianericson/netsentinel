@@ -34,6 +34,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QProcess
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.styles import (
     alpha,
@@ -45,7 +47,8 @@ from ui.widgets.hub_helpers import (
     _find_python_exe, _path_hash, _load_health, _reset_health,
     _load_instance_config, _save_instance_config,
     _safe_set_text, _age_str, _rsrp_color, _sinr_color,
-    _classify_error,
+    _partial_clients_text,
+    _classify_error,  # noqa: F401 — re-exported for hardware_integration_page.py
     # Backwards-compatible re-exports — consumed by hardware_integration_page.py,
     # hardware_browse_mixin.py, plugin_guide.py, plugin_wizard_mixin.py, credential_dialog.py
     _TEMPLATE,  # noqa: F401
@@ -651,13 +654,15 @@ class _RouterDetailPanel(QFrame):
 class _PluginConnectionTester(QThread):
     """Runs get_info() + get_status() in a background thread with temporary credentials.
 
-    Emits success(dict) if both calls return without error, or failure(str) with
-    a human-readable message.  The caller is responsible for persisting the
+    Emits success(dict) if both calls return without error, or failure(str) with the
+    plugin's error text — protocol-prefixed (``ERR:`` for NetSentinel's own messages) and
+    NOT yet classified: the receiver runs ``hub_helpers.plugin_error_text`` so it still has the
+    raw text when nothing recognises it (RULE-A2). The caller is responsible for persisting the
     credential to keyring ONLY on success.
     """
 
     success = pyqtSignal(dict)  # {"info": ..., "status": ...}
-    failure = pyqtSignal(str)   # plain-English error message
+    failure = pyqtSignal(str)   # plugin error text, unclassified — see the docstring
 
     def __init__(self, path: str, ip: str, pw: str, parent=None) -> None:
         super().__init__(parent)
@@ -684,7 +689,7 @@ class _PluginConnectionTester(QThread):
 
         try:
             if not Path(self._path).exists():
-                self.failure.emit(f"Plugin file not found: {self._path}")
+                self.failure.emit(f"ERR: Plugin file not found: {self._path}")
                 return
 
             # Ensure NetSentinel modules are importable
@@ -701,7 +706,7 @@ class _PluginConnectionTester(QThread):
                 f"_ns_test_{Path(self._path).stem}", self._path
             )
             if spec is None or spec.loader is None:
-                self.failure.emit("Cannot load plugin file.")
+                self.failure.emit("ERR: Cannot load plugin file.")
                 return
 
             mod = importlib.util.module_from_spec(spec)
@@ -716,7 +721,7 @@ class _PluginConnectionTester(QThread):
             get_status = getattr(mod, "get_status", None)
 
             if not callable(get_info) or not callable(get_status):
-                self.failure.emit("Plugin is missing get_info() or get_status().")
+                self.failure.emit("ERR: Plugin is missing get_info() or get_status().")
                 return
 
             info   = get_info()
@@ -725,15 +730,15 @@ class _PluginConnectionTester(QThread):
             # Treat an error inside extra as a failure so the user can fix it now
             err = (status.get("extra") or {}).get("error", "")
             if err:
-                self.failure.emit(_classify_error(str(err)))
+                self.failure.emit(str(err))
                 return
 
             self.success.emit({"info": info, "status": status})
 
         except SystemExit:
-            self.failure.emit("Plugin called sys.exit() unexpectedly.")
+            self.failure.emit("ERR: Plugin called sys.exit() unexpectedly.")
         except Exception as exc:
-            self.failure.emit(_classify_error(str(exc)))
+            self.failure.emit(str(exc))
         finally:
             # Always restore the env var to its pre-test value (RULE-PL1).
             if _prev_ip is None:
@@ -1126,7 +1131,8 @@ class HubCard(QFrame):
         self._last_ts = ts
         self._apply_result(data)
 
-    def set_error(self, msg: str) -> None:
+    def set_error(self, msg: str, raw: str = "") -> None:
+        """``msg`` is classified plugin text; ``raw`` is set instead when nothing classified it."""
         import re as _re
         _s.themed_ss(self._dot, "color:{RED}; font-size:13px; border:none;")
         m = _re.search(r"pip install\s+(\S+)", msg)
@@ -1152,10 +1158,13 @@ class HubCard(QFrame):
             self._btn_install.setVisible(False)
         else:
             self._pending_pkg = ""
-            short = msg[:80] if msg else "Unknown error"
-            self._metrics_lbl.setText(
-                f"Plugin error — {short}. Check the plugin log for details."
-            )
+            if raw:
+                show_worker_error(self._metrics_lbl, raw, WE.PLUGIN_ERROR)
+            else:
+                short = msg[:80] if msg else "Unknown error"
+                self._metrics_lbl.setText(
+                    f"Plugin error — {short}. Check the plugin log for details."
+                )
             self._btn_update_cred.setVisible(False)
             self._btn_install.setVisible(False)
             self._btn_reimport.setVisible(False)
@@ -1289,9 +1298,18 @@ class HubCard(QFrame):
                 parts.append(f"{n_nodes} node{'s' if n_nodes != 1 else ''}")
             if n_cli is not None:
                 parts.append(f"{n_cli} client{'s' if n_cli != 1 else ''}")
+            # S4.4d: a count missing some nodes' clients must not read as the whole mesh.
+            partial = _partial_clients_text(extra)
+            if partial:
+                parts.append(f"{_s.STATUS_ICON_WARN} incomplete")
             summary = "  ·  ".join(parts) if parts else "Online"
             self._metrics_lbl.setText(summary)
-            _s.themed_ss(self._metrics_lbl, "color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;")
+            if partial:
+                _s.themed_ss(self._metrics_lbl, "color:{AMBER}; font-size:10px; border:none; background:transparent;")
+                self._metrics_lbl.setToolTip(_s.safe_tooltip(partial))
+            else:
+                _s.themed_ss(self._metrics_lbl, "color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;")
+                self._metrics_lbl.setToolTip("")
             if isinstance(self._detail, _RouterDetailPanel):
                 self._detail.update(status, clients)
 

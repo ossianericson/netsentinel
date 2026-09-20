@@ -304,6 +304,9 @@ class IoTMonitor:
         # SYN-scan tracking: mac → {port: first_seen_time}
         self._syn_ports: Dict[str, Dict[int, float]] = defaultdict(dict)
 
+        # NEW_PORT dedup: mac → ports already alerted on this run (RULE-WIN28)
+        self._port_alerted: Dict[str, Set[int]] = defaultdict(set)
+
         # Rate tracking: mac → (window_start, pkt_count)
         self._rate: Dict[str, list] = defaultdict(lambda: [time.monotonic(), 0])
 
@@ -393,8 +396,15 @@ class IoTMonitor:
             if pkt.haslayer(TCP):
                 dport = pkt[TCP].dport
                 flags = pkt[TCP].flags
+                # A new port is news only when the device OPENS a connection (SYN
+                # without ACK), and once per device and port. A reply to a client
+                # lands on that client's ephemeral port -- per-packet alerting on it
+                # flooded ~10,000 alerts in minutes and hung the GUI (RULE-WIN28).
+                opens = bool(flags) and bool(int(flags) & 0x02) and not int(flags) & 0x10
+                seen = self._port_alerted[mac]
 
-                if dport in _ALWAYS_ALERT_PORTS:
+                if opens and dport not in seen and dport in _ALWAYS_ALERT_PORTS:
+                    seen.add(dport)
                     self._emit(IoTAlert(
                         mac=mac, ip=src_ip, device_label=label,
                         alert_type="NEW_PORT",
@@ -410,7 +420,8 @@ class IoTMonitor:
                         ),
                     ))
 
-                elif dport not in baseline.known_ports:
+                elif opens and dport not in seen and dport not in baseline.known_ports:
+                    seen.add(dport)
                     self._emit(IoTAlert(
                         mac=mac, ip=src_ip, device_label=label,
                         alert_type="NEW_PORT",
@@ -427,7 +438,7 @@ class IoTMonitor:
 
                 # ── SYN scan detection ────────────────────────────────────
                 # SYN flag set, ACK not set → outgoing connection attempt
-                if flags and (int(flags) & 0x02) and not (int(flags) & 0x10):
+                if opens:
                     syn_map = self._syn_ports[mac]
                     syn_map[dport] = now
                     # Expire old entries outside the window

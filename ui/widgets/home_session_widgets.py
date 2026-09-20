@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import platform
+from typing import Mapping
 
 from PyQt6.QtCore import Qt, QSettings, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
@@ -60,6 +61,9 @@ class FreshnessStrip(QFrame):
             self._fs_pill_log:   "Network Logger",
         }
         self._fs_pill_active: dict = {p: False for p in _pill_nav}
+        # S4.2: pills that are ON but whose monitor's last run failed (flag-gated input).
+        self._fs_pill_failing: set = set()
+        self._fs_pill_nav = _pill_nav  # the failing tooltip names the page a click opens
         for pill, nav_label in _pill_nav.items():
             _nav = nav_label
             pill.clicked.connect(
@@ -129,11 +133,21 @@ class FreshnessStrip(QFrame):
         return f"{d} day{'s' if d != 1 else ''} ago"
 
     def _on_pill_clicked(self, pill: QPushButton, nav_label: str) -> None:
-        if not self._fs_pill_active.get(pill, True):
+        if not self._fs_pill_active.get(pill, True) or pill in self._fs_pill_failing:
             self.navigate_to.emit(nav_label)
 
     def update_freshness(self, arp: bool = False, dhcp: bool = False,
-                          storm: bool = False, logger: bool = False) -> None:
+                          storm: bool = False, logger: bool = False,
+                          failing: "Mapping[str, str] | None" = None) -> None:
+        """Paint the four monitor pills: ON (green), OFF (muted) or ON-but-failing (amber).
+
+        ``failing`` maps a pill name ("ARP", "DHCP", "Storm", "Logger") to the error its
+        monitor last reported. RULE-SURF1 / matrix F1b: ON is derived from the worker
+        still running, and a worker keeps running after a probe raises, so without this
+        a failing monitor rendered exactly like a healthy one. A failing pill clicks
+        through to its page; an OFF pill with a stale error stays OFF.
+        """
+        failing = failing or {}
         _PILL_OFF_TIPS = {
             "ARP":    "ARP Spoof Watch is OFF — click to enable real-time spoofing detection.",
             "DHCP":   "DHCP Rogue detection is OFF — click to go to the DHCP page.",
@@ -149,7 +163,20 @@ class FreshnessStrip(QFrame):
 
         def _set_pill(pill: QPushButton, active: bool, name: str) -> None:
             self._fs_pill_active[pill] = active
-            if active:
+            self._fs_pill_failing.discard(pill)
+            if active and name in failing:
+                self._fs_pill_failing.add(pill)
+                pill.setText(f"{_s.STATUS_ICON_WARN} {name}")  # shape, not colour alone (S10-2)
+                _s.themed_ss(pill, "QPushButton {{ font-size:10px; color:{AMBER}; background:transparent;"
+                    " border:none; padding:0 2px; }}"
+                    "QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+                    "QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}")
+                _tip = (f"{name} monitoring is ON, but its last run failed — "
+                        f"click to open {self._fs_pill_nav.get(pill, name)}.")
+                if failing[name]:
+                    _tip += f"\n\nDetails: {failing[name]}"
+                pill.setToolTip(_s.safe_tooltip(_tip))
+            elif active:
                 pill.setText(f"● {name}")
                 _s.themed_ss(pill, "QPushButton {{ font-size:10px; color:{GREEN}; background:transparent;"
                     " border:none; padding:0 2px; }}"
@@ -210,6 +237,8 @@ class FreshnessStrip(QFrame):
         """Update Logger pill tooltip with live data when logger is active."""
         if not self._fs_pill_active.get(self._fs_pill_log, False):
             return
+        if self._fs_pill_log in self._fs_pill_failing:
+            return  # the failure tooltip is the one that matters (S4.2)
         parts = ["Network Logger is ON"]
         if since_str:
             parts.append(f"logging since {since_str}")

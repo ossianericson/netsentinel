@@ -38,9 +38,10 @@ def test_axfr_transfer_closes_socket_on_connection_failure(monkeypatch):
     fake = _FakeSocket(fail_on="connect")
     monkeypatch.setattr(m.socket, "socket", lambda *a, **kw: fake)
 
-    result = m.axfr_transfer("10.0.0.1", "example.com", timeout=1.0)
+    records, error = m.axfr_transfer("10.0.0.1", "example.com", timeout=1.0)
 
-    assert result == []
+    assert records == []
+    assert error == "refused"
     assert fake.closed is True
 
 

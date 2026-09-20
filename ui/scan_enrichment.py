@@ -22,6 +22,8 @@ from modules.scan_persistence import (
 from ui.tabs import _add_row
 from ui.nav.labels import NavLabel as L
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 
 if TYPE_CHECKING:
     pass
@@ -405,7 +407,11 @@ class ScanEnrichmentMixin:
         self._update_stat(self._m3_bcast_lbl, f"{bps:.1f}", _color_for_level(level))
         self._update_stat(self._m3_mcast_lbl, f"{mps:.1f}")
         self._update_stat(self._m3_ratio_lbl, f"{ratio:.1%}")
-        self._update_stat(self._m3_level_lbl, level, _color_for_level(level))
+        # S9.1 — the "Storm level" stat showed the raw internal level (STORM/WARNING/CLEAN)
+        # directly above a status line already rendering risk_to_label() for the same
+        # measurement: one page, one number, two vocabularies (RULE-A3).
+        from ui.tabs_helpers import risk_to_label as _level_label
+        self._update_stat(self._m3_level_lbl, _level_label(level), _color_for_level(level))
 
         self._m3_table.setRowCount(0)
         for mac, count in top5:
@@ -856,7 +862,12 @@ class ScanEnrichmentMixin:
     def _on_smb_result(self, res):
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
         flags = res.risk_flags
-        _smb_sev = "RED" if any("Anonymous" in f or "DC" in f for f in flags) else ("AMBER" if flags else "GREEN")
+        if any("Anonymous" in f or "DC" in f for f in flags):
+            _smb_sev = "RED"
+        elif getattr(res, "not_testable", False):
+            _smb_sev = "VIOLET"   # could not test — never the clean GREEN (RULE-SURF1)
+        else:
+            _smb_sev = "AMBER" if flags else "GREEN"
         self._smb_verdict.setText(res.plain_verdict + (f"\n⚠ {' | '.join(flags)}" if flags else ""))
         _s.themed_ss(self._smb_verdict, lambda tk=_smb_sev: (
             f"color:{getattr(_s, tk)};font-size:11px;font-weight:bold;padding:4px;"
@@ -2070,5 +2081,5 @@ class ScanEnrichmentMixin:
                 f"Filter: {len(matched_ips)} match(es) — {result.explanation}"
             )
         except Exception as exc:
-            self._m1_status.setText(f"Filter error: {exc}")
+            show_worker_error(self._m1_status, exc, WE.DEVICE_FILTER)
 

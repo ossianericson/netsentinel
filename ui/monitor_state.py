@@ -590,6 +590,39 @@ class _MonitorStateMixin:
 
     # ── Monitor pills ─────────────────────────────────────────────────────────
 
+    #: Freshness-pill name → the scan-registry label whose "error" state marks it failing.
+    #: The registry is where S1 routes these monitors' failures (owner decision 2026-09-17:
+    #: no separate app-health producers for them).
+    _PILL_REGISTRY_LABELS = {
+        "ARP": "ARP Spoof Watch",
+        "DHCP": "DHCP Rogue Monitor",
+        "Storm": "Broadcast Storm",
+        "Logger": "Network Logger",
+    }
+
+    def _pill_failures(self) -> dict:
+        """S4.2 — the pills whose monitor's last run failed, keyed by pill name.
+
+        Empty when nothing is failing, which is the common case; ``set_monitor_pills``
+        treats an empty mapping as "paint every ON pill green", so there is no separate
+        off state to carry (S10.2 removed the flag that used to supply one).
+        """
+        registry = getattr(self, "_scan_registry", {}) or {}
+        failing = {}
+        for name, label in self._PILL_REGISTRY_LABELS.items():
+            entry = registry.get(label) or {}
+            if entry.get("state") == "error":
+                failing[name] = entry.get("error") or ""
+        return failing
+
+    def _repaint_pill_failures(self) -> None:
+        """Repaint Home's pills after a registry change, without _push_monitor_pills' DB reads."""
+        home = getattr(self, "_home_page", None)
+        states = getattr(home, "_last_pill_states", None)
+        if home is None or states is None:
+            return
+        home.set_monitor_pills(*states, failing=self._pill_failures())
+
     def _push_monitor_pills(self) -> None:
         """Push current monitoring states to Home pills, flyout dots, and section badges."""
         arp    = bool(hasattr(self, '_arp_worker')  and self._arp_worker  and self._arp_worker.isRunning())
@@ -602,7 +635,7 @@ class _MonitorStateMixin:
             if k.startswith("logging/") and k.endswith("_enabled")
         )
         if hasattr(self, "_home_page"):
-            self._home_page.set_monitor_pills(arp, dhcp, storm, logger)
+            self._home_page.set_monitor_pills(arp, dhcp, storm, logger, failing=self._pill_failures())
             if self._store is not None:
                 try:
                     unacked = self._store.get_unacked_alerts()
@@ -620,8 +653,14 @@ class _MonitorStateMixin:
         # the scan registry (_nav_set_scan_state(L.NETWORK_LOGGER, ...), called
         # from ui/tabs_logger.py on real start/stop) so it can show
         # running/fresh/stale/error, not just this binary checkbox-derived on/off.
-        self._set_flyout_dot("ARP Spoof Watch",    _s.GREEN if arp    else "")
-        self._set_flyout_dot("DHCP Rogue Monitor", _s.GREEN if dhcp   else "")
+        #
+        # S1.1 extends that transfer to ARP Spoof Watch and DHCP Rogue Monitor
+        # for a sharper reason: `arp`/`dhcp` above are just worker.isRunning(),
+        # and a ProactiveProbeWorker keeps running after a probe raises. Writing
+        # GREEN here therefore repainted a *failing* monitor as healthy and
+        # erased the "error" state its error slot had just recorded. Both dots
+        # now come from the registry (app.py's watch wiring + ui/tabs_monitors.py).
+        # Home pills below still derive from isRunning() — that is F1b, untouched.
         self._set_flyout_dot("Broadcast Storm",    _s.GREEN if storm  else "")
         # AUTO-1/2: Automation dot and tile — green if any rule fired in last 24h
         try:

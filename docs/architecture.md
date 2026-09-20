@@ -57,7 +57,7 @@ Large files are a maintenance hazard: they attract more code, become harder to t
 | `_MonitorStateMixin` | `ui/monitor_state.py` | Verdict/badge/pill display; KPI tiles |
 | `_PluginPageMixin` | `ui/plugin_page_mixin.py` | Plugin page lifecycle; HW auto-detect |
 
-`dashboard.py` now stands at 1,967 lines. Each mixin has a single responsibility and its own test file.
+`dashboard.py` now stands at 2,238 lines. Each mixin has a single responsibility and its own test file.
 
 ---
 
@@ -139,7 +139,7 @@ The installed binary lives in `C:\Program Files\NetSentinel\` — a read-only di
 
 ## Test architecture
 
-The test suite has 7,806 tests across 559 files. Key categories:
+The test suite has 8,306 tests across 590 files. Key categories:
 
 | Category | Files | What it catches |
 |---|---|---|

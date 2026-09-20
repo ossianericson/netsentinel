@@ -47,6 +47,22 @@ def test_cli_version(canonical):
     )
 
 
+def test_modules_version_constant(canonical):
+    """The mirror `modules/` and `svc.py` import — see modules/version.py's docstring.
+
+    It is a mirror rather than the source because app.py's setApplicationVersion() call
+    is what every other check here keys on, and moving that anchor would turn eleven
+    passing checks into eleven regexes that silently stop matching (bump_version's
+    _sub() only WARNs on a no-match).
+    """
+    text = (ROOT / "modules" / "version.py").read_text(encoding="utf-8")
+    m = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', text)
+    assert m, "Could not find APP_VERSION in modules/version.py"
+    assert m.group(1) == canonical, (
+        f"modules/version.py APP_VERSION={m.group(1)!r} does not match app.py {canonical!r}"
+    )
+
+
 def test_debug_launch_version(canonical):
     text = (ROOT / "tools" / "debug_launch.py").read_text(encoding="utf-8")
     m = re.search(r'setApplicationVersion\(\s*"([^"]+)"\s*\)', text)
@@ -214,4 +230,82 @@ def test_whats_new_heading_renders_from_the_constant():
         f"Sourcing it from the live app version means a missed prose update shows "
         f"the new version number above the previous release's bullets — the exact "
         f"defect that shipped in v2.1.47."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Windows VERSIONINFO resource (packaging/version_info.py)
+# ---------------------------------------------------------------------------
+
+def test_version_info_helper_matches_canonical(canonical):
+    """packaging/version_info.py must read the same version app.py declares.
+
+    The helper deliberately reads app.py at build time instead of being another
+    bump_version.py target, because `_sub()` only WARNs on a no-match and a 16th
+    target could rot silently. That trade only holds if this test guards the regex.
+    """
+    import sys
+
+    sys.path.insert(0, str(ROOT / "packaging"))
+    try:
+        import version_info
+    finally:
+        sys.path.pop(0)
+
+    assert version_info.read_version() == canonical, (
+        f"packaging/version_info.py reads {version_info.read_version()!r} but app.py "
+        f"declares {canonical!r} — the shipped exes would carry the wrong FileVersion."
+    )
+    assert version_info.version_tuple(canonical)[:3] == tuple(
+        int(p) for p in canonical.split(".")
+    )
+    # Windows VERSIONINFO is always 4 parts (RULE-R4 is the same constraint for MSIX).
+    assert len(version_info.version_tuple(canonical)) == 4
+
+
+def test_specs_do_not_reenable_upx():
+    """UPX packing is a strong AV heuristic trigger on an unsigned PyInstaller exe.
+
+    The CLI and service binaries shipped with `upx=True` while the GUI had it off.
+    They were never actually packed - UPX is not installed on any builder and
+    PyInstaller skips it silently - so this guards a latent trap, not a live defect:
+    the day a builder has UPX, those binaries start shipping packed without anyone
+    choosing it. Do not cite this as a cause of winget PR #430336.
+    """
+    for name in ("NetSentinel.spec", "NetSentinelCLI.spec", "NetSentinelSvc.spec"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert "upx=True" not in text, (
+            f"{name} sets upx=True. UPX-packed binaries are a top-tier AV heuristic "
+            f"trigger and all three of ours ship inside the installer. Use upx=False."
+        )
+
+
+def test_specs_attach_a_version_resource():
+    """All three shipped exes must carry VERSIONINFO — a metadata-less PE is a
+    reputation penalty that feeds exactly the Defender false positive this guards."""
+    for name in ("NetSentinel.spec", "NetSentinelCLI.spec", "NetSentinelSvc.spec"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert "version=build_version_info(" in text, (
+            f"{name} does not attach a VERSIONINFO resource to its EXE(...) block."
+        )
+
+
+def test_installer_declares_version_metadata(canonical):
+    """The setup stub is the file Defender actually downloads; it needs metadata too.
+
+    Values must come from the {#MyAppVersion}/{#MyAppPublisher} defines, which
+    bump_version.py already maintains — hardcoding a literal here would create a
+    silent bump target (RULE 11).
+    """
+    text = (ROOT / "installer.iss").read_text(encoding="utf-8")
+    for field in ("VersionInfoVersion", "VersionInfoProductName",
+                  "VersionInfoCompany", "VersionInfoDescription"):
+        assert re.search(rf"^{field}\s*=", text, re.MULTILINE), (
+            f"installer.iss does not declare {field} in [Setup]."
+        )
+
+    m = re.search(r"^VersionInfoVersion\s*=\s*(.+)$", text, re.MULTILINE)
+    assert m and "{#MyAppVersion}" in m.group(1), (
+        "installer.iss VersionInfoVersion must use {#MyAppVersion}, not a literal — "
+        f"a hardcoded {canonical!r} would silently rot on the next bump."
     )

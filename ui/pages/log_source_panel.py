@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import csv as _csv
 import datetime as _dt
+import os as _os
 import time as _t
 
 from PyQt6.QtCore import Qt, QSettings, QTimer
@@ -36,7 +37,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
 from ui.dialog_utils import run_dialog
+from ui.error_display import show_error_dialog
 from ui.styles import (
     alpha,
     LOG_SOURCE_PLUGIN,
@@ -692,8 +695,10 @@ class _LogSourcePanelMixin:
             and self._entry_matches(e, filt)
         ]
         if not visible:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.information(self, "Export", "No rows match the current filter.")
+            # S9.2 — a non-event does not need a modal. The loudness belongs on the write
+            # below, which used to be the silent half of this method (RULE-SURF2).
+            from ui.widgets.toast import ToastManager
+            ToastManager.show("No rows match the current filter — nothing to export", "info")
             return
         ts_label = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         path, _ = QFileDialog.getSaveFileName(
@@ -715,8 +720,14 @@ class _LogSourcePanelMixin:
                 for e in visible:
                     w.writerow(list(e["row"]))
         except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Export failed", str(exc))
+            show_error_dialog(self, exc, WE.EXPORT_LOG_VIEW, retry=self._export_visible)
+        else:
+            # Only the work is guarded; the confirmation runs after it succeeded
+            # (RULE-SURF1's inverse corollary).
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(
+                f"{_s.STATUS_ICON_OK} Exported {len(visible)} row(s) to "
+                f"{_os.path.basename(path)}", "success")
 
     def _open_export_dialog(self) -> None:
         dlg = QDialog(self)
@@ -804,8 +815,8 @@ class _LogSourcePanelMixin:
                 w.writerow(["Time", "Source", "Host", "Event", "Detail", "Status"])
                 w.writerows(rows)
         except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Export failed", str(exc))
+            # No retry button: the Export Log dialog stays open, so pressing Export again asks anew.
+            show_error_dialog(dlg, exc, WE.EXPORT_LOG_RANGE)
             return
         dlg.accept()
 

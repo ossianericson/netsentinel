@@ -4,6 +4,7 @@ Network info helpers — get_network_info(), get_dhcp_info(), get_interface_deta
 Extracted from modules/utils.py (S2-3 sprint split).
 All three functions are re-exported from modules/utils for backwards compatibility.
 """
+import logging
 import platform
 import re
 import socket
@@ -12,6 +13,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Tuple, TypeVar
+
+_log = logging.getLogger(__name__)
 
 
 def get_network_info() -> dict:
@@ -97,7 +100,7 @@ def get_network_info() -> dict:
             except OSError:
                 pass  # non-fatal
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: registry read of adapter settings failed", exc_info=True)  # non-fatal
 
     elif system == "Darwin":
         try:
@@ -110,23 +113,23 @@ def get_network_info() -> dict:
                     if ip:
                         info["local_ips"].append({"ip": ip, "mask": "", "adapter": iface})
                 except Exception:
-                    pass  # non-fatal
+                    _log.debug("network info: ipconfig getifaddr %s failed", iface, exc_info=True)  # non-fatal
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: adapter address read failed", exc_info=True)  # non-fatal
         try:
             raw = subprocess.check_output(["route", "get", "default"], text=True, timeout=5)
             m = re.search(r"gateway:\s*(\d+\.\d+\.\d+\.\d+)", raw)
             if m:
                 info["gateway"] = m.group(1)
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: route get default failed", exc_info=True)  # non-fatal
         try:
             with open("/etc/resolv.conf") as f:
                 for line in f:
                     if line.startswith("nameserver"):
                         info["dns_servers"].append(line.split()[1].strip())
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: /etc/resolv.conf read failed", exc_info=True)  # non-fatal
 
     else:  # Linux
         try:
@@ -136,7 +139,7 @@ def get_network_info() -> dict:
             ):
                 info["local_ips"].append({"ip": m.group(1), "mask": m.group(2), "adapter": ""})
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: ip addr show failed", exc_info=True)  # non-fatal
         try:
             raw = subprocess.check_output(
                 ["ip", "route", "show", "default"], text=True, timeout=5
@@ -145,14 +148,14 @@ def get_network_info() -> dict:
             if m:
                 info["gateway"] = m.group(1)
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: ip route show default failed", exc_info=True)  # non-fatal
         try:
             with open("/etc/resolv.conf") as f:
                 for line in f:
                     if line.startswith("nameserver"):
                         info["dns_servers"].append(line.split()[1].strip())
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: /etc/resolv.conf read failed", exc_info=True)  # non-fatal
 
     seen: set = set()
     info["dns_servers"] = [
@@ -181,7 +184,7 @@ def get_network_info() -> dict:
                 if m:
                     info["gateway_mac"] = m.group(0).lower()
         except Exception:
-            pass  # non-fatal
+            _log.debug("network info: gateway MAC lookup failed", exc_info=True)  # non-fatal
 
     return info
 
@@ -243,13 +246,13 @@ def get_dhcp_info() -> dict:
                                             "%A, %B %d, %Y %I:%M:%S %p"
                                         )
                                     except Exception:
-                                        pass  # non-fatal
+                                        _log.debug("DHCP info: %s timestamp could not be converted", ts_key, exc_info=True)  # non-fatal
                             if result["dhcp_enabled"]:
                                 break
                     except OSError:
                         pass  # non-fatal
         except Exception:
-            pass  # non-fatal
+            _log.debug("DHCP info: registry read failed", exc_info=True)  # non-fatal
         if result["lease_obtained"] and result["lease_expires"]:
             for fmt in (
                 "%A, %B %d, %Y %I:%M:%S %p",
@@ -281,7 +284,7 @@ def get_dhcp_info() -> dict:
                         result["lease_duration_h"] = round(int(m.group(1)) / 3600, 1)
                     break
             except Exception:
-                pass  # non-fatal
+                _log.debug("DHCP info: ipconfig getpacket %s failed", iface, exc_info=True)  # non-fatal
 
     else:  # Linux
         try:
@@ -295,7 +298,7 @@ def get_dhcp_info() -> dict:
                 if m:
                     result["dhcp_server"] = m.group(1)
         except Exception:
-            pass  # non-fatal
+            _log.debug("DHCP info: nmcli device show failed", exc_info=True)  # non-fatal
         if not result["dhcp_server"]:
             try:
                 for lease_file in [
@@ -311,7 +314,7 @@ def get_dhcp_info() -> dict:
                             result["dhcp_server"] = m.group(1)
                         break
             except Exception:
-                pass  # non-fatal
+                _log.debug("DHCP info: lease file read failed", exc_info=True)  # non-fatal
 
     return result
 
@@ -365,7 +368,7 @@ def get_interface_details() -> List[dict]:
                     "speed_mbps": speed_mbps, "signal_pct": -1, "connected": connected,
                 })
         except Exception:
-            pass  # non-fatal
+            _log.debug("interface details: psutil adapter read failed", exc_info=True)  # non-fatal
 
     elif system == "Darwin":
         try:
@@ -395,11 +398,11 @@ def get_interface_details() -> List[dict]:
                             current["ipv4"] = ip
                             current["connected"] = True
                     except Exception:
-                        pass  # non-fatal
+                        _log.debug("interface details: ipconfig getifaddr %s failed", iface, exc_info=True)  # non-fatal
             if current.get("name"):
                 adapters.append(dict(current))
         except Exception:
-            pass  # non-fatal
+            _log.debug("interface details: networksetup -listallhardwareports failed", exc_info=True)  # non-fatal
 
     else:  # Linux
         try:
@@ -412,19 +415,19 @@ def get_interface_details() -> List[dict]:
                 try:
                     mac = (iface / "address").read_text().strip()
                 except Exception:
-                    pass  # non-fatal
+                    _log.debug("interface details: %s MAC read failed", iface.name, exc_info=True)  # non-fatal
                 speed_mbps = 0
                 try:
                     speed_mbps = int((iface / "speed").read_text().strip())
                 except Exception:
-                    pass  # non-fatal
+                    _log.debug("interface details: %s link speed read failed", iface.name, exc_info=True)  # non-fatal
                 connected = False
                 ipv4 = ""
                 try:
                     operstate = (iface / "operstate").read_text().strip()
                     connected = operstate == "up"
                 except Exception:
-                    pass  # non-fatal
+                    _log.debug("interface details: %s operstate read failed", iface.name, exc_info=True)  # non-fatal
                 try:
                     raw = subprocess.check_output(
                         ["ip", "-4", "addr", "show", iface.name],
@@ -435,13 +438,13 @@ def get_interface_details() -> List[dict]:
                         ipv4 = m.group(1)
                         connected = True
                 except Exception:
-                    pass  # non-fatal
+                    _log.debug("interface details: ip -4 addr show %s failed", iface.name, exc_info=True)  # non-fatal
                 adapters.append({
                     "name": iface.name, "type": t, "mac": mac, "ipv4": ipv4,
                     "speed_mbps": speed_mbps, "signal_pct": -1, "connected": connected,
                 })
         except Exception:
-            pass  # non-fatal
+            _log.debug("interface details: /sys/class/net read failed", exc_info=True)  # non-fatal
 
     return [a for a in adapters if a.get("name")]
 
@@ -483,7 +486,7 @@ def icmp_ping(host: str, timeout: float = 2.0) -> float:
             if m:
                 return float(m.group(1))
     except Exception:
-        pass  # non-fatal
+        _log.debug("ping of %s failed", host, exc_info=True)  # non-fatal
     return -1.0
 
 
@@ -548,7 +551,7 @@ def get_arp_snapshot() -> Dict[str, str]:
                 if m:
                     _add(m.group(1), m.group(2))
     except Exception:
-        pass  # non-fatal — ARP table read is best-effort
+        _log.debug("ARP table read failed", exc_info=True)  # non-fatal — ARP table read is best-effort
     return result
 
 
@@ -587,7 +590,7 @@ def get_local_mac_label_map() -> dict:
             if mac:
                 label_map[mac] = f"This PC ({hostname})"
     except Exception:
-        pass  # non-fatal — local adapter enumeration is best-effort
+        _log.debug("local adapter label map could not be built", exc_info=True)  # non-fatal — local adapter enumeration is best-effort
     return label_map
 
 

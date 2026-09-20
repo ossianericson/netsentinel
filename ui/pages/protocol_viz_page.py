@@ -25,6 +25,8 @@ from PyQt6.QtWidgets import (
 from modules.protocol_animator import AnimNode, ProtocolSceneData
 from modules.protocol_animator_extra import build_scene_for_key
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 from ui.widgets.frame_anatomy_panel import FrameAnatomyPanel
 from ui.widgets.protocol_canvas import ProtocolCanvas
 from ui.widgets.protocol_storyboard import build_storyboard_pixmap
@@ -925,7 +927,7 @@ class ProtocolVizPage(QWidget):
         self._stop_live()
         if was_live:
             self._select_protocol(self._active_key)
-        self._canvas_subtitle.setText(f"⚠ {msg}")
+        show_worker_error(self._canvas_subtitle, msg, WE.LIVE_PROTOCOL)
 
     # ── Export (Phase A3 — Copy / Save / Storyboard) ───────────────────────────
 
