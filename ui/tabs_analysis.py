@@ -19,6 +19,14 @@ from ui.nav.labels import NavLabel as L
 from ui.npcap_banner import NpcapMissingBanner
 from ui.tabs_helpers import _page_header, _table
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_error_dialog, show_worker_error
+
+
+# RULE-WIN28: the IoT alert drain takes a bounded batch per tick so the event loop always runs,
+# and the alert table keeps only the newest rows (the status line reports the total).
+_IOT_DRAIN_PER_TICK = 50
+_IOT_ALERT_ROWS_MAX = 500
 
 
 class _AnalysisTabsMixin:
@@ -76,7 +84,7 @@ class _AnalysisTabsMixin:
         self._ipv6_worker.result.connect(self._on_ipv6_result)
         self._ipv6_worker.status.connect(self._ipv6_status.setText)
         self._ipv6_worker.error.connect(
-            lambda e: self._ipv6_status.setText(f"⚠ {e}"),
+            lambda e: show_worker_error(self._ipv6_status, e, WE.IPV6),
             Qt.ConnectionType.QueuedConnection,
         )
         self._ipv6_worker.finished.connect(
@@ -157,7 +165,7 @@ class _AnalysisTabsMixin:
         self._cloud_worker.network_result.connect(self._on_cloud_network_result)
         self._cloud_worker.status.connect(self._cloud_status.setText)
         self._cloud_worker.error.connect(
-            lambda e: self._cloud_status.setText(f"⚠ {e}"),
+            lambda e: show_worker_error(self._cloud_status, e, WE.CLOUD_METADATA),
             Qt.ConnectionType.QueuedConnection,
         )
         self._cloud_worker.error.connect(
@@ -198,7 +206,7 @@ class _AnalysisTabsMixin:
             self._chart_window.activateWindow()
             self._log_status_lbl.setText("Chart opened.")
         except Exception as exc:
-            self._log_status_lbl.setText(f"Chart error: {exc}")
+            show_worker_error(self._log_status_lbl, exc, WE.LOG_CHART)
         finally:
             self._btn_log_chart.setEnabled(True)
 
@@ -320,7 +328,7 @@ class _AnalysisTabsMixin:
             )
 
         except Exception as exc:
-            self._corr_status.setText(f"⚠ Correlation failed: {exc}")
+            show_worker_error(self._corr_status, exc, WE.ROOT_CAUSE)
 
     # ── IoT Behavioural Baseline tab ─────────────────────────────────────────
 
@@ -419,6 +427,14 @@ class _AnalysisTabsMixin:
         lay.addWidget(self._iot_alert_table, 1)
 
         self._iot_monitor_obj = None
+        # RULE-WIN27: the Learn/Monitor threads only emit, tagged with a run id; these slots do
+        # every widget write on the GUI thread and drop a stopped or superseded run's signals.
+        self._iot_run_seq = 0
+        self._iot_learn_run = None
+        self._iot_monitor_run = None
+        self._iot_progress.connect(self._on_iot_progress)
+        self._iot_ready.connect(self._on_iot_ready)
+        self._iot_failed.connect(self._on_iot_failed)
         return w
 
     def _populate_iot_baseline_table(self, baselines: dict) -> None:
@@ -444,25 +460,30 @@ class _AnalysisTabsMixin:
         self._iot_status.setText(f"Learning for {duration} s — keep devices active…")
         try:
             from modules.iot_baseline import learn
+            run = self._iot_new_run()
+            self._iot_learn_run = run
+
             def _do_learn():
-                baselines = learn(
-                    devices=devices, duration_s=duration,
-                    progress_cb=lambda m: self._iot_status.setText(m),
-                )
-                self._populate_iot_baseline_table(baselines)
-                self._iot_status.setText(
-                    f"Baseline learned for {len(baselines)} IoT device(s). "
-                    "Click 'Start Anomaly Monitor' to watch for deviations."
-                )
+                # Off the GUI thread: emit only (RULE-WIN27).
+                try:
+                    baselines = learn(
+                        devices=devices, duration_s=duration,
+                        progress_cb=lambda m: self._iot_progress.emit(run, m),
+                    )
+                except Exception as exc:
+                    self._iot_failed.emit(run, exc)
+                else:
+                    self._iot_ready.emit(run, baselines)
             import threading
             threading.Thread(target=_do_learn, daemon=True).start()
         except Exception as exc:
-            self._iot_status.setText(f"⚠ Learn failed: {exc}")
+            # Only starting the thread is guarded here; a failure inside it arrives as _iot_failed.
+            show_worker_error(self._iot_status, exc, WE.IOT_LEARN)
 
     @pyqtSlot()
     def _run_iot_monitor(self):
         try:
-            from modules.iot_baseline import load_or_create, IoTMonitor
+            from modules.iot_baseline import load_or_create
             from PyQt6.QtGui import QColor
 
             if not self._m1_result:
@@ -483,104 +504,167 @@ class _AnalysisTabsMixin:
                 "RATE_SPIKE":     "Live Bandwidth",
             }
 
-            # Stop any previous drain timer before (re)starting the monitor.
-            if hasattr(self, "_iot_drain_timer") and self._iot_drain_timer is not None:
-                self._iot_drain_timer.stop()
-                self._iot_drain_timer = None
+            # A second Start must not orphan the first sniffer or its drain timer.
+            self._halt_iot_monitor()
 
             # IoT alerts arrive from Scapy's AsyncSniffer thread; calling Qt widget
             # methods from that thread causes access violations (P1 crash). Use a
             # thread-safe queue and a main-thread QTimer to drain it safely.
             self._iot_queue = _q.Queue()
+            self._iot_alert_total = self._iot_alert_table.rowCount()
 
             def _drain_iot_alerts():
-                try:
-                    while True:
+                table = self._iot_alert_table
+                last = None
+                for _ in range(_IOT_DRAIN_PER_TICK):
+                    try:
                         alert = self._iot_queue.get_nowait()
-                        row = self._iot_alert_table.rowCount()
-                        self._iot_alert_table.insertRow(row)
-                        sev_color = _s.RED if alert.severity == "CRITICAL" else (_s.AMBER if alert.severity == "HIGH" else _s.BLUE)
-                        for col, val in enumerate([
-                            alert.timestamp[11:19], alert.device_label,
-                            alert.alert_type.replace("_", " ").title(),
-                            alert.severity, alert.detail, alert.remediation,
-                        ]):
-                            item = QTableWidgetItem(str(val))
-                            if col in (2, 3):
-                                item.setForeground(QColor(sev_color))
-                            self._iot_alert_table.setItem(row, col, item)
-                        target = _IOT_INVESTIGATE_TARGET.get(alert.alert_type, "Devices")
-                        inv_btn = QPushButton("Investigate →")
-                        inv_btn.setFlat(True)
-                        _s.themed_ss(inv_btn, "color:{ACCENT_LITE};font-size:11px;text-align:left;padding:2px 4px;")
-                        inv_btn.clicked.connect(lambda _checked, t=target: self._nav_rail_go_to(t))
-                        self._iot_alert_table.setCellWidget(row, 6, inv_btn)
-                        self._iot_alert_table.scrollToBottom()
-                        self._iot_status.setText(
-                            f"⚠ Alert: {alert.alert_type} on {alert.device_label}"
-                        )
-                        if hasattr(self, "_monitor_overview_page"):
-                            self._monitor_overview_page.set_iot_anomaly_count(
-                                self._iot_alert_table.rowCount()
-                            )
-                        # V6 Sprint 2 — IOT_BEHAVIOR: route the same signal through
-                        # AlertEngine so it becomes a real toast/digest alert instead
-                        # of a page-only table row.
-                        if self._alert_engine is not None:
-                            for a in self._alert_engine.evaluate_iot_behavior_checks([alert]):
-                                self._surface_alert_in_app(a)
-                                self._home_page.on_alert(a)
-                                if self._store is not None:
-                                    try:
-                                        persist_alert(self._store, a)
-                                    except Exception:
-                                        pass  # non-fatal — persistence failure must not block the drain loop
-                except _q.Empty:
-                    pass  # queue exhausted — all pending alerts processed this tick
+                    except _q.Empty:
+                        break  # queue exhausted — the timer comes back for new alerts
+                    last = alert
+                    self._iot_alert_total += 1
+                    row = table.rowCount()
+                    table.insertRow(row)
+                    sev_color = _s.RED if alert.severity == "CRITICAL" else (_s.AMBER if alert.severity == "HIGH" else _s.BLUE)
+                    for col, val in enumerate([
+                        alert.timestamp[11:19], alert.device_label,
+                        alert.alert_type.replace("_", " ").title(),
+                        alert.severity, alert.detail, alert.remediation,
+                    ]):
+                        item = QTableWidgetItem(str(val))
+                        if col in (2, 3):
+                            item.setForeground(QColor(sev_color))
+                        table.setItem(row, col, item)
+                    target = _IOT_INVESTIGATE_TARGET.get(alert.alert_type, "Devices")
+                    inv_btn = QPushButton("Investigate →")
+                    inv_btn.setFlat(True)
+                    _s.themed_ss(inv_btn, "color:{ACCENT_LITE};font-size:11px;text-align:left;padding:2px 4px;")
+                    inv_btn.clicked.connect(lambda _checked, t=target: self._nav_rail_go_to(t))
+                    table.setCellWidget(row, 6, inv_btn)
+                    if table.rowCount() > _IOT_ALERT_ROWS_MAX:
+                        table.removeRow(0)  # keep the newest; the status line reports the total
+                    # V6 Sprint 2 — IOT_BEHAVIOR: route the same signal through
+                    # AlertEngine so it becomes a real toast/digest alert instead
+                    # of a page-only table row.
+                    if self._alert_engine is not None:
+                        for a in self._alert_engine.evaluate_iot_behavior_checks([alert]):
+                            self._surface_alert_in_app(a)
+                            self._home_page.on_alert(a)
+                            if self._store is not None:
+                                try:
+                                    persist_alert(self._store, a)
+                                except Exception:
+                                    pass  # non-fatal — persistence failure must not block the drain loop
+                if last is None:
+                    return
+                table.scrollToBottom()
+                shown = table.rowCount()
+                total = self._iot_alert_total
+                note = f" — {total} alerts, showing the latest {shown}" if total > shown else ""
+                self._iot_status.setText(f"⚠ Alert: {last.alert_type} on {last.device_label}{note}")
+                if hasattr(self, "_monitor_overview_page"):
+                    self._monitor_overview_page.set_iot_anomaly_count(total)
 
             self._iot_drain_timer = _QTimer(self)
             self._iot_drain_timer.setInterval(100)
             self._iot_drain_timer.timeout.connect(_drain_iot_alerts)
             self._iot_drain_timer.start()
 
+            run = self._iot_new_run()
+            self._iot_monitor_run = run
+
             def _start():
-                baselines = load_or_create(
-                    devices=devices,
-                    progress_cb=lambda m: self._iot_status.setText(m),
-                )
-                if not baselines:
-                    self._iot_status.setText("⚠ No IoT baselines — run Learn first.")
-                    return
-                self._populate_iot_baseline_table(baselines)
-
-                def _on_alert(alert):
-                    # Called from Scapy's background thread — enqueue for main-thread drain
-                    self._iot_queue.put(alert)
-
-                self._iot_monitor_obj = IoTMonitor(
-                    baselines=baselines,
-                    on_alert=_on_alert,
-                    on_error=lambda m: self._iot_status.setText(f"⚠ {m}"),
-                )
-                self._iot_monitor_obj.start()
-                self._iot_status.setText(
-                    f"Monitoring {len(baselines)} IoT device(s) — watching for anomalies…"
-                )
+                # Off the GUI thread: load (or learn) the baselines and emit only (RULE-WIN27).
+                # The monitor is built in _start_iot_monitor on the GUI thread, where Stop can reach it.
+                try:
+                    baselines = load_or_create(
+                        devices=devices,
+                        progress_cb=lambda m: self._iot_progress.emit(run, m),
+                    )
+                except Exception as exc:
+                    self._iot_failed.emit(run, exc)
+                else:
+                    self._iot_ready.emit(run, baselines)
 
             threading.Thread(target=_start, daemon=True).start()
 
         except Exception as exc:
-            self._iot_status.setText(f"⚠ Monitor failed: {exc}")
+            # Only starting the thread is guarded here; a failure inside it arrives as _iot_failed.
+            show_worker_error(self._iot_status, exc, WE.IOT_MONITOR)
 
     @pyqtSlot()
     def _stop_iot_monitor(self):
+        self._halt_iot_monitor()
+        self._iot_status.setText("Anomaly monitor stopped.")
+
+    def _iot_new_run(self) -> int:
+        self._iot_run_seq += 1
+        return self._iot_run_seq
+
+    def _halt_iot_monitor(self) -> None:
+        """End the monitor run: its late signals are dropped; its sniffer and drain timer stop."""
+        self._iot_monitor_run = None
         if self._iot_monitor_obj:
             self._iot_monitor_obj.stop()
             self._iot_monitor_obj = None
-        if hasattr(self, "_iot_drain_timer") and self._iot_drain_timer is not None:
+        if getattr(self, "_iot_drain_timer", None) is not None:
             self._iot_drain_timer.stop()
             self._iot_drain_timer = None
-        self._iot_status.setText("Anomaly monitor stopped.")
+
+    def _iot_run_kind(self, run: int) -> str:
+        """``learn``/``monitor`` for the current run of that kind; "" for a stopped or superseded one."""
+        if run == self._iot_monitor_run:
+            return "monitor"
+        if run == self._iot_learn_run:
+            return "learn"
+        return ""
+
+    @pyqtSlot(int, str)
+    def _on_iot_progress(self, run: int, msg: str) -> None:
+        if self._iot_run_kind(run):
+            self._iot_status.setText(msg)
+
+    @pyqtSlot(int, object)
+    def _on_iot_ready(self, run: int, baselines) -> None:
+        kind = self._iot_run_kind(run)
+        if kind == "learn":
+            self._iot_learn_run = None
+            self._populate_iot_baseline_table(baselines)
+            self._iot_status.setText(
+                f"Baseline learned for {len(baselines)} IoT device(s). "
+                "Click 'Start Anomaly Monitor' to watch for deviations."
+            )
+        elif kind == "monitor":
+            self._start_iot_monitor(run, baselines)
+
+    @pyqtSlot(int, object)
+    def _on_iot_failed(self, run: int, raw) -> None:
+        kind = self._iot_run_kind(run)
+        if kind == "learn":
+            self._iot_learn_run = None
+            show_worker_error(self._iot_status, raw, WE.IOT_LEARN_RUN)
+        elif kind == "monitor":
+            self._halt_iot_monitor()
+            show_worker_error(self._iot_status, raw, WE.IOT_MONITOR_RUN)
+
+    def _start_iot_monitor(self, run: int, baselines) -> None:
+        from modules.iot_baseline import IoTMonitor
+
+        if not baselines:
+            self._halt_iot_monitor()
+            self._iot_status.setText("⚠ No IoT baselines — run Learn first.")
+            return
+        self._populate_iot_baseline_table(baselines)
+        self._iot_monitor_obj = IoTMonitor(
+            baselines=baselines,
+            on_alert=self._iot_queue.put,  # Scapy's sniffer thread: the queue is the hand-off
+            on_error=lambda m: self._iot_failed.emit(run, m),
+        )
+        self._iot_monitor_obj.start()
+        if run == self._iot_monitor_run:  # an on_error inside start() has already ended the run
+            self._iot_status.setText(
+                f"Monitoring {len(baselines)} IoT device(s) — watching for anomalies…"
+            )
 
     # ── Network Grade (Benchmark) tab ─────────────────────────────────────────
 
@@ -768,8 +852,7 @@ class _AnalysisTabsMixin:
             from ui.widgets.toast import ToastManager
             ToastManager.show("Grade card copied as image", "success")
         except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Copy Failed", str(exc))
+            show_error_dialog(self, exc, WE.COPY_GRADE_CARD)
 
     @pyqtSlot()
     def _scan_and_grade(self):
@@ -919,4 +1002,4 @@ class _AnalysisTabsMixin:
             self._bm_table.resizeColumnsToContents()
 
         except Exception as exc:
-            self._bm_verdict_label.setText(f"⚠ Grading failed: {exc}")
+            show_worker_error(self._bm_verdict_label, exc, WE.NETWORK_GRADE)

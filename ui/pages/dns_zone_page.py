@@ -38,6 +38,8 @@ from workers.dns_zone_worker import DnsZoneWorker
 from ui.widgets.context_menu import install_copy_menu
 from ui.tabs_helpers import _table as _make_table
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -118,6 +120,9 @@ class DnsZonePage(QWidget):
     """DNS Zone Mapping — AXFR records + mDNS LAN service enumeration."""
 
     scan_complete = pyqtSignal(str)  # emits verdict string on success
+    scan_failed = pyqtSignal(str)    # RULE-SURF1: emits the error on failure,
+                                     # so the registry stops showing the last success
+    scan_not_testable = pyqtSignal(str)  # the AXFR server could not be reached: emits the verdict
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -458,16 +463,17 @@ class DnsZonePage(QWidget):
         self._mdns_btn.setEnabled(True)
         self._content_stack.setCurrentIndex(1)
         self._populate(result)
-        self.scan_complete.emit(result.verdict)
+        if result.axfr_error and not result.records:
+            self.scan_not_testable.emit(result.verdict)   # a failed probe is not a clean "no zone"
+        else:
+            self.scan_complete.emit(result.verdict)       # includes a partial zone: its records are real
 
     def _on_error(self, msg: str) -> None:
         self._axfr_btn.setEnabled(True)
         self._mdns_btn.setEnabled(True)
         self._content_stack.setCurrentIndex(1)
-        self._status_lbl.setText(
-            f"DNS zone scan failed — {msg}. "
-            "AXFR requires the DNS server to allow zone transfers; mDNS requires local network access."
-        )
+        show_worker_error(self._status_lbl, msg, WE.DNS_ZONE)
+        self.scan_failed.emit(msg)
 
     # ── Table population ──────────────────────────────────────────────────────
 

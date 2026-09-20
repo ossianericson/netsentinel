@@ -44,6 +44,12 @@ class HealthScoreCalculator:
     _GREEN = 75
     _AMBER = 45
 
+    #: The uptime window availability is scored over. `query_uptime_table` keys each
+    #: window by `str(hours)`, so the request and the read must derive from one constant
+    #: — before S8 they did not (`"24h"` was read, `"24.0"` was emitted) and availability,
+    #: the heaviest input, silently never reached the score.
+    _AVAIL_WINDOW_HOURS = 24.0
+
     def compute(self, store: MetricStore) -> HealthSnapshot:
         """Return a HealthSnapshot by querying MetricStore."""
         if store is None:
@@ -87,15 +93,16 @@ class HealthScoreCalculator:
     def _availability_score(self, store: MetricStore) -> Optional[float]:
         """Average 24-hour uptime % across monitored hosts (0-100 scale)."""
         try:
-            table = store.query_uptime_table(hours_list=[24.0])
+            table = store.query_uptime_table(hours_list=[self._AVAIL_WINDOW_HOURS])
         except Exception:
             return None
         if not table:
             return None
+        key = str(self._AVAIL_WINDOW_HOURS)
         uptimes = [
-            row.get("24h", 100.0)
+            row[key]
             for row in table
-            if row.get("24h") is not None
+            if row.get(key) is not None
         ]
         if not uptimes:
             return None

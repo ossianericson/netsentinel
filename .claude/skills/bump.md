@@ -172,6 +172,24 @@ Before presenting the result to the user, confirm every box:
 If architecture docs need updating (new modules, new pages), do those before
 Step 5 so the bump commit includes everything.
 
+### After the release run finishes
+
+The bump is not the end of the release — winget distribution is downstream of it and used
+to be unwatched. Median time to merge is ~1 h (28 of the first 30 PRs merged inside 4 h),
+so a submission still open after a few hours is worth a look.
+
+- [ ] Release run green, including the `winget` job
+- [ ] winget PR merged: `gh search prs --repo microsoft/winget-pkgs --author <you> --limit 3`
+
+You do **not** need to poll it. `.github/workflows/winget-watch.yml` checks every 30 minutes
+and opens an issue in this repo if the PR is flagged — and for the "cannot reproduce" label
+family it posts the author comment that moves the PR from `Needs-Author-Feedback` to
+`Needs-Attention` (RULE-W3). If an issue appears, follow
+`docs/internal/vt-false-positive-runbook.md` Part 2.
+
+Why this box exists: v2.3.0's PR was flagged 30 minutes in and then sat for 64 hours because
+nobody knew — and a PR left under `Needs-Author-Feedback` is auto-closed after 8 idle days.
+
 ---
 
 ## Mode B: Retag (same version, retrigger CI)

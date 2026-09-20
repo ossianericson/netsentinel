@@ -157,13 +157,19 @@ def install_channel() -> str:
 
 
 def _sink_paths() -> list:
-    """The four crash sinks, as (heading, path) pairs, in the order they matter.
+    """The five diagnostic sinks, as (heading, path) pairs, in the order they matter.
 
-    Two of the paths come from `modules.crash_net`, which owns them. The other two
-    are rebuilt here rather than imported: `netsentinel_shutdown.log` belongs to
-    `ui/shutdown.py` and `netsentinel_stderr.log` to `app.py`, and `modules/`
-    cannot import either (ARCH RULE 1). The names are the contract.
+    Three of the paths come from the module that owns them — `modules.crash_net` and
+    `modules.app_logging`. The other two are rebuilt here rather than imported:
+    `netsentinel_shutdown.log` belongs to `ui/shutdown.py` and `netsentinel_stderr.log`
+    to `app.py`, and `modules/` cannot import either (ARCH RULE 1). The names are the
+    contract.
+
+    `netsentinel_app.log` is last but is usually the one worth reading first: it is the
+    only sink whose lines carry a timestamp, a level and a logger name, so it is the
+    only one that can place a failure in time relative to the others (D4).
     """
+    from modules.app_logging import log_path as app_log_path
     from modules.crash_net import crash_log_path, exceptions_log_path
     from modules.utils import get_app_data_dir
 
@@ -175,6 +181,7 @@ def _sink_paths() -> list:
          os.path.join(app_dir, "netsentinel_shutdown.log")),
         ("Standard error (netsentinel_stderr.log)",
          os.path.join(app_dir, "netsentinel_stderr.log")),
+        ("Application log (netsentinel_app.log)", app_log_path()),
     ]
 
 

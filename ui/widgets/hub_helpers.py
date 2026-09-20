@@ -22,7 +22,7 @@ from ui import styles as _s
 # and the plugin tests. Declaring it in __all__ marks the re-export as intentional so
 # CodeQL/ruff don't flag the import as unused. hub_helpers is never used with
 # `from hub_helpers import *`; all other helpers are imported explicitly by name.
-__all__ = ["_TEMPLATE"]
+__all__ = ["_TEMPLATE", "plugin_error_text"]
 
 _SETTINGS_KEY      = "hardware/custom_scripts"
 _SETTINGS_RESULT   = "hardware/last_result/{}"   # .format(path_hash)
@@ -529,8 +529,28 @@ def _sinr_color(v) -> str:
     return _s.RED
 
 
-def _classify_error(msg: str) -> str:
-    """Convert a raw or prefixed error string into a human-readable sentence.
+def _partial_clients_text(extra: dict) -> str:
+    """Plain-English note for a mesh client list missing some nodes' clients, or "".
+
+    Reads ``status["extra"]["failed_nodes"]`` (error-surfacing S4.4d, set by the Deco
+    plugin). Absent means complete — older plugin copies never send it (RULE-SURF1).
+    """
+    nodes = [str(n) for n in ((extra or {}).get("failed_nodes") or []) if n]
+    if not nodes:
+        return ""
+    return (
+        f"Client list incomplete — no answer from {', '.join(nodes)}. Devices connected "
+        f"to {'that node' if len(nodes) == 1 else 'those nodes'} are missing until it "
+        "answers; it retries on the next poll."
+    )
+
+
+def plugin_error_text(msg: str) -> Optional[str]:
+    """The sentence to show for a plugin error, or ``None`` when nothing here recognises it.
+
+    ``None`` means ``msg`` is unclassified — usually a raw exception string from the plugin — so
+    the caller shows a fixed message and keeps ``msg`` as detail (RULE-A2). Protocol text after a
+    prefix is the plugin author's own wording and is returned as written.
 
     Handles structured prefixes emitted by plugin _fmt_err() helpers:
       FILE: <msg>  — plugin file not found (moved / deleted)
@@ -567,4 +587,10 @@ def _classify_error(msg: str) -> str:
         return "Cannot reach the device — check the IP address and that the device is online."
     if "no saved password" in low or "no password" in low:
         return "No password saved — enter a password and try again."
-    return msg
+    return None
+
+
+def _classify_error(msg: str) -> str:
+    """``plugin_error_text``, falling back to ``msg`` itself — for callers that key on the text."""
+    text = plugin_error_text(msg)
+    return msg if text is None else text

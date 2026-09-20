@@ -11,6 +11,9 @@ error(str)
     Emitted on socket bind failure or unhandled exception.
 status(str)
     Emitted when the listen port is confirmed (e.g. "Listening on UDP :514").
+bound(int)
+    The port actually bound, as a number — lets app.py tell the designed fallback from
+    a random port without parsing status text (error-surfacing S4.4e).
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ class SyslogWorker(QThread):
     message_received = pyqtSignal(dict)
     error            = pyqtSignal(str)
     status           = pyqtSignal(str)
+    bound            = pyqtSignal(int)
 
     def __init__(
         self,
@@ -36,6 +40,12 @@ class SyslogWorker(QThread):
         self._bind_address = bind_address
         self._running      = False
         self._receiver: SyslogReceiver | None = None
+
+    @property
+    def listen_port(self) -> int:
+        """The UDP port currently bound, or 0 when not listening."""
+        receiver = self._receiver
+        return receiver.listen_port if receiver is not None else 0
 
     def stop(self) -> None:
         # Flip the flag first, THEN close the socket. Closing it unblocks a
@@ -55,6 +65,7 @@ class SyslogWorker(QThread):
         try:
             actual_port = receiver.open()
             self.status.emit(f"Listening on UDP :{actual_port}")
+            self.bound.emit(actual_port)
         except OSError as exc:
             self.error.emit(f"Cannot bind syslog UDP port {self._port}: {exc}")
             self._running = False

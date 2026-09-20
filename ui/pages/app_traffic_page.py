@@ -47,7 +47,9 @@ from modules.colours import APP_CATEGORY_COLORS
 from modules.app_traffic_classifier import CATEGORY_ORDER as _CAT_ORDER
 from modules.metric_store import MetricStore
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
 from ui.device_labels import DeviceLabelResolver, normalise_mac
+from ui.error_display import record_worker_error, worker_error_text
 from ui.styles import (
     CHART_AXIS,
 )
@@ -431,13 +433,15 @@ class AppTrafficPage(QWidget):
         self._ax.clear()
         self._ax.set_facecolor(_s.CHART_PLOT_BG)
         self._ax.text(
-            0.5, 0.5, msg,
-            ha="center", va="center", fontsize=8,
+            0.5, 0.5, worker_error_text(WE.APP_TRAFFIC),
+            ha="center", va="center", fontsize=8, wrap=True,
             color=_s.RED, transform=self._ax.transAxes,
         )
         self._canvas.draw_idle()
         self._stop_worker()
-        self._status_lbl.setText("Error — see chart for details")
+        # The control-row label does not wrap: what failed only; the raw text goes to the app log.
+        self._status_lbl.setText(f"{_s.STATUS_ICON_WARN} {WE.APP_TRAFFIC.what}.")
+        record_worker_error(WE.APP_TRAFFIC, msg)
 
     # ── Host combo ────────────────────────────────────────────────────────────
 

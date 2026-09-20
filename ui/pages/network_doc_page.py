@@ -26,6 +26,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_worker_error, worker_error_text
 
 
 # ── Background generation worker ─────────────────────────────────────────────
@@ -323,7 +325,9 @@ class NetworkDocPage(QWidget):
                 )
                 self._log.appendPlainText("  ✓ Topology snapshot saved")
             except Exception as exc:
-                self._log.appendPlainText(f"  ⚠ Topology snapshot failed: {exc}")
+                # A log pane has no per-line tooltip: the raw text goes to the app log.
+                self._log.appendPlainText(f"  {worker_error_text(WE.TOPOLOGY_SNAPSHOT, exc)}")
+                record_worker_error(WE.TOPOLOGY_SNAPSHOT, exc)
                 topology_png = None
 
         devices   = self._devices   if self._chk_inv.isChecked()   else []
@@ -356,8 +360,8 @@ class NetworkDocPage(QWidget):
     def _on_error(self, msg: str) -> None:
         self._btn_generate.setEnabled(True)
         self._btn_generate.setText("▣  Generate Network Doc")
-        self._status_lbl.setText(f"⚠  {msg}")
-        self._log.appendPlainText(f"  ✗ Error: {msg}")
+        show_worker_error(self._status_lbl, msg, WE.NETWORK_DOC)
+        self._log.appendPlainText(f"  {worker_error_text(WE.NETWORK_DOC)}")
 
     @pyqtSlot()
     def _open_in_browser(self) -> None:

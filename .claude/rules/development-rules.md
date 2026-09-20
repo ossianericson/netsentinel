@@ -315,6 +315,36 @@ Rule: after **any** UI change — including single-line layout tweaks — run
 `python tools/debug_launch.py` and verify `window.show() called OK` before
 declaring the work done. This is COMMIT GATE Step 3 and is a hard gate.
 
+### RULE-UI2 (blocking): A fixed-width widget holding word-wrapped text takes its height from `heightForWidth()` — never from `adjustSize()` / `sizeHint()`
+
+**Mechanism.** `sizeHint()` of a layout containing a word-wrapped `QLabel` is computed at the label's
+*unconstrained* preferred width, where the text wraps into few lines. `adjustSize()` on a child
+widget just applies that hint. Pin the width narrower afterwards (`setFixedWidth`, or a
+`setGeometry(..., FIXED_W, hint_h)`) and the same text wraps into more lines than the height
+allows — the tail is cut off with no ellipsis, no log and no failing assertion on the text. Qt
+already knows the right answer: `widget.heightForWidth(FIXED_W)` (the layout's
+`totalHeightForWidth`).
+
+Live case (S6, found 2026-09-18 by rendering): the toast is 300 px wide; S6 gave error toasts an
+action button *inline* and explained messages up to 220 chars. The button squeezed the message to
+94 px, which needed 195 px of height and got 90 — "…The file may be open in" was all that
+showed, so the *what next* half of RULE-A2's message was exactly the part cut.
+
+```python
+# WRONG — height from the unconstrained hint, then the width is pinned narrower
+t.adjustSize()
+t.setGeometry(x, y, _WIDTH, t.height())
+
+# CORRECT — ask the layout what height the fixed width needs
+th = t.heightForWidth(_WIDTH) if t.hasHeightForWidth() else t.sizeHint().height()
+t.setGeometry(x, y, _WIDTH, th)
+```
+
+Put a long message's action button on its own row: inline, it takes the width the text needs.
+
+Enforced by `tests/test_toast_fits_message.py` (a long message with and without an action shows
+in full through the real `ToastManager` path).
+
 ### RULE 25: Rail section icon standard
 Rail section icons (the 48 px icon on the permanent left rail, set via `_nav_begin_section()`) must be **Lucide SVG names** from the `_LUCIDE` dict in `dashboard.py` — not Unicode symbols or photo-emoji.
 
@@ -620,6 +650,72 @@ Winget validation sandboxes run with `/VERYSILENT`; a nested `winget install` ha
 ### RULE-W2 (blocking): PrivilegesRequiredOverridesAllowed must include `commandline`
 Without `commandline`, Inno Setup attempts `ShellExecuteEx "runas"` in headless environments → E_ABORT.
 
+### RULE-W3 (blocking): A submitted winget PR must never sit unwatched — silence is not neutral, it auto-closes the submission
+
+**Mechanism.** `wingetcreate --submit` exits 0 the moment the PR exists, and nothing downstream
+of that was ours. When `microsoft/winget-pkgs` applies an error label, its policy service also
+applies `Needs-Author-Feedback` and **assigns the PR to us** — so the ball is formally in our
+court while no human or automation is looking. `scheduledSearch.markNoRecentActivity` then adds
+`No-Recent-Activity` after 5 idle days and `closeNoRecentActivity` closes the PR 3 days later.
+
+Live case, PR #430336 (v2.3.0): `Validation-Defender-Error` at T+30 min, then **64 hours of dead
+air**, then a moderator noticed by hand and re-ran validation — and the **identical binary passed
+unchanged**. 71.5 h total against a 1.1 h median over the previous 29 submissions. The real
+failure was half an hour; the rest was detection latency, and the PR was 2.7 days into the 8-day
+auto-close countdown.
+
+**The remedy is a comment, and only the author can send it.** Only listed moderators can run
+`@wingetbot run`; we cannot re-trigger validation. But `labelManagement.issueUpdated.yml` does:
+
+```yaml
+if:   Issue_Comment AND isActivitySender(issueAuthor) AND hasLabel(Needs-Author-Feedback)
+then: removeLabel(Needs-Author-Feedback); addLabel(Needs-Attention)   # assigns the ICM users
+```
+
+One author comment moves the PR into the queue their on-call engineers are actually assigned to.
+
+**Scope the auto-comment narrowly.** Only labels whose documented remedy is literally "add a
+comment to get the Windows Package Manager engineers to investigate" may be auto-answered
+(`AUTO_COMMENT_LABELS`). Everything else notifies a human: `Validation-Unattended-Failed` is the
+standing proof that a winget failure can be entirely our bug (RULE-W1), and asking a volunteer
+moderator to investigate our own defect spends goodwill we depend on.
+
+**The comment must never claim something we have not done.** WDSI submission is a web form with
+no API, so it stays a human step recorded on the notification issue — never asserted in the body.
+Likewise: the cosign `.bundle` sidecars are Sigstore signatures over the blob, invisible to
+SmartScreen, Defender and winget validation. Nothing we ship is Authenticode-signed; do not write
+"the installer is signed" in a winget PR comment.
+
+Enforced by `tests/test_winget_pr_watch.py` (label routing incl. a replay of #430336's real
+labels, idempotency marker, and the no-false-claims assertions) with
+`.github/workflows/winget-watch.yml` as the runtime gate. Full procedure:
+`docs/internal/vt-false-positive-runbook.md` Part 2.
+
+### RULE-W4 (blocking): Ship no unsigned PE without VERSIONINFO, and never UPX-pack one
+
+Every binary in the installer is unsigned, so metadata is the only reputation signal we get for
+free. All three exes shipped with **no VERSIONINFO at all** — no CompanyName, ProductName, or
+FileVersion. UPX packing is a top-tier AV heuristic trigger, and `NetSentinel-cli.exe` /
+`NetSentinel-svc.exe` carried `upx=True` while the GUI was already `upx=False`.
+
+**Be precise about what the UPX setting was costing: nothing, yet.** UPX is not installed on the
+build machine and no workflow installs it, and PyInstaller silently skips packing when the binary
+is absent. Measured directly — the same spec built at `upx=True` and `upx=False` differs by 2,096
+bytes on a 9.79 MB exe, and the `upx=True` build is the *larger* one, so that is build noise, not
+compression (real packing takes 50–70% off). The shipped binaries were never packed, and this
+setting did **not** contribute to the v2.3.0 Defender flag. It is a latent trap: the day UPX
+appears on a builder — a runner image change, someone installing it for an unrelated reason — the
+payload binaries silently start shipping packed. Set it false and keep it false.
+
+`packaging/version_info.py` reads the version from `app.py`'s `setApplicationVersion(...)` — the
+canonical source — at build time, deliberately **not** as a new `bump_version.py` target: `_sub()`
+only *warns* on a no-match, so a 16th target could rot silently and ship a stale FileVersion with
+every test green. It raises rather than falling back to a placeholder.
+
+Enforced by `tests/test_version_consistency.py` (`test_version_info_helper_matches_canonical`,
+`test_specs_do_not_reenable_upx`, `test_specs_attach_a_version_resource`,
+`test_installer_declares_version_metadata`).
+
 ---
 
 ## PyInstaller Bundle
@@ -882,6 +978,20 @@ btn.setStyleSheet(f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
 Enforced by `tests/test_home_ack_button_glyph.py` (static: available label width ≥ text
 advance; render: non-zero ink under the real app stylesheet).
 
+**Corollary — spin boxes: the same merge, one widget deeper, and `sizeHint()` cannot see it.** A
+`QSpinBox` composes an internal `QLineEdit`, and the global `QLineEdit { padding: 4px 8px; }` rule
+reaches that child too — on top of the two 21 px windows11 `+`/`−` buttons and
+`style_spinbox()`'s text margins. At `SPINBOX_WIDTH_WITH_SUFFIX = 100` that left **33 px** for the
+value: Port Scan's rate rendered "500 p" (owner-reported 2026-09-18), and every port box cut
+"65535". `sizeHint()` is no guide — under windows11 it returned 158 px for every box measured,
+whatever the text. Measure the text area the stylesheet actually lays out
+(`SE_LineEditContents` minus `textMargins()`) against the widest value (`maximum()` + suffix),
+**on the native platform**: offscreen fonts measure ~2× wider even with windows11 forced, so an
+offscreen probe proves nothing either way.
+
+Enforced by `tests/test_spinbox_text_fit.py` (AST sweep of every `setFixedWidth(SPINBOX_WIDTH_*)`
+site and its literal range/suffix, measured in a native child process).
+
 ### RULE-PERF1 (blocking): Never set `QHeaderView.ResizeMode.ResizeToContents` as a table's default column resize mode
 **Mechanism:** the single-argument `setSectionResizeMode(ResizeToContents)` (applied to all
 columns) tells Qt to recompute every column's ideal width — a full `sizeHintForColumn()` pass,
@@ -915,11 +1025,93 @@ more than ~50 rows or is ever re-sorted.
 ### RULE-A1 (required): Every feature must have a plain-English summary and a technical detail view
 Plain-English summary visible by default; full technical detail accessible via collapsible section or "Details" button.
 
-### RULE-A2 (required): Error messages must be translated — no raw exceptions shown to users
-Translate every worker error to: what failed, why it likely failed, what the user should try next.
+### RULE-A2 (blocking): Error messages must be translated — no raw exceptions shown to users
+Every failure a user sees reads what failed, why it likely failed, what to try next; the raw text goes
+in a tooltip, `setDetailedText()` or the app log. Use `ui/error_display.py` with an entry from
+`ui/worker_error_catalogue.py`, passing a caught exception itself (`show_worker_error(lbl, exc, WE.X)`,
+never `str(exc)`). Enforced by `tests/test_error_surfacing_ratchet.py` (raw sinks and stringified
+exceptions held at zero) and `tests/test_worker_error_catalogue.py` (wording, every reference resolves).
 
 ### RULE-A3 (required): Severity labels must use the canonical set only
 Only: `Info`, `Warning`, `High`, `Critical`. Never invent new severity strings.
+
+### RULE-SURF1 (blocking): A caught failure must never render as clean, empty, never-run or green
+
+**Mechanism.** Every status surface — flyout dot, scan-registry state, Home pill, result list —
+shows whatever was written to it last. An error slot that writes nothing leaves the last success
+on screen; one that writes the *completion* state or clears the indicator hands the user the
+opposite of the truth. Nothing crashes and nothing logs, so no crash net, test or chaos run sees it.
+
+All four shapes were live, reproduced by `docs/spikes/error-surfacing-matrix.py` (2026-09-15):
+- `app.py::_wire_arp_watch` / `_wire_dhcp_watch` answer a probe error with
+  `_set_flyout_dot(label, "")` — `""` is the never-run colour.
+- `ServiceDiagnosticsPage._on_error` emits `scan_complete`, which `app.py` maps to `"fresh"`:
+  a failed diagnosis turns the dot green.
+- `SpeedTestPage._on_test_error` returns before recording anything while the page is hidden.
+- `DecoMeshClient.get_all_clients` drops a failed node's clients and returns a list shaped
+  exactly like a complete one.
+
+```python
+# WRONG — the failure reads as "never ran" / "done"
+worker.error.connect(lambda msg: window._set_flyout_dot(label, ""))
+def _on_error(self, msg): self.scan_complete.emit()
+
+# CORRECT — failure is a state of its own; partial results say what is missing
+worker.error.connect(lambda msg: window._nav_set_scan_state(label, "error", error=msg))
+```
+
+Use `"not_testable"` when the probe was blocked rather than broken. A label that can go
+`running`/`fresh` must be able to go `error` or `not_testable`.
+
+**Corollary — the inverse lie: a success must never render as a failure.** A confirmation written
+*inside* the `try` that guards the work is guarded by the same handler, so if the confirmation
+itself raises, the finished work is reported as failed. Live since v2.1.13–v2.1.25: four call
+sites named `ToastManager.instance().show_toast(...)`, a method that never existed. A successful
+Export All Data and two clipboard copies each showed a "failed" modal carrying the
+`AttributeError`; a successful Network Map PNG save showed nothing.
+
+```python
+# WRONG — a broken confirmation is caught as a failure of the work
+try:
+    export_all_zip(self._store, path)
+    ToastManager.instance().show_toast("Saved", "info")   # AttributeError -> "Export Failed"
+except Exception as exc:
+    QMessageBox.warning(self, "Export Failed", str(exc))
+
+# CORRECT — only the work is guarded; the confirmation runs after it succeeded
+try:
+    export_all_zip(self._store, path)
+except Exception as exc:
+    show_error_dialog(self, exc, WE.EXPORT_ALL_DATA, retry=self._on_export_all)
+else:
+    ToastManager.show(f"Export saved to {path}", "success")
+```
+
+Enforced by `tests/test_error_surfacing_ratchet.py` (scan labels without an error path,
+shrink-only), `tests/test_toast_call_sites.py` (every `ToastManager` attribute a call site names
+exists) and re-running `docs/spikes/error-surfacing-matrix.py`.
+
+### RULE-SURF2 (required): Raise a failure at a loudness proportional to its impact — and a swallow is a decision, not a comment
+
+Loudness ladder, quietest first: **log** (expected and harmless — at least `debug` with
+`exc_info`) → **in-place state** (the page/row/pill shows degraded) → **ambient indicator**
+(dot, pill, tray — persists while the condition does) → **toast/strip** (deduplicated per
+condition, with an action) → **alert** (network facts only, through AlertEngine) → **modal**
+(only a user-initiated action that needs a decision).
+
+- "NetSentinel can't see X" — a monitor, listener, channel or credential store failing — is an
+  app-health condition, never a network alert.
+- A broad `except` must log (≥ `debug` with `exc_info`), mark its result degraded / partial /
+  `not_testable`, or surface. `pass  # non-fatal` satisfies RULE-LINT2 but not this rule — the
+  comment says why it is silenced, not whether anyone should have been told.
+- Anything raised above "log" says what failed, why, and what to do next (RULE-A2); raw
+  exception text goes in a tooltip or `QMessageBox.setDetailedText()`, never in the message.
+- Never match exception *message text* to decide what to show — Windows localizes it (a bind
+  failure arrives in Swedish on sv-SE); key on type, errno or status code (RULE-WIN23).
+
+Enforced by `tests/test_error_surfacing_ratchet.py` (shrink-only ratchets on silent broad
+handlers and undefined toast kinds; raw exception text in user-visible sinks is held at zero,
+RULE-A2). Plan and baselines: `docs/internal/error-surfacing-audit-2026-09-15.md`.
 
 ---
 
@@ -2489,6 +2681,107 @@ and `tests/test_crash_net.py` (behavioural + its own per-entry-point wiring guar
 
 ---
 
+### RULE-WIN27 (blocking): A plain `threading.Thread` in `ui/` may touch Qt only by emitting a signal — and a callback handed to a `modules/` function runs on the thread that calls it
+
+**Mechanism.** Qt widgets are GUI-thread-only. PyQt6 wheels are release builds, so the
+`Q_ASSERT_X` that would catch a cross-thread widget write is compiled out: a `setText()` or
+`insertRow()` from a background thread usually works, and occasionally corrupts the heap and
+surfaces as an access violation far from the site — the RULE-WIN20 class, reached by ordinary
+code instead of a crash handler.
+
+The shape that hides it is a **callback parameter**. `modules/` functions take plain callables
+(`progress_cb`, `on_error`) and call them on whatever thread called *them*. A lambda that writes a
+label looks GUI-side at the call site, but once the module function runs inside a
+`threading.Thread` target, so does the lambda. IoT Behaviour shipped exactly this: `learn()`'s
+`progress_cb`, `IoTMonitor(on_error=...)` and the baseline table fill all ran on a
+`threading.Thread` — in the same function whose drain-timer comment names the crash, because
+only the *alert* path had been routed through a queue.
+
+Two lifecycle defects travel with it, because the thread also ends up *owning* state:
+- **A failure reads as still running** (RULE-SURF1): an exception escapes the thread to
+  `threading.excepthook`, and the page keeps its "Learning…" text forever.
+- **Stop cannot reach what the thread has not yet built.** An object the thread assigns to
+  `self._x` after a long call is invisible to a Stop pressed during that call, and a second
+  Start overwrites the handle of a first that is still running.
+
+```python
+# WRONG — both callbacks and the table fill run on the background thread
+def _do():
+    baselines = learn(devices, progress_cb=lambda m: self._status.setText(m))
+    self._populate_table(baselines)
+threading.Thread(target=_do, daemon=True).start()
+
+# CORRECT — the thread only emits; the GUI-thread slot builds and owns everything
+def _do():
+    try:
+        baselines = learn(devices, progress_cb=lambda m: self._iot_progress.emit(run, m))
+    except Exception as exc:
+        self._iot_failed.emit(run, exc)
+    else:
+        self._iot_ready.emit(run, baselines)
+```
+
+A signal emitted from another thread to a receiver living on the GUI thread is queued
+automatically. Tag each run (`run`, a counter bumped on every Start *and* Stop) so a stopped or
+superseded run's late signals are dropped instead of overwriting the current state.
+
+Enforced by `tests/test_ui_thread_affinity.py` (AST guard over every `threading.Thread`/`Timer`
+target in `ui/`, including the lambdas it hands on, one level into same-class methods) and
+`tests/test_iot_thread_affinity.py` (every IoT widget write lands on the GUI thread; a failure,
+a Stop mid-learn and a second Start each end in the right state).
+
+---
+
+### RULE-WIN28 (blocking): A GUI-thread drain of a cross-thread queue takes a bounded batch per tick — and a per-packet producer must deduplicate at the source
+
+**Mechanism.** RULE-WIN27's hand-off (a background thread `put`s, a `QTimer` slot on the GUI thread
+drains) is only safe while the drain *returns*. `while True: q.get_nowait()` empties the whole
+queue in one tick, so the event loop runs again only when the queue is empty. When the producer
+outpaces the per-item cost, that never happens: no repaint, no input, Windows marks the window
+Not Responding. Nothing raises and nothing is logged — the crash and exception logs stay flat, so
+it reads as "the app crashed" to the user and as nothing at all to every log.
+
+Live case (2026-09-18, source run, found during S2.4): IoT Behaviour's anomaly monitor raised
+`NEW_PORT` for **every TCP packet** to a port absent from the baseline — no dedup, no SYN check —
+so a device *answering* clients produced one alert per client ephemeral port. Each alert cost an
+`insertRow` + a `QPushButton` cell widget + `scrollToBottom` + an AlertEngine pass; py-spy showed
+the GUI thread pinned in `_drain_iot_alerts` at 9,788 → 9,910 rows in 5 s, one core at 100 %,
++88 MB in 2½ minutes. The two defects needed each other: a flood with a bounded drain is a busy
+table; a bounded producer with an unbounded drain is fine until the day the producer isn't.
+
+```python
+# WRONG — one tick drains everything; a fast producer means the tick never ends
+def _drain():
+    try:
+        while True:
+            item = q.get_nowait()
+            ...                       # widget work per item
+    except queue.Empty:
+        pass
+
+# CORRECT — a fixed batch per tick; the timer comes back for the rest
+_DRAIN_PER_TICK = 50
+def _drain():
+    for _ in range(_DRAIN_PER_TICK):
+        try:
+            item = q.get_nowait()
+        except queue.Empty:
+            break
+        ...
+```
+
+A table that grows by one row per event needs a cap too (keep the newest rows, report the total).
+And fix the producer, not only the consumer: an alert that can fire per packet must key on the
+event it means (an outbound SYN is "the device opened a connection") and fire once per
+(device, subject).
+
+Enforced by `tests/test_iot_thread_affinity.py` (AST guard: no `while True` around `get_nowait()`
+in `ui/`; one drain tick takes a bounded batch; the alert table keeps the newest rows and the
+count reports the total) and `tests/test_iot_baseline.py` (replies to client ephemeral ports
+raise no `NEW_PORT`; repeated SYNs to one new port raise one).
+
+---
+
 ## QSettings State Hygiene
 
 ### RULE-QS1 (blocking): Never gate data access on QSettings-persisted mode — use always-populated sources
@@ -3147,6 +3440,7 @@ Currently tool-enforced (high reliability):
 - RULE-LINT5 → `tools/check_import_lint.py` + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook
 - RULE-LINT6 → `tools/check_import_lint.py` (`find_unused_global_violations`) + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook; local-variable half via tightened `dummy-variable-rgx` in `pyproject.toml`
 - RULE-LINT7 → `tools/check_import_lint.py` (`find_shadowed_import_violations`) + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook
+- RULE-UI2 → `test_toast_fits_message.py` (the real ToastManager path shows a long message in full, with and without an action button)
 - RULE-AH1 → `test_module_loc.py`
 - RULE-NAV1 → `test_nav_completeness.py`
 - RULE-AX1 → `test_interactive_states.py`
@@ -3154,7 +3448,7 @@ Currently tool-enforced (high reliability):
 - RULE-QSS2 → `test_qss_hex_alpha.py`
 - RULE-QSS3 → `test_qss_recipe_adoption.py`
 - RULE-QSS4 → `test_qss_widget_coverage.py` (class-level net + `_STYLING_CRITICAL_SUBCONTROLS` one level down) + `test_qss_derived_contrast.py` (fg/bg pairs derived from the real QSS, both themes) + `test_qss_tab_styling.py` (SMB-tabs pin)
-- RULE-QSS5 → `test_home_ack_button_glyph.py` (label-width arithmetic + ink-pixel render under the real app stylesheet)
+- RULE-QSS5 → `test_home_ack_button_glyph.py` (label-width arithmetic + ink-pixel render under the real app stylesheet) + `test_spinbox_text_fit.py` (every fixed-width spin box's widest value fits its text area, measured natively)
 - RULE-GATE1 → `test_run_test_suite.py` (canned-output classification of all five modes) + `tools/run_test_suite.py` as COMMIT GATE Step 2
 - RULE-UX7 → `test_item_tooltip_wrap.py` (ratchet on `safe_tooltip` call-site count)
 - RULE-ENC1 → `test_source_encoding.py`
@@ -3182,10 +3476,15 @@ Currently tool-enforced (high reliability):
 - RULE-WIN23 → `test_locale_independent_parsing.py` (sv-SE/es-BO/ru-RU/zh-CN/en-US ping, tracert, wlan, net view fixtures)
 - RULE-WIN24 → `test_crash_handler_encoding.py` (the stderr replacement must carry a codec and never raise on an unrepresentable path)
 - RULE-WIN25 → `test_receiver_reset_resilience.py` (a WSAECONNRESET must not end a syslog/SNMP/SSDP/mDNS listen loop)
-- RULE-WIN26 → `test_subprocess_decoding.py` (AST guard: every entry point installs the codec and hardens stdio) + `test_console_codec.py` (behavioural, incl. a real redirected cp1252 child pipe) + `test_crash_net.py` (behavioural + per-entry-point crash-net wiring guard)
+- RULE-WIN26 → `test_subprocess_decoding.py` (AST guard: every entry point installs the codec and hardens stdio) + `test_console_codec.py` (behavioural, incl. a real redirected cp1252 child pipe) + `test_crash_net.py` (behavioural + per-entry-point crash-net wiring guard) + `test_app_logging.py` (behavioural + per-entry-point app-log wiring guard, incl. that it is configured after rotate_logs())
+- RULE-WIN27 → `test_ui_thread_affinity.py` (AST guard: no widget write in a `threading` target in `ui/`) + `test_iot_thread_affinity.py` (behavioural: IoT writes land on the GUI thread; failure / Stop / restart states)
 - RULE-STARTUP2 → `test_startup_repaint_guard.py` (AST guard: every QApplication.setStyleSheet() call is inside `_suspend_repaints()`)
 - RULE-REL1 → `test_vt_scan.py` (classify() threshold boundaries) + `test_update_release_body.py` (status-aware rendering)
+- RULE-W3 → `test_winget_pr_watch.py` (label routing, idempotency, no-false-claims) + `.github/workflows/winget-watch.yml` as the runtime gate
+- RULE-W4 → `test_version_consistency.py` (version-resource/UPX/installer-metadata guards)
 - RULE-R1b → `test_version_consistency.py::test_whats_new_version` + `bump_version.py::_preflight_whats_new()` (aborts the bump before any file is written)
+- RULE-SURF1 / RULE-SURF2 (ratchet, not yet zero) → `test_error_surfacing_ratchet.py` via `tools/check_error_surfacing.py` (silent broad handlers, undefined toast kinds, scan labels without an error path — all shrink-only)
+- RULE-A2 → `test_error_surfacing_ratchet.py` via `tools/check_error_surfacing.py` (raw exception sinks and exceptions passed as text, both held at zero) + `test_worker_error_catalogue.py` (wording budgets, every `WE.<NAME>` resolves statically, no unused entry)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry

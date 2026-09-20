@@ -31,6 +31,7 @@ from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui import styles as _s
 from ui.dialog_utils import run_dialog
+from ui.widgets.hub_helpers import _partial_clients_text
 from ui.styles import (
     ORANGE,
 )
@@ -599,6 +600,9 @@ class PluginDevicePage(QWidget):
             self._show_banner(f"Plugin file not found: {self._path}", "RED")
         elif err:
             self._show_banner(str(err), "RED")
+        elif _partial_clients_text(extra):
+            # S4.4d: a degraded result, not a failure — amber, and the page still fills.
+            self._show_banner(_partial_clients_text(extra), "AMBER")
         else:
             self._banner.setVisible(False)
 

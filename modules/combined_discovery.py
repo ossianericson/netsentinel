@@ -27,11 +27,15 @@ from __future__ import annotations
 
 import concurrent.futures
 import ipaddress
+import logging
+import platform
 import socket
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
+
+_log = logging.getLogger(__name__)
 
 SCAPY_AVAILABLE = False
 try:
@@ -64,6 +68,9 @@ class DiscoveryResult:
     error: str = ""
     not_testable:        bool = False
     not_testable_reason: str  = ""
+    # Active methods that raised before they could probe (no Npcap / not elevated) — the
+    # devices listed are real, but these methods did not contribute to them.
+    methods_failed: List[str] = field(default_factory=list)
 
     @property
     def count(self) -> int:
@@ -72,14 +79,32 @@ class DiscoveryResult:
     @property
     def plain_verdict(self) -> str:
         if self.not_testable:
-            return f"⚠ Could not test {self.cidr or 'this network'} — {self.not_testable_reason}"
+            return f"⚠ Could not test {self.cidr or 'this network'} — {self.not_testable_reason}{self._failed_note()}"
         if self.error:
             return f"⚠ Discovery failed: {self.error}"
         return (
             f"Found {self.count} device(s) on {self.cidr or 'network'} "
             f"in {self.duration_s:.1f} s "
             f"using: {', '.join(self.methods_used) or 'ARP cache only'}"
+            f"{self._failed_note()}"
         )
+
+    def _failed_note(self) -> str:
+        """Fixed text naming the methods that could not run — never the exception (RULE-A2)."""
+        names = [_METHOD_NAMES.get(m, m) for m in self.methods_failed]
+        if not names:
+            return ""
+        need = "Npcap and administrator rights" if platform.system() == "Windows" else "administrator (root) rights"
+        if len(names) == 1:
+            return f" — {names[0]} could not run: it needs {need}."
+        return f" — {', '.join(names[:-1])} and {names[-1]} could not run: they need {need}."
+
+
+_METHOD_NAMES = {"arp-sweep": "ARP sweep", "tcp-syn": "TCP SYN"}
+
+
+class _MethodUnavailable(Exception):
+    """An active discovery method raised before it could probe (scapy without Npcap or elevation)."""
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -132,8 +157,10 @@ def _arp_sweep(cidr: str, timeout: float = 2.0) -> Dict[str, DiscoveredDevice]:
                 devices[ip].mac = devices[ip].mac or mac
                 if "arp-sweep" not in devices[ip].discovery_methods:
                     devices[ip].discovery_methods.append("arp-sweep")
-    except Exception:
-        pass  # non-fatal
+    except Exception as exc:
+        _log.debug("ARP sweep of %s failed", cidr, exc_info=True)
+        if not devices:
+            raise _MethodUnavailable("arp-sweep") from exc
     return devices
 
 
@@ -167,21 +194,36 @@ def _tcp_probe_host(ip: str, ports: List[int], timeout: float) -> Optional[Disco
         for sent, rcv in ans:
             if rcv.haslayer(TCP) and rcv[TCP].flags in (0x12, 0x14):  # SYN-ACK or RST
                 return DiscoveredDevice(ip=ip, discovery_methods=["tcp-syn"])
-    except Exception:
-        pass  # non-fatal
+    except Exception as exc:
+        raise _MethodUnavailable("tcp-syn") from exc   # _tcp_sweep logs and decides
     return None
 
 
 def _tcp_sweep(hosts: List[str], ports: List[int] = None, timeout: float = 1.0, max_workers: int = 32) -> Dict[str, DiscoveredDevice]:
+    """Raises ``_MethodUnavailable`` only when the probe raised for every host — the method
+    could not run at all. Some hosts failing is a partial sweep: logged, results kept."""
     if not SCAPY_AVAILABLE:
         return {}
     if ports is None:
         ports = [80, 443, 22, 8080]
     from modules.utils_net import parallel_map
+    failures: List[_MethodUnavailable] = []
+
+    def _probe(ip: str) -> Optional[DiscoveredDevice]:
+        try:
+            return _tcp_probe_host(ip, ports, timeout)
+        except _MethodUnavailable as exc:
+            failures.append(exc)
+            return None
+
     devices: Dict[str, DiscoveredDevice] = {}
-    for dev in parallel_map(lambda ip: _tcp_probe_host(ip, ports, timeout), hosts, workers=max_workers):
+    for dev in parallel_map(_probe, hosts, workers=max_workers):
         if dev:
             devices[dev.ip] = dev
+    if failures:
+        _log.debug("TCP SYN probe failed for %d of %d host(s)", len(failures), len(hosts), exc_info=failures[0])
+        if len(failures) == len(hosts):
+            raise _MethodUnavailable("tcp-syn")
     return devices
 
 
@@ -225,9 +267,10 @@ def _mdns_query(timeout: float = 2.0) -> Dict[str, DiscoveredDevice]:
                 except socket.timeout:
                     break
                 except Exception:
+                    _log.debug("mDNS discovery receive failed; ending the listen early", exc_info=True)
                     break
     except Exception:
-        pass  # non-fatal
+        _log.debug("mDNS discovery query could not be sent", exc_info=True)  # non-fatal
     return devices
 
 
@@ -296,6 +339,7 @@ def discover(
 
     devices: Dict[str, DiscoveredDevice] = {}
     methods_used: List[str] = []
+    methods_failed: List[str] = []
 
     # ── Stage 1: Passive (instant) ────────────────────────────────────────────
     if progress_cb:
@@ -337,6 +381,10 @@ def discover(
                     methods_used.append(name)
                     if progress_cb:
                         progress_cb(f"{name}: +{len(result_map)} host(s)")
+            except _MethodUnavailable:
+                methods_failed.append(name)   # already logged at debug where it raised
+                if progress_cb:
+                    progress_cb(f"{name}: could not run")
             except Exception as exc:
                 if progress_cb:
                     progress_cb(f"{name}: skipped ({exc})")
@@ -374,7 +422,7 @@ def discover(
                         if name and ip in devices:
                             devices[ip].hostname = name
                     except Exception:
-                        pass  # non-fatal
+                        _log.debug("fallback reverse DNS for %s failed", ip, exc_info=True)  # non-fatal
 
     duration = time.monotonic() - t0
     sorted_devs = sorted(devices.values(), key=lambda d: ipaddress.ip_address(d.ip))
@@ -387,6 +435,7 @@ def discover(
         cidr=cidr,
         duration_s=duration,
         methods_used=methods_used,
+        methods_failed=methods_failed,
     )
     if not sorted_devs and not stop.is_set():
         result.not_testable = True

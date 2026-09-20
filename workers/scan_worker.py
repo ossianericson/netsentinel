@@ -1096,9 +1096,10 @@ class CombinedDiscoveryWorker(QThread):
 
 class SMBEnumWorker(QThread):
     """SMB / NetBIOS enumeration — shares, users, sessions, domain info."""
-    result = pyqtSignal(object)   # SMBEnumResult
-    status = pyqtSignal(str)
-    error  = pyqtSignal(str)
+    result  = pyqtSignal(object)   # SMBEnumResult
+    status  = pyqtSignal(str)
+    error   = pyqtSignal(str)
+    stopped = pyqtSignal()         # the user pressed Stop before the run finished — not a failure
 
     def __init__(self, host: str, username: str = "", password: str = "",
                  domain: str = "", parent=None):
@@ -1123,7 +1124,11 @@ class SMBEnumWorker(QThread):
                 progress_cb=lambda m: self.status.emit(m),
                 stop_event=self._stop,
             )
-            if res.error:
+            if res.error and self._stop.is_set():
+                # enumerate_smb reports a Stop between its tiers as an error result. Decided by
+                # our own stop flag, never by the result's text (D5).
+                self.stopped.emit()
+            elif res.error:
                 self.error.emit(res.error)
             else:
                 self.result.emit(res)

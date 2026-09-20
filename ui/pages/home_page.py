@@ -374,6 +374,15 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._freshness_strip.navigate_to.connect(self.navigate_to)
         outer.addWidget(self._freshness_strip)
 
+        # ── App-health strip (error-surfacing S4.1) ──────────────────────────
+        # "NetSentinel can't see X": a monitor, listener or alert channel that stopped
+        # working. Added before any set_conditions() call can make it visible
+        # (RULE-WIN7). Unconditional since S10.2 — it ships on.
+        from ui.widgets.app_health_strip import AppHealthStrip
+        self._app_health_strip = AppHealthStrip()
+        self._app_health_strip.navigate_to.connect(self.navigate_to)
+        outer.addWidget(self._app_health_strip)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)

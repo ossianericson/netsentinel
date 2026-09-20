@@ -14,6 +14,32 @@ from pathlib import Path
 from modules.report_html import generate_html
 
 
+class NoPdfBackendError(RuntimeError):
+    """No PDF engine is installed: weasyprint is absent and no headless Edge/Chrome was found.
+
+    Its own type so a caller can tell the user what to install without reading the message
+    (RULE-A2). A ``RuntimeError`` so existing ``except RuntimeError`` callers still catch it.
+    """
+
+
+def _check_location_takes_the_file(output_path: Path) -> None:
+    """Raise the real ``OSError`` if ``output_path`` cannot be written — before any backend runs.
+
+    Measured with Edge installed: headless Edge exits non-zero *with no reason* for a missing
+    folder or a protected one, so every such failure used to fall through to
+    ``NoPdfBackendError`` ("install Edge"). Opening for append creates nothing that matters and
+    never truncates an existing file; a file this check created is removed again.
+    """
+    existed = output_path.exists()
+    with open(output_path, "ab"):
+        pass
+    if not existed:
+        try:
+            output_path.unlink()
+        except OSError:
+            pass  # non-fatal — a backend overwrites it, and a failed run leaves 0 bytes at worst
+
+
 def save_pdf_report(
     output_path: Path,
     module1_data=None,
@@ -36,8 +62,10 @@ def save_pdf_report(
       4. Fallback — saves HTML and raises RuntimeError listing install options
 
     Returns the Path to the saved PDF on success.
-    Raises RuntimeError if no PDF backend is available.
+    Raises OSError if ``output_path`` cannot take a file, NoPdfBackendError (a RuntimeError) if
+    no PDF backend is available, and RuntimeError if weasyprint is installed but fails.
     """
+    _check_location_takes_the_file(Path(output_path))
     html_content = generate_html(
         module1_data, module2_data, module3_data, module4_data, module5_data,
         diagnostics_data, network_info_data,
@@ -118,7 +146,7 @@ def save_pdf_report(
     except Exception:
         pass  # non-fatal
 
-    raise RuntimeError(
+    raise NoPdfBackendError(
         "No PDF backend available.\n"
         "Install one of:\n"
         "  pip install weasyprint\n"

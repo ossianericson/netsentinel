@@ -284,3 +284,69 @@ def test_zte_status_offline_sets_classified_error(monkeypatch):
     status = mod.get_status()
     err = status["extra"].get("error")
     assert err and err.startswith("AUTH:"), err
+
+
+# ── deco: a partial client fetch says which nodes are missing (S4.4d) ───────────
+
+def _patch_partial_deco(monkeypatch):
+    """The real MeshClientList (modules.deco_client, S3.4) with one node that did not answer."""
+    import modules.deco_client as dc
+
+    class FakeDeco:
+        def __init__(self, host, password):
+            pass
+
+        def login(self):
+            pass
+
+        def get_mesh_units(self):
+            return [_FakeUnit("Main", "aa:bb", "192.168.68.1", "primary"),
+                    _FakeUnit("Kontor", "aa:cc", "192.168.68.2", "satellite")]
+
+        def get_all_clients(self, units=None):
+            return dc.MeshClientList(
+                [_FakeClient("laptop", "11:22", "192.168.68.50", "5G", "Main")],
+                failed_nodes=["Kontor"],
+            )
+
+    monkeypatch.setattr(dc, "DecoMeshClient", FakeDeco)
+
+
+def test_deco_status_names_the_nodes_whose_clients_are_missing(monkeypatch):
+    """RULE-SURF1 — 1 client from a 2-node mesh must not read as the whole mesh."""
+    _install_fake_keyring(monkeypatch, {("NetSentinel/hardware", "192.168.68.1"): "pw"})
+    mod = _exec_plugin("deco_plugin.py", instance_ip="192.168.68.1")
+    _patch_partial_deco(monkeypatch)
+
+    status = mod.get_status()
+
+    assert not status["extra"].get("error"), "a partial fetch is a degraded result, not a failure"
+    assert status["extra"]["failed_nodes"] == ["Kontor"]
+
+
+def test_deco_status_omits_failed_nodes_when_every_node_answered(monkeypatch):
+    _install_fake_keyring(monkeypatch, {("NetSentinel/hardware", "192.168.68.1"): "pw"})
+    mod = _exec_plugin("deco_plugin.py", instance_ip="192.168.68.1")
+    _patch_deco_client(monkeypatch)  # returns a plain list, as an older deco_client would
+
+    assert "failed_nodes" not in mod.get_status()["extra"]
+
+
+def test_deco_subprocess_shim_reports_failed_nodes_too(monkeypatch, capsys):
+    """The hub can run the plugin as a subprocess (``--netsentinel``), which builds its own
+    status dict — a marker added only to get_status() would never reach that path."""
+    import json
+    import re
+
+    src = (PLUGINS_DIR / "deco_plugin.py").read_text(encoding="utf-8")
+    bundled_ip = re.search(r'^HARDWARE_IP\s*=\s*"([^"]*)"', src, re.M).group(1)
+    _install_fake_keyring(monkeypatch, {("NetSentinel/hardware", bundled_ip): "pw"})
+    _patch_partial_deco(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["deco_plugin.py", "--netsentinel"])
+
+    with pytest.raises(SystemExit):
+        _exec_plugin("deco_plugin.py")
+
+    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert not payload["status"]["extra"].get("error"), payload["status"]["extra"]
+    assert payload["status"]["extra"]["failed_nodes"] == ["Kontor"]

@@ -25,12 +25,15 @@ from PyQt6.QtCore    import Qt, QUrl, pyqtSlot
 from PyQt6.QtGui     import QDesktopServices
 from PyQt6.QtWidgets import (
     QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QPushButton, QSizePolicy, QSpinBox,
+    QListWidgetItem, QPushButton, QSizePolicy, QSpinBox,
     QVBoxLayout, QWidget, QCheckBox,
 )
 
 from modules.metric_store      import MetricStore
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_error_dialog
+from modules.report_pdf import NoPdfBackendError
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -427,19 +430,22 @@ class ReportsPage(QWidget):
         try:
             from modules.report_exporter import save_pdf_report
             save_pdf_report(Path(path))
-            QMessageBox.information(
-                self, "PDF Exported",
-                f"Report saved to:\n{path}"
-            )
+        except NoPdfBackendError as exc:
+            show_error_dialog(self, exc, WE.PDF_NO_ENGINE)
+        except Exception as exc:
+            show_error_dialog(self, exc, WE.EXPORT_PDF_REPORT, retry=self._export_pdf)
+        else:
+            # S9.2 — a finished export decides nothing, so it confirms the way every other
+            # export in the app does (and the way _copy_summary below already did). Only the
+            # work stays inside the try: a confirmation guarded by the same handler reports
+            # finished work as failed (RULE-SURF1's inverse corollary, the S6.0 defect).
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(f"{_s.STATUS_ICON_OK} Saved to {Path(path).name}", "success")
             # Also add to the recent list
             item = QListWidgetItem(path)
             item.setData(Qt.ItemDataRole.UserRole, path)
             self._report_list.insertItem(0, item)
             self._sync_list_visibility()
-        except RuntimeError as exc:
-            QMessageBox.warning(self, "PDF Export Failed", str(exc))
-        except Exception as exc:
-            QMessageBox.warning(self, "PDF Export Error", f"Unexpected error: {exc}")
         finally:
             self._btn_pdf.setEnabled(True)
             self._btn_pdf.setText("Export PDF")
@@ -450,10 +456,11 @@ class ReportsPage(QWidget):
             text = generate_status_report(self._store)
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(text)
-            from ui.widgets.toast import ToastManager
-            ToastManager.instance().show_toast("Network summary copied to clipboard", "info")
         except Exception as exc:
-            QMessageBox.warning(self, "Copy Failed", str(exc))
+            show_error_dialog(self, exc, WE.COPY_NETWORK_SUMMARY)
+        else:
+            from ui.widgets.toast import ToastManager
+            ToastManager.show("Network summary copied to clipboard", "success")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

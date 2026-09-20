@@ -9,6 +9,7 @@ Usage:
 Or double-click the compiled executable.
 """
 
+import logging
 import sys
 import os
 import time
@@ -122,6 +123,13 @@ def _smoke_test() -> None:
         "modules.diagnostic_report",
         "modules.environment_fingerprint",
         "modules.log_rotation",
+        "modules.app_logging",
+        "modules.version",
+        "modules.app_health",
+        "modules.app_health_catalogue",
+        "ui.app_health_bridge",
+        "ui.widgets.app_health_strip",
+        "modules.error_text",
         "modules.session_record",
         "ui.command_palette",
         "ui.empty_state",
@@ -374,8 +382,15 @@ def _headless() -> None:
         sys.exit(0)
 
     except Exception as exc:
+        # S10.1 — the traceback stays: this is a diagnostic surface and it is the whole
+        # point of it. What was missing is a first line a person can act on, instead of
+        # the exception's own (Windows-localized) text (RULE-A2).
         import traceback
-        print(f"ERROR: {exc}", file=sys.stderr)
+
+        from modules.error_text import explain
+        explanation = explain(exc)
+        print(f"The report could not be generated. "
+              f"{explanation.why} {explanation.next_step}", file=sys.stderr)
         traceback.print_exc()
         sys.exit(1)
 
@@ -410,6 +425,52 @@ def _ensure_std_streams() -> None:
     if sys.stdout is None:
         import io as _io
         sys.stdout = _io.StringIO()
+
+
+#: Qt message type -> logging level, built on first use. Qt's enum lives in PyQt6, which
+#: app.py deliberately does not import at module scope (``_check_pyqt`` has to run first
+#: and report a missing install as prose, not an ImportError traceback).
+_QT_LEVELS: dict = {}
+
+
+def _qt_message_handler(msg_type, context, message) -> None:
+    """Route Qt's own diagnostics into the application log instead of raw stderr.
+
+    Qt writes through this callback, not through Python's ``logging`` — so "Unknown
+    property cursor" (a QSS typo) and "QProcess: Destroyed while process is still
+    running" used to reach ``netsentinel_stderr.log`` as bare undated lines, one
+    indistinguishable from the same line written by a build six months earlier. As
+    records they carry a timestamp and a level, which is what makes "does current code
+    still emit this?" answerable at all (finding F4).
+
+    Extracted from ``main()`` to module scope so the contract is reachable by a test;
+    the inline version could only be exercised by running the whole application.
+
+    Two things it must not do, because Qt calls it from inside native code on whichever
+    thread emitted the message: raise, and touch a Qt object (RULE-WIN9).
+    """
+    try:
+        if "Point size <= 0" in message:
+            return  # matplotlib's QtAgg backend measures with pixel-size QFonts
+        if not _QT_LEVELS:
+            from PyQt6.QtCore import QtMsgType
+
+            _QT_LEVELS.update({
+                QtMsgType.QtDebugMsg:    logging.DEBUG,
+                QtMsgType.QtInfoMsg:     logging.INFO,
+                QtMsgType.QtWarningMsg:  logging.WARNING,
+                QtMsgType.QtCriticalMsg: logging.ERROR,
+                QtMsgType.QtFatalMsg:    logging.CRITICAL,
+            })
+        logging.getLogger("qt").log(
+            _QT_LEVELS.get(msg_type, logging.WARNING), "%s", message
+        )
+    except Exception:
+        # Raising inside a native Qt callback is worse than losing one message, so this
+        # never propagates — but it leaves a record rather than nothing (RULE-SURF2).
+        # Safe to log from here: logging handles a failing handler internally via
+        # handleError() and does not raise back out at us.
+        logging.getLogger("qt").debug("qt message handler failed", exc_info=True)
 
 
 #: The plain-English body for a crash. `_fatal`'s other callers — the Python-version
@@ -837,7 +898,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     window._alert_cycle_handler = _on_cycle
 
 
-def _wire_speedtest_scheduling(window, worker, alerts, store):
+def _wire_speedtest_scheduling(window, worker, alerts, store, health=None):
     """
     Sprint 3 — scheduled speed test.  ``worker`` is a ProactiveProbeWorker
     running modules.scheduled_speed_test.run_scheduled_speed_test().  Each
@@ -849,6 +910,7 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
     modules.digest_bullets._speed_trend_bullet() has overnight BASELINE_DROP
     history to summarize in the Morning Briefing.
     """
+    from modules.app_health_catalogue import SCHEDULED_SPEED_TEST
     from modules.scan_persistence import persist_alert
 
     def _on_probe_done(result) -> None:
@@ -877,6 +939,10 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
         elif not enabled and worker.isRunning():
             worker.stop()
             worker.wait(3000)
+        if not enabled and health is not None:
+            # S4.4c — a schedule the user switched off is not a schedule that is failing,
+            # and a stopped worker will never emit the success that would resolve it.
+            health.report_ok(SCHEDULED_SPEED_TEST.key)
 
     window._speed_test_page.auto_speedtest_changed.connect(_on_auto_speedtest_changed)
 
@@ -970,7 +1036,7 @@ def _wire_arp_watch(window, worker, alerts, store):
     """V6 Sprint 4.1 — background ARP spoof watch. ``worker`` is a
     ProactiveProbeWorker running modules.arp_watch.run_arp_watch_cycle() on a
     fixed interval, independent of whether the ARP Spoof Watch page is open."""
-    from ui.styles import GREEN, RED
+    from ui.styles import RED
 
     from modules.scan_persistence import persist_alert
 
@@ -982,10 +1048,19 @@ def _wire_arp_watch(window, worker, alerts, store):
                 persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
-        window._set_flyout_dot("ARP Spoof Watch", RED if report.events else GREEN)
+        # The registry records the RUN's health; the dot additionally signals a
+        # live detection, which "fresh" has no colour for.
+        window._nav_set_scan_state(
+            "ARP Spoof Watch", "fresh",
+            verdict=f"{len(report.events)} ARP spoofing event(s)" if report.events else "No ARP spoofing seen",
+        )
+        if report.events:
+            window._set_flyout_dot("ARP Spoof Watch", RED)
 
     def _on_probe_error(msg: str) -> None:
-        window._set_flyout_dot("ARP Spoof Watch", "")
+        # RULE-SURF1: "" is the never-run colour — an erroring watch used to be
+        # indistinguishable from one that had never started.
+        window._nav_set_scan_state("ARP Spoof Watch", "error", error=msg)
 
     worker.probe_done.connect(_on_probe_done)
     worker.error.connect(_on_probe_error)
@@ -996,7 +1071,7 @@ def _wire_dhcp_watch(window, worker, alerts, store):
     ProactiveProbeWorker running modules.dhcp_watch.run_dhcp_watch_cycle() on
     a fixed interval, independent of whether the DHCP Rogue Monitor page is
     open."""
-    from ui.styles import GREEN, RED
+    from ui.styles import RED
 
     from modules.scan_persistence import persist_alert
 
@@ -1008,10 +1083,16 @@ def _wire_dhcp_watch(window, worker, alerts, store):
                 persist_alert(store, a)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
-        window._set_flyout_dot("DHCP Rogue Monitor", RED if report.rogue_offers else GREEN)
+        window._nav_set_scan_state(
+            "DHCP Rogue Monitor", "fresh",
+            verdict=f"{len(report.rogue_offers)} rogue DHCP offer(s)" if report.rogue_offers
+                    else "No rogue DHCP servers seen",
+        )
+        if report.rogue_offers:
+            window._set_flyout_dot("DHCP Rogue Monitor", RED)
 
     def _on_probe_error(msg: str) -> None:
-        window._set_flyout_dot("DHCP Rogue Monitor", "")
+        window._nav_set_scan_state("DHCP Rogue Monitor", "error", error=msg)
 
     worker.probe_done.connect(_on_probe_done)
     worker.error.connect(_on_probe_error)
@@ -1044,24 +1125,123 @@ def _wire_trend_forecast(window, worker, alerts, store):
 def _wire_monitor_error_surface(window, workers_by_name: dict) -> None:
     """G6 — avail/cert/svc/health/passive_observer/trend all define an
     ``error`` signal but nothing connected it, so a persistent failure showed
-    stale data with zero indication. One shared quiet slot per worker: log
-    it, then surface a single one-time status-bar note (not a modal — these
-    workers retry automatically on their next interval, so repeating the
-    note every retry would just be noise)."""
+    stale data with zero indication. One shared quiet slot per worker: log it.
+
+    The *surface* is the Home app-health strip, not this handler. Each of these
+    six workers is wired to its own ``MONITORS[...]`` condition by
+    ``_report_worker_health`` long before this runs, so the failure is already
+    on screen and stays there while the fault does. S10.2 retired the one-time
+    status-bar note this used to write (S4.3's ``note=False``): the strip
+    survives the next status write (matrix F2-G6) and, unlike the note, shows a
+    failure raised before any of this wiring existed."""
     import logging
     log = logging.getLogger("netsentinel.monitors")
-    _notified: set = set()
 
     def _make_handler(name: str):
         def _on_error(msg: str) -> None:
             log.warning("%s monitor error: %s", name, msg)
-            if name not in _notified:
-                _notified.add(name)
-                window._set_status(f"⚠ {name} monitor hit an error — see log for details.")
         return _on_error
 
     for _name, _worker in workers_by_name.items():
         _worker.error.connect(_make_handler(_name))
+
+
+def _create_app_health():
+    """S3 (D1, D3) — the one in-memory registry of "NetSentinel can't see X" conditions.
+
+    Every transition is also recorded in the D4 app log, so a condition that came and
+    went before anyone looked is still visible afterwards. Repeats are not logged — the
+    registry only notifies on raise and resolve.
+    """
+    import logging
+    from modules.app_health import AppHealth
+
+    log = logging.getLogger("netsentinel.app_health")
+
+    def _record(cond) -> None:
+        if cond.resolved_at is None:
+            log.warning("condition raised: %s — %s (%s)", cond.key, cond.what, cond.detail)
+        else:
+            log.info("condition resolved: %s after %d failure(s)", cond.key, cond.count)
+
+    health = AppHealth()
+    health.subscribe(_record)
+    return health
+
+
+def _report_worker_health(health, spec, worker, ok_signal: str) -> None:
+    """Raise ``spec`` on the worker's ``error`` signal; resolve it on ``ok_signal``.
+
+    **Call before ``worker.start()``.** A cross-thread signal emitted while nothing is
+    connected is dropped, and the listeners fail exactly once, within milliseconds of
+    starting (a UDP bind), long before the Dashboard exists to wire anything. Connecting
+    after construction of the window would miss precisely the failures that never retry.
+    """
+    worker.error.connect(lambda msg, s=spec: health.report_failure(s, detail=str(msg)))
+    getattr(worker, ok_signal).connect(lambda *_a, k=spec.key: health.report_ok(k))
+
+
+def _report_syslog_port(health, worker) -> None:
+    """S4.4e — raise ``listener:syslog_port`` when the receiver fell back to a random port.
+
+    ``SyslogReceiver.open()`` tries 514, then ``FALLBACK_PORT``, then port 0 — which always
+    binds, so a taken 514 never reaches ``error``. 5140 is the designed fallback and is not
+    raised. **Call before ``worker.start()``**, for the same dropped-signal reason as
+    ``_report_worker_health``.
+    """
+    from modules.app_health_catalogue import SYSLOG_RANDOM_PORT
+    from modules.syslog_receiver import FALLBACK_PORT, SYSLOG_PORT
+
+    def _on_bound(port: int) -> None:
+        if port in (SYSLOG_PORT, FALLBACK_PORT):
+            health.report_ok(SYSLOG_RANDOM_PORT.key)
+        else:
+            health.report_failure(SYSLOG_RANDOM_PORT, detail=f"Listening on UDP {port}")
+
+    worker.bound.connect(_on_bound)
+
+
+def _seed_listener_pages(window, health, syslog_worker, snmp_trap_worker) -> None:
+    """S4.4b — give the syslog and SNMP pages what their dropped startup signals carried.
+
+    ``_wire_logging`` connects the pages seconds after both receivers started, and a
+    cross-thread signal emitted before ``connect()`` is dropped: a bind failure never
+    reached the page, and neither did "Listening on UDP :N". The registry was connected
+    before ``start()`` and still holds the failure; the worker still knows its port.
+    Called after ``_wire_logging``, so anything emitted from here on arrives normally.
+    """
+    from modules.app_health_catalogue import SNMP_TRAP_RECEIVER, SYSLOG_RECEIVER
+
+    for spec, worker, page in (
+        (SYSLOG_RECEIVER, syslog_worker, window._syslog_page),
+        (SNMP_TRAP_RECEIVER, snmp_trap_worker, window._snmp_trap_page),
+    ):
+        cond = health.get(spec.key)
+        if cond is not None and cond.resolved_at is None:
+            page.on_error(cond.detail)
+        elif worker.listen_port:
+            page.on_status(f"Listening on UDP :{worker.listen_port}")
+
+
+def _wire_app_health(window, health, mqtt_page) -> None:
+    """Hand the Dashboard the registry, wire the one UI-owned producer, draw the surface.
+
+    Every other existing error surface — page labels, the scan registry — is untouched;
+    the strip is additive to them (S3.3). G6's one-time status-bar note is the exception:
+    the strip replaced it outright in S10.2. The REST API worker and the notification
+    router report to the registry themselves, because they hold the exception and the
+    delivery streak respectively.
+    """
+    from modules.app_health_catalogue import MQTT_PASSWORD
+
+    window._app_health = health  # read by ui/tabs.py::_watch_rest_api_worker
+    mqtt_page.secret_persisted.connect(
+        lambda saved: health.report_ok(MQTT_PASSWORD.key) if saved
+        else health.report_failure(MQTT_PASSWORD)
+    )
+    # S4.1 — Home strip + tray dot. Unconditional since S10.2 (RULE-EXP1 gate retired).
+    from ui.app_health_bridge import attach_surface
+    attach_surface(window, health)
 
 
 def _wire_cross_page(window):
@@ -1102,12 +1282,10 @@ def _wire_cross_page(window):
     window._threat_intel_page.scan_complete.connect(_on_threat_intel_scan_complete)
     window._threat_intel_page.scan_error.connect(_on_threat_intel_scan_error)
     window._threat_intel_page.scan_not_testable.connect(_on_threat_intel_scan_not_testable)
-    window._service_diagnostics_page.scan_started.connect(
-        lambda: window._nav_set_scan_state("Service Diagnostics", "running")
-    )
-    window._service_diagnostics_page.scan_complete.connect(
-        lambda: window._nav_set_scan_state("Service Diagnostics", "fresh")
-    )
+    # Service Diagnostics' three registry transitions (running/fresh/error) all
+    # live in ui/tabs.py, so one place owns the label. They used to be split:
+    # this file wrote "fresh" with no verdict and, connecting later, overwrote
+    # the verdict ui/tabs.py had just recorded.
 
 
 def _wire_scan_ctas(window):
@@ -1150,6 +1328,19 @@ def main():
 
     # Guard sys.stderr/stdout being None in windowed PyInstaller builds
     _ensure_std_streams()
+
+    # ── The formatted application log (D4) ────────────────────────────────────
+    # After rotation (Windows cannot rename an open file) and after the stderr guard
+    # above, so that the one failure this cannot report into the app log -- not being
+    # able to open it -- still reaches netsentinel_stderr.log in a windowed build.
+    # Until this runs, a log.warning falls through to logging.lastResort and lands as a
+    # bare message with no timestamp, level or logger, and log.info/debug are dropped.
+    # Lives in modules/ so cli.py and svc.py -- separate PyInstaller entry points that
+    # never import app.py -- get the same record (RULE-WIN26 placement).
+    from modules.app_logging import configure as _configure_app_log
+    from modules.version import APP_VERSION as _APP_VERSION
+
+    _configure_app_log(_APP_VERSION)
 
     _check_python_version()
     _check_pyqt()
@@ -1220,15 +1411,6 @@ def main():
     from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
     from PyQt6.QtCore import Qt, QSettings, qInstallMessageHandler, QRect
 
-    # Suppress noisy Qt warnings that come from matplotlib's QtAgg backend
-    # measuring fonts with pixel-size QFont objects (pointSize() returns -1).
-    def _qt_message_handler(msg_type, context, message):
-        if "Point size <= 0" in message:
-            return  # matplotlib font-metrics noise — safe to ignore
-        # In windowed/frozen builds sys.stderr is None — guard before writing
-        import sys as _sys
-        if _sys.stderr is not None:
-            _sys.stderr.write(message + "\n")
     qInstallMessageHandler(_qt_message_handler)
 
     # Enable high-DPI
@@ -1251,7 +1433,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.3.0")
+    app.setApplicationVersion("2.4.0")
 
     # ── Session sentinel (A1) ─────────────────────────────────────────────────
     # Opens a record marked clean_exit=False; only ui/shutdown.py's hard_exit()
@@ -1419,7 +1601,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.3.0")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.4.0")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1602,6 +1784,17 @@ def main():
     from modules.notification_router import NotificationRouter
     notif_router = NotificationRouter()
 
+    # S3 (D1, D3) — created before any producer starts; see _report_worker_health.
+    app_health = _create_app_health()
+    notif_router.set_app_health(app_health)
+    from modules.app_health_catalogue import (
+        MONITORS as _HEALTH_MONITORS,
+        REPORT_SCHEDULER as _HEALTH_REPORTS,
+        SCHEDULED_SPEED_TEST as _HEALTH_SPEEDTEST,
+        SNMP_TRAP_RECEIVER as _HEALTH_SNMP,
+        SYSLOG_RECEIVER as _HEALTH_SYSLOG,
+    )
+
     def _dispatch_alert(alert) -> None:
         notif_router.dispatch(alert)
         # Fan the same alert into Automation Hooks — the engine already
@@ -1634,12 +1827,11 @@ def main():
     _sq_settings = QSettings("NetSentinel", "NetSentinel")
     import logging as _sq_logging
     _sq_log = _sq_logging.getLogger("netsentinel.signal_quality")
-    # Its own logger + FileHandler under get_app_data_dir(), independent of root
-    # logging config — nothing in the app calls logging.basicConfig(), so a bare
-    # log.info() is dropped at the default WARNING root level (same reason
-    # ui/shutdown.py and ui/styles.py each carry their own handler). These lines
-    # are the only durable record of a migration that DELETES rows from the
-    # user's device inventory, so they have to actually land.
+    # Its own logger + FileHandler under get_app_data_dir(), with propagate=False —
+    # a dedicated file, kept separate from the shared netsentinel_app.log that
+    # modules/app_logging.py configures (same as ui/shutdown.py and ui/styles.py).
+    # These lines are the only durable record of a migration that DELETES rows from
+    # the user's device inventory, so they get a file nothing else writes to.
     try:
         from modules.utils import get_app_data_dir as _sq_dir
         if not _sq_log.handlers:
@@ -1785,27 +1977,39 @@ def main():
         # gateway alone, for the same bounded reason (ui/scan_wiring.py).
         jitter_hosts=DEFAULT_TARGETS,
     )
+    _report_worker_health(app_health, _HEALTH_MONITORS["Availability"], avail_worker, "cycle_done")
     avail_worker.start()
 
     cert_worker = CertWorker(store=store, interval_s=3600)
+    _report_worker_health(app_health, _HEALTH_MONITORS["Certificate"], cert_worker, "check_done")
     cert_worker.start()
 
     svc_worker = SvcWorker(store=store, interval_s=60)
+    _report_worker_health(app_health, _HEALTH_MONITORS["Service"], svc_worker, "check_done")
     svc_worker.start()
 
     report_worker = ReportSchedulerWorker(store=store)
+    _report_worker_health(app_health, _HEALTH_REPORTS, report_worker, "report_saved")
     report_worker.start()
 
+    # The two receivers emit `status` only once their UDP socket is bound.
     snmp_trap_worker = SnmpTrapWorker()
+    _report_worker_health(app_health, _HEALTH_SNMP, snmp_trap_worker, "status")
     snmp_trap_worker.start()
 
     syslog_worker = SyslogWorker()
+    _report_worker_health(app_health, _HEALTH_SYSLOG, syslog_worker, "status")
+    _report_syslog_port(app_health, syslog_worker)
     syslog_worker.start()
 
     passive_observer_worker = PassiveObserverWorker()
+    _report_worker_health(
+        app_health, _HEALTH_MONITORS["Passive Observer"], passive_observer_worker, "observation_ready"
+    )
     passive_observer_worker.start()
 
     health_worker = HealthWorker(store=store)
+    _report_worker_health(app_health, _HEALTH_MONITORS["Health"], health_worker, "result_ready")
     health_worker.start()
 
     # V6 Sprint 2 — TREND_FORECAST: hourly OLS ETA-to-threshold sweep. Pure DB
@@ -1818,6 +2022,7 @@ def main():
         probe=lambda: _run_full_trend_report(store),
         interval_s=3600,
     )
+    _report_worker_health(app_health, _HEALTH_MONITORS["Trend Forecast"], trend_worker, "probe_done")
     trend_worker.start()
 
     # Stability Sprint 1 (G3): prune_old_data() previously only ran once, in
@@ -1860,6 +2065,7 @@ def main():
     scheduled_speedtest_worker.set_maintenance_checker(
         lambda: maint_manager.is_suppressed("speedtest") is not None
     )
+    _report_worker_health(app_health, _HEALTH_SPEEDTEST, scheduled_speedtest_worker, "probe_done")
 
     # V6 Sprint 3 — scheduled security posture scans. Opt-in, default off
     # (BACKLOG-V6 guardrail: no new background network activity without an
@@ -1935,8 +2141,11 @@ def main():
         _host     = "0.0.0.0" if _external else "127.0.0.1"
         rest_api_worker = RestApiWorker(store=store)
         rest_api_worker.set_bind(_host, _port)
+        # Was print() — into a StringIO in the windowed build, so a failed bind reached
+        # no one (F2-REST). The worker now raises the rest_api:serve condition itself.
+        rest_api_worker.report_to(app_health)
         rest_api_worker.error.connect(
-            lambda msg: print(f"[REST API] ERROR: {msg}", flush=True)
+            lambda msg: logging.getLogger("netsentinel.rest_api").warning("REST API: %s", msg)
         )
         from modules.rest_api import get_or_create_api_key as _ensure_key
         _ensure_key()  # generate and persist key on first enable
@@ -1971,10 +2180,12 @@ def main():
     _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router, store)
     _wire_cross_page(window)
     _wire_scan_ctas(window)
-    _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts, store)
+    _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts, store, app_health)
     if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
         scheduled_speedtest_worker.start()
     _wire_trend_forecast(window, trend_worker, alerts, store)
+    # Error-surfacing S4: the Home app-health strip carries every monitor failure.
+    # Unconditional since S10.2 — the RULE-EXP1 flag came off after the S4.5 live look.
     _wire_monitor_error_surface(window, {
         "Availability":     avail_worker,
         "Certificate":      cert_worker,
@@ -1983,6 +2194,8 @@ def main():
         "Passive Observer": passive_observer_worker,
         "Trend Forecast":   trend_worker,
     })
+    _wire_app_health(window, app_health, window._mqtt_page)
+    _seed_listener_pages(window, app_health, syslog_worker, snmp_trap_worker)
 
     # V6 Sprint 3.1/3.3/3.5, 3.2/3.5, 3.4/3.5 — scheduled posture scans.
     # Each starts only if its Security Overview toggle was already on at

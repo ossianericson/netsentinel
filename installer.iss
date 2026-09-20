@@ -22,7 +22,7 @@
 ; ============================================================================
 
 #define MyAppName        "NetSentinel"
-#define MyAppVersion     "2.3.0"
+#define MyAppVersion     "2.4.0"
 #define MyAppPublisher   "NetSentinel Project"
 #define MyAppURL         "https://github.com/ossianericson/netsentinel"
 #define MyAppExeName     "NetSentinel.exe"
@@ -54,6 +54,19 @@ SetupIconFile             = assets\icons\NetSentinel.ico
 Compression               = lzma2/ultra64
 SolidCompression          = yes
 WizardStyle               = modern
+
+; ── Version metadata (the setup stub's own PE resource) ──────────────────────
+; The setup stub is the file Microsoft Defender's dynamic test actually downloads
+; and scans. It carried no VERSIONINFO at all, which is a reputation penalty on an
+; unsigned binary — see packaging/version_info.py for the same fix on the payload
+; exes, and winget PR #430336 for what it cost. All values come from the defines
+; above, which bump_version.py already maintains, so this adds no new bump target.
+VersionInfoVersion        = {#MyAppVersion}
+VersionInfoProductVersion = {#MyAppVersion}
+VersionInfoProductName    = {#MyAppName}
+VersionInfoCompany        = {#MyAppPublisher}
+VersionInfoDescription    = {#MyAppName} Setup
+VersionInfoCopyright      = Copyright (C) {#MyAppPublisher}. MIT Licence.
 
 ; ── Architecture ─────────────────────────────────────────────────────────────
 ArchitecturesInstallIn64BitMode = x64compatible

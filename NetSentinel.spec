@@ -17,6 +17,13 @@ Debug build (keeps a console window so print/traceback output is visible):
 
 import os
 import sys
+
+# Windows VERSIONINFO resource. An unsigned PE with no version metadata is a
+# reputation penalty (see packaging/version_info.py); the version is read from
+# app.py, the canonical source, so there is no extra bump target to keep in sync.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(SPEC)), "packaging"))
+from version_info import build_version_info  # noqa: E402
+
 from PyInstaller.utils.hooks import collect_all
 
 # ── Build mode ────────────────────────────────────────────────────────────────
@@ -126,6 +133,11 @@ hiddenimports: list = [
     "modules.console_codec",
     "modules.crash_net",
     "modules.log_rotation",
+    "modules.app_logging",
+    "modules.version",
+    "modules.app_health",
+    "modules.app_health_catalogue",
+    "modules.error_text",
     "modules.environment_fingerprint",
     "modules.session_record",
     "modules.diagnostic_report",
@@ -293,6 +305,9 @@ hiddenimports: list = [
     "ui.live_graph",
     "ui.npcap_banner",
     "ui.scan_settings",
+    "ui.app_health_bridge",
+    "ui.error_display",
+    "ui.worker_error_catalogue",
     "ui.skeleton",
     "ui.device_labels",
     "ui.styles",
@@ -349,6 +364,7 @@ hiddenimports: list = [
     "ui.pages.wifi_heatmap_page",
     "ui.widgets.environment_banner",
     "ui.widgets.unclean_exit_strip",
+    "ui.widgets.app_health_strip",
     "ui.widgets.explainer_panel",
     "ui.widgets.frame_anatomy_panel",
     "ui.widgets.badge_medallion",
@@ -513,6 +529,10 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=build_version_info(
+        internal_name="NetSentinel",
+        description="NetSentinel - network security scanner and monitor",
+    ) if sys.platform == "win32" else None,
     icon="assets/icons/NetSentinel.ico" if sys.platform == "win32" else None,
 )
 

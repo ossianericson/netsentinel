@@ -19,7 +19,15 @@ Install the built service (run as Administrator):
     dist\\NetSentinel-svc.exe start
 """
 
+import os
 import sys
+
+# Windows VERSIONINFO resource. An unsigned PE with no version metadata is a
+# reputation penalty (see packaging/version_info.py); the version is read from
+# app.py, the canonical source, so there is no extra bump target to keep in sync.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(SPEC)), "packaging"))
+from version_info import build_version_info  # noqa: E402
+
 
 if sys.platform != "win32":
     raise SystemExit(
@@ -47,6 +55,9 @@ hiddenimports: list = [
     "modules.console_codec",
     "modules.crash_net",
     "modules.log_rotation",
+    # D4 formatted app log -- imported at svc.py module scope
+    "modules.app_logging",
+    "modules.version",
     # NetworkLogger and its dependencies
     "modules.network_logger",
     "modules.utils",
@@ -87,7 +98,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,          # UPX packing is a strong AV heuristic trigger
     upx_exclude=[],
     runtime_tmpdir=None,
     # Service executables must be console=True.
@@ -99,5 +110,9 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=build_version_info(
+        internal_name="NetSentinel-svc",
+        description="NetSentinel background logging service",
+    ) if sys.platform == "win32" else None,
     icon="assets/icons/NetSentinel.ico" if sys.platform == "win32" else None,
 )

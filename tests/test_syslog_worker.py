@@ -53,3 +53,27 @@ def test_start_stop_lifecycle():
     assert not w.isRunning()
     _cleanup(w)
     # Errors are allowed (port binding may fail in CI); thread must stop.
+
+
+def test_bound_reports_the_port_actually_bound():
+    """S4.4e — the port as a number, so app.py can tell a fallback from a random port
+    without parsing the localized-looking status text."""
+    from workers.syslog_worker import SyslogWorker
+
+    app = QApplication.instance()
+    w = SyslogWorker(port=0, bind_address="127.0.0.1")
+    bound = []
+    w.bound.connect(bound.append)
+    assert w.listen_port == 0, "nothing is bound before the thread runs"
+    w.start()
+    deadline = time.monotonic() + 5
+    while not bound and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.02)
+    port_while_running = w.listen_port
+    w.stop()
+    assert w.wait(5000)
+    _cleanup(w)
+
+    assert len(bound) == 1 and bound[0] > 0
+    assert port_while_running == bound[0]

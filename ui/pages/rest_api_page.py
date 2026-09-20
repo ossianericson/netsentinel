@@ -5,6 +5,7 @@ Lives in the left toolbar under Tools. Replaces the settings card.
 """
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Optional
 
@@ -15,6 +16,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+
+_log = logging.getLogger(__name__)
 
 
 # ── HTTP probe worker ─────────────────────────────────────────────────────────
@@ -108,6 +111,14 @@ def _btn(label: str, color_name: str = "ACCENT") -> QPushButton:
 
 class RestApiPage(QWidget):
     """Standalone page for configuring and monitoring the local REST API."""
+
+    #: Every hot-started RestApiWorker, emitted before start() so the Dashboard can
+    #: hand it the app-health registry (S3.3). This page is built lazily, after
+    #: app.py's wiring has run, so the registry cannot be passed in at construction.
+    worker_created = pyqtSignal(object)
+    #: The "Enable REST API" checkbox changed. Switching it off withdraws a launch
+    #: failure's app-health condition (S4.4c) — a feature meant to be off is not failing.
+    enabled_changed = pyqtSignal(bool)
 
     def __init__(self, store=None, parent=None):
         super().__init__(parent)
@@ -296,6 +307,7 @@ class RestApiPage(QWidget):
     def _on_enable_changed(self, state: int) -> None:
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("rest_api/enabled", bool(state))
+        self.enabled_changed.emit(bool(state))
         self._probe_status()
 
     def _on_port_changed(self, value: int) -> None:
@@ -442,13 +454,14 @@ class RestApiPage(QWidget):
 
         self._worker = RestApiWorker(store=self._store, parent=self)
         self._worker.set_bind(host, port)
-        self._worker.error.connect(lambda msg: print(f"[REST API] {msg}", flush=True))
+        self._worker.error.connect(lambda msg: _log.warning("REST API: %s", msg))
         def _on_started_ok(_: object) -> None:
             _t = QTimer(self)
             _t.setSingleShot(True)
             _t.timeout.connect(self._probe_status)
             _t.start(600)
         self._worker.started_ok.connect(_on_started_ok)
+        self.worker_created.emit(self._worker)
         self._worker.start()
 
         _s.themed_ss(self._lbl_dot, "font-size:16px; color:{TEXT_MUTED}; border:none;")

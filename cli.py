@@ -26,6 +26,7 @@ Examples:
 
 import argparse
 import json
+import logging
 import os
 import signal
 import sys
@@ -64,8 +65,15 @@ from modules.log_rotation import rotate_logs as _rotate_logs  # noqa: E402
 
 _rotate_logs()
 
+# The formatted application log (D4) is configured in main(), NOT here. Everything
+# above runs at import time because it has to -- the codec must precede the first
+# subprocess, the crash net the first exception, and rotation any open handle. Opening
+# a log file does not: `import cli` (a test, a tool, PyInstaller's analysis) would then
+# create and hold netsentinel_app.log in the real %LOCALAPPDATA% as a side effect of
+# the import alone, and attach a root handler that captures the importer's own records.
+from modules.app_logging import configure as _configure_app_log  # noqa: E402
 
-_VERSION = "2.3.0"
+_VERSION = "2.4.0"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -82,7 +90,14 @@ def _resolve_output(path: str, default: str | None = None) -> Path:
     try:
         parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        print(f"Cannot create output directory '{parent}': {exc}", file=sys.stderr)
+        # S10.1 — stderr is this binary's only surface, so it gets the same what/why/next
+        # a widget would (RULE-A2). The raw, Windows-localized text goes to the app log.
+        from modules.error_text import explain
+        logging.getLogger("netsentinel.cli").warning(
+            "could not create output directory %s", parent, exc_info=exc)
+        explanation = explain(exc)
+        print(f"Cannot create output directory '{parent}'. "
+              f"{explanation.why} {explanation.next_step}", file=sys.stderr)
         sys.exit(1)
     if not parent.is_dir():
         print(f"Output parent path is not a directory: {parent}", file=sys.stderr)
@@ -508,6 +523,11 @@ def cmd_log_chart(args) -> None:
 
 
 def main() -> None:
+    # Timestamped, levelled records for this run (D4). First thing in main() so that
+    # every command below is covered, and only when the CLI actually runs -- see the
+    # note beside the import at the top of this file.
+    _configure_app_log(_VERSION)
+
     parser = argparse.ArgumentParser(
         prog="netsentinel",
         description="NetSentinel — Network Security Scanner & Connectivity Monitor",

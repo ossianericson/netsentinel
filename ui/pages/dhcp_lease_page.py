@@ -31,6 +31,8 @@ from modules.dhcp_lease_scanner import DhcpLease
 from workers.dhcp_lease_worker import DhcpLeaseWorker
 from ui.tabs_helpers import _table as _make_table
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 from ui.widgets.empty_state_card import EmptyStateCard
 
@@ -242,10 +244,7 @@ class DhcpLeasePage(QWidget):
 
     def _on_error(self, msg: str) -> None:
         self._refresh_btn.setEnabled(True)
-        self._status_lbl.setText(
-            f"DHCP lease scan failed — {msg}. "
-            "Check that you are running as administrator and your network adapter is active."
-        )
+        show_worker_error(self._status_lbl, msg, WE.DHCP_LEASES)
 
     # ── Table population ──────────────────────────────────────────────────────
 

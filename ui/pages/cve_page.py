@@ -12,6 +12,7 @@ This page stores lifecycle state in MetricStore.cve_lifecycle (schema v7).
 """
 from __future__ import annotations
 
+import logging
 import time
 from typing import Optional
 
@@ -32,7 +33,11 @@ from ui.expanding_table import ExpandingTable
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 from ui.widgets.jargon_tooltip import LearnMoreLink
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import export_failed
 from ui.dialog_utils import run_dialog
+
+log = logging.getLogger(__name__)
 
 # ── CVE state definitions ─────────────────────────────────────────────────────
 
@@ -213,6 +218,8 @@ class CvePage(QWidget):
     scan_requested            = pyqtSignal()      # emitted by empty-state CTA; wire to _start_full_scan
     lookup_threat_intel_for   = pyqtSignal(str)   # IP → navigate to Threat Intel + pre-filter
     data_refreshed            = pyqtSignal(int)   # S6: emitted after _refresh() with tracked-CVE count
+    refresh_failed            = pyqtSignal(str)   # RULE-SURF1: the store read failed; the count on
+                                                  # screen is stale and the registry must say so
 
     def __init__(self, store: MetricStore, parent=None):
         super().__init__(parent)
@@ -417,8 +424,15 @@ class CvePage(QWidget):
         state_filter = self._filter_combo.currentText()
         if state_filter == "All States":
             state_filter = None
-        self._rows = self._store.list_cve_lifecycles(state_filter)
-        all_rows = self._store.list_cve_lifecycles(None)
+        try:
+            self._rows = self._store.list_cve_lifecycles(state_filter)
+            all_rows = self._store.list_cve_lifecycles(None)
+        except Exception as exc:
+            # RULE-SURF1: a locked or corrupt database leaves the previous count
+            # on screen. Say so rather than silently keeping the stale number.
+            log.warning("CVE Tracker refresh failed: %s", exc, exc_info=True)
+            self.refresh_failed.emit(str(exc))
+            return
         self._content_stack.setCurrentIndex(0 if not all_rows else 1)
         self._apply_filter(self._search_box.text())
         self._update_kpis()
@@ -812,9 +826,10 @@ class CvePage(QWidget):
                         r.get("owner", ""), days_open,
                         r.get("notes", ""), r.get("description", ""),
                     ])
-            ToastManager.show(f"✓ Exported {len(rows)} row(s) to {os.path.basename(path)}", "success")
         except Exception as exc:
-            ToastManager.show(f"Export failed: {exc}", "error")
+            export_failed(exc, WE.EXPORT_CVE_CSV, retry=self._export_csv)
+        else:
+            ToastManager.show(f"✓ Exported {len(rows)} row(s) to {os.path.basename(path)}", "success")
 
     # ── Import dialog ─────────────────────────────────────────────────────────
 

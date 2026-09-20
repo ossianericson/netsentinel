@@ -13,6 +13,9 @@ from pathlib import Path
 from PyQt6.QtCore import QSettings, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
 
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_error_dialog, worker_error_text
+
 
 class _ExportMixin:
     """Mixin providing report export + "Export All Data" handlers for Dashboard.
@@ -34,11 +37,11 @@ class _ExportMixin:
             from modules.exporter import export_all_zip
             from pathlib import Path as _P
             export_all_zip(self._store, _P(path))
-            from ui.widgets.toast import ToastManager
-            ToastManager.instance().show_toast(f"Export saved to {path}", "info")
         except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox as _MB
-            _MB.warning(self, "Export Failed", str(exc))
+            show_error_dialog(self, exc, WE.EXPORT_ALL_DATA, retry=self._on_export_all)
+        else:
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(f"Export saved to {path}", "success")
 
     @pyqtSlot()
     def _run_full_report(self):
@@ -107,7 +110,9 @@ class _ExportMixin:
             webbrowser.open(_out.as_uri())
             self._set_status(f"Report ready — {_out.name}")
         except Exception as _exc:
-            self._set_status(f"Auto-report failed: {_exc}")
+            # A QStatusBar message has no tooltip: the raw text goes to the app log.
+            self._set_status(worker_error_text(WE.AUTO_REPORT, _exc))
+            record_worker_error(WE.AUTO_REPORT, _exc)
             if hasattr(self, "_overview_page"):
                 self._overview_page.set_report_running(False)
 
@@ -174,6 +179,9 @@ class _ExportMixin:
                     overall_level=level,
                 )
                 webbrowser.open(out.as_uri())
-            self._set_status(f"Report saved: {out.name}")
         except Exception as exc:
-            self._set_status(f"Export failed: {exc}")
+            # A QStatusBar message has no tooltip: the raw text goes to the app log.
+            self._set_status(worker_error_text(WE.EXPORT_REPORT, exc))
+            record_worker_error(WE.EXPORT_REPORT, exc)
+        else:
+            self._set_status(f"Report saved: {out.name}")

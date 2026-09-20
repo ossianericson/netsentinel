@@ -129,4 +129,6 @@ jobs:
           echo "| Installer URL | ${{ steps.url.outputs.URL }} |" >> $env:GITHUB_STEP_SUMMARY
           echo "" >> $env:GITHUB_STEP_SUMMARY
           echo "A PR has been opened in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs)." >> $env:GITHUB_STEP_SUMMARY
-          echo "It will be auto-merged by the winget bot within ~24 hours after validation." >> $env:GITHUB_STEP_SUMMARY
+          echo "Median time to merge across our submissions is ~1 h; 28 of the first 30 merged" >> $env:GITHUB_STEP_SUMMARY
+          echo "in under 4 h. If it is flagged instead, winget-watch.yml opens an issue here" >> $env:GITHUB_STEP_SUMMARY
+          echo "within 30 minutes - see docs/internal/vt-false-positive-runbook.md Part 2." >> $env:GITHUB_STEP_SUMMARY

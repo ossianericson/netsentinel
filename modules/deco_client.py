@@ -62,6 +62,21 @@ class MeshClient:
     download_kbps: float = 0.0
 
 
+class MeshClientList(list):
+    """``get_all_clients()``'s result: a plain list of ``MeshClient`` that also says what
+    it could not see.
+
+    RULE-SURF1 / matrix F1d: a node whose client query failed used to drop out of a
+    list shaped exactly like a complete one, so callers counted the survivors as every
+    client on the mesh. A ``list`` subclass keeps every existing caller unchanged.
+    """
+
+    def __init__(self, clients=(), failed_nodes=()) -> None:
+        super().__init__(clients)
+        #: Names of the mesh nodes whose clients are missing from this list.
+        self.failed_nodes: List[str] = list(failed_nodes)
+
+
 class MeshAuthError(Exception):
     """Raised when login to the mesh gateway fails."""
 
@@ -277,10 +292,13 @@ class DecoMeshClient:
     def get_all_clients(
         self,
         units: Optional[List[MeshUnit]] = None,
-    ) -> List[MeshClient]:
+    ) -> MeshClientList:
         """
         Return all currently online clients with node assignment and
         real-time rates.  One API call per mesh node to get node assignment.
+
+        A node whose call fails is skipped, logged, and named in the result's
+        ``failed_nodes`` — the list is then partial, and says so.
 
         Pass `units` to avoid a redundant device_list call.
         """
@@ -288,6 +306,7 @@ class DecoMeshClient:
             units = self.get_mesh_units()
 
         clients: List[MeshClient] = []
+        failed_nodes: List[str] = []
         seen_macs: set = set()
 
         for unit in units:
@@ -301,6 +320,7 @@ class DecoMeshClient:
             except MeshApiError as exc:
                 log.warning("Could not fetch clients for %s (%s): %s",
                             unit.name, raw_mac, exc)
+                failed_nodes.append(unit.name)
                 continue
 
             for c in data.get("client_list", []):
@@ -327,4 +347,4 @@ class DecoMeshClient:
                     download_kbps = float(c.get("down_speed") or 0),
                 ))
 
-        return clients
+        return MeshClientList(clients, failed_nodes)

@@ -40,6 +40,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import export_failed, show_worker_error
 from ui.styles import (
     HTML_TEXT,
 )
@@ -531,7 +533,7 @@ class BaselinePage(QWidget):
     def _on_scan_error(self, err: str) -> None:
         self._btn_take.setEnabled(True)
         self._btn_take.setText("📸  Take Snapshot")
-        self._status_lbl.setText(f"Scan error: {err}")
+        show_worker_error(self._status_lbl, err, WE.BASELINE_SNAPSHOT)
 
     # ── Delete snapshot ───────────────────────────────────────────────────────
 
@@ -683,10 +685,11 @@ tr:nth-child(even){{background:{_s.BG_ALT_ROW}}}
         try:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(html)
+        except Exception as exc:
+            export_failed(exc, WE.EXPORT_BASELINE_DIFF, retry=self._export_diff_html)
+        else:
             import os
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
-        except Exception as exc:
-            ToastManager.show(f"Export failed: {exc}", "error")
 
     # ── ACT-7: schedule strip ─────────────────────────────────────────────────
 

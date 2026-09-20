@@ -38,6 +38,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import export_failed, show_worker_error
 from ui.styles import (
     TEAL,
 )
@@ -1146,15 +1148,14 @@ class NetworkMapPage(QWidget):
     @pyqtSlot(str)
     def _on_bw_error(self, msg: str) -> None:
         """Handle bandwidth worker errors — untoggle the button and show a hint."""
-        log.warning("Traffic Overlay: %s", msg)
         self._btn_traffic.blockSignals(True)
         self._btn_traffic.setChecked(False)
         self._btn_traffic.blockSignals(False)
         self._traffic_overlay = False
         self._bw_legend.setVisible(False)
         self._bw_worker = None
-        # Surface the error briefly in the LLDP hint label (already present on the page)
-        self._lldp_hint_label.setText(f"Traffic Overlay unavailable: {msg.splitlines()[0]}")
+        # Surface the error in the LLDP hint label (already present on the page); logged there too
+        show_worker_error(self._lldp_hint_label, msg, WE.TRAFFIC_OVERLAY)
         self._lldp_hint_label.setVisible(True)
 
     def showEvent(self, event) -> None:  # noqa: N802
@@ -1246,13 +1247,12 @@ class NetworkMapPage(QWidget):
         if self._web_available and self._inner_tab.currentIndex() == 0:
             self._run_js("window.exportPng && window.exportPng();")
         else:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.information(
-                self,
-                "Export",
-                "PNG export is only available in the Interactive view.\n"
-                "Switch to the Interactive tab and try again.",
-            )
+            # S9.2 — a refusal with a next step, not a decision: the same channel this
+            # page's two success paths already use.
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(
+                "PNG export needs the Interactive view — switch to the Interactive tab "
+                "and try again.", "warning")
 
     @pyqtSlot(str)
     def _on_export_data(self, data_url: str) -> None:
@@ -1273,10 +1273,11 @@ class NetworkMapPage(QWidget):
             img_bytes = base64.b64decode(b64)
             with open(path, "wb") as fh:
                 fh.write(img_bytes)
-            from ui.widgets.toast import ToastManager
-            ToastManager.instance().show_toast(f"Map exported to {path}", "info")
         except Exception as exc:
-            log.warning("network_map_page: export failed: %s", exc)
+            export_failed(exc, WE.EXPORT_MAP_IMAGE, retry=lambda: self._on_export_data(data_url))
+        else:
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(f"Map exported to {path}", "success")
 
     def _on_share_export(self) -> None:
         """Export a sanitized PNG (private IPs aliased, MACs/hostnames stripped,
@@ -1303,10 +1304,10 @@ class NetworkMapPage(QWidget):
                 edges=kwargs.get("edges") or [],
                 output_path=path,
             )
-            ToastManager.show(f"Sanitized map exported to {path}", "success")
         except Exception as exc:
-            log.warning("network_map_page: sanitized share export failed: %s", exc)
-            ToastManager.show(f"Export failed: {exc}", "error")
+            export_failed(exc, WE.EXPORT_MAP_SHARE, retry=self._on_share_export)
+        else:
+            ToastManager.show(f"Sanitized map exported to {path}", "success")
 
     def _run_js(self, script: str) -> None:
         """Run a JavaScript snippet in the web view if available."""

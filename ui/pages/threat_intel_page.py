@@ -41,6 +41,8 @@ from workers.threat_intel_worker import AbuseIpDbWorker, ThreatFeedRefreshWorker
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from ui.tabs_helpers import _table as _make_table
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_worker_error, worker_error_text
 
 log = logging.getLogger(__name__)
 
@@ -579,7 +581,7 @@ class ThreatIntelPage(QWidget):
         self._refresh_btn.setEnabled(True)
         self._refresh_btn.setText("Update Feeds")
         self._cache_btn.setEnabled(True)
-        self._status_lbl.setText(f"Feed refresh failed: {msg}")
+        show_worker_error(self._status_lbl, msg, WE.THREAT_FEED_REFRESH)
         self.scan_error.emit(msg)
 
     def _on_db_ready(self, db: ThreatIntelDB, from_cache: bool = False) -> None:
@@ -781,10 +783,13 @@ class ThreatIntelPage(QWidget):
         self._lookup_btn.setEnabled(True)
         self._lookup_btn.setText("Check IP")
         base = self._lookup_result.text()
-        self._lookup_result.setText(f"{base} | AbuseIPDB: ⚠ Could not test — {msg}")
+        self._lookup_result.setText(f"{base} | {worker_error_text(WE.ABUSEIPDB_NOT_TESTABLE)}")
+        record_worker_error(WE.ABUSEIPDB_NOT_TESTABLE, msg)
 
     def _on_abuse_error(self, msg: str) -> None:
         self._lookup_btn.setEnabled(True)
         self._lookup_btn.setText("Check IP")
         base = self._lookup_result.text()
-        self._lookup_result.setText(f"{base} | AbuseIPDB error: {msg}")
+        # The label also carries the local-feed verdict, so the message is appended, not replaced.
+        self._lookup_result.setText(f"{base} | {worker_error_text(WE.ABUSEIPDB_LOOKUP)}")
+        record_worker_error(WE.ABUSEIPDB_LOOKUP, msg)

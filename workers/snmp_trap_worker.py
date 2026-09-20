@@ -38,6 +38,12 @@ class SnmpTrapWorker(QThread):
         self._running      = False
         self._receiver: SnmpTrapReceiver | None = None
 
+    @property
+    def listen_port(self) -> int:
+        """The UDP port currently bound, or 0 when not listening."""
+        receiver = self._receiver
+        return receiver.listen_port if receiver is not None else 0
+
     def stop(self) -> None:
         # Flip the flag first, THEN close the socket. Closing it unblocks a
         # recvfrom() in run() immediately (main thread -> worker socket), so

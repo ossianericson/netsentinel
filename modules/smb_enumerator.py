@@ -23,6 +23,7 @@ requirements.txt as an optional comment.
 
 from __future__ import annotations
 
+import logging
 import platform
 import re
 import socket
@@ -31,6 +32,8 @@ import subprocess
 import threading
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
+
+_log = logging.getLogger(__name__)
 
 ProgressCB = Optional[Callable[[str], None]]
 
@@ -113,6 +116,8 @@ class SMBEnumResult:
 
     @property
     def plain_verdict(self) -> str:
+        if self.not_testable:
+            return f"⚠ Could not test {self.host} — {self.not_testable_reason}"
         if self.error:
             return f"⚠  SMB enum failed: {self.error}"
         parts = [
@@ -266,7 +271,7 @@ def _netbios_name_query(host: str, timeout: float = 3.0) -> NetBIOSInfo:
             info.mac = ":".join(f"{b:02x}" for b in mac_bytes)
 
     except Exception:
-        pass  # non-fatal
+        _log.debug("NetBIOS name query to %s failed", host, exc_info=True)  # non-fatal
     return info
 
 
@@ -327,7 +332,7 @@ def _smb_anonymous_banner(host: str, timeout: float = 5.0) -> tuple:
     except ConnectionRefusedError:
         pass  # non-fatal
     except Exception:
-        pass  # non-fatal
+        _log.debug("SMB2 banner probe of %s failed", host, exc_info=True)  # non-fatal
     return os_version, anonymous_ok
 
 
@@ -353,7 +358,7 @@ def _net_view_shares(host: str) -> List[SMBShare]:
                 visible_anonymous=True,
             ))
     except Exception:
-        pass  # non-fatal
+        _log.debug("net view of %s failed", host, exc_info=True)  # non-fatal
     return shares
 
 
@@ -399,9 +404,10 @@ def _impacket_enum(
             try:
                 anon_share_names = {s["shi1_netname"][:-1] for s in anon.listShares()}
             except Exception:
-                pass  # non-fatal — anonymous session may lack share-list rights
+                _log.debug("anonymous SMB share list on %s failed", host, exc_info=True)  # non-fatal — anonymous session may lack share-list rights
             anon.logoff()
         except Exception:
+            _log.debug("anonymous SMB login to %s failed", host, exc_info=True)
             result.anonymous_login = False
 
         for share in result.shares:
@@ -415,6 +421,34 @@ def _impacket_enum(
 
 # ── Tier 2 — net.exe subprocess fallback (Windows only) ─────────────────────
 
+def _redact_argv(exc: BaseException, secret: str) -> None:
+    """Blank *secret* out of a subprocess exception's argv — ``CalledProcessError`` and
+    ``TimeoutExpired`` print ``cmd`` in their message, so it would reach the log."""
+    cmd = getattr(exc, "cmd", None)
+    if secret and isinstance(cmd, list):
+        exc.cmd = ["***" if part == secret else part for part in cmd]   # type: ignore[attr-defined]
+
+
+def _net_use_login(host: str, username: str, password: str, domain: str, extra: dict) -> str:
+    """Open the authenticated IPC$ session: "" on success, else a fixed not-testable reason.
+
+    Keyed on the exit code, never on net.exe's text, which Windows localizes (RULE-WIN23).
+    """
+    cmd = ["net", "use", f"\\\\{host}\\IPC$",
+           password, f"/user:{domain}\\{username}" if domain else f"/user:{username}"]
+    try:
+        subprocess.check_output(cmd, text=True, timeout=20, stderr=subprocess.DEVNULL, **extra)
+        return ""
+    except Exception as exc:
+        _redact_argv(exc, password)
+        _log.debug("net use \\\\%s\\IPC$ failed", host, exc_info=True)
+        how = (f"net use exit code {exc.returncode}" if isinstance(exc, subprocess.CalledProcessError)
+               else "net use did not complete")
+        return (f"The login to \\\\{host} was not accepted, or the host did not answer ({how}). "
+                "Shares, users and groups were not read: without the login every command runs as "
+                "this PC's own account. Check the user name, password and domain, then try again.")
+
+
 def _net_exe_enum(host: str, username: str, password: str, domain: str,
                   progress: ProgressCB) -> SMBEnumResult:
     result = SMBEnumResult(host=host, tier=2)
@@ -425,13 +459,18 @@ def _net_exe_enum(host: str, username: str, password: str, domain: str,
             return subprocess.check_output(cmd, text=True, timeout=20,
                                            stderr=subprocess.DEVNULL, **extra)
         except Exception:
+            _log.debug("%s failed", " ".join(cmd[:2]), exc_info=True)   # an empty answer; the login already held
             return ""
 
-    # Establish authenticated session
+    # Establish authenticated session. Without it every `net` command below runs as the
+    # scanner's own Windows account and would describe what THIS PC sees, not the target.
     if progress:
         progress(f"net use \\\\{host} as {username}…")
-    _run(["net", "use", f"\\\\{host}\\IPC$",
-          password, f"/user:{domain}\\{username}" if domain else f"/user:{username}"])
+    login_error = _net_use_login(host, username, password, domain, extra)
+    if login_error:
+        result.not_testable = True
+        result.not_testable_reason = login_error
+        return result   # enumerate_smb() still merges the Tier-1 data
 
     # Shares
     if progress:

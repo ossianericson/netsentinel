@@ -20,6 +20,8 @@ from ui.tabs import _add_row
 from ui.tabs_helpers import format_scan_status, risk_to_label
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_worker_error, worker_error_text
 from ui.nav.labels import NavLabel as L
 from ui.scan_enrichment import ScanEnrichmentMixin
 
@@ -964,7 +966,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 self._bl_new_lbl.setText("✓  No new devices since last scan.")
                 _s.themed_ss(self._bl_new_lbl, "color:{GREEN}; font-size:11px;")
         except Exception as _exc:
-            self._bl_new_lbl.setText(f"Baseline check failed: {_exc}")
+            show_worker_error(self._bl_new_lbl, _exc, WE.BASELINE_CHECK)
 
     def _m1_feed_network_doc(self, data: dict) -> None:
         """Feed the latest scan devices + cert status into the Network Doc page."""
@@ -1380,7 +1382,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except AttributeError:
             pass  # network_map_page not yet initialised
         except Exception as _topo_exc:
-            self._set_status(f"Topology render error: {_topo_exc}")
+            # A QStatusBar message has no tooltip: the raw text goes to the app log.
+            self._set_status(worker_error_text(WE.TOPOLOGY_RENDER, _topo_exc))
+            record_worker_error(WE.TOPOLOGY_RENDER, _topo_exc)
 
     def _m1_reapply_search_and_suggestions(self) -> None:
         """Re-apply any active NL search filter, then recompute suggestion cards."""

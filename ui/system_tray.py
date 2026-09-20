@@ -76,6 +76,22 @@ def _health_dot_colour(state: str) -> "str | None":
     }.get(state)
 
 
+_STATE_RANK = {"unknown": 0, "green": 1, "amber": 2, "red": 3}
+
+#: App-health severity → the least-bad tray dot it can force (S4, owner decision
+#: 2026-09-17). High is amber, not red: red on this dot means the NETWORK is in trouble,
+#: and D1 keeps "NetSentinel can't see X" apart from that. Info never moves the dot.
+_APP_SEVERITY_STATE = {"Critical": "red", "High": "amber", "Warning": "amber"}
+
+
+def _effective_health_state(network_state: str, app_severity: str) -> str:
+    """The worse of the network health state and what an app-health condition implies."""
+    app_state = _APP_SEVERITY_STATE.get(app_severity, "unknown")
+    if _STATE_RANK.get(app_state, 0) > _STATE_RANK.get(network_state, 0):
+        return app_state
+    return network_state
+
+
 def _overlay_health_dot(base_icon: QIcon, state: str) -> QIcon:
     """
     Overlay a small coloured dot in the bottom-left of the tray icon to
@@ -132,6 +148,9 @@ class SystemTrayManager:
         self._grade: str = "?"
         self._health_state: str = "unknown"
         self._health_headline: str = ""
+        # Most severe non-Info app-health condition (S4) — see set_app_health().
+        self._app_severity: str = ""
+        self._app_headline: str = ""
         self._pending_click_callback: Optional[Callable[[], None]] = None
         self._qs = QSettings("NetSentinel", "NetSentinel")
         # True only after show_tray_icon() has run — see show_tray_icon() and
@@ -349,6 +368,22 @@ class SystemTrayManager:
         self._health_headline = headline
         self._refresh_icon()
 
+    def set_app_health(self, conditions) -> None:
+        """Fold active app-health conditions into the dot and tooltip (S4, D2).
+
+        ``conditions`` is ``AppHealth.active()`` — most severe first. Info conditions are
+        ignored here for the same reason they cannot open the Home strip on their own.
+        """
+        worst = [c for c in conditions if c.severity != "Info"]
+        self._app_severity = worst[0].severity if worst else ""
+        if not worst:
+            self._app_headline = ""
+        elif len(worst) == 1:
+            self._app_headline = worst[0].what
+        else:
+            self._app_headline = f"{worst[0].what} (+{len(worst) - 1} more)"
+        self._refresh_icon()
+
     def is_available(self) -> bool:
         return self._tray is not None
 
@@ -497,7 +532,7 @@ class SystemTrayManager:
         if self._tray is None or self._base_icon is None or not self._shown:
             return  # not shown yet — see show_tray_icon() docstring (COM reentrancy)
         icon = _build_badge_icon(self._base_icon, self._badge_count)
-        icon = _overlay_health_dot(icon, self._health_state)
+        icon = _overlay_health_dot(icon, _effective_health_state(self._health_state, self._app_severity))
         self._tray.setIcon(icon)
         parts = []
         if self._grade != "?":
@@ -509,6 +544,8 @@ class SystemTrayManager:
             parts.append(f"{self._badge_count} alert{'s' if self._badge_count != 1 else ''}")
         if self._health_state != "unknown" and self._health_headline:
             parts.append(self._health_headline[:50])
+        if self._app_headline:
+            parts.append(f"App: {self._app_headline[:60]}")
         # Plain text — see the native-tooltip note in setup() above.
         tip = f"NetSentinel — {' | '.join(parts)}" if parts else "NetSentinel — Network Guardian"
         self._tray.setToolTip(tip)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, QUrl, pyqtSlot
 from PyQt6.QtGui import QDesktopServices
@@ -28,6 +29,16 @@ try:
     from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
 except ImportError:
     _GUIDE_FEATURES: list = []
+
+log = logging.getLogger(__name__)
+
+#: S8 B12 — an acknowledgement is a write the user is watching for. When the store
+#: refuses one, the card must not clear: the alert is still outstanding, and a row that
+#: vanished here would simply return at the next 30 s refresh with no explanation.
+_ACK_FAILED_MSG = (
+    "Could not acknowledge that — the database did not accept the change. "
+    "The alert stays in the list; try again in a moment."
+)
 
 
 class _HomeDataMixin:
@@ -332,12 +343,31 @@ class _HomeDataMixin:
         label = "▶  Scan Network" if self._device_count == 0 else "▶  Rescan"
         self._btn_scan.setText(label)
 
+    # ── App-health conditions (error-surfacing S4.1) ──────────────────────────
+
+    def set_app_health(self, conditions) -> None:
+        """Show ``AppHealth.active()`` on the strip.
+
+        The ``getattr`` guard outlives the S10.2 flag removal on purpose: a partially
+        built page (a constructor that raised, a test double) must not turn a health
+        update into an AttributeError on top of whatever already went wrong.
+        """
+        strip = getattr(self, "_app_health_strip", None)
+        if strip is not None:
+            strip.set_conditions(conditions)
+
     # ── Monitoring pill status ────────────────────────────────────────────────
 
     def set_monitor_pills(
-        self, arp: bool, dhcp: bool, storm: bool, logger: bool
+        self, arp: bool, dhcp: bool, storm: bool, logger: bool,
+        failing: "dict | None" = None,
     ) -> None:
-        """Update monitoring pill badges. Called by dashboard on worker state changes."""
+        """Update monitoring pill badges. Called by dashboard on worker state changes.
+
+        ``failing`` (S4.2): pill name ("ARP", "DHCP", "Storm", "Logger") → the error its
+        monitor last reported, painted as ON-but-failing on all three of Home's pill
+        sets. Empty or None means nothing is failing.
+        """
         self._last_pill_states = (arp, dhcp, storm, logger)
         # Track logger start time for rich tooltip
         if logger and not getattr(self, "_logger_active_since", None):
@@ -345,13 +375,16 @@ class _HomeDataMixin:
         elif not logger:
             self._logger_active_since = None
 
+        failing = failing or {}
         _pill_map = [
-            (self._pill_arp,    arp,    "ARP Watch"),
-            (self._pill_dhcp,   dhcp,   "DHCP Watch"),
-            (self._pill_storm,  storm,  "Broadcast Storm"),
-            (self._pill_logger, logger, "Network Logger"),
+            (self._pill_arp,    arp,    "ARP Watch",       "ARP"),
+            (self._pill_dhcp,   dhcp,   "DHCP Watch",      "DHCP"),
+            (self._pill_storm,  storm,  "Broadcast Storm", "Storm"),
+            (self._pill_logger, logger, "Network Logger",  "Logger"),
         ]
-        for btn, active, label in _pill_map:
+        for btn, active, label, key in _pill_map:
+            if self._paint_failing_pill(btn, label, active, failing.get(key)):
+                continue
             if active:
                 btn.setText(f"●  {label}")
                 btn.setStyleSheet(
@@ -373,7 +406,9 @@ class _HomeDataMixin:
         self._monitoring_nudge.setVisible(all_off)
         if hasattr(self, "_btn_start_logger"):
             self._btn_start_logger.setVisible(all_off)
-        self._freshness_strip.update_freshness(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
+        self._freshness_strip.update_freshness(
+            arp=arp, dhcp=dhcp, storm=storm, logger=logger, failing=failing,
+        )
         # Enrich logger pill tooltip with "since X ago"
         if logger and getattr(self, "_logger_active_since", None):
             _since = self._logger_active_since
@@ -390,12 +425,14 @@ class _HomeDataMixin:
             self._freshness_strip.update_logger_tooltip(since_str=_since_str)
 
         _rec_map = [
-            (self._rec_pill_arp,    arp,    "ARP Watch"),
-            (self._rec_pill_dhcp,   dhcp,   "DHCP Watch"),
-            (self._rec_pill_storm,  storm,  "Broadcast Storm"),
-            (self._rec_pill_logger, logger, "Network Logger"),
+            (self._rec_pill_arp,    arp,    "ARP Watch",       "ARP"),
+            (self._rec_pill_dhcp,   dhcp,   "DHCP Watch",      "DHCP"),
+            (self._rec_pill_storm,  storm,  "Broadcast Storm", "Storm"),
+            (self._rec_pill_logger, logger, "Network Logger",  "Logger"),
         ]
-        for rbtn, active, rlabel in _rec_map:
+        for rbtn, active, rlabel, rkey in _rec_map:
+            if self._paint_failing_pill(rbtn, rlabel, active, failing.get(rkey)):
+                continue
             if active:
                 rbtn.setText(f"●  {rlabel}")
                 rbtn.setStyleSheet(
@@ -413,6 +450,36 @@ class _HomeDataMixin:
                     f"QPushButton:hover {{ border-color:{_s.ACCENT}; }}"
                     f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
                 )
+
+    def _paint_failing_pill(self, btn, label: str, active: bool, error: "str | None") -> bool:
+        """Paint a Home monitoring-card / recommendation pill ON-but-failing, or undo that.
+
+        The same RULE-SURF1 state as FreshnessStrip's (S4.2) — Home draws each monitor three
+        times, and a failing one must not stay green in any of them. Returns True when it
+        painted the failing state; otherwise restores the pill's own description tooltip
+        (captured the first time it is replaced) and lets the caller paint ON/OFF.
+        """
+        base_tips = getattr(self, "_pill_base_tips", None)
+        if base_tips is None:
+            base_tips = self._pill_base_tips = {}
+        if not (active and error is not None):
+            if btn in base_tips:
+                btn.setToolTip(base_tips.pop(btn))  # already safe_tooltip()-wrapped — no re-wrap
+            return False
+        base_tips.setdefault(btn, btn.toolTip())
+        btn.setText(f"{_s.STATUS_ICON_WARN}  {label}")
+        btn.setStyleSheet(
+            f"QPushButton {{ background:{_s.alpha(_s.AMBER, 0x22)}; color:{_s.AMBER}; font-size:10px;"
+            f" font-weight:bold; border:1px solid {_s.AMBER}; border-radius:11px;"
+            f" padding:1px 10px; }}"
+            f"QPushButton:hover {{ background:{_s.alpha(_s.AMBER, 0x44)}; color:{_s.AMBER}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
+        )
+        tip = f"{label} is ON, but its last run failed — click to open it."
+        if error:
+            tip += f"\n\nDetails: {error}"
+        btn.setToolTip(_s.safe_tooltip(tip))
+        return True
 
     # ── Action-needed card ────────────────────────────────────────────────────
 
@@ -543,22 +610,26 @@ class _HomeDataMixin:
         """
         if self._store is None:
             return
+        from ui.widgets.toast import ToastManager
         try:
             ids = [
                 int(a["id"]) for a in self._store.get_unacked_alerts()
                 if a.get("id") is not None
             ]
         except Exception:
+            log.debug("get_unacked_alerts failed during ack-all", exc_info=True)
+            ToastManager.show(_ACK_FAILED_MSG, "warning")
             return
         if not ids:
             return
         try:
             self._store.acknowledge_alerts(ids)
         except Exception:
-            return  # non-fatal — nothing acked, card is left as-is
+            log.debug("acknowledge_alerts failed", exc_info=True)
+            ToastManager.show(_ACK_FAILED_MSG, "warning")
+            return
         self.set_pending_alert_rows([])
         self.alerts_acknowledged.emit()
-        from ui.widgets.toast import ToastManager
         ToastManager.show(
             f"{len(ids)} alert{'s' if len(ids) != 1 else ''} acknowledged",
             "action",
@@ -572,7 +643,16 @@ class _HomeDataMixin:
         try:
             self._store.unacknowledge_alerts(alert_ids)
         except Exception:
-            return  # non-fatal — the ack simply stands
+            # The toast said "Undo", so silence here would report a reversal that did
+            # not happen — the alerts stay acknowledged (S8 B12).
+            log.debug("unacknowledge_alerts failed", exc_info=True)
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(
+                "Could not undo — the database did not accept the change, so those "
+                "alerts stay acknowledged. You can find them under Notifications.",
+                "warning",
+            )
+            return
         try:
             self.set_pending_alert_rows(self._store.get_unacked_alerts())
         except Exception:
@@ -584,7 +664,12 @@ class _HomeDataMixin:
             try:
                 self._store.acknowledge_alert(int(alert_id))
             except Exception:
-                pass  # non-fatal
+                # Hiding the row here would assert a success the store refused, and the
+                # row would return at the next 30 s refresh unexplained (S8 B12).
+                log.debug("acknowledge_alert failed", exc_info=True)
+                from ui.widgets.toast import ToastManager
+                ToastManager.show(_ACK_FAILED_MSG, "warning")
+                return
         row_widget.setVisible(False)
         row_widget.deleteLater()
         remaining = sum(

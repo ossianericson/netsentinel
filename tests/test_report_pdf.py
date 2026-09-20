@@ -105,6 +105,71 @@ def test_save_pdf_raises_when_no_backend(tmp_path):
                     rp.save_pdf_report(output)
 
 
+def test_no_backend_is_its_own_type_so_the_ui_never_reads_the_message(tmp_path, monkeypatch):
+    """S6 (RULE-A2): "no PDF engine" and "weasyprint failed" were both a bare RuntimeError, so the
+    Reports page could only show str(exc). A type lets it say what to install without the text."""
+    import modules.report_pdf as rp
+
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "none"))
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "none"))
+    monkeypatch.setenv("LocalAppData", str(tmp_path / "none"))
+    with patch("modules.report_pdf.generate_html", return_value="<html></html>"):
+        with patch.dict("sys.modules", {"weasyprint": None}):
+            with patch("subprocess.run", side_effect=FileNotFoundError):
+                with pytest.raises(rp.NoPdfBackendError) as info:
+                    rp.save_pdf_report(tmp_path / "report.pdf")
+
+    assert isinstance(info.value, RuntimeError), "existing `except RuntimeError` callers must still catch it"
+
+
+@pytest.mark.parametrize("where", ["missing_folder", "a_directory"])
+def test_a_location_that_cannot_take_the_file_raises_the_real_os_error(tmp_path, monkeypatch, where):
+    """Measured (S6), Edge installed: headless Edge exits non-zero with no reason for a missing
+    folder or Program Files, so both fell through to "no PDF backend — install Edge". The real
+    OSError must surface before any backend runs, so the page can say what is actually wrong."""
+    import modules.report_pdf as rp
+
+    target = tmp_path / "gone" / "report.pdf" if where == "missing_folder" else tmp_path
+    launched: list = []
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: launched.append(a))
+    with patch("modules.report_pdf.generate_html", return_value="<html></html>"):
+        with patch.dict("sys.modules", {"weasyprint": None}):
+            with pytest.raises(OSError) as info:
+                rp.save_pdf_report(target)
+
+    assert not isinstance(info.value, rp.NoPdfBackendError)
+    assert launched == [], "a browser was launched for a location that cannot take the file"
+
+
+def test_the_location_check_leaves_no_empty_file_behind(tmp_path, monkeypatch):
+    import modules.report_pdf as rp
+
+    target = tmp_path / "report.pdf"
+    monkeypatch.setattr(rp.subprocess, "run", MagicMock(side_effect=FileNotFoundError))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "none"))
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "none"))
+    monkeypatch.setenv("LocalAppData", str(tmp_path / "none"))
+    with patch("modules.report_pdf.generate_html", return_value="<html></html>"):
+        with patch.dict("sys.modules", {"weasyprint": None}):
+            with pytest.raises(rp.NoPdfBackendError):
+                rp.save_pdf_report(target)
+
+    assert not target.exists(), "a failed export left a 0-byte PDF"
+
+
+def test_a_failing_weasyprint_is_not_reported_as_no_backend(tmp_path):
+    import modules.report_pdf as rp
+
+    broken = MagicMock()
+    broken.HTML.return_value.write_pdf.side_effect = ValueError("trasig CSS")
+    with patch("modules.report_pdf.generate_html", return_value="<html></html>"):
+        with patch.dict("sys.modules", {"weasyprint": broken}):
+            with pytest.raises(RuntimeError) as info:
+                rp.save_pdf_report(tmp_path / "report.pdf")
+
+    assert not isinstance(info.value, rp.NoPdfBackendError)
+
+
 # ── The file: URL handed to the headless browser ──────────────────────────────
 
 def _drive_browser_backend(rp, monkeypatch, tmp_path, temp_dir):

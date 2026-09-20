@@ -624,9 +624,47 @@ class TestIdentityChurn:
         assert "no-op" in f.detail
 
 
+# ── audit_app_health_ctas (error-surfacing S4.4) ──────────────────────────────
+
+class TestAppHealthCtas:
+    """An app-health condition's button routes through ``_nav_rail_go_to`` — a label
+    that names no page is a button that silently does nothing (RULE-NAV3)."""
+
+    @staticmethod
+    def _spec(key, cta_label):
+        from modules.app_health import ConditionSpec
+
+        return ConditionSpec(key=key, source="s", severity="Warning", what="w", why="y",
+                             next_step="n", cta_label=cta_label)
+
+    def test_fails_when_a_condition_cta_is_not_a_known_label(self):
+        from modules.scan_guidance_audit import audit_app_health_ctas
+
+        f = _finding(audit_app_health_ctas(
+            [self._spec("monitor:x", "Availability History"), self._spec("listener:y", "Syslog")],
+            known_labels=frozenset({"Availability History", "Syslog Viewer"}),
+        ), "APP_HEALTH_CTA_RESOLVE")
+        assert f.ok is False
+        assert "listener:y" in f.detail and "Syslog" in f.detail
+        assert "monitor:x" not in f.detail
+
+    def test_a_condition_without_a_cta_is_not_a_violation(self):
+        """No button is drawn for it, so there is nothing to route."""
+        from modules.scan_guidance_audit import audit_app_health_ctas
+
+        f = _finding(audit_app_health_ctas([self._spec("monitor:health", "")], frozenset()),
+                     "APP_HEALTH_CTA_RESOLVE")
+        assert f.ok is True
+
+    def test_real_catalogue_resolves(self):
+        from modules.scan_guidance_audit import run_all
+
+        assert _finding(run_all(REPO_ROOT), "APP_HEALTH_CTA_RESOLVE").ok is True
+
+
 # ── run_all / CLI wiring ───────────────────────────────────────────────────────
 
-def test_run_all_returns_all_eight_codes():
+def test_run_all_returns_all_nine_codes():
     from modules.scan_guidance_audit import run_all
 
     findings = run_all(REPO_ROOT)
@@ -634,7 +672,7 @@ def test_run_all_returns_all_eight_codes():
     assert codes == {
         "CTA_LABELS_RESOLVE", "CTA_TABLE_PARITY", "AUDIT_STATE_WIRED",
         "AUDIT_CARD_PARITY", "AUDIT_QUEUE_TERMINATES", "GUIDANCE_FITS",
-        "GRADE_INPUTS_GATED", "IDENTITY_CHURN",
+        "GRADE_INPUTS_GATED", "IDENTITY_CHURN", "APP_HEALTH_CTA_RESOLVE",
     }
 
 

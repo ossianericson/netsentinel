@@ -13,6 +13,10 @@ from pathlib import Path
 
 from PyQt6.QtCore import QSettings, pyqtSlot
 
+from ui.nav.labels import NavLabel as _L
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_worker_error, worker_error_text
+
 # Part 1/C3 — scan watchdog budget. A fixed 120s timeout was sized for a home
 # /24 and fired a false "took too long" on a large corporate ARP table while
 # the scan was still genuinely working. Base + a per-device allowance (derived
@@ -307,17 +311,23 @@ class _PluginPageMixin:
             self._launch_modules_impl()
         except Exception as exc:
             self._scan_watchdog.stop()
-            self._set_status(f"Scan startup failed: {exc}")
+            # As _on_prescan_error: the one-line status bar gets what failed, the verdict banner
+            # the full message, the raw text the app log.
+            self._set_status(f"{WE.SCAN_STARTUP.what}.")
             self._set_scanning(False)
-            self._verdict.update(f"Scan failed to start: {exc}", "HIGH")
+            self._verdict.update(worker_error_text(WE.SCAN_STARTUP, exc), "HIGH")
+            record_worker_error(WE.SCAN_STARTUP, exc)
 
     @pyqtSlot(str)
     def _on_prescan_error(self, msg: str):
         """Pre-scan failed (G5) — clear the scanning state instead of hanging forever."""
         self._scan_watchdog.stop()
         self._set_scanning(False)
-        self._set_status(f"Pre-scan failed: {msg}")
-        self._verdict.update(f"Pre-scan failed: {msg}", "UNKNOWN")
+        # The status bar is one line with no per-message tooltip: the full message goes on the
+        # verdict banner, the raw text to the app log.
+        self._set_status(f"{WE.PRESCAN.what}.")
+        self._verdict.update(worker_error_text(WE.PRESCAN), "UNKNOWN")
+        record_worker_error(WE.PRESCAN, msg)
 
     def _known_device_count_hint(self) -> int:
         """Best-known device count from the status bar's last "n/total" message
@@ -418,7 +428,12 @@ class _PluginPageMixin:
             self._set_status(m), self._m1_status.setText(m),
             hasattr(self, "_home_page") and self._home_page.set_scan_progress(m),
         ))
-        w1.error.connect(lambda e: self._m1_status.setText(f"Error: {e}"))
+        w1.error.connect(lambda e: (
+            show_worker_error(self._m1_status, e, WE.DEVICES),
+            # RULE-SURF1: the page label alone left the registry showing the last
+            # successful sweep as "fresh".
+            self._nav_set_scan_state(_L.DEVICES, "error", error=e),
+        ))
         w1.finished.connect(self._on_worker_done)
         if hasattr(self, "_home_page"):
             w1.device_found.connect(self._home_page.on_device_found)
@@ -436,7 +451,7 @@ class _PluginPageMixin:
             w2.bpdu_found.connect(self._on_bpdu_found)
             w2.result.connect(self._on_m2_result)
             w2.status.connect(lambda m: (self._set_status(m), self._m2_status.setText(m)))
-            w2.error.connect(lambda e: self._m2_status.setText(f"⚠ {e}"))
+            w2.error.connect(lambda e: show_worker_error(self._m2_status, e, WE.STP))
             w2.finished.connect(self._on_worker_done)
             self._workers.append(w2)
             self._active_count += 1
@@ -450,7 +465,7 @@ class _PluginPageMixin:
             )
             w3.result.connect(self._on_m3_result)
             w3.status.connect(lambda m: (self._set_status(m), self._m3_status.setText(m)))
-            w3.error.connect(lambda e: self._m3_status.setText(f"⚠ {e}"))
+            w3.error.connect(lambda e: show_worker_error(self._m3_status, e, WE.BROADCAST_STORM))
             w3.finished.connect(self._on_worker_done)
             self._workers.append(w3)
             self._active_count += 1
@@ -460,7 +475,10 @@ class _PluginPageMixin:
             w4 = Module4Worker()
             w4.result.connect(self._on_m4_result)
             w4.status.connect(lambda m: (self._set_status(m), self._m4_status.setText(m)))
-            w4.error.connect(lambda e: self._m4_status.setText(f"⚠ {e}"))
+            w4.error.connect(lambda e: (
+                show_worker_error(self._m4_status, e, WE.WIFI_NETWORKS),
+                self._nav_set_scan_state(_L.WIFI_NETWORKS, "error", error=e),
+            ))
             w4.finished.connect(self._on_worker_done)
             self._workers.append(w4)
             self._active_count += 1
@@ -472,7 +490,7 @@ class _PluginPageMixin:
             w5.dns_point.connect(self._on_dns_point)
             w5.result.connect(self._on_m5_result)
             w5.status.connect(lambda m: (self._set_status(m), self._m5_status.setText(m)))
-            w5.error.connect(lambda e: self._m5_status.setText(f"⚠ {e}"))
+            w5.error.connect(lambda e: show_worker_error(self._m5_status, e, WE.DNS_PING))
             w5.finished.connect(self._on_worker_done)
             self._workers.append(w5)
             self._active_count += 1

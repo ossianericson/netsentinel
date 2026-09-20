@@ -894,6 +894,13 @@ class _NavBuilderMixin:
         # C-1: push updated registry to Security Overview scan status card
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.update_scan_registry(dict(registry))
+        # S4.2: a monitor that just failed (or recovered) repaints its Home pill now,
+        # not whenever the next worker start/finish happens to push the pills.
+        # The `_app_health_bridge is not None` half of this test was the RULE-EXP1 flag's
+        # proxy and came off in S10.2; _repaint_pill_failures() no-ops on its own if the
+        # Home page has not pushed a pill state yet.
+        if label in getattr(self, "_PILL_REGISTRY_LABELS", {}).values():
+            self._repaint_pill_failures()
 
     def _restore_scan_registry(self) -> None:
         """C-1: Re-apply _scan_registry dots/badges from the QSettings snapshot.

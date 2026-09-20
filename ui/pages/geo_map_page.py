@@ -115,6 +115,8 @@ from ui.styles import (
     MAP_LAND_BG, MAP_LAND_BORDER,
 )
 from ui.widgets.device_detail_pane import _wire_close_icon
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 
 
 # ── Workers ───────────────────────────────────────────────────────────────────
@@ -1123,10 +1125,7 @@ class GeoMapPage(QWidget):
     @pyqtSlot(str)
     def _on_dl_error(self, msg: str) -> None:
         self._btn_dl.setEnabled(True)
-        self._dl_status.setText(
-            f"GeoLite2 database download failed — {msg}. "
-            "Check your internet connection and try again."
-        )
+        show_worker_error(self._dl_status, msg, WE.GEOLITE_DOWNLOAD)
         _s.themed_ss(self._dl_status, "font-size:9px; color:{RED};")
 
     # ── Table ─────────────────────────────────────────────────────────────────

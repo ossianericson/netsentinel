@@ -4,6 +4,47 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.4.0
+
+**Added**
+- App-health surface — `modules/app_health.py` and `modules/app_health_catalogue.py` hold a registry of "NetSentinel can't see X" conditions: a monitor whose checks keep failing, a listener that cannot bind its port, an alert channel that stopped delivering, a credential store refusing writes. A condition persists while the fault does and clears on the first success, so a surface shows the fault rather than one retry
+- `ui/widgets/app_health_strip.py` and `ui/app_health_bridge.py` — the strip under the Home freshness row and the tray dot that draw those conditions. Each row is a severity dot, what failed, why, what to do next, and a button that opens the page that fixes it; the raw error stays in the tooltip. `Info` conditions never open the strip on their own
+- `modules/app_logging.py` — one formatted `netsentinel_app.log` with timestamp, level and logger, configured at all three entry points. Nothing in the tree configured root logging before, so every `log.warning` fell through to `logging.lastResort`: the bare message, no timestamp, into `netsentinel_stderr.log`, and `debug`/`info` were dropped entirely
+- `modules/error_text.py`, `ui/error_display.py` and `ui/worker_error_catalogue.py` — the shared what/why/next machinery behind every user-visible failure (RULE-A2), with the raw text one hover away
+- `modules/version.py` — an importable version for `modules/` and `svc.py`, kept in step by `bump_version.py`
+- `packaging/version_info.py` — a VERSIONINFO resource for all three binaries, read from `app.py`'s canonical version at build time
+- `scripts/winget_pr_watch.py` and a winget PR watch workflow — a submitted PR that fails validation is assigned back to us and auto-closed after 8 idle days, so silence is not neutral (RULE-W3)
+- `tools/check_error_surfacing.py` — shrink-only ratchets for silent broad handlers, undefined toast kinds, scan labels with no error path, and raw exception text in user-visible sinks
+
+**Changed**
+- A failed scan now shows a failure. Every scan label that can go running or fresh can also go error, so a failed run no longer keeps the previous success on the flyout dot and in the Scan Status card
+- Worker and export failures say what failed, why it likely failed, and what to try next, instead of showing a raw — and often OS-localized — exception string as the message
+- A failed notification delivery is now logged, rate-limited per channel. It previously left only an in-memory, capped delivery-log row, so a broken SMTP password wrote nothing to disk
+- The three shipped binaries carry version metadata, and UPX packing is off in all specs. Neither was reaching the build, but an unsigned PE with no VERSIONINFO has no reputation signal at all (RULE-W4)
+- The app-health surface ships on. It was introduced behind `experimental/app_health_v1` and the flag was retired once it had been verified live — where it found a failing report scheduler on its own
+- `tplinkrouterc6u` updated to `~=5.33` (the only dependency change that reaches the shipped binary, via `modules/deco_client.py`)
+
+**Fixed**
+- Service Diagnostics turned its flyout dot **green** on a failed diagnosis: the error slot emitted `scan_complete`, which the dashboard maps to "fresh", captioned with the previous run's verdict
+- A scheduled speed test that failed while the page was hidden recorded nothing at all — no status, no history row, no registry entry
+- ARP and DHCP watch answered a failed probe by clearing their flyout dot, and an empty dot is the never-run colour
+- Network Logger sat on "running" for a logger that had already died
+- Four `ToastManager.show_toast` call sites named a method that never existed, and each sat inside the `try` that guarded the work — so a **successful** Export All Data, Copy summary and ISP complaint copy each showed a "failed" dialog carrying the `AttributeError`, and a successful Network Map PNG export showed nothing
+- IoT Behaviour wrote Qt widgets directly from a background thread in eight places, and an exception escaping that thread left "Learning…" on screen forever
+- An IoT anomaly flood froze the window: `NEW_PORT` fired for every packet to an unbaselined port, so a device answering clients produced one alert per client ephemeral port, and the drain emptied the whole queue in a single tick. Both crash logs stayed byte-identical throughout, so the hang read as a crash to the user and as nothing at all to every log (RULE-WIN28)
+- Every fixed-width spin box cut its own value — the Port Scan rate read "500 p" — because the global `QLineEdit` padding also reaches a spin box's internal line edit
+- Error toasts cut off their own next step: the action button squeezed the message to 94 px, so the *what to do* half was exactly the part that vanished (RULE-UI2)
+- Scheduled reports and Copy summary failed on any real network, on an uptime window that could be `None`
+- Detection modules reported probes that never ran as clean: an unreachable AXFR server read as "no zone data", an ARP sweep or TCP SYN that could not run vanished from a "Found N device(s)" verdict, and an SMB host that could not be tested was painted green
+- The Network Grade read availability that never reached it, so a device down half the day still scored green; the weekly digest's Grade tile called a method that never existed, always reported 0 new devices, and collapsed its whole uptime table if one device fell outside the 7-day window
+- A failed alert acknowledgement hid and destroyed its row exactly like a successful one
+- One page measured its storm level twice in two different vocabularies, printing internal risk words like `Storm` and `Clean` as user-facing severity labels (RULE-A3)
+- The service, CLI and headless report paths printed raw exception text as the only thing their user sees — including a Windows error verbatim in the system locale
+- `netsentinel_crash.log` was held as a buffered file object that was never closed; it is now a raw fd, which is what `faulthandler` wants anyway (CodeQL `py/file-not-closed`)
+- Documentation line and page counts had drifted: the README headline, the `dashboard.py` size, and the `modules/` file count
+
+---
+
 ### v2.3.0
 
 **Added**

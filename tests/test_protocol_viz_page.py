@@ -332,7 +332,11 @@ def test_live_error_stops_and_shows_translated_message(live_page):
     live_page._start_live()
     live_page._on_live_error("Failed to start live ARP capture: boom")
     assert not live_page._is_live()
-    assert "boom" in live_page._canvas_subtitle.text()
+    # RULE-A2 (S6.3a): what/why/next on the subtitle, set AFTER the scene rebuild; the raw text is detail.
+    from ui import worker_error_catalogue as WE
+    from ui.error_display import worker_error_text
+    assert live_page._canvas_subtitle.text() == worker_error_text(WE.LIVE_PROTOCOL)
+    assert "boom" not in live_page._canvas_subtitle.text()
 
 
 def test_live_progress_updates_subtitle(live_page):

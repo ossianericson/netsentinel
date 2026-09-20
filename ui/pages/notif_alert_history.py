@@ -34,6 +34,8 @@ from ui.widgets.device_detail_pane import _wire_close_icon
 from ui.device_labels import resolve_alert_message
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import export_failed
 
 
 # ── Alert CTA routing ────────────────────────────────────────────────────────
@@ -903,9 +905,10 @@ class _NotifAlertHistoryMixin:
                         (tbl.item(r, c).text() if tbl.item(r, c) else "")
                         for c in range(tbl.columnCount())
                     ])
-            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
         except Exception as exc:
-            ToastManager.show(f"Export failed: {exc}", "error")
+            export_failed(exc, WE.EXPORT_ALERT_HISTORY, retry=self._export_alert_history_csv)
+        else:
+            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
 
     def _on_hist_selection_changed(self) -> None:
         n_rows = len(self._selected_rows())

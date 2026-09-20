@@ -43,6 +43,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_worker_error, worker_error_text
 from ui.widgets.device_detail_pane import _make_close_icon
 from ui.styles import (
     CARD_RADIUS,
@@ -494,6 +496,10 @@ class SpeedTestPage(QWidget):
 
     #: Emitted when a speed test completes successfully. Carries the SpeedTestResult.
     test_completed = pyqtSignal(object)
+    #: Emitted when a speed test fails. RULE-SURF1 — a scheduled test that fails
+    #: while this page is hidden must still reach the scan registry, or the dot
+    #: keeps showing the last success.
+    test_failed = pyqtSignal(str)
 
     modem_pause_requested  = pyqtSignal()  # pause ZteWorker before capturing signal
     modem_resume_requested = pyqtSignal()  # restart ZteWorker after test finishes
@@ -1199,8 +1205,10 @@ class SpeedTestPage(QWidget):
     @pyqtSlot(str)
     def _on_fetch_error(self, msg: str) -> None:
         self._server_list.clear()
-        err_item = QListWidgetItem(f"⚠  {msg}")
+        err_item = QListWidgetItem(worker_error_text(WE.SPEED_SERVER_LIST))
+        err_item.setToolTip(_s.safe_tooltip(msg))
         err_item.setForeground(QColor(_s.RED))
+        record_worker_error(WE.SPEED_SERVER_LIST, msg)
         self._server_list.addItem(err_item)
         self._server_hint.setText("Could not fetch server list — auto-best will be used")
 
@@ -1532,12 +1540,15 @@ class SpeedTestPage(QWidget):
         self._anim_timer.stop()
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶   Run Speed Test")
-        if not self.isVisible():
-            return
+        # RULE-SURF1: no isVisible() guard here. A scheduled test runs whether or
+        # not this page is on screen, and returning early left the failure with no
+        # history row, no status and no scan-registry entry — so the flyout dot
+        # kept the previous success. None of these calls need the page visible.
         self._gauge.set_value(0.0, "idle")
         self._gauge.set_status("ERROR")
-        self._set_status(f"⚠  {msg}")
+        show_worker_error(self._status_lbl, msg, WE.SPEED_TEST)
         self._add_history_row(None, error=msg)
+        self.test_failed.emit(msg)
 
     # ── Animation ─────────────────────────────────────────────────────────────
 

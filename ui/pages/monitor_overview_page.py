@@ -520,12 +520,24 @@ class MonitorOverviewPage(QWidget):
         )
 
     def set_storm_status(self, level: str) -> None:
+        """S9.1 — the headline is plain English, the subtitle is the shared translation.
+
+        ``level`` is an internal risk level (``STORM``/``WARNING``/``CLEAN``), and those
+        words never reach a user as a label (RULE-A3; architecture reference, "Risk levels
+        — two separate systems"). This tile used to write them verbatim — "Warn" for
+        WARNING — while the Broadcast Storm page's own status line rendered
+        ``risk_to_label()`` for the same measurement. Both surfaces now read the same.
+        """
+        from ui.tabs_helpers import risk_to_label
+
         if level == "STORM":
-            self._tile_storm.update("Storm", "Flooding detected",  _s.RED)
+            self._tile_storm.update("Flooding", risk_to_label(level), _s.RED)
         elif level == "WARNING":
-            self._tile_storm.update("Warn",  "Elevated broadcast", _s.AMBER)
+            self._tile_storm.update("Elevated", risk_to_label(level), _s.AMBER)
         else:
-            self._tile_storm.update("Clean", "No storm",           _s.GREEN)
+            # Explicitly CLEAN, not risk_to_label(level): this branch is the catch-all, and
+            # risk_to_label() returns an unrecognised input unchanged — which is the leak.
+            self._tile_storm.update("Normal",   risk_to_label("CLEAN"), _s.GREEN)
         self._tile_storm.set_active(level in ("STORM", "WARNING"))
 
     def set_iot_anomaly_count(self, count: int) -> None:

@@ -126,10 +126,10 @@ def build_digest_html(store: "MetricStore") -> str:
 
 def _grade_kpi(store: "MetricStore") -> str:
     try:
-        row = store.get_grade_result()
+        row = store.query_last_grade()
         if row:
             grade = row.get("grade", "—")
-            score = row.get("score", 0)
+            score = row.get("score") or 0
             color = "green" if score >= 80 else ("amber" if score >= 60 else "red")
             return (
                 f'<div class="kpi {color}">'
@@ -159,8 +159,7 @@ def _alert_kpi(store: "MetricStore") -> str:
 
 def _new_device_kpi(store: "MetricStore") -> str:
     try:
-        events = store.query_device_events(hours=168)
-        joins  = sum(1 for e in events if e.event_type in ("join", "new"))
+        joins  = len(store.query_device_events(hours=168, event_types=["JOINED"]))
         color  = "amber" if joins > 0 else "green"
         return (
             f'<div class="kpi {color}">'
@@ -209,8 +208,7 @@ def _top_alerts_table(store: "MetricStore") -> str:
 
 def _new_devices_table(store: "MetricStore") -> str:
     try:
-        events = store.query_device_events(hours=168)
-        joins  = [e for e in events if e.event_type in ("join", "new")]
+        joins = store.query_device_events(hours=168, event_types=["JOINED"])
         if not joins:
             return "<p style='color:#9BA8B4;font-size:12px'>No new devices joined this week.</p>"
         rows = ""
@@ -289,12 +287,22 @@ def _uptime_table(store: "MetricStore") -> str:
             return "<p style='color:#9BA8B4;font-size:12px'>No uptime data recorded yet.</p>"
         tbl_rows = ""
         for r in rows[:10]:
-            pct = r.get("168.0", r.get("24.0", 100.0))
-            cls = "up" if pct >= 99 else ("warn" if pct >= 95 else "down")
+            # A window key is present but None for a device with no samples in it, so
+            # `.get(key, default)` does not fall back — it returns the None. Reading a
+            # missing measurement as 100 % would be a fabrication, and comparing it
+            # raised, which collapsed the whole table into "unavailable" (S8 B11).
+            pct = r.get("168.0")
+            if pct is None:
+                pct = r.get("24.0")
+            if pct is None:
+                cls, cell = "", "—"
+            else:
+                cls = "up" if pct >= 99 else ("warn" if pct >= 95 else "down")
+                cell = f"{pct:.1f}%"
             tbl_rows += (
                 f"<tr><td>{html.escape(r['ip'])}</td>"
                 f"<td>{html.escape(r.get('hostname') or '—')}</td>"
-                f'<td class="{cls}">{pct:.1f}%</td></tr>'
+                f'<td class="{cls}">{cell}</td></tr>'
             )
         return (
             "<table><thead><tr><th>IP</th><th>Hostname</th><th>7-Day Uptime</th></tr></thead>"

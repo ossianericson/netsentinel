@@ -18,6 +18,7 @@ display name and the source used.
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import platform
 import re
 import socket
@@ -28,6 +29,8 @@ from typing import TYPE_CHECKING
 
 from modules.device_classifier import is_randomized_mac
 from modules.mac_registry import lookup as mac_lookup
+
+_log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from modules.adaptive_timing import TimingProfile
@@ -87,6 +90,7 @@ def _rdns(ip: str, timeout: float = 1.0, _retry: bool = True) -> str:
             return _rdns(ip, timeout, _retry=False)
         return ""
     except Exception:
+        _log.debug("reverse DNS for %s failed", ip, exc_info=True)
         return ""  # genuine negative answer (NXDOMAIN etc.) — no retry
     finally:
         ex.shutdown(wait=False)  # non-fatal — abandoned call is bounded by the OS resolver
@@ -185,6 +189,7 @@ def _netbios(ip: str, timeout: float = 3.0) -> str:
             data, _ = sock.recvfrom(1024)
         return _parse_nbstat_response(data)
     except Exception:
+        _log.debug("NetBIOS name query to %s failed", ip, exc_info=True)
         return ""  # non-fatal — host may not run NetBIOS, or the query timed out
 
 
@@ -229,7 +234,7 @@ def _mdns_name(ip: str, timeout: float = 1.5) -> str:
             if "." in s or len(s) > 3:
                 return s
     except Exception:
-        pass  # non-fatal
+        _log.debug("mDNS reverse lookup for %s failed", ip, exc_info=True)  # non-fatal
     return ""
 
 
@@ -289,7 +294,7 @@ def _snmp_sysname(ip: str, community: str = "public") -> str:
             if val and len(val) > 1:
                 return val
     except Exception:
-        pass  # non-fatal
+        _log.debug("SNMP sysName query to %s failed", ip, exc_info=True)  # non-fatal
     return ""
 
 
@@ -301,6 +306,7 @@ def _dhcp_option12_name(mac: str) -> str:
         from modules.dhcp_fingerprint import get_option12_hostname
         return get_option12_hostname(mac)
     except Exception:
+        _log.debug("DHCP option 12 lookup failed", exc_info=True)
         return ""  # non-fatal
 
 
@@ -336,7 +342,7 @@ def _dhcp_lease_name(ip: str) -> str:
                     if m:
                         candidates.append(m.group(1))
         except Exception:
-            pass  # non-fatal
+            _log.debug("DHCP lease file %s could not be read", path, exc_info=True)  # non-fatal
     return candidates[0] if candidates else ""
 
 
@@ -520,7 +526,7 @@ def resolve_batch(
                 try:
                     on_result(ip, name)
                 except Exception:
-                    pass  # non-fatal — a broken caller callback must not abort the batch
+                    _log.debug("resolve_batch result callback raised", exc_info=True)  # non-fatal — a broken caller callback must not abort the batch
 
             if progress_cb:
                 with _lock:

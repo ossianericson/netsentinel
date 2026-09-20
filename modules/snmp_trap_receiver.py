@@ -14,7 +14,9 @@ Implements a minimal BER/ASN.1 decoder sufficient to extract:
   • Timestamp
 
 Port 162 requires administrator/root on most OSes.  When not elevated the
-receiver falls back to a random high port and records that in `listen_port`.
+receiver falls back to `FALLBACK_PORT` (16200) and records the bound port in `listen_port`;
+if that is taken too, `open()` raises `OSError` (unlike the syslog receiver, there is no
+random-port last resort).
 
 Architecture rules:
   • Pure Python — zero PyQt imports (ARCH RULE 3)

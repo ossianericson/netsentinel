@@ -82,5 +82,9 @@ class TestDnsBenchmarkResult:
     def test_error_updates_status_and_reenables_button(self, host):
         host._dns_bench_btn.setEnabled(False)
         host._on_dns_benchmark_error("network unreachable")
-        assert "network unreachable" in host._dns_bench_status.text()
+        # RULE-A2 (S6.3a): the label says what/why/next; the raw text is its tooltip, not its text.
+        from ui import worker_error_catalogue as WE
+        from ui.error_display import worker_error_text
+        assert host._dns_bench_status.text() == worker_error_text(WE.DNS_BENCHMARK)
+        assert "network unreachable" not in host._dns_bench_status.text()
         assert host._dns_bench_btn.isEnabled()

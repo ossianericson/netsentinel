@@ -33,6 +33,12 @@ from ui import styles as _s
 _MONO = "Consolas, Courier New, monospace"
 
 
+_INVALID_INPUT = (
+    "Not a valid IPv4 network. Enter an address with a prefix or mask, "
+    "for example 192.168.1.10/24 or 192.168.1.10/255.255.255.0."
+)
+
+
 class IpCalculatorPage(QWidget):
     """Self-contained IP/subnet calculator with educational reference panels."""
 
@@ -191,6 +197,7 @@ class IpCalculatorPage(QWidget):
     def _calculate(self):
         raw = self._ip_input.text().strip()
         self._error_lbl.setVisible(False)
+        self._error_lbl.setToolTip("")
         self._results_widget.setVisible(False)
 
         try:
@@ -204,7 +211,10 @@ class IpCalculatorPage(QWidget):
             net = ipaddress.IPv4Network(raw, strict=False)
             host_ip = ipaddress.IPv4Address(raw.split("/")[0])
         except Exception as e:
-            self._error_lbl.setText(f"Invalid input: {e}")
+            # The user's typing, not a fault: nothing is logged. The stdlib's reason (which octet,
+            # which bit) stays one hover away (RULE-A2).
+            self._error_lbl.setText(_INVALID_INPUT)
+            self._error_lbl.setToolTip(_s.safe_tooltip(str(e)))
             self._error_lbl.setVisible(True)
             return
 

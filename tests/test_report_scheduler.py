@@ -120,6 +120,28 @@ class TestGenerateStatusReport:
         html = generate_status_report(store)
         assert "JOINED" in html
 
+    def test_device_silent_for_a_day_does_not_break_the_report(self, store):
+        """A device seen 3 days ago has no samples in the 24 h window: query_uptime_table() gives
+        that window as None. min() over it raised TypeError, so every scheduled report and
+        Reports -> Copy summary failed on any network where one device went quiet (live,
+        2026-09-18: 5 of 26 monitored devices)."""
+        three_days_ago = int(time.time()) - 3 * 86400
+        store.record_device_state("10.0.0.9", mac=None, hostname="old-tv", state="UP",
+                                  ts=three_days_ago)
+        html = generate_status_report(store)
+        row = next(tr for tr in html.split("<tr>") if "old-tv" in tr)
+        assert "—" in row, f"the empty 24 h window must read as no data, not a number: {row!r}"
+
+    def test_device_with_no_samples_in_any_window_reads_as_no_data(self, store, monkeypatch):
+        """Unreachable with today's windows (the 30 d window always has the row's samples), but a
+        caller passing other windows gets all-None rows: that is no data, not a crash."""
+        monkeypatch.setattr(store, "query_uptime_table", lambda: [
+            {"ip": "10.0.0.7", "hostname": "ghost", "24.0": None, "168.0": None, "720.0": None},
+        ])
+        html = generate_status_report(store)
+        row = next(tr for tr in html.split("<tr>") if "ghost" in tr)
+        assert row.count("<td>—</td>") == 3, row
+
     def test_kpi_total_devices_in_html(self, store):
         store.record_device_state("10.0.0.1", mac=None, hostname=None, state="UP")
         store.record_device_state("10.0.0.2", mac=None, hostname=None, state="UP")

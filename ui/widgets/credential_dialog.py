@@ -20,6 +20,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.hub_card import _PluginConnectionTester, _instance_id
+from ui.widgets.hub_helpers import plugin_error_text
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 from ui import styles as _s
 from ui.dialog_utils import run_dialog
 
@@ -167,7 +170,8 @@ def show_credential_dialog(
         _tester.append(tester)
 
         def _on_success(result: dict) -> None:
-            _set_status("✓  Connected successfully — adding integration.", _s.GREEN)
+            _set_status(f"{_s.STATUS_ICON_OK}  Connected successfully — adding integration.",
+                        _s.GREEN)
             try:
                 import keyring as _kr
                 iid = _instance_id(plugin_path or ip, ip)
@@ -196,7 +200,16 @@ def show_credential_dialog(
                 _kr.delete_password("NetSentinel/hardware", ip)
             except Exception:
                 pass  # non-fatal
-            _set_status(f"✗  {msg}", _s.RED)
+            text = plugin_error_text(msg)
+            if text is None:  # unrecognised plugin text: fixed message, msg as detail (RULE-A2)
+                _set_status("", _s.RED)  # colour + visible
+                show_worker_error(status_lbl, msg, WE.PLUGIN_CONNECTION_TEST)
+            else:
+                # S9.1 -- the same failure of the same button must carry the same glyph as
+                # the branch three lines up: show_worker_error() writes STATUS_ICON_WARN,
+                # so a recognised plugin error used to read as a harder failure than an
+                # unrecognised one purely because NetSentinel could explain it.
+                _set_status(f"{_s.STATUS_ICON_WARN}  {text}", _s.RED)
             test_btn.setEnabled(True)
             cancel_btn.setEnabled(True)
             ip_edit.setEnabled(True)

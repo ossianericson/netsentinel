@@ -31,6 +31,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 from ui.table_utils import kpi_tile as _shared_kpi_tile
 from modules.trend_analyser import TrendReport, run_full_trend_report
 from ui.widgets.context_menu import install_copy_menu
@@ -460,7 +462,7 @@ class TrendPage(QWidget):
     def _on_error(self, err: str):
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶  Run Analysis")
-        self._status_lbl.setText(f"Analysis error: {err}")
+        show_worker_error(self._status_lbl, err, WE.TREND_ANALYSIS)
 
     # ── Table population ──────────────────────────────────────────────────────
 

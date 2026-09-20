@@ -25,6 +25,8 @@ from ui.nav.labels import NavLabel as L
 from ui.npcap_banner import NpcapMissingBanner
 from ui.tabs_helpers import _make_card, _page_header, _table
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 
 
 class _ScanTabsMixin:
@@ -814,5 +816,5 @@ class _ScanTabsMixin:
         self._dns_bench_btn.setEnabled(True)
 
     def _on_dns_benchmark_error(self, msg: str) -> None:
-        self._dns_bench_status.setText(f"Error: {msg}")
+        show_worker_error(self._dns_bench_status, msg, WE.DNS_BENCHMARK)
         self._dns_bench_btn.setEnabled(True)

@@ -22,6 +22,8 @@ from PyQt6.QtWidgets import (
 
 from ui.npcap_banner import NpcapMissingBanner
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import record_worker_error, show_worker_error, worker_error_text
 from ui.tabs_helpers import _empty_state_widget, _table
 from ui.monitor_state import _color_for_level
 from ui.nav.labels import NavLabel as L
@@ -144,16 +146,30 @@ class _MonitorTabsMixin:
         gateway_ip = self._net_info.get("gateway") if self._net_info else None
         self._arp_worker = ARPMonitorWorker(gateway_ip=gateway_ip, duration=30)
         self._arp_worker.event_found.connect(self._on_arp_event)
-        self._arp_worker.result.connect(lambda r: self._arp_status.setText(r.plain_verdict), Qt.ConnectionType.QueuedConnection)
+        # Registry owns this dot (S1.1) — mirrors the DHCP wiring below, so a
+        # failed ARP monitor shows "error" instead of a cleared, never-run dot.
+        self._arp_worker.result.connect(
+            lambda r: (
+                self._arp_status.setText(r.plain_verdict),
+                self._nav_set_scan_state(L.ARP_SPOOF_WATCH, "fresh", verdict=r.plain_verdict),
+            ),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._arp_worker.status.connect(self._arp_status.setText)
-        self._arp_worker.error.connect(lambda e: self._arp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._arp_worker.error.connect(
+            lambda e: (
+                show_worker_error(self._arp_status, e, WE.ARP_WATCH),
+                self._nav_set_scan_state(L.ARP_SPOOF_WATCH, "error", error=e),
+            ),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._arp_worker.finished.connect(self._push_monitor_pills)
         self._arp_worker.start()
         self._arp_status.setText("ARP monitor started…")
         QSettings("NetSentinel", "NetSentinel").setValue("home/setup/arp_started", True)
         self._save_monitor_state("arp", True)
         self._push_monitor_pills()
-        self._set_flyout_dot("ARP Spoof Watch", _s.GREEN)
+        self._nav_set_scan_state(L.ARP_SPOOF_WATCH, "running")
 
     @pyqtSlot(object)
     def _on_arp_event(self, event):
@@ -229,7 +245,7 @@ class _MonitorTabsMixin:
             Qt.ConnectionType.QueuedConnection,
         )
         self._dhcp_worker.status.connect(self._dhcp_status.setText)
-        self._dhcp_worker.error.connect(lambda e: self._dhcp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._dhcp_worker.error.connect(lambda e: show_worker_error(self._dhcp_status, e, WE.DHCP_WATCH), Qt.ConnectionType.QueuedConnection)
         self._dhcp_worker.error.connect(
             lambda e: self._nav_set_scan_state(L.DHCP_ROGUE_MONITOR, "error", error=e),
             Qt.ConnectionType.QueuedConnection,
@@ -322,7 +338,7 @@ class _MonitorTabsMixin:
         self._bw_worker = BandwidthWorker(interval_s=5.0, label_map=label_map)
         self._bw_worker.snapshot.connect(self._on_bw_snapshot)
         self._bw_worker.status.connect(self._bw_status.setText)
-        self._bw_worker.error.connect(lambda e: self._bw_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._bw_worker.error.connect(lambda e: show_worker_error(self._bw_status, e, WE.BANDWIDTH), Qt.ConnectionType.QueuedConnection)
         self._bw_worker.start()
         self._save_monitor_state("bandwidth", True)
 
@@ -414,7 +430,14 @@ class _MonitorTabsMixin:
         )
         self._sched_worker.status.connect(self._on_sched_status)
         self._sched_worker.alert.connect(lambda t, m: self._sched_log.append(f"🔔 {t}: {m}"), Qt.ConnectionType.QueuedConnection)
-        self._sched_worker.error.connect(lambda e: self._sched_log.append(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        # A log pane has no per-line tooltip: the message goes in the pane, the raw text to the app log.
+        self._sched_worker.error.connect(
+            lambda e: (
+                self._sched_log.append(worker_error_text(WE.SCHEDULED_SCANS)),
+                record_worker_error(WE.SCHEDULED_SCANS, e),
+            ),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._sched_worker.scan_result.connect(self._on_sched_scan_result, Qt.ConnectionType.QueuedConnection)
         self._sched_worker.start()
         self._save_monitor_state("scheduler", True)
@@ -611,7 +634,7 @@ class _MonitorTabsMixin:
         self._snmp_worker.host_result.connect(self._on_snmp_result)
         self._snmp_worker.status.connect(self._snmp_status.setText)
         self._snmp_worker.error.connect(
-            lambda e: self._snmp_status.setText(f"⚠ {e}"),
+            lambda e: show_worker_error(self._snmp_status, e, WE.SNMP_POLL),
             Qt.ConnectionType.QueuedConnection,
         )
         self._snmp_worker.start()
@@ -632,7 +655,7 @@ class _MonitorTabsMixin:
         self._snmp_if_worker.result_ready.connect(self._on_snmp_if_result)
         self._snmp_if_worker.status.connect(self._snmp_if_status.setText)
         self._snmp_if_worker.error.connect(
-            lambda e: self._snmp_if_status.setText(f"⚠ {e}"),
+            lambda e: show_worker_error(self._snmp_if_status, e, WE.SNMP_INTERFACES),
             Qt.ConnectionType.QueuedConnection,
         )
         self._snmp_if_worker.start()

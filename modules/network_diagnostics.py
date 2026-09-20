@@ -12,6 +12,7 @@ common home-network problems without requiring admin privileges:
   • Traceroute to 8.8.8.8 (first 15 hops)
 """
 
+import logging
 import platform
 import re
 import socket
@@ -24,6 +25,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from modules.utils_net import RTT_UNIT, icmp_ping
+
+_log = logging.getLogger(__name__)
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -122,6 +125,7 @@ def _ping_host(host: str, stop_event=None) -> Tuple[float, str]:
     try:
         resolved = socket.gethostbyname(host)
     except Exception:
+        _log.debug("could not resolve %s; pinging it as given", host, exc_info=True)
         resolved = host
     rtts = []
     for _ in range(3):
@@ -142,6 +146,7 @@ def _dns_latency(domain: str, server: Optional[str]) -> Tuple[float, str]:
             ip = socket.gethostbyname(domain)
             return (time.monotonic() - t0) * 1000, ip
         except Exception:
+            _log.debug("system DNS lookup of %s failed", domain, exc_info=True)
             return -1.0, ""
     # Minimal raw A-record query over UDP
     try:
@@ -173,6 +178,7 @@ def _dns_latency(domain: str, server: Optional[str]) -> Tuple[float, str]:
                 return elapsed, resolved_ip
         return elapsed, ""
     except Exception:
+        _log.debug("DNS query for %s to %s failed", domain, server, exc_info=True)
         return -1.0, ""
 
 
@@ -189,6 +195,7 @@ def _http_check(url: str) -> Tuple[int, float]:
     except urllib.error.HTTPError as exc:
         return exc.code, -1.0
     except Exception:
+        _log.debug("HTTP check of %s failed", url, exc_info=True)
         return 0, -1.0
 
 
@@ -205,7 +212,7 @@ def _speed_test() -> float:
         if elapsed > 0:
             return (len(data) * 8) / (elapsed * 1_000_000)
     except Exception:
-        pass  # non-fatal
+        _log.debug("speed test download failed", exc_info=True)  # non-fatal
     return -1.0
 
 
@@ -225,6 +232,7 @@ def _get_public_ip() -> str:
                 if re.match(r"^\d+\.\d+\.\d+\.\d+$", ip):
                     return ip
         except Exception:
+            _log.debug("public IP lookup via %s failed", url, exc_info=True)
             continue
     return ""
 
@@ -299,7 +307,7 @@ def _dns_leak_test() -> DnsLeakResult:
         try:
             socket.getaddrinfo(f"{uid}.bash.ws", None)
         except Exception:
-            pass  # non-fatal
+            _log.debug("DNS leak test: probe lookup raised (only the query reaching the resolver matters)", exc_info=True)  # non-fatal
 
         # Step 3: fetch results
         result_req = urllib.request.Request(

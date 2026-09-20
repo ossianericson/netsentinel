@@ -19,6 +19,8 @@ from ui.npcap_banner import NpcapMissingBanner
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from ui import styles as _s
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error, worker_error_text
 
 
 class WiFiMonitorPage(QWidget):
@@ -225,7 +227,8 @@ class WiFiMonitorPage(QWidget):
     def _on_error(self, msg: str) -> None:
         self._btn_start.setEnabled(True)
         self._btn_stop.setEnabled(False)
-        self._set_status(f"⚠ {msg}", "RED")
+        self._set_status(worker_error_text(WE.WIFI_MONITOR), "RED")  # colour
+        show_worker_error(self._status_lbl, msg, WE.WIFI_MONITOR)
 
     @pyqtSlot(str)
     def _on_unsupported(self, msg: str) -> None:

@@ -92,3 +92,127 @@ runbook exists partly because nobody reached for it during the 2026-07-26 incide
 (`.github/workflows/promote-release.yml` is a related staged-rollout helper for marking a
 prerelease stable — not needed here since `release.yml` currently publishes with
 `prerelease: false` directly; noted only so it isn't confused with the winget step above.)
+
+---
+
+# Part 2 — A winget PR flagged *after* submission
+
+Everything above covers a VirusTotal verdict raised **inside our own pipeline**, where the
+release job goes red and we notice immediately. This part covers the opposite case: our
+pipeline was green, the PR opened normally, and `microsoft/winget-pkgs` flagged it
+**downstream**, where nothing of ours was watching.
+
+## What this cost us once
+
+`microsoft/winget-pkgs` PR [#430336](https://github.com/microsoft/winget-pkgs/pull/430336)
+(v2.3.0), against a **1.1 h median** across the previous 29 submissions (1.15 h including it):
+
+| Elapsed | Event |
+|---|---|
+| T+0:00 | PR opened by `release.yml`'s winget job |
+| **T+0:30** | `Validation-Defender-Error`. Bot applied `Needs-Author-Feedback` + `Validation-Guide` and assigned the PR **to us** |
+| T+0:30 → T+64:21 | **Nothing.** No human and no automation knew it had failed |
+| T+64:21 | Moderator @stephengillie manually ran `@wingetbot run` |
+| T+71:28 | Merged — **the identical binary passed, unchanged** |
+
+The real failure was 30 minutes long. The other 64 hours were detection latency.
+
+## The single most important fact
+
+**Silence is not neutral — it loses the submission.** `scheduledSearch.markNoRecentActivity`
+adds `No-Recent-Activity` to any PR that has sat under `Needs-Author-Feedback` for 5 days, and
+`scheduledSearch.closeNoRecentActivity` closes it 3 days after that. #430336 was 2.7 days into
+that 8-day countdown when a moderator happened to intervene.
+
+## The unlock: a comment from the PR author
+
+Microsoft's documented remedy for a Defender error you cannot reproduce is *"add a comment to
+get the Windows Package Manager engineers to investigate"*, and it is wired into their
+automation (`microsoft/winget-pkgs/.github/policies/labelManagement.issueUpdated.yml`):
+
+```yaml
+if:   Issue_Comment AND isActivitySender(issueAuthor) AND hasLabel(Needs-Author-Feedback)
+then: removeLabel(Needs-Author-Feedback); addLabel(Needs-Attention)
+```
+
+`Needs-Attention` **auto-assigns their on-call engineers**. One comment from the PR author moves
+the PR out of our court and into a queue somebody is actually paged for.
+
+Note who can do what: only the moderators listed in `moderatorTriggers.yml` (and anyone with
+write access) can run `@wingetbot run`. We cannot re-trigger validation ourselves. Commenting is
+the entire lever we have — and it is enough.
+
+## What is automated now
+
+`.github/workflows/winget-watch.yml` runs `scripts/winget_pr_watch.py` every 30 minutes:
+
+- **No open PR → exits in seconds.** Free on a public repo; this is the normal case.
+- **`AUTO_COMMENT_LABELS`** (Defender, SmartScreen, Domain, Installer-Availability,
+  Executable-Error) → posts the author comment once, guarded by a hidden marker so a later tick
+  cannot repeat it. The body carries only checkable evidence: the VirusTotal permalink from our
+  own release body, the public CI build, the SHA256, and a **live-computed** count of prior
+  clean submissions.
+- **Everything else** → opens a GitHub issue and says nothing on the PR. Some failures are
+  genuinely ours (RULE-W1's `Validation-Unattended-Failed` is the precedent), and asking a
+  moderator to investigate our own bug wastes their time.
+- **Either way** → a notification issue lands in this repo so a human hears about it.
+
+Run it by hand with `--dry-run` to see what it would do without touching anything:
+
+```powershell
+python scripts/winget_pr_watch.py --repo ossianericson/netsentinel --dry-run
+```
+
+## Your manual steps when it fires
+
+1. **Try to reproduce.** Install the published installer, run a full Microsoft Defender scan. If
+   it reproduces, this is our bug — fix the binary; do not ask for a re-run.
+2. **Submit to WDSI** if it does not reproduce:
+   https://www.microsoft.com/en-us/wdsi/filesubmission → **Software developer**. There is no API
+   for this, which is exactly why the automation does not claim to have done it. If you submit,
+   add a follow-up comment on the PR with the submission ID — it materially speeds up review.
+3. **Watch the clock.** If it stalls again, another author comment resets the
+   `No-Recent-Activity` timer and re-raises `Needs-Attention`.
+
+## Why the installer gets flagged at all
+
+The evidence points at a **transient cloud/ML reputation verdict on a brand-new, unsigned,
+zero-prevalence PyInstaller hash**, not a stable behavioural rule:
+
+- The identical bytes passed on re-run 2.7 days later with **no change whatsoever**.
+- The 28 prior releases from this same pipeline were never flagged. A deterministic behavioural
+  trigger — `installer.iss`'s four `netsh advfirewall` calls are the obvious candidate — would
+  have fired every time, on all of them.
+
+What we have done about it (v2.3.1), all free:
+
+- **UPX off** on `NetSentinel-cli.exe` and `NetSentinel-svc.exe`, which were `upx=True` while the
+  GUI was already `upx=False`. Note honestly what this did and did not fix: UPX is not installed
+  on any builder and PyInstaller silently skips packing without it, so those binaries were never
+  actually packed and this was **not** a cause of the v2.3.0 flag (measured: the same spec at
+  `upx=True` vs `upx=False` differs by 2 KB on a 9.79 MB exe, in the wrong direction — noise, not
+  compression). It closes a latent trap rather than an open wound: UPX packing is a top-tier
+  heuristic trigger, and the day a builder happens to have UPX these would start shipping packed.
+- **VERSIONINFO on all three exes** (`packaging/version_info.py`) and on the Inno setup stub
+  (`installer.iss`). Every binary previously shipped with no CompanyName, ProductName, or
+  FileVersion at all.
+
+## What we deliberately did not do
+
+- **Delay the winget submission** to let the binary age into some reputation. 28 of 30 PRs merge
+  in about an hour; slowing the common case to hedge a 1-in-30 case is a bad trade.
+- **Chase `Publisher-Verified`.** `verifiedDeveloper.yml` does define a fast path that bypasses
+  moderator review entirely, but the label is applied server-side by `wingetbot` with no public
+  self-enrolment — and it would only have saved the final ~7 hours, not the 64.
+- **Authenticode code signing.** This is the genuine root-cause fix and the only thing that also
+  removes end-user SmartScreen warnings. **Azure Artifact Signing** (formerly Trusted Signing,
+  ~$10/month) is the cheap modern route, but its public-trust certificates require **individual
+  developers to be located in the US or Canada**; organizations are eligible across the EU/UK and
+  more. As an individual outside those two countries this is a closed door — recorded here so it
+  is not researched again. The remaining options are a traditional OV certificate (~$200–400/yr,
+  private key on a hardware token or cloud HSM since 2023) or signing as a registered legal
+  entity.
+
+Nothing we ship is Authenticode-signed today. The cosign `.bundle` sidecars are Sigstore
+signatures over the blob — real, verifiable, and completely invisible to SmartScreen, Defender,
+and winget validation. Do not cite them as "the installer is signed" in a winget PR comment.

@@ -11,12 +11,29 @@ Usage:
     ToastManager.show("Scanning…", "info")
     ToastManager.show("Blocked — Undo", "action", action_label="Undo",
                       action_callback=undo_fn)
+    ToastManager.show("The file could not be saved.", "error",
+                      action_label="Choose another location", action_callback=retry,
+                      detail=raw_exception_text)
 
 Types:
     success  — GREEN border, 3s auto-dismiss
     error    — RED border, stays until clicked
+    warning  — AMBER border, 6s auto-dismiss
     info     — ACCENT border, 4s auto-dismiss
     action   — ACCENT border, message + one button, stays until dismissed
+
+Any kind may carry one action button (``action_label`` + ``action_callback``) — an error that has
+a next step offers it (S6). ``detail`` is raw technical text (an exception, a path): it becomes
+the message's tooltip and never part of the message itself (RULE-A2).
+
+A kind that is not listed here falls through to the info defaults, so adding a
+new one means adding it to `_type_border`, `_AUTO_DISMISS_MS` and the icon map —
+`tests/test_error_surfacing_ratchet.py` derives the valid set from this module
+and fails any call site using a kind that was never defined.
+
+Toasts whose auto-dismiss is 0 are "sticky": they wait on a click, so `_show()`
+never evicts one to make room for a newer toast. Toasts raised before `attach()`
+are queued and replayed, not dropped.
 """
 from __future__ import annotations
 
@@ -26,7 +43,7 @@ from PyQt6.QtCore import (
     QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer,
 )
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QWidget,
+    QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
 from ui import styles as _s
@@ -46,6 +63,7 @@ def _type_border(kind: str) -> str:
     return {
         "success": _s.GREEN,
         "error":   _s.RED,
+        "warning": _s.AMBER,
         "info":    _s.ACCENT,
         "action":  _s.ACCENT,
     }.get(kind, _s.ACCENT)
@@ -54,9 +72,14 @@ def _type_border(kind: str) -> str:
 _AUTO_DISMISS_MS = {
     "success": 3000,
     "error":   0,
+    "warning": 6000,
     "info":    4000,
     "action":  0,
 }
+
+#: Kinds the user must dismiss themselves (auto-dismiss 0). These are never
+#: evicted to make room for a newer toast — see ToastManager._show().
+_STICKY_KINDS = frozenset(k for k, ms in _AUTO_DISMISS_MS.items() if ms == 0)
 
 
 # ── Single toast widget ────────────────────────────────────────────────────────
@@ -64,7 +87,7 @@ _AUTO_DISMISS_MS = {
 class _Toast(QFrame):
     def __init__(self, message: str, kind: str,
                  action_label: str = "", action_callback: Optional[Callable] = None,
-                 parent: QWidget = None):
+                 parent: QWidget = None, detail: str = ""):
         super().__init__(parent)
         self._kind = kind
         color = _type_border(kind)
@@ -76,11 +99,16 @@ class _Toast(QFrame):
             f" border-left:3px solid {color}; border-radius:4px; }}"
         )
 
-        root = QHBoxLayout(self)
+        # Icon | message | close on one row; an action button gets its own row below, because
+        # inline it takes the width a long message needs to wrap into (RULE-UI2).
+        root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 8, 8)
-        root.setSpacing(8)
+        root.setSpacing(6)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        root.addLayout(row)
 
-        icon_map = {"success": "✓", "error": "✗", "info": "ℹ", "action": "ℹ"}
+        icon_map = {"success": "✓", "error": "✗", "warning": "⚠", "info": "ℹ", "action": "ℹ"}
         icon_lbl = QLabel(icon_map.get(kind, "ℹ"))
         icon_lbl.setStyleSheet(
             f"color:{color}; font-weight:bold; font-size:13px;"
@@ -90,14 +118,17 @@ class _Toast(QFrame):
 
         msg_lbl = QLabel(message)
         msg_lbl.setWordWrap(True)
+        if detail:
+            msg_lbl.setToolTip(_s.safe_tooltip(detail))
         msg_lbl.setStyleSheet(
             f"color:{_s.TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
         )
 
-        root.addWidget(icon_lbl)
-        root.addWidget(msg_lbl, 1)
+        row.addWidget(icon_lbl)
+        row.addWidget(msg_lbl, 1)
 
-        if kind == "action" and action_label and action_callback:
+        act_btn = None
+        if action_label and action_callback:
             act_btn = QPushButton(action_label)
             act_btn.setFixedHeight(22)
             act_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -110,7 +141,6 @@ class _Toast(QFrame):
             )
             act_btn.clicked.connect(action_callback)
             act_btn.clicked.connect(self._dismiss)
-            root.addWidget(act_btn)
 
         close_btn = QPushButton()
         close_btn.setFixedSize(18, 18)
@@ -122,9 +152,15 @@ class _Toast(QFrame):
             f"QPushButton:pressed {{ background:{_s.BG_HOVER}; }}"
         )
         close_btn.clicked.connect(self._dismiss)
-        root.addWidget(close_btn)
+        row.addWidget(close_btn)
 
-        self.adjustSize()
+        if act_btn is not None:
+            act_row = QHBoxLayout()
+            act_row.addStretch()
+            act_row.addWidget(act_btn)
+            root.addLayout(act_row)
+
+        self.resize(_WIDTH, self.fitted_height())
 
         dismiss_ms = _AUTO_DISMISS_MS.get(kind, 0)
         if dismiss_ms > 0:
@@ -132,6 +168,12 @@ class _Toast(QFrame):
             _t.setSingleShot(True)
             _t.timeout.connect(self._dismiss)
             _t.start(dismiss_ms)
+
+    def fitted_height(self) -> int:
+        """The height the message needs at the fixed ``_WIDTH`` (RULE-UI2). ``sizeHint()`` is
+        computed at the message's unconstrained width, where it wraps into fewer lines."""
+        h = self.heightForWidth(_WIDTH)
+        return h if h > 0 else self.sizeHint().height()
 
     def _dismiss(self) -> None:
         mgr = ToastManager.instance()
@@ -149,6 +191,9 @@ class ToastManager:
     def __init__(self):
         self._parent: Optional[QWidget] = None
         self._toasts: list[_Toast] = []
+        # Toasts raised before attach(). Startup failures land in that window,
+        # and returning early used to discard them silently.
+        self._pending: list[tuple] = []
 
     @classmethod
     def instance(cls) -> "ToastManager":
@@ -158,21 +203,39 @@ class ToastManager:
 
     def attach(self, parent: QWidget) -> None:
         self._parent = parent
+        pending, self._pending = self._pending, []
+        for message, kind, action_label, action_callback, detail in pending:
+            self._show(message, kind, action_label, action_callback, detail)
 
     @classmethod
     def show(cls, message: str, kind: str = "info",
-             action_label: str = "", action_callback: Optional[Callable] = None) -> None:
-        cls.instance()._show(message, kind, action_label, action_callback)
+             action_label: str = "", action_callback: Optional[Callable] = None,
+             detail: str = "") -> None:
+        cls.instance()._show(message, kind, action_label, action_callback, detail)
 
     def _show(self, message: str, kind: str,
-              action_label: str, action_callback: Optional[Callable]) -> None:
+              action_label: str, action_callback: Optional[Callable],
+              detail: str = "") -> None:
         if self._parent is None:
+            # Queue rather than drop — replayed by attach(). Bounded so a
+            # pre-attach failure loop cannot grow without limit.
+            if len(self._pending) < 8:
+                self._pending.append((message, kind, action_label, action_callback, detail))
             return
         if len(self._toasts) >= 3:
-            self._remove_toast(self._toasts[0])
+            # Evict the oldest NON-sticky toast. A sticky kind (error/action)
+            # waits on a click the user has not made yet, so discarding it to
+            # make room for a routine success throws away the one message that
+            # required attention.
+            victim = next((t for t in self._toasts if t._kind not in _STICKY_KINDS), None)
+            if victim is not None:
+                self._remove_toast(victim)
+            elif len(self._toasts) >= 5:
+                # All sticky and piling up — drop the oldest so the stack stays
+                # readable rather than covering the window.
+                self._remove_toast(self._toasts[0])
 
-        t = _Toast(message, kind, action_label, action_callback, self._parent)
-        t.adjustSize()
+        t = _Toast(message, kind, action_label, action_callback, self._parent, detail)
         t.show()
         self._toasts.append(t)
         self._restack(animate_last=True)
@@ -194,8 +257,7 @@ class ToastManager:
         y = pw_h - _MARGIN
 
         for i, t in enumerate(reversed(self._toasts)):
-            t.adjustSize()
-            th = t.height()
+            th = t.fitted_height()
             y -= th
             tx = pw_w - _WIDTH - _MARGIN
             target = QRect(tx, y, _WIDTH, th)

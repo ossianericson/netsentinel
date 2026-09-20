@@ -52,6 +52,8 @@ from modules.device_admin import (
     record_ha_detected, update_device_ha_info, upsert_known_device,
 )
 from ui.dialog_utils import run_dialog
+from ui import worker_error_catalogue as WE
+from ui.error_display import show_worker_error
 
 # ── Category definitions ──────────────────────────────────────────────────────
 
@@ -471,6 +473,7 @@ class HomeAutomationPage(QWidget):
         self._status_lbl = QLabel("")
         _s.themed_ss(self._status_lbl, "color:{TEXT_SECONDARY}; font-size:11px;"
             " background:transparent; border:none;")
+        self._status_lbl.setWordWrap(True)  # an explained database error is ~220 characters (S6b)
         root.addWidget(self._status_lbl)
 
         # ── Main splitter: device table | detail panel ────────────────────────
@@ -652,7 +655,7 @@ class HomeAutomationPage(QWidget):
             devices = self._store.query_ha_devices()
             self._devices = [self._kd_to_dict(d) for d in devices]
         except Exception as exc:
-            self._set_status(f"⚠  {exc}")
+            show_worker_error(self._status_lbl, exc, WE.HA_LOAD)
             self._devices = []
 
         self._rebuild_filters()
@@ -828,7 +831,7 @@ class HomeAutomationPage(QWidget):
             try:
                 update_device_ha_info(self._store, mac=mac, **vals)
             except Exception as exc:
-                self._set_status(f"⚠  Save failed: {exc}")
+                show_worker_error(self._status_lbl, exc, WE.HA_SAVE)
                 return
         # Update local cache
         device.update(vals)
@@ -867,7 +870,7 @@ class HomeAutomationPage(QWidget):
         from workers.ha_worker import MacLookupWorker
         self._mac_worker = MacLookupWorker(mac, parent=self)
         self._mac_worker.result_ready.connect(self._on_mac_lookup_done)
-        self._mac_worker.error.connect(lambda e: self._set_status(f"⚠  {e}"))
+        self._mac_worker.error.connect(lambda e: show_worker_error(self._status_lbl, e, WE.MAC_LOOKUP))
         self._mac_worker.start()
 
     @pyqtSlot(str, str)
@@ -917,7 +920,7 @@ class HomeAutomationPage(QWidget):
         self._ha_worker = HaScanWorker(hosts, parent=self)
         self._ha_worker.status.connect(self._set_status)
         self._ha_worker.results_ready.connect(self._on_ha_scan_done)
-        self._ha_worker.error.connect(lambda e: self._set_status(f"⚠  {e}"))
+        self._ha_worker.error.connect(lambda e: show_worker_error(self._status_lbl, e, WE.HA_SCAN))
         self._ha_worker.start()
 
     @pyqtSlot(list)
@@ -1016,7 +1019,7 @@ class HomeAutomationPage(QWidget):
                     category=cat_cbo.currentData(),
                 )
             except Exception as exc:
-                self._set_status(f"⚠  {exc}")
+                show_worker_error(self._status_lbl, exc, WE.HA_ADD)
                 return
 
         self._set_status(f"✓  Device {mac} added")

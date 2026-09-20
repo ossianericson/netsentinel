@@ -1,0 +1,86 @@
+name: WinGet PR Watch
+
+# Notices when a microsoft/winget-pkgs submission has been flagged, and reacts.
+#
+# Why this exists: nothing used to watch a winget PR after `wingetcreate --submit`
+# exited. The v2.3.0 PR (#430336) was flagged `Validation-Defender-Error` 30 minutes
+# after it opened, then sat untouched for 64 hours until a moderator noticed it by
+# hand — 71.5 h total, against a 1.15 h median across the previous 29 submissions.
+# The failure lasted half an hour; the rest was nobody knowing about it. Silence is
+# not neutral either: `Needs-Author-Feedback` + 5 days idle adds `No-Recent-Activity`,
+# and the PR is auto-closed 3 days after that.
+#
+# NOT a RULE 20 violation. RULE 20 forbids moving the winget *submission* job out of
+# release.yml or triggering it via `workflow_run`. The submission stays exactly where
+# it is; this is a read-and-notify watcher on a plain `schedule` trigger.
+#
+# Cost is nil: the repo is public, so scheduled minutes are free, and the overwhelmingly
+# common case — no open PR — exits after a single `gh pr list` in a few seconds.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # every 30 minutes; detection lag <= 30 min, was 64 hours
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report what would happen without commenting or opening issues"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never let two ticks race on the same PR — both could pass the "already commented?"
+  # check before either has posted.
+  group: winget-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      # The comment must come from the PR author for winget-pkgs' policy service to
+      # flip Needs-Author-Feedback -> Needs-Attention, so this uses the same PAT that
+      # opened the PR rather than GITHUB_TOKEN.
+      GH_TOKEN: ${{ secrets.WINGET_PAT }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # Commenting on microsoft/winget-pkgs needs public_repo (or repo). Opening the
+      # notification issue on this repo needs repo. A PAT missing either fails silently
+      # in a way that looks like "nothing was wrong", so check it up front.
+      - name: Check PAT scopes
+        run: |
+          set -uo pipefail
+          if ! resp=$(gh api -i user); then
+            echo "::error::WINGET_PAT was rejected by GitHub (expired or revoked) - rotate the secret"
+            exit 1
+          fi
+          scopes=$(printf '%s\n' "$resp" | grep -i '^x-oauth-scopes:' | head -1 | cut -d' ' -f2- | tr -d '\r')
+          echo "Scopes: ${scopes:-<none reported>}"
+          # x-oauth-scopes is a classic-PAT header; a fine-grained PAT omits it
+          # entirely. Warning on an absent header would fire on all 48 runs a day
+          # and train us to ignore the one that matters.
+          if [ -z "$scopes" ]; then
+            echo "No scopes header - fine-grained PAT (its permissions cannot be read here)."
+          else
+            case "$scopes" in
+              *repo*) ;;
+              *) echo "::warning::WINGET_PAT scopes lack repo/public_repo - commenting on $UPSTREAM will fail" ;;
+            esac
+          fi
+        env:
+          UPSTREAM: microsoft/winget-pkgs
+
+      - name: Watch open winget PRs
+        run: |
+          python scripts/winget_pr_watch.py \
+            --repo "${{ github.repository }}" \
+            ${{ (inputs.dry_run && '--dry-run') || '' }}

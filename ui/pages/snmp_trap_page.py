@@ -32,6 +32,8 @@ from modules.metric_store import MetricStore
 from ui.tabs_helpers import _table
 from ui import styles as _s
 from ui.dialog_utils import run_dialog
+from ui.error_display import show_worker_error
+from modules.app_health_catalogue import SNMP_TRAP_RECEIVER
 
 
 # ── Helpers (mirrors dashboard helpers, no dependency on dashboard) ───────────
@@ -117,6 +119,8 @@ class SnmpTrapPage(QWidget):
         # Status bar
         self._status_lbl = QLabel("Not listening.")
         _s.themed_ss(self._status_lbl, "font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        # S5: the receiver's error shows the Home strip's condition text, longer than one line.
+        self._status_lbl.setWordWrap(True)
         root.addWidget(self._status_lbl)
 
         # KPI row
@@ -245,7 +249,7 @@ class SnmpTrapPage(QWidget):
 
     @pyqtSlot(str)
     def on_error(self, msg: str) -> None:
-        self._status_lbl.setText(f"⚠ {msg}")
+        show_worker_error(self._status_lbl, msg, SNMP_TRAP_RECEIVER)
         _s.themed_ss(self._status_lbl, "font-size:11px; color:{RED}; background:transparent;")
 
     # ── Detail dialog ─────────────────────────────────────────────────────────
