@@ -1,0 +1,1807 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Network Security Scanner — Rogue Device Detector, STP Monitor & ISP Accountability Tool">
+      
+      
+      
+        <link rel="canonical" href="https://ossianericson.github.io/netsentinel/hardware-plugins/">
+      
+      
+        <link rel="prev" href="../jargon-dictionary/">
+      
+      
+        <link rel="next" href="../plugin-authoring/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Hardware Integrations - NetSentinel</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#hardware-integrations" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="NetSentinel" class="md-header__button md-logo" aria-label="NetSentinel" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetSentinel
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Hardware Integrations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ossianericson/netsentinel" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ossianericson/netsentinel
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../feature-reference/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Extend
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  Develop
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../privacy-policy/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Privacy Policy
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="NetSentinel" class="md-nav__button md-logo" aria-label="NetSentinel" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetSentinel
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ossianericson/netsentinel" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ossianericson/netsentinel
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../feature-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../networking-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../incident-patterns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validated Incident Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jargon-dictionary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jargon Dictionary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Integrations
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Integrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#bundled-integrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundled integrations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-plugin-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The plugin interface
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The plugin interface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional constants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config_schema-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CONFIG_SCHEMA example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-classification-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error classification (required)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registration-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-ecosystem-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin ecosystem features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-new-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a new plugin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Writing a new plugin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-find-your-hardwares-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Find your hardware's API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-generate-the-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Generate the template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-validate-and-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Validate and test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-use-ai-to-accelerate-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Use AI to accelerate (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#submitting-a-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitting a plugin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-nspkg-bundle-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The .nspkg bundle format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validator-cli-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validator CLI reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing Scan Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Develop
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Develop
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chaos-testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chaos / Monkey Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#bundled-integrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundled integrations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-plugin-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The plugin interface
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The plugin interface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional constants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config_schema-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CONFIG_SCHEMA example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-classification-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error classification (required)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registration-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-ecosystem-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin ecosystem features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-new-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a new plugin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Writing a new plugin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-find-your-hardwares-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Find your hardware's API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-generate-the-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Generate the template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-validate-and-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Validate and test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-use-ai-to-accelerate-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Use AI to accelerate (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#submitting-a-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitting a plugin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-nspkg-bundle-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The .nspkg bundle format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validator-cli-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validator CLI reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="hardware-integrations">Hardware Integrations<a class="headerlink" href="#hardware-integrations" title="Permanent link">&para;</a></h1>
+<p>NetSentinel supports any router, modem, access point, NAS, or smart home hub through an open plugin protocol — not just the brands it was built for. The minimal interface is two constants and two Python functions.</p>
+<hr />
+<h2 id="bundled-integrations">Bundled integrations<a class="headerlink" href="#bundled-integrations" title="Permanent link">&para;</a></h2>
+<p>11 hardware plugins ship with the app, all signed and hash-verified against <code>data/plugin_hashes.json</code> (a 12th bundled file, <code>example_open_ports_report.py</code>, is an example for the separate <em>scan</em>-plugin system used by the Security Audit → Recon Plugins page — see <code>docs/plugin-authoring.md</code> — and is not a hardware integration):</p>
+<table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Hardware</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zte_plugin.py</code></td>
+<td>ZTE MC889 5G modem (SINR, RSRP, band, cell ID)</td>
+</tr>
+<tr>
+<td><code>deco_plugin.py</code></td>
+<td>TP-Link Deco XE75 mesh router (nodes, clients, topology)</td>
+</tr>
+<tr>
+<td><code>asus_plugin.py</code></td>
+<td>ASUS routers and ZenWiFi mesh (via <code>asusrouter</code> library)</td>
+</tr>
+<tr>
+<td><code>fritzbox_plugin.py</code></td>
+<td>AVM FRITZ!Box (DSL/cable, WAN IP, uptime, clients)</td>
+</tr>
+<tr>
+<td><code>unifi_plugin.py</code></td>
+<td>Ubiquiti UniFi (via UniFi API; requires local controller)</td>
+</tr>
+<tr>
+<td><code>netgear_plugin.py</code></td>
+<td>Netgear routers (Nighthawk, Orbi via SOAP API)</td>
+</tr>
+<tr>
+<td><code>mikrotik_plugin.py</code></td>
+<td>MikroTik RouterOS (REST API; v7.1+)</td>
+</tr>
+<tr>
+<td><code>openwrt_plugin.py</code></td>
+<td>OpenWrt (ubus JSON-RPC API)</td>
+</tr>
+<tr>
+<td><code>synology_plugin.py</code></td>
+<td>Synology NAS (DSM API; connection stats, uptime)</td>
+</tr>
+<tr>
+<td><code>ha_plugin.py</code></td>
+<td>Home Assistant (REST API; entity state and attributes)</td>
+</tr>
+<tr>
+<td><code>template_plugin.py</code></td>
+<td>Starter template for writing a new plugin</td>
+</tr>
+</tbody>
+</table>
+<p>If your hardware is not on this list, see <a href="#writing-a-new-plugin">Writing a new plugin</a> below. Most consumer hardware takes under 30 minutes to integrate.</p>
+<hr />
+<h2 id="the-plugin-interface">The plugin interface<a class="headerlink" href="#the-plugin-interface" title="Permanent link">&para;</a></h2>
+<p>Any <code>.py</code> file that satisfies the required interface becomes a first-class integration — it gets its own Hub card, nav entry, health tracking, and sandboxed execution.</p>
+<h3 id="required">Required<a class="headerlink" href="#required" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">HARDWARE_NAME</span> <span class="o">=</span> <span class="s2">"My Router XYZ"</span>   <span class="c1"># displayed in the app</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">HARDWARE_TYPE</span> <span class="o">=</span> <span class="s2">"router"</span>           <span class="c1"># router | modem | ap | switch | other</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_info</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="sd">"""Static metadata: model, firmware version, local IP."""</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="p">{</span><span class="s2">"model"</span><span class="p">:</span> <span class="s2">"XYZ v2"</span><span class="p">,</span> <span class="s2">"firmware"</span><span class="p">:</span> <span class="s2">"1.2.3"</span><span class="p">,</span> <span class="s2">"ip"</span><span class="p">:</span> <span class="s2">"192.168.1.1"</span><span class="p">}</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_status</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="sd">"""Live data polled every N seconds. Accept a `config` kwarg even if</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="sd">    unused — see CONFIG_SCHEMA below; the poller falls back to calling</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="sd">    get_status() with no arguments if this raises TypeError."""</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="k">return</span> <span class="p">{</span><span class="s2">"wan_ip"</span><span class="p">:</span> <span class="s2">"84.x.x.x"</span><span class="p">,</span> <span class="s2">"uptime_sec"</span><span class="p">:</span> <span class="mi">86400</span><span class="p">,</span> <span class="s2">"download_mbps"</span><span class="p">:</span> <span class="mf">450.0</span><span class="p">}</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1"># Optional — if present, connected clients appear on the plugin's device page</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_clients</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="sd">"""Each item: {"ip": "...", "mac": "...", "hostname": "..."}"""</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="k">return</span> <span class="p">[</span><span class="o">...</span><span class="p">]</span>
+</code></pre></div>
+<p>Neither <code>get_info</code> nor <code>get_status</code>/<code>get_clients</code> may take a <em>required</em> positional argument — the validator rejects any of them that do.</p>
+<p><strong>Every outbound request must set a timeout</strong> (e.g. <code>requests.get(url, timeout=10)</code>). Without one, an unreachable device blocks the polling thread for the OS-level TCP connect timeout (often 20 s+) with no progress signal.</p>
+<h3 id="optional-constants">Optional constants<a class="headerlink" href="#optional-constants" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Constant</th>
+<th>Type</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HARDWARE_IP</code></td>
+<td><code>str</code></td>
+<td>Default target IP pre-populated in the credential dialog</td>
+</tr>
+<tr>
+<td><code>DESCRIPTION</code></td>
+<td><code>str</code></td>
+<td>One-line blurb shown in the plugin catalog</td>
+</tr>
+<tr>
+<td><code>CREDENTIAL_LABEL</code></td>
+<td><code>str</code></td>
+<td>Label on the password field in the credential dialog (default <code>"Password"</code>)</td>
+</tr>
+<tr>
+<td><code>PYPI_PACKAGE</code></td>
+<td><code>str</code></td>
+<td>pip dependency name; NetSentinel warns at startup if missing</td>
+</tr>
+<tr>
+<td><code>CONFIG_SCHEMA</code></td>
+<td><code>dict</code></td>
+<td>Typed settings declarations; Hub card auto-generates a config form</td>
+</tr>
+<tr>
+<td><code>ICON_PATH</code></td>
+<td><code>str</code></td>
+<td>Path to a 24×24 PNG; falls back to a sibling <code>icon.png</code>/<code>.jpg</code>/<code>.svg</code> next to the script</td>
+</tr>
+</tbody>
+</table>
+<h3 id="config_schema-example"><code>CONFIG_SCHEMA</code> example<a class="headerlink" href="#config_schema-example" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">CONFIG_SCHEMA</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">"poll_interval"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"int"</span><span class="p">,</span>  <span class="s2">"default"</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>   <span class="s2">"label"</span><span class="p">:</span> <span class="s2">"Poll every (seconds)"</span><span class="p">},</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="s2">"verify_ssl"</span><span class="p">:</span>    <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"bool"</span><span class="p">,</span> <span class="s2">"default"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">"label"</span><span class="p">:</span> <span class="s2">"Verify SSL certificate"</span><span class="p">},</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">}</span>
+</code></pre></div>
+<p>If <code>CONFIG_SCHEMA</code> is present, saved values are passed to <code>get_status()</code> as the keyword argument <code>config={"poll_interval": 30, ...}</code> — <code>get_status</code> must accept it (a plain <code>config=None</code> parameter is enough even if you never read it).</p>
+<h3 id="error-classification-required">Error classification (required)<a class="headerlink" href="#error-classification-required" title="Permanent link">&para;</a></h3>
+<p><code>get_status()</code> and <code>get_clients()</code> must catch every exception themselves and report it through <code>extra.error</code>, never let it propagate — an uncaught exception is reported as an <em>unclassified</em> error and incorrectly counts toward the auto-disable circuit breaker even for something as routine as a wrong password. Use a machine-readable prefix:</p>
+<table>
+<thead>
+<tr>
+<th>Prefix</th>
+<th>Meaning</th>
+<th>Counts toward circuit breaker?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AUTH:</code></td>
+<td>Wrong credentials</td>
+<td><strong>No</strong> — a wrong password won't fix itself by retrying, so the card stays in "Re-enter Password" instead of auto-disabling</td>
+</tr>
+<tr>
+<td><code>NET:</code></td>
+<td>Device unreachable / connection refused / timed out</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>DEPS:</code></td>
+<td>Missing pip package</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>ERR:</code></td>
+<td>Anything else</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_status</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="o">...</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">"wan_ip"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">,</span> <span class="s2">"extra"</span><span class="p">:</span> <span class="p">{}}</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">"extra"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"error"</span><span class="p">:</span> <span class="n">_fmt_err</span><span class="p">(</span><span class="n">exc</span><span class="p">)}}</span>
+</code></pre></div>
+<p>Classify by <strong>exception type or HTTP status code first</strong>, falling back to message-keyword matching only when neither is available. A raw <code>requests.exceptions.ConnectionError</code>'s message includes the request URL — if that URL's path happens to contain a word like <code>login</code> (e.g. <code>POST /api/login</code>), naive keyword-only matching misreads a plain connection failure as an <code>AUTH:</code> failure. See <code>_fmt_err()</code> in <code>plugins/template_plugin.py</code>, <code>plugins/deco_plugin.py</code>, or <code>plugins/zte_plugin.py</code> for the reference implementation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">_fmt_err</span><span class="p">(</span><span class="n">exc</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">msg</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="ne">ImportError</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">"pip install"</span> <span class="ow">in</span> <span class="n">msg</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="k">return</span> <span class="s2">"DEPS: "</span> <span class="o">+</span> <span class="n">msg</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="s2">"response"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">"status_code"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">401</span><span class="p">,</span> <span class="mi">403</span><span class="p">):</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="k">return</span> <span class="s2">"AUTH: "</span> <span class="o">+</span> <span class="n">msg</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">w</span> <span class="ow">in</span> <span class="nb">type</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"Connection"</span><span class="p">,</span> <span class="s2">"Timeout"</span><span class="p">)):</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="k">return</span> <span class="s2">"NET: "</span> <span class="o">+</span> <span class="n">msg</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">lm</span> <span class="o">=</span> <span class="n">msg</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">w</span> <span class="ow">in</span> <span class="n">lm</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"refused"</span><span class="p">,</span> <span class="s2">"timed out"</span><span class="p">,</span> <span class="s2">"unreachable"</span><span class="p">,</span> <span class="s2">"no route"</span><span class="p">,</span> <span class="s2">"network is"</span><span class="p">)):</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>        <span class="k">return</span> <span class="s2">"NET: "</span> <span class="o">+</span> <span class="n">msg</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">w</span> <span class="ow">in</span> <span class="n">lm</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"auth"</span><span class="p">,</span> <span class="s2">"password"</span><span class="p">,</span> <span class="s2">"login"</span><span class="p">,</span> <span class="s2">"401"</span><span class="p">,</span> <span class="s2">"forbidden"</span><span class="p">,</span> <span class="s2">"wrong credential"</span><span class="p">)):</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        <span class="k">return</span> <span class="s2">"AUTH: "</span> <span class="o">+</span> <span class="n">msg</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="k">return</span> <span class="s2">"ERR: "</span> <span class="o">+</span> <span class="n">msg</span>
+</code></pre></div>
+<hr />
+<h2 id="registration-lifecycle">Registration lifecycle<a class="headerlink" href="#registration-lifecycle" title="Permanent link">&para;</a></h2>
+<p>When you import a plugin, NetSentinel runs these steps in order:</p>
+<ol>
+<li><strong>AST validation</strong> — reads the source via <code>ast.parse</code>. No code executes. Checks: <code>HARDWARE_NAME</code>/<code>HARDWARE_TYPE</code> present, <code>get_info</code>/<code>get_status</code> defined with no required positional arguments. (The separate <code>python -m modules.plugin_tools validate</code> CLI, described below, additionally <em>warns</em> — non-blocking — about top-level network calls and imports outside a safe list; the in-app registration check does not.)</li>
+<li><strong>Unsigned plugin consent</strong> — if the plugin is not in <code>data/plugin_hashes.json</code>, a one-time SHA-256-keyed warning dialog asks for consent before proceeding. Consent is persisted per exact file content.</li>
+<li><strong>Credential test</strong> — a dialog collects IP and credentials; <code>get_info()</code> + <code>get_status()</code> run in a background thread. The plugin is only saved if both calls succeed.</li>
+<li><strong>Hub card</strong> — the plugin appears in the Hardware Hub (Extend section) with live status, poll counter, and health state.</li>
+<li><strong>In-process polling</strong> — every subsequent poll loads the plugin fresh via <code>importlib</code> on a dedicated <code>QThread</code> (not a subprocess — this works identically in both source-run and PyInstaller frozen builds, where <code>sys.executable</code> is the app's own .exe, not a Python interpreter) and calls <code>get_info()</code>/<code>get_status()</code>/<code>get_clients()</code> directly, wrapped in a broad <code>try/except</code>. A crashing plugin cannot bring down the app, but it does share the app's process — heavy CPU work in a plugin will contend with the main thread the way any Python-level exception handling does. Each poll gets a fresh module namespace, so module-level caches (e.g. a cached login session) never leak between polls or between two instances of the same plugin.</li>
+</ol>
+<hr />
+<h2 id="plugin-ecosystem-features">Plugin ecosystem features<a class="headerlink" href="#plugin-ecosystem-features" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AST validation before import</td>
+<td>No code executed during validation; checks required constants and function signatures</td>
+</tr>
+<tr>
+<td>Live credential test before registration</td>
+<td>Runs <code>get_info()</code> + <code>get_status()</code> in background thread; only saves on success</td>
+</tr>
+<tr>
+<td>In-process polling, try/except-contained</td>
+<td>Each poll runs on a dedicated QThread with a fresh module namespace and a broad exception guard — a buggy plugin cannot crash the app, but it is not process-isolated</td>
+</tr>
+<tr>
+<td>Multi-instance support</td>
+<td>Same plugin type, multiple device IPs — each gets its own Hub card and nav entry</td>
+</tr>
+<tr>
+<td>Per-instance OS keychain credentials</td>
+<td>Password stored under a unique instance ID; zero cross-instance collisions</td>
+</tr>
+<tr>
+<td>CONFIG_SCHEMA typed config panel</td>
+<td>Plugin declares settings; Hub card auto-generates the form</td>
+</tr>
+<tr>
+<td>Health tracking + circuit breaker</td>
+<td>Success/error counters on each card; auto-disables after 10 consecutive <em>non-AUTH</em> errors; amber "degraded" state after 24 h without a successful poll</td>
+</tr>
+<tr>
+<td>Structured error classification</td>
+<td><code>AUTH:</code> / <code>NET:</code> / <code>DEPS:</code> / <code>ERR:</code> prefixes route to specific remediation text; <code>AUTH:</code> is exempt from the circuit breaker</td>
+</tr>
+<tr>
+<td>Re-enter Password button</td>
+<td>Appears on AUTH errors; reopens credential dialog and restarts worker on success</td>
+</tr>
+<tr>
+<td>Plugin log console</td>
+<td>"≡ Logs" toggle on each Hub card shows the last 100 structured poll log lines</td>
+</tr>
+<tr>
+<td>Plugin validator CLI</td>
+<td><code>python -m modules.plugin_tools validate &lt;plugin.py&gt;</code> — static checks before registering</td>
+</tr>
+<tr>
+<td>Bundled plugin signing</td>
+<td><code>data/plugin_hashes.json</code> SHA-256 list; tampered bundled files blocked at load time</td>
+</tr>
+<tr>
+<td>Plugin icon support</td>
+<td><code>icon.png</code> alongside the script or <code>ICON_PATH</code> constant; 24×24 on Hub cards</td>
+</tr>
+<tr>
+<td>Plugin rename</td>
+<td>"✎" button renames the instance; propagates atomically to nav flyout, breadcrumb, command palette</td>
+</tr>
+<tr>
+<td>Community Browse tab</td>
+<td>Fetches a GitHub-hosted JSON index; per-entry SHA-256 verified before download</td>
+</tr>
+<tr>
+<td><code>.nspkg</code> bundle format</td>
+<td>ZIP containing <code>plugin.py</code> + <code>manifest.json</code> + optional <code>icon.png</code></td>
+</tr>
+<tr>
+<td>Startup dependency smoke-check</td>
+<td>Missing <code>PYPI_PACKAGE</code> deps surface as card errors immediately on startup</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="writing-a-new-plugin">Writing a new plugin<a class="headerlink" href="#writing-a-new-plugin" title="Permanent link">&para;</a></h2>
+<p>The <strong>Hardware Hub</strong> (Extend section) has a built-in <strong>Write a Plugin</strong> tab that walks through the process. Here is the same workflow in full.</p>
+<h3 id="step-1-find-your-hardwares-api">Step 1 — Find your hardware's API<a class="headerlink" href="#step-1-find-your-hardwares-api" title="Permanent link">&para;</a></h3>
+<p>Most consumer hardware exposes one of:</p>
+<ul>
+<li>An <strong>HTTP REST API</strong> — the router admin panel's own backend</li>
+<li>An <strong>HTML scrape target</strong> — older firmware with no JSON API</li>
+<li><strong>SNMP</strong> — enterprise switches and APs</li>
+<li><strong>SSH</strong> — OpenWrt, MikroTik, and other open-firmware devices</li>
+</ul>
+<p><strong>Browser dev tools method (works for most consumer routers):</strong></p>
+<ol>
+<li>Open your router's admin panel in a browser</li>
+<li>Press F12 → Network tab → clear the log</li>
+<li>Navigate to the Status or WAN page</li>
+<li>Look for JSON responses — these are the API endpoints you need</li>
+<li>Right-click a request → "Copy as cURL" to get the exact headers and auth tokens</li>
+</ol>
+<h3 id="step-2-generate-the-template">Step 2 — Generate the template<a class="headerlink" href="#step-2-generate-the-template" title="Permanent link">&para;</a></h3>
+<p>Click <strong>"⬡ New Plugin"</strong> in the Hardware Hub. Fill in hardware name, type, target IP, and any pip dependencies. A complete <code>.py</code> file is generated and opened in your system editor.</p>
+<h3 id="step-3-validate-and-test">Step 3 — Validate and test<a class="headerlink" href="#step-3-validate-and-test" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python<span class="w"> </span>-m<span class="w"> </span>modules.plugin_tools<span class="w"> </span>validate<span class="w"> </span>my_plugin.py
+</code></pre></div>
+<p>This performs static analysis without executing code. Then import the plugin in the Hardware Hub — it runs the live credential test before saving.</p>
+<h3 id="step-4-use-ai-to-accelerate-optional">Step 4 — Use AI to accelerate (optional)<a class="headerlink" href="#step-4-use-ai-to-accelerate-optional" title="Permanent link">&para;</a></h3>
+<p>An AI assistant can write a working plugin for most hardware in about 10 minutes given the right input. The Write a Plugin tab includes three copy-ready prompts (reproduced here — the tab is the source of truth if this ever drifts, see <code>ui/pages/plugin_guide.py</code>):</p>
+<p><strong>Prompt A — general (start here):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>I want to write a NetSentinel hardware plugin that reads live data from my [Brand] [Model]
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>router/modem. The admin panel is at http://192.168.1.1. Login: username 'admin', password 'admin'.
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>Please:
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>1. Find if this router has a local JSON REST API or requires HTML scraping
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>2. Write a Python script using requests (with timeout=10 on every call) that logs in and
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>   returns WAN IP, Uptime, Connected clients (name, IP, MAC)
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>3. Wrap it in the NetSentinel plugin format:
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>   - Constants: HARDWARE_NAME (str), HARDWARE_TYPE (must be exactly one of: router, modem,
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>     ap, switch, other)
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>   - Functions: get_info(), get_status(), and optionally get_clients() — none may take
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>     required positional arguments
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>   - Read the password from the OS keychain via the `keyring` package
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>     (NetSentinel/hardware/&lt;ip&gt;), never hard-code it
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>   - Catch every exception inside get_status()/get_clients() and return it as
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>     {"extra": {"error": "PREFIX: message"}} where PREFIX is AUTH: (wrong credentials),
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>     NET: (unreachable/timeout), DEPS: (missing pip package), or ERR: (anything else) —
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>     never let an exception propagate out of these functions
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>4. Add a main block at the bottom that prints get_info()/get_status()/get_clients() as JSON
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>5. Tell me which packages to install with pip
+</code></pre></div></p>
+<p><strong>Prompt B — from a cURL command (best results):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>I captured this API call from my router admin panel using browser dev tools (F12 → Network
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>→ right-click request → Copy as cURL). Convert it to a Python function using requests, with
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>timeout=10 on every call.
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>[Paste your cURL command here]
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>Then wrap the result in the NetSentinel plugin format:
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>- Constants: HARDWARE_NAME (str), HARDWARE_TYPE (exactly one of: router, modem, ap, switch, other)
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>- Functions: get_info(), get_status(), optionally get_clients()
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>- If the cURL command contains a password, move it to the OS keychain via the `keyring`
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>  package (NetSentinel/hardware/&lt;ip&gt;) instead of leaving it in the script — do not
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>  hard-code the captured credential
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>- Read the device address from a `_NETSENTINEL_INSTANCE_IP` global if present, falling
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>  back to a HARDWARE_IP constant, so the plugin still works if I add a second device of
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>  the same type at a different IP
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>- Catch every exception in get_status()/get_clients() and return it as
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>  {"extra": {"error": "PREFIX: message"}} — AUTH:/NET:/DEPS:/ERR: — never let an exception
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>  escape these functions
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>- if __name__ == '__main__': print all results as JSON
+</code></pre></div></p>
+<p><strong>Prompt C — debug an error:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>This NetSentinel hardware plugin raises the following error:
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>[Paste your plugin script here]
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>[Paste the error message here]
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>Fix it. Do not change the HARDWARE_NAME, HARDWARE_TYPE, get_info(), or get_status()
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>signatures, and keep every exception classified with the AUTH:/NET:/DEPS:/ERR: prefix
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>convention already used in the script.
+</code></pre></div></p>
+<hr />
+<h2 id="submitting-a-plugin">Submitting a plugin<a class="headerlink" href="#submitting-a-plugin" title="Permanent link">&para;</a></h2>
+<p>Open a GitHub Issue titled <code>[Hardware Plugin] Brand Model XYZ</code> and include:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Hardware: Brand Model XYZ
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Firmware tested: vX.Y.Z
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>Access method: HTTP REST / HTML scrape / SNMP / SSH
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>pip dependencies: requests, beautifulsoup4   (or none)
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>get_status() returns: wan_ip, uptime_sec, connected_clients, download_mbps, upload_mbps
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>[attach your .py file]
+</code></pre></div>
+<p>Reviewed scripts are signed (SHA-256 added to <code>data/plugin_hashes.json</code>) and merged as built-in integrations. Contributors are credited in release notes.</p>
+<hr />
+<h2 id="the-nspkg-bundle-format">The <code>.nspkg</code> bundle format<a class="headerlink" href="#the-nspkg-bundle-format" title="Permanent link">&para;</a></h2>
+<p><code>.nspkg</code> is a ZIP archive that packages a plugin for distribution:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>my_plugin.nspkg  (ZIP)
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>├── plugin.py        # the plugin script
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>├── manifest.json    # name, version, author, hardware_type, pypi_packages
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>└── icon.png         # optional 24×24 icon
+</code></pre></div>
+<p><strong><code>manifest.json</code> schema:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">"name"</span><span class="p">:</span><span class="w">          </span><span class="s2">"My Router XYZ"</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">"version"</span><span class="p">:</span><span class="w">       </span><span class="s2">"1.0.0"</span><span class="p">,</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">"author"</span><span class="p">:</span><span class="w">        </span><span class="s2">"Your Name"</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">"hardware_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"router"</span><span class="p">,</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">"pypi_packages"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"requests"</span><span class="p">]</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="p">}</span>
+</code></pre></div>
+<p>Import via <strong>"⬡ Import .nspkg"</strong> in the Hardware Hub. NetSentinel verifies the SHA-256 of <code>plugin.py</code> against the manifest before installing.</p>
+<hr />
+<h2 id="validator-cli-reference">Validator CLI reference<a class="headerlink" href="#validator-cli-reference" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Validate before registering</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>python<span class="w"> </span>-m<span class="w"> </span>modules.plugin_tools<span class="w"> </span>validate<span class="w"> </span>my_plugin.py
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>python<span class="w"> </span>-m<span class="w"> </span>modules.plugin_tools<span class="w"> </span>validate<span class="w"> </span>my_plugin.py<span class="w"> </span>--live<span class="w">   </span><span class="c1"># also imports and calls get_info()</span>
+</code></pre></div>
+<p><code>validate</code> is the only CLI subcommand. There is no <code>pack</code>/<code>verify</code> CLI for <code>.nspkg</code> bundles — building one is just zipping <code>plugin.py</code> + <code>manifest.json</code> (+ optional <code>icon.png</code>) yourself per the format above; importing one is done through <strong>"⬡ Import .nspkg"</strong> in the Hardware Hub, which calls <code>modules.nspkg.unpack_nspkg()</code> directly.</p>
+<p>Validation checks (<code>python -m modules.plugin_tools validate</code>):
+- <strong>Errors (block registration):</strong> <code>HARDWARE_NAME</code>/<code>HARDWARE_TYPE</code> present; <code>get_info()</code>/<code>get_status()</code> present with no required positional arguments
+- <strong>Warnings (non-blocking):</strong> no <code>PYPI_PACKAGE</code> declared despite external imports; no <code>HARDWARE_IP</code>; a possible top-level network call detected at module scope
+- <strong>Info (advisory):</strong> no <code>CREDENTIAL_LABEL</code>; imports outside the default safe list (<code>SAFE_IMPORTS</code> can acknowledge them)</p>
+<p>Note the in-app registration flow (triggered by "＋ Add Integration") runs a lighter check than this CLI — it validates required constants and function signatures only, and does not warn about top-level network calls or unusual imports. Run the CLI validator manually if you want those extra checks before registering.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/ossianericson/netsentinel" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,14 @@
+title: NetSentinel
+description: >-
+  Find every device on your network, catch the faults that cause dropouts,
+  and prove an outage to your ISP — all in one local app.
+theme: jekyll-theme-cayman
+url: https://ossianericson.github.io
+baseurl: /netsentinel
+
+# Working notes, not documentation — kept in the repo but off the published site.
+exclude:
+  - internal
+  - internal/
+  - spikes
+  - spikes/
